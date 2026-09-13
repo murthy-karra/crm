@@ -95,6 +95,12 @@ struct WorkspaceView: View {
                             Button("Drain target conflict") { Task { await model.drainQAConflict() } }.accessibilityIdentifier("qaDrainConflict")
                         }
                         #endif
+                        #if MOBILE003_QA
+                        Section("QA Mobile003 migration probe") {
+                            Text(model.qaMobile003MigrationStage).font(.caption2).accessibilityIdentifier("qaMobile003MigrationStage")
+                            Button("Inspect Mobile003 protected migration") { model.inspectMobile003Migration() }.accessibilityIdentifier("inspectMobile003Migration")
+                        }
+                        #endif
                         Section("Connection") {
                             Toggle("Work offline · pause sync", isOn: $model.paused).accessibilityIdentifier("offlineToggle")
                             Text("Last complete sync: \(model.lastSync)").font(.footnote)
@@ -106,7 +112,7 @@ struct WorkspaceView: View {
                             Text(model.account).font(.caption).textSelection(.enabled)
                             Button("Sign out", role: .destructive) { signOutPrompt = true }.accessibilityIdentifier("signOut")
                         }
-                        Section("About this build") { Text("Mobile 002 · Synthetic development. Downloaded notes and tasks can be edited offline with explicit conflict review. Calls, messages and background delivery are outside this field workflow.").font(.footnote) }
+                        Section("About this build") { Text("Mobile 003 · Synthetic development. Log a manual contact that already happened, or save notes and tasks for later synchronization. Calls, messages and background delivery are outside this field workflow.").font(.footnote) }
                     }.navigationTitle("Settings")
                 }.tabItem { Label("Settings", systemImage: "gearshape") }
             }
@@ -123,8 +129,10 @@ struct TodayView: View {
             Section {
                 Text("Server-ranked work from your last complete download.").font(.footnote).foregroundStyle(.secondary)
                 Text("Evaluated: " + (model.today["generated_at"].text.isEmpty ? "No complete download" : model.today["generated_at"].text)).font(.caption)
-                let pendingTasks = model.queue.filter { $0.envelope.kind != "add_note" && $0.overlay }.count
+                let pendingTasks = model.queue.filter { $0.envelope.kind != "add_note" && !$0.isContact && $0.overlay }.count
                 Label("\(pendingTasks) local task changes · see Saved work", systemImage: "tray").font(.caption)
+                if model.pendingContactCount > 0 { Label("\(model.pendingContactCount) contact \(model.pendingContactCount == 1 ? "attempt" : "attempts") saved on this device", systemImage: "person.crop.circle.badge.clock").font(.caption).accessibilityIdentifier("pendingContactBadge") }
+                if model.todayIsStale { Label("Today will refresh from the server before its ranking changes.", systemImage: "arrow.triangle.2.circlepath").font(.caption).foregroundStyle(.orange).accessibilityIdentifier("todayStale") }
             }
             if model.today["items"].list.isEmpty { ContentUnavailableView("No downloaded Today items", systemImage: "sun.max", description: Text("Open People to see your downloaded relationships.")) }
             ForEach(Array(model.today["items"].list.enumerated()), id: \.offset) { _, item in
@@ -169,6 +177,7 @@ struct PersonView: View {
     @EnvironmentObject private var model: FieldModel
     let personID: String
     @State private var composer: Draft?
+    @State private var contactComposer: Draft?
     var bundle: Bundle? { model.people.first { $0.person == personID } }
     var overlays: [Queued] { model.queue.filter { $0.envelope.person == personID && $0.overlay } }
     var body: some View {
@@ -183,13 +192,15 @@ struct PersonView: View {
                 Section {
                     Button("Add note") { composer = Draft(id: UUID().uuidString, person: personID, kind: "add_note", text: "", revision: 0) }.accessibilityIdentifier("addNote")
                     Button("Create task") { composer = Draft(id: UUID().uuidString, person: personID, kind: "create_task", text: "", revision: 0) }.accessibilityIdentifier("createTask")
+                    Button("Log contact") { contactComposer = try? model.newContactDraft(person: personID) }.disabled(!model.canLogContact).accessibilityIdentifier("logContact")
+                    Text(model.canLogContact ? "For a manual interaction that already happened. Calls made through the CRM already have a contact record." : "Contact logging is unavailable for this account. Existing saved work is retained.").font(.caption).foregroundStyle(.secondary)
                 }
                 if !overlays.isEmpty {
                     Section("Saved changes on this device") {
                         ForEach(overlays) { op in
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(op.envelope.kind.replacingOccurrences(of: "_", with: " ").capitalized).font(.caption.bold())
-                                if op.error != "not_found" && op.error != "forbidden" { Text(op.title.isEmpty ? "Task completion" : op.title) }
+                                if op.error != "not_found" && op.error != "forbidden" { Text(op.title.isEmpty ? (op.isContact ? "Manual contact attempt" : "Task completion") : op.title) }
                                 Text(op.status == "accepted" ? "Synced · waiting for a covering download" : op.status == "attention" ? "Needs attention" : "Saved on device").font(.caption).foregroundStyle(.secondary)
                                 if op.envelope.kind == "create_task" && !model.queue.contains(where: { $0.envelope.payload["target"]["created_by_operation_id"].text == op.id }) {
                                     Button("Complete saved task") { model.complete(person: personID, target: .object(["created_by_operation_id": .s(op.id)])) }
@@ -238,6 +249,7 @@ struct PersonView: View {
             } else { Text("This record is not in the complete downloaded selection. Saved actions remain in Saved work.") }
         }.navigationTitle("Person").navigationBarTitleDisplayMode(.inline)
             .sheet(item: $composer) { draft in ComposerView(initial: draft).environmentObject(model) }
+            .sheet(item: $contactComposer) { draft in ContactComposerView(initial: draft).environmentObject(model) }
     }
 }
 struct ComposerView: View {
@@ -300,15 +312,72 @@ struct ComposerView: View {
         return value["title"].text + "\n" + value["kind"].text + " · " + due
     }
 }
+struct ContactComposerView: View {
+    @EnvironmentObject private var model: FieldModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var draft: Draft
+    @State private var occurredAt: String
+    @State private var pickerDate: Date
+    @State private var status: String
+    @State private var failed = false
+    init(initial: Draft) {
+        let value = initial.occurredAt ?? stamp()
+        _draft = State(initialValue: initial)
+        _occurredAt = State(initialValue: value)
+        _pickerDate = State(initialValue: (try? date(value)) ?? Date())
+        _status = State(initialValue: initial.revision > 0 ? "Draft saved on device · revision \(initial.revision)" : "Not yet saved")
+    }
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Manual contact") {
+                    Picker("Channel", selection: binding(\.contactChannel, fallback: "call")) {
+                        ForEach(["call", "text", "email", "other"], id: \.self) { Text($0.capitalized).tag($0) }
+                    }.onChange(of: draft.contactChannel) { _, _ in autosave() }
+                    Picker("Outcome", selection: binding(\.contactOutcome, fallback: "reached")) {
+                        ForEach(["reached", "no_answer", "left_message", "sent", "busy", "wrong_number"], id: \.self) { outcome in Text(outcome.replacingOccurrences(of: "_", with: " ").capitalized).tag(outcome) }
+                    }.onChange(of: draft.contactOutcome) { _, _ in autosave() }
+                    Text("Calls made through the CRM already have a contact record. Use this form only for a manual interaction that already happened.").font(.caption).foregroundStyle(.secondary)
+                }
+                Section("When it happened") {
+                    DatePicker("Date and time", selection: $pickerDate, displayedComponents: [.date, .hourAndMinute])
+                        .onChange(of: pickerDate) { _, value in occurredAt = stamp(value); draft.occurredAt = occurredAt; autosave() }
+                    TextField("Reported time (RFC3339 with offset)", text: $occurredAt)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityIdentifier("contactOccurredAt")
+                        .onChange(of: occurredAt) { _, value in draft.occurredAt = value; autosave() }
+                    Text("The time is reported by you. The offset makes an ambiguous local time explicit; enter a corrected RFC3339 time if a local clock time does not exist.").font(.caption).foregroundStyle(.secondary)
+                }
+                Section { Text(status).font(.caption).foregroundStyle(failed ? .red : .secondary).accessibilityIdentifier("contactDraftStatus") }
+                Button("Save contact on device") {
+                    do { if draft.revision == 0 { draft = try model.save(draft) }; try model.submit(draft); dismiss() }
+                    catch { status = error.localizedDescription; failed = true }
+                }.disabled(occurredAt.isEmpty || failed).accessibilityIdentifier("saveContact")
+                if failed { Button("Retry saving contact draft") { autosave() } }
+            }.navigationTitle("Log contact")
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() }.disabled(failed) } }
+                .interactiveDismissDisabled(failed)
+        }
+    }
+    private func binding(_ keyPath: WritableKeyPath<Draft, String?>, fallback: String) -> Binding<String> {
+        Binding(get: { draft[keyPath: keyPath] ?? fallback }, set: { draft[keyPath: keyPath] = $0 })
+    }
+    private func autosave() {
+        do { draft = try model.save(draft); status = "Draft saved on device · revision \(draft.revision)"; failed = false }
+        catch { status = error.localizedDescription; failed = true }
+    }
+}
 struct QueueView: View {
     @EnvironmentObject private var model: FieldModel
     @State private var composer: Draft?
+    @State private var contactComposer: Draft?
     var body: some View {
         List {
             Section { Text("\(model.pendingCount) pending · \(model.drafts.count) saved drafts").accessibilityIdentifier("queueCount") }
             if !model.drafts.isEmpty {
                 Section("Drafts") { ForEach(model.drafts) { draft in
-                    Button(draft.text.isEmpty ? "Empty draft" : draft.text) { composer = draft }
+                    Button(draft.kind == "log_contact_attempt" ? "Manual contact · " + [draft.contactChannel, draft.contactOutcome, draft.occurredAt].compactMap { $0 }.joined(separator: " · ") : (draft.text.isEmpty ? "Empty draft" : draft.text)) {
+                        if draft.kind == "log_contact_attempt" { contactComposer = draft } else { composer = draft }
+                    }
                     if draft.mode == "follow_up" { Text("Saved draft — waiting for the previous change").font(.caption).foregroundStyle(.orange) }
                     if draft.mode == "conflict" { Text("Conflict requires review").font(.caption).foregroundStyle(.orange) }
                 } }
@@ -318,11 +387,14 @@ struct QueueView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Label(op.status == "accepted" ? "Synced" : op.status == "attention" ? "Needs attention" : "Saved on device", systemImage: op.status == "accepted" ? "checkmark.circle" : op.status == "attention" ? "exclamationmark.triangle" : "tray")
                         Text(op.envelope.kind.replacingOccurrences(of: "_", with: " ").capitalized).font(.subheadline.bold())
-                        if op.error != "not_found" && op.error != "forbidden" { Text(op.title.isEmpty ? "Task completion" : op.title).lineLimit(4) }
+                        if op.error != "not_found" && op.error != "forbidden" { Text(op.title.isEmpty ? (op.isContact ? "Manual contact attempt" : "Task completion") : op.title).lineLimit(4) }
                         if let error = op.error { Text(APIError(status: 409, code: error).localizedDescription).font(.caption).foregroundStyle(.secondary) }
                         if op.status == "conflict", let draft = model.drafts.first(where: { $0.predecessor == op.id }) {
                             Button("Review conflict") { composer = draft }
-                        } else if op.status == "attention" && ["invalid_input", "invalid_assignee", "over_limit"].contains(op.error ?? "") && op.envelope.kind != "complete_task" {
+                        } else if op.status == "attention" && op.error == "contact_time_in_future" && op.isContact {
+                            Button("Correct reported time in a new contact") { contactComposer = try? model.revisedContactDraft(from: op) }
+                            Text("The original saved action remains unchanged because the server rejected its reported future time.").font(.caption).foregroundStyle(.secondary)
+                        } else if op.status == "attention" && ["invalid_input", "invalid_assignee", "over_limit"].contains(op.error ?? "") && op.envelope.kind != "complete_task" && !op.isContact {
                             Button("Prepare a separate revised draft") { composer = Draft(id: UUID().uuidString, person: op.envelope.person, kind: op.envelope.kind, text: op.title, revision: 0) }
                         }
                         DisclosureGroup("Sync details") { Text(op.id).font(.caption2).foregroundStyle(.secondary).textSelection(.enabled) }
@@ -330,5 +402,6 @@ struct QueueView: View {
                 }
             }
         }.navigationTitle("Saved work").sheet(item: $composer) { draft in ComposerView(initial: draft).environmentObject(model) }
+            .sheet(item: $contactComposer) { draft in ContactComposerView(initial: draft).environmentObject(model) }
     }
 }

@@ -10,14 +10,15 @@ def q(s): return json.dumps(s)
 def arr(xs): return '(' + ', '.join(xs) + (',)' if xs else ')')
 def config_list(name, settings):
     refs = []
-    for config in ['Debug', 'Mobile002QA', 'Release']:
+    for config in ['Debug', 'Mobile002QA', 'Mobile003QA', 'Release']:
         merged = dict(settings)
-        merged['SWIFT_OPTIMIZATION_LEVEL'] = '-Onone' if config in ['Debug', 'Mobile002QA'] else '-O'
-        merged['SWIFT_ACTIVE_COMPILATION_CONDITIONS'] = 'DEBUG MOBILE002_QA $(inherited)' if config == 'Mobile002QA' else ('DEBUG $(inherited)' if config == 'Debug' else '$(inherited)')
-        merged['ENABLE_TESTABILITY'] = 'YES' if config in ['Debug', 'Mobile002QA'] else 'NO'
+        merged['SWIFT_OPTIMIZATION_LEVEL'] = '-Onone' if config in ['Debug', 'Mobile002QA', 'Mobile003QA'] else '-O'
+        merged['SWIFT_ACTIVE_COMPILATION_CONDITIONS'] = ('DEBUG MOBILE002_QA $(inherited)' if config == 'Mobile002QA' else ('DEBUG MOBILE003_QA $(inherited)' if config == 'Mobile003QA' else ('DEBUG $(inherited)' if config == 'Debug' else '$(inherited)')))
+        merged['ENABLE_TESTABILITY'] = 'YES' if config in ['Debug', 'Mobile002QA', 'Mobile003QA'] else 'NO'
         if name == 'FieldCRM':
-            merged['INFOPLIST_FILE'] = 'FieldCRM/Info.Debug.plist' if config in ['Debug', 'Mobile002QA'] else 'FieldCRM/Info.plist'
+            merged['INFOPLIST_FILE'] = 'FieldCRM/Info.Debug.plist' if config in ['Debug', 'Mobile002QA', 'Mobile003QA'] else 'FieldCRM/Info.plist'
             if config == 'Mobile002QA': merged['PRODUCT_BUNDLE_IDENTIFIER'] = 'dev.crm.FieldCRM.mobile002qa'
+            if config == 'Mobile003QA': merged['PRODUCT_BUNDLE_IDENTIFIER'] = 'dev.crm.FieldCRM.mobile003qa'
         refs.append(add(name+config, 'isa = XCBuildConfiguration; name = '+config+'; buildSettings = {' + ''.join(q(k)+' = '+q(v)+';' for k,v in merged.items()) + '};'))
     return add(name+'configs', 'isa = XCConfigurationList; buildConfigurations = '+arr(refs)+'; defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;')
 products=[]; groups=[]; targets=[]
@@ -59,3 +60,4 @@ def ref(name): return f'<BuildableReference BuildableIdentifier="primary" Bluepr
 scheme=f'''<?xml version="1.0" encoding="UTF-8"?><Scheme LastUpgradeVersion="2660" version="1.3"><BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES"><BuildActionEntries><BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES">{ref('FieldCRM')}</BuildActionEntry></BuildActionEntries></BuildAction><TestAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.IDEFoundation.Launcher.LLDB" shouldUseLaunchSchemeArgsEnv="YES"><Testables><TestableReference skipped="NO">{ref('FieldCRMTests')}</TestableReference><TestableReference skipped="NO">{ref('FieldCRMUITests')}</TestableReference></Testables></TestAction><LaunchAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.IDEFoundation.Launcher.LLDB" launchStyle="0" useCustomWorkingDirectory="NO" ignoresPersistentStateOnLaunch="NO" debugDocumentVersioning="YES" allowLocationSimulation="YES"><BuildableProductRunnable runnableDebuggingMode="0">{ref('FieldCRM')}</BuildableProductRunnable></LaunchAction><ProfileAction buildConfiguration="Release" shouldUseLaunchSchemeArgsEnv="YES" savedToolIdentifier="" useCustomWorkingDirectory="NO" debugDocumentVersioning="YES"><BuildableProductRunnable runnableDebuggingMode="0">{ref('FieldCRM')}</BuildableProductRunnable></ProfileAction><AnalyzeAction buildConfiguration="Debug"/><ArchiveAction buildConfiguration="Release" revealArchiveInOrganizer="YES"/></Scheme>'''
 (root/'FieldCRM.xcodeproj/xcshareddata/xcschemes/FieldCRM.xcscheme').write_text(scheme)
 (root/'FieldCRM.xcodeproj/xcshareddata/xcschemes/FieldCRMMobile002QA.xcscheme').write_text(scheme.replace('buildConfiguration="Debug"', 'buildConfiguration="Mobile002QA"').replace('<ArchiveAction buildConfiguration="Release"', '<ArchiveAction buildConfiguration="Mobile002QA"'))
+(root/'FieldCRM.xcodeproj/xcshareddata/xcschemes/FieldCRMMobile003QA.xcscheme').write_text(scheme.replace('buildConfiguration="Debug"', 'buildConfiguration="Mobile003QA"').replace('<ArchiveAction buildConfiguration="Release"', '<ArchiveAction buildConfiguration="Mobile003QA"'))

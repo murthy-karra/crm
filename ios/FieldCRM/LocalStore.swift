@@ -7,7 +7,7 @@ final class LocalStore {
     private var db: OpaquePointer?
     let identity: String, context: String, url: URL
     private let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
-    init(url: URL, key: Data, identity: String, context: String, schemaTarget: Int = 5) throws {
+    init(url: URL, key: Data, identity: String, context: String, schemaTarget: Int = 6) throws {
         self.url = url; self.identity = identity; self.context = context
         guard sqlite3_open_v2(url.path, &db, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX, nil) == SQLITE_OK else {
             sqlite3_close(db); db = nil; throw LocalError.storage
@@ -31,7 +31,7 @@ final class LocalStore {
     deinit { sqlite3_close(db) }
     private func migrate(to target: Int) throws {
         let version = Int(try rows("PRAGMA user_version").first?.first ?? "0") ?? 0
-        guard version <= 5 else { throw LocalError.invalidProtocol }
+        guard version <= 6 else { throw LocalError.invalidProtocol }
         try transaction {
             if version < 1 {
                 for sql in [
@@ -65,6 +65,13 @@ final class LocalStore {
             if version < 5 && target >= 5 {
                 try run("CREATE INDEX IF NOT EXISTS drafts_person_target ON drafts(id)")
                 try run("PRAGMA user_version=5")
+            }
+            // Mobile 003 uses additive fields inside the encrypted draft JSON.
+            // Do not rewrite envelopes, receipts, bundles, or saved Mobile 002
+            // drafts: their bytes remain the idempotency evidence for old work.
+            if version < 6 && target >= 6 {
+                try run("CREATE INDEX IF NOT EXISTS operations_person_status ON operations(status)")
+                try run("PRAGMA user_version=6")
             }
         }
     }
@@ -109,13 +116,23 @@ final class LocalStore {
         }
     }
     @discardableResult func submit(_ draft: Draft) throws -> Envelope {
-        guard !draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw LocalError.invalidInput }
         var payload: [String: JSON] = ["person_id": .s(draft.person)]
-        if draft.kind == "add_note" { payload["body"] = .s(draft.text) }
+        if draft.kind == "log_contact_attempt" {
+            guard let channel = draft.contactChannel, let outcome = draft.contactOutcome, let occurredAt = draft.occurredAt,
+                  ["call", "text", "email", "other"].contains(channel),
+                  ["reached", "no_answer", "left_message", "sent", "busy", "wrong_number"].contains(outcome),
+                  validExplicitInstant(occurredAt) else { throw LocalError.invalidInput }
+            payload["channel"] = .s(channel); payload["outcome"] = .s(outcome); payload["occurred_at"] = .s(occurredAt)
+        } else if draft.kind == "add_note" {
+            guard !draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw LocalError.invalidInput }
+            payload["body"] = .s(draft.text)
+        }
         else if draft.kind == "edit_note" {
+            guard !draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw LocalError.invalidInput }
             guard let target = draft.targetID, let expected = draft.expectedRevision else { throw LocalError.invalidInput }
             _ = try revision(expected); payload["note_id"] = .s(target); payload["expected_revision"] = .s(expected); payload["body"] = .s(draft.text)
         } else {
+            guard !draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw LocalError.invalidInput }
             payload["title"] = .s(draft.text); payload["kind"] = .s(draft.taskKind)
             payload["due_at"] = draft.dueAt.map(JSON.s) ?? .null
             if draft.kind == "update_task" {
@@ -136,7 +153,7 @@ final class LocalStore {
         return try transaction {
             guard let row = try rows("SELECT body FROM drafts WHERE id=?", [draft.id]).first,
                   let stored = try? decode(Draft.self, Data(row[0].utf8)), stored.revision == draft.revision else { throw LocalError.staleDraft }
-            let envelope = try insertEnvelope(kind: draft.kind, payload: .object(payload))
+            let envelope = try insertEnvelope(kind: draft.kind, payload: .object(payload), deviceRecordedAt: draft.deviceRecordedAt)
             if draft.isEdit {
                 var protected = stored; protected.mode = "submitted"; protected.predecessor = envelope.operation_id; protected.revision += 1
                 try run("UPDATE drafts SET body=? WHERE id=?", [try string(protected), protected.id])
@@ -151,9 +168,17 @@ final class LocalStore {
             return try insertEnvelope(kind: "complete_task", payload: .object(["person_id": .s(person), "target": target]))
         }
     }
-    private func insertEnvelope(kind: String, payload: JSON) throws -> Envelope {
+    private func validExplicitInstant(_ value: String) -> Bool {
+        // An offset (or Z) makes a repeated local wall-clock time unambiguous;
+        // a nonexistent local clock value cannot be silently shifted into one.
+        let shape = "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,9})?(?:Z|[+-][0-9]{2}:[0-9]{2})$"
+        guard let year = Int(value.prefix(4)), (1...9999).contains(year) else { return false }
+        return value.range(of: shape, options: .regularExpression) != nil && (try? date(value)) != nil
+    }
+    private func insertEnvelope(kind: String, payload: JSON, deviceRecordedAt: String? = nil) throws -> Envelope {
+        let recorded = deviceRecordedAt.flatMap { validExplicitInstant($0) ? $0 : nil } ?? stamp()
         let envelope = Envelope(context_id: context, operation_id: UUID().uuidString.lowercased(), kind: kind,
-                                device_recorded_at: stamp(), payload: payload)
+                                device_recorded_at: recorded, payload: payload)
         let bytes = try string(envelope)
         guard bytes.utf8.count <= 131072 else { throw LocalError.invalidInput }
         try run("INSERT INTO operations(id,envelope) VALUES(?,?)", [envelope.operation_id, bytes])
@@ -180,20 +205,23 @@ final class LocalStore {
             guard UUID(uuidString: receipt.operation_id) != nil, UUID(uuidString: receipt.resource_id) != nil,
                   (try? date(receipt.accepted_at)) != nil else { throw LocalError.invalidProtocol }
             let expected: String
-            switch op.envelope.kind { case "add_note", "edit_note": expected = "note"; case "create_task", "update_task", "complete_task": expected = "task"; default: throw LocalError.invalidProtocol }
+            switch op.envelope.kind { case "add_note", "edit_note": expected = "note"; case "create_task", "update_task", "complete_task": expected = "task"; case "log_contact_attempt": expected = "contact_attempt"; default: throw LocalError.invalidProtocol }
             guard receipt.resource_type == expected else { throw LocalError.invalidProtocol }
-            if op.envelope.kind == "add_note" { guard receipt.committed_revision == nil else { throw LocalError.invalidProtocol } }
+            if op.envelope.kind == "add_note" || op.envelope.kind == "log_contact_attempt" { guard receipt.committed_revision == nil else { throw LocalError.invalidProtocol } }
             else { guard let committed = receipt.committed_revision, (try? revision(committed)) != nil else { throw LocalError.invalidProtocol } }
             if let target = op.targetID, target != receipt.resource_id { throw LocalError.invalidProtocol }
-            let covers = try activeBundle(op.envelope.person).map { try revision($0.revision) >= revision(receipt.person_revision) } ?? false
+            // A contact can change server-ranked Today without changing the
+            // Person revision.  Keep its overlay until a new seal succeeds.
+            let covers = op.isContact ? false : (try activeBundle(op.envelope.person).map { try revision($0.revision) >= revision(receipt.person_revision) } ?? false)
             try run("UPDATE operations SET receipt=?,status='accepted',error=NULL,overlay=? WHERE id=?",
                     [try string(receipt), covers ? "0" : "1", receipt.operation_id])
+            if op.isContact { try setMeta("today_refresh_pending", "1") }
         }
     }
     func failure(_ id: String, code: String, permanent: Bool, delay: Double) throws {
         let status: String
         if code == "revision_conflict" { status = "conflict" }
-        else if ["not_found", "forbidden"].contains(code) { status = "unavailable" }
+        else if code == "not_found" { status = "unavailable" }
         else { status = permanent ? "attention" : "pending" }
         try run("UPDATE operations SET status=?,error=?,attempts=attempts+1,retry_at=? WHERE id=?",
                 [status, code, String(Date().timeIntervalSince1970 + delay), id])
@@ -332,6 +360,9 @@ final class LocalStore {
                     try run("UPDATE operations SET error='selection_removed' WHERE id=?", [op.id])
                 }
             }
+            // A seal is the only proof that the server-ranked Today snapshot is
+            // current after a contact whose Person revision may be unchanged.
+            try run("DELETE FROM metadata WHERE key='today_refresh_pending'")
             try run("DELETE FROM metadata WHERE key='staging'")
             // Reclaim completed page copies only after the published pointer is durable in this transaction.
             try run("DELETE FROM pages WHERE generation=?", [seal.generation_id])

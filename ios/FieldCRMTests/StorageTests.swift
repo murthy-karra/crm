@@ -12,7 +12,7 @@ final class StorageTests: XCTestCase {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
     override func tearDownWithError() throws { try FileManager.default.removeItem(at: directory) }
-    func open(_ name: String = "store", version: Int = 5) throws -> LocalStore {
+    func open(_ name: String = "store", version: Int = 6) throws -> LocalStore {
         try LocalStore(url: directory.appendingPathComponent(name + ".sqlite"), key: key, identity: identity, context: context, schemaTarget: version)
     }
     func draft(_ text: String = "Synthetic iOS private note") -> Draft { Draft(id: UUID().uuidString, person: person, kind: "add_note", text: text, revision: 0) }
@@ -58,7 +58,7 @@ final class StorageTests: XCTestCase {
         try old!.submit(saved)
         old = nil
         var upgraded: LocalStore? = try open()
-        XCTAssertEqual(try upgraded!.rows("PRAGMA user_version")[0][0], "5")
+        XCTAssertEqual(try upgraded!.rows("PRAGMA user_version")[0][0], "6")
         XCTAssertEqual(try upgraded!.queue().count, 1)
         XCTAssertEqual(try upgraded!.queue()[0].attempts, 0)
         try upgraded!.run("PRAGMA user_version=999"); upgraded = nil
@@ -211,6 +211,8 @@ final class StorageTests: XCTestCase {
         _ = try fixture(CurrentRecordResponse.self, "mobile002/mobile002_current_task")
         _ = try fixture(Receipt.self, "mobile002/mobile002_edit_note_receipt")
         _ = try fixture(Receipt.self, "mobile002/mobile002_update_task_receipt")
+        _ = try fixture(Envelope.self, "mobile003/log_contact_attempt_request")
+        _ = try fixture(Receipt.self, "mobile003/contact_attempt_receipt")
         XCTAssertEqual(try revision("9007199254740993"), 9007199254740993)
         XCTAssertThrowsError(try revision("01")); XCTAssertThrowsError(try revision("0"))
         XCTAssertEqual(try date("2026-09-13T01:27:15.217133+00:00"), try date("2026-09-13T01:27:15.217133Z"))
@@ -222,7 +224,7 @@ final class StorageTests: XCTestCase {
         let generation = self.generation(); try stage(old!, generation, notes: [.object(["id": .s("55555555-5555-4555-8555-555555555555"), "body": .s("Legacy readable note"), "can_manage": .bool(true)])]); try old!.promote(seal(generation))
         old = nil
         let upgraded = try open()
-        XCTAssertEqual(try upgraded.rows("PRAGMA user_version")[0][0], "5")
+        XCTAssertEqual(try upgraded.rows("PRAGMA user_version")[0][0], "6")
         XCTAssertEqual(try upgraded.queue().first?.id, legacy.operation_id)
         XCTAssertEqual(try upgraded.queue().first?.bytes, bytes)
         XCTAssertNil(try upgraded.editableRecord(person: person, type: "note", id: "55555555-5555-4555-8555-555555555555"))
@@ -257,5 +259,45 @@ final class StorageTests: XCTestCase {
         XCTAssertEqual(try store.queue().first?.bytes, bytes)
         let protected = try XCTUnwrap(store.draftForOperation(op.operation_id))
         XCTAssertEqual(protected.text, "Protected uncertain proposal"); XCTAssertEqual(protected.baseline?["body"].text, "old")
+    }
+    func testMobile003UpgradeKeepsMobile002BytesAndContactNeedsFreshTodaySeal() throws {
+        var old: LocalStore? = try open(version: 5)
+        let prior = try old!.submit(old!.saveDraft(draft("Mobile002 envelope remains exact")))
+        let priorBytes = try XCTUnwrap(old!.queue().first?.bytes)
+        let initial = generation(); try stage(old!, initial); try old!.promote(seal(initial))
+        old = nil
+
+        let store = try open()
+        XCTAssertEqual(try store.rows("PRAGMA user_version")[0][0], "6")
+        XCTAssertEqual(try store.queue().first?.id, prior.operation_id)
+        XCTAssertEqual(try store.queue().first?.bytes, priorBytes)
+
+        let first = try store.saveDraft(Draft(id: UUID().uuidString, person: person, kind: "log_contact_attempt", revision: 0,
+                                               contactChannel: "other", contactOutcome: "reached", occurredAt: "2026-09-12T13:00:00.123456789-07:00", deviceRecordedAt: "2026-09-13T12:00:00Z"))
+        var edited = first; edited.contactOutcome = "sent"
+        let second = try store.saveDraft(edited)
+        XCTAssertThrowsError(try store.submit(first), "A stale editor cannot mint a second operation")
+        let one = try store.submit(second)
+        let distinctDraft = try store.saveDraft(Draft(id: UUID().uuidString, person: person, kind: "log_contact_attempt", revision: 0,
+                                                       contactChannel: "email", contactOutcome: "sent", occurredAt: "2026-09-12T20:01:00Z", deviceRecordedAt: "2026-09-13T12:00:00Z"))
+        let two = try store.submit(distinctDraft)
+        XCTAssertNotEqual(one.operation_id, two.operation_id)
+        XCTAssertEqual(try store.queue().filter(\.isContact).count, 2)
+        XCTAssertEqual(one.payload["occurred_at"].text, "2026-09-12T13:00:00.123456789-07:00")
+
+        let receipt = Receipt(operation_id: one.operation_id, outcome: "accepted", resource_type: "contact_attempt", resource_id: UUID().uuidString,
+                              committed_revision: nil, person_revision: "1", accepted_at: stamp(), changed: true, replayed: false)
+        try store.acknowledge(receipt)
+        XCTAssertTrue(try XCTUnwrap(store.queue().first { $0.id == one.operation_id }).overlay)
+        XCTAssertEqual(try store.meta("today_refresh_pending"), "1")
+        let malformed = Receipt(operation_id: two.operation_id, outcome: "accepted", resource_type: "contact_attempt", resource_id: UUID().uuidString,
+                                committed_revision: "2", person_revision: "1", accepted_at: stamp(), changed: true, replayed: false)
+        XCTAssertThrowsError(try store.acknowledge(malformed))
+
+        // Contact facts do not fabricate a Person revision. A complete new seal,
+        // even at revision 1, is the evidence that Today is fresh and clears the overlay.
+        let refreshed = generation("1"); try stage(store, refreshed); try store.promote(seal(refreshed))
+        XCTAssertFalse(try XCTUnwrap(store.queue().first { $0.id == one.operation_id }).overlay)
+        XCTAssertNil(try store.meta("today_refresh_pending"))
     }
 }

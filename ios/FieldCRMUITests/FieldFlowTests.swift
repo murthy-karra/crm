@@ -100,6 +100,43 @@ final class FieldFlowTests: XCTestCase {
         let queueProof = XCTAttachment(screenshot: app.screenshot()); queueProof.name = "saved-work-with-collapsed-sync-details"; queueProof.lifetime = .keepAlways; add(queueProof)
     }
 
+    #if MOBILE003_QA
+    @MainActor func testMobile003NativeOfflineContactTerminatesRelaunchesAndReceivesReceipt() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication(); app.launchArguments = ["--synthetic-keychain"]; app.launch()
+        XCTAssertTrue(app.staticTexts["syntheticBanner"].waitForExistence(timeout: 20))
+        if app.buttons["signIn"].exists {
+            app.textFields["email"].tap(); app.textFields["email"].typeText("agent@mobile.test")
+            app.secureTextFields["password"].tap(); app.secureTextFields["password"].typeText("Mobile-demo-only-123!")
+            app.buttons["signIn"].tap()
+        }
+        XCTAssertTrue(app.tabBars.buttons["Settings"].waitForExistence(timeout: 80))
+        app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: false); app.buttons["sync"].tap()
+        XCTAssertTrue(app.staticTexts["100 people available offline"].waitForExistence(timeout: 240))
+        app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: true)
+        app.tabBars.buttons["People"].tap(); let search = app.searchFields.firstMatch; search.tap(); search.typeText("001")
+        let person = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'person_' ")).firstMatch
+        XCTAssertTrue(person.waitForExistence(timeout: 15)); person.tap()
+        let contact = app.buttons["logContact"]; XCTAssertTrue(contact.waitForExistence(timeout: 10)); contact.tap()
+        XCTAssertTrue(app.staticTexts["Manual contact"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Calls made through the CRM already have a contact record. Use this form only for a manual interaction that already happened."].exists)
+        XCTAssertTrue(app.staticTexts["contactDraftStatus"].label.contains("Draft saved on device"))
+        app.buttons["saveContact"].tap()
+        app.tabBars.buttons["Today"].tap(); XCTAssertTrue(app.staticTexts["pendingContactBadge"].waitForExistence(timeout: 15))
+        app.tabBars.buttons["Saved work"].tap(); XCTAssertTrue(app.staticTexts["queueCount"].label.contains("1 pending"))
+        let pending = XCTAttachment(screenshot: app.screenshot()); pending.name = "mobile003-offline-contact-pending"; pending.lifetime = .keepAlways; add(pending)
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.tabBars.buttons["Saved work"].waitForExistence(timeout: 30)); app.tabBars.buttons["Saved work"].tap()
+        XCTAssertTrue(app.staticTexts["queueCount"].label.contains("1 pending"))
+        app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: false); app.buttons["sync"].tap()
+        app.tabBars.buttons["Saved work"].tap()
+        expectation(for: NSPredicate(format: "label BEGINSWITH '0 pending'"), evaluatedWith: app.staticTexts["queueCount"]); waitForExpectations(timeout: 180)
+        let receipt = XCTAttachment(screenshot: app.screenshot()); receipt.name = "mobile003-contact-accepted-after-relaunch"; receipt.lifetime = .keepAlways; add(receipt)
+        app.tabBars.buttons["Settings"].tap(); app.buttons["inspectMobile003Migration"].tap()
+        XCTAssertTrue(app.staticTexts["qaMobile003MigrationStage"].label.contains("schema=6"))
+    }
+    #endif
+
     #if MOBILE002_QA
     @MainActor func testMobile002NativeOfflineEditTerminateRelaunchAndSynchronizeReservedPerson001() throws {
         continueAfterFailure = false

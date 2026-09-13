@@ -89,6 +89,12 @@ struct Bundle: Codable, Sendable {
 struct Draft: Codable, Identifiable, Sendable {
     var id: String, person: String, kind: String, text: String, revision: Int
     var taskKind: String = "follow_up", dueAt: String? = nil
+    /// Contact input is kept separate from note/task text.  It is protected
+    /// draft input until the immutable envelope has been committed locally.
+    var contactChannel: String? = nil
+    var contactOutcome: String? = nil
+    var occurredAt: String? = nil
+    var deviceRecordedAt: String? = nil
     var targetID: String? = nil
     var expectedRevision: String? = nil
     var baseline: JSON? = nil
@@ -97,10 +103,11 @@ struct Draft: Codable, Identifiable, Sendable {
     var predecessor: String? = nil
     var current: JSON? = nil
     var editorEpoch: String = UUID().uuidString.lowercased()
-    enum CodingKeys: String, CodingKey { case id, person, kind, text, revision, taskKind, dueAt, targetID, expectedRevision, baseline, proposal, mode, predecessor, current, editorEpoch }
-    init(id: String, person: String, kind: String, text: String, revision: Int, taskKind: String = "follow_up", dueAt: String? = nil, targetID: String? = nil, expectedRevision: String? = nil, baseline: JSON? = nil, proposal: JSON? = nil, mode: String = "editing", predecessor: String? = nil, current: JSON? = nil, editorEpoch: String = UUID().uuidString.lowercased()) {
+    enum CodingKeys: String, CodingKey { case id, person, kind, text, revision, taskKind, dueAt, contactChannel, contactOutcome, occurredAt, deviceRecordedAt, targetID, expectedRevision, baseline, proposal, mode, predecessor, current, editorEpoch }
+    init(id: String, person: String, kind: String, text: String = "", revision: Int, taskKind: String = "follow_up", dueAt: String? = nil, contactChannel: String? = nil, contactOutcome: String? = nil, occurredAt: String? = nil, deviceRecordedAt: String? = nil, targetID: String? = nil, expectedRevision: String? = nil, baseline: JSON? = nil, proposal: JSON? = nil, mode: String = "editing", predecessor: String? = nil, current: JSON? = nil, editorEpoch: String = UUID().uuidString.lowercased()) {
         self.id = id; self.person = person; self.kind = kind; self.text = text; self.revision = revision
         self.taskKind = taskKind; self.dueAt = dueAt; self.targetID = targetID; self.expectedRevision = expectedRevision
+        self.contactChannel = contactChannel; self.contactOutcome = contactOutcome; self.occurredAt = occurredAt; self.deviceRecordedAt = deviceRecordedAt
         self.baseline = baseline; self.proposal = proposal; self.mode = mode; self.predecessor = predecessor; self.current = current; self.editorEpoch = editorEpoch
     }
     init(from decoder: Decoder) throws {
@@ -109,6 +116,8 @@ struct Draft: Codable, Identifiable, Sendable {
         kind = try c.decode(String.self, forKey: .kind); text = try c.decode(String.self, forKey: .text)
         revision = try c.decode(Int.self, forKey: .revision)
         taskKind = try c.decodeIfPresent(String.self, forKey: .taskKind) ?? "follow_up"; dueAt = try c.decodeIfPresent(String.self, forKey: .dueAt)
+        contactChannel = try c.decodeIfPresent(String.self, forKey: .contactChannel); contactOutcome = try c.decodeIfPresent(String.self, forKey: .contactOutcome)
+        occurredAt = try c.decodeIfPresent(String.self, forKey: .occurredAt); deviceRecordedAt = try c.decodeIfPresent(String.self, forKey: .deviceRecordedAt)
         targetID = try c.decodeIfPresent(String.self, forKey: .targetID); expectedRevision = try c.decodeIfPresent(String.self, forKey: .expectedRevision)
         baseline = try c.decodeIfPresent(JSON.self, forKey: .baseline); proposal = try c.decodeIfPresent(JSON.self, forKey: .proposal)
         mode = try c.decodeIfPresent(String.self, forKey: .mode) ?? "editing"; predecessor = try c.decodeIfPresent(String.self, forKey: .predecessor)
@@ -121,7 +130,13 @@ struct Queued: Identifiable, Sendable {
     let envelope: Envelope, bytes: Data, status: String, error: String?, receipt: Receipt?, overlay: Bool
     let attempts: Int, retryAt: Double
     var id: String { envelope.operation_id }
-    var title: String { envelope.kind == "add_note" || envelope.kind == "edit_note" ? envelope.payload["body"].text : envelope.payload["title"].text }
+    var isContact: Bool { envelope.kind == "log_contact_attempt" }
+    var title: String {
+        if envelope.kind == "add_note" || envelope.kind == "edit_note" { return envelope.payload["body"].text }
+        if isContact { return [envelope.payload["channel"].text, envelope.payload["outcome"].text, envelope.payload["occurred_at"].text].filter { !$0.isEmpty }.joined(separator: " · ") }
+        if ["create_task", "update_task"].contains(envelope.kind) { return envelope.payload["title"].text }
+        return ""
+    }
     var targetID: String? {
         if envelope.kind == "edit_note" { return envelope.payload["note_id"].text }
         if envelope.kind == "update_task" { return envelope.payload["task_id"].text }

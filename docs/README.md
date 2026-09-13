@@ -47,6 +47,10 @@ authoritative.
 
 ## Engineer handoff
 
+- [Current planning: Mobile004 / 010e4](plans/MOBILE_004_010e4_PARALLEL_LAUNCH.md):
+  offline stage changes and admitted-People core refresh; D-079 authorizes planning
+  and the smaller [migration family sequence](plans/SLICE_010_ADMITTED_PEOPLE_LADDER.md),
+  not implementation. Calling follows the existing progression.
 - [System map](architecture/ARCHITECTURE_BASELINE.md): current components,
   boundaries and the distinction between development and planned production.
 - [Current state](plans/PROJECT_STATE.md): active work, release evidence,

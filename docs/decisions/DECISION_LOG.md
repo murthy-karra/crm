@@ -2702,3 +2702,56 @@ Preserve the native-demo API and installed stores. Native distribution,
 physical-phone/cellular tests, live FUB/customer processing, activation and
 production-cluster deployment remain separate. Record the actual release in
 `docs/tasks/MOBILE_003_010e3_RELEASE.md`.
+
+### D-079 — Mobile 004 and sequential admitted-People migration planning (2026-09-13)
+
+After the assistant proposed planning offline mobile stage changes and extending
+migration support for newly admitted People, the user said **“ok lets plan”**.
+The user then selected **“Plan smaller sequential migration slices (Recommended)”**
+when asked whether to start with later core refresh and add dependent families
+separately or plan all families in one larger milestone.
+
+This authorizes drafting the [Mobile 004 specification](../specs/MOBILE_004_OFFLINE_STAGE_CHANGES.md),
+[010e4 core-refresh specification](../specs/SLICE_010e4.md), their implementation
+briefs and [coordinated plan](../plans/MOBILE_004_010e4_PARALLEL_LAUNCH.md).
+The accepted migration sequence is later core refresh for admitted People first,
+then separately specified dependent-family extensions; the
+[ladder](../plans/SLICE_010_ADMITTED_PEOPLE_LADDER.md) records those boundaries.
+
+The user also said **“lets not interrupt other progressions, we can do calling
+afterwards.”** Native calling therefore follows the existing mobile/migration
+progression rather than replacing the next mobile work. This does not resume
+physical-phone/cellular testing or approve a calling slice.
+
+Planning authorization does not accept Mobile 004's proposed stage revision,
+conflict/catalog/receipt contracts or 010e4's admission baseline, cohort watermark,
+remainder, private-write and recovery contracts. Those require completed review
+and implementation approval. Preserve Terra high for substantive implementation
+when authorized, existing shared development and the native demo. Live source/
+customer processing, family imports beyond 010e4, activation, publication,
+deployment and app distribution remain separately scoped. No application change
+or runtime work is authorized by this planning decision.
+
+### D-080 — Mobile 004 and admitted-People refresh implementation approved (2026-09-13)
+
+After the completed draft specifications, execution briefs, sequential migration
+ladder and coordinated ownership plan were presented, the user said
+**“go ahead and implement.”** This accepts [Mobile 004](../specs/MOBILE_004_OFFLINE_STAGE_CHANGES.md),
+[010e4](../specs/SLICE_010e4.md), their declared shared contracts and
+[coordinated plan](../plans/MOBILE_004_010e4_PARALLEL_LAUNCH.md) for implementation
+and isolated synthetic verification. Preserve Terra high implementation writers.
+
+Mobile stage changes use stage-specific revision checks, server business time,
+explicit conflict recovery, immutable operation receipts and a coherent opt-in
+stage catalog. Admission-derived core refresh uses successful terminal cohorts,
+conservative whole-Person local-change holds, independent cohort watermarks and
+explicit exact-boundary remainder, under the continuing migration-review hold.
+Concrete compatible DTO/schema/lock checkpoints and local integration commits
+are owned implementation work, not a repeated approval gate. Required independent
+review and verification remain necessary; source-based planning notes alone do
+not establish completion.
+
+Preserve shared development and the native demo. Later migration families,
+physical phones/cellular, broad mobile design, native calling, live FUB/customer
+processing, activation, app distribution, Git publication and deployment remain
+separately scoped. No production release follows from this implementation approval.

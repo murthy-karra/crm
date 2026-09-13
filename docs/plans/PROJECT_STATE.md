@@ -1,6 +1,6 @@
 # Project state
 
-Updated: 2026-09-13 (documentation efficiency pass; no runtime changes).
+Updated: 2026-09-13 (Mobile004 / 010e4 implementation under D-080; no runtime changes).
 Current status and live residuals only. [History](PROJECT_HISTORY.md#archived-project-state-snapshot--2026-09-13)
 preserves the previous state verbatim, including superseded instructions.
 Decisions remain authoritative; use the [reading index](../decisions/DECISION_INDEX.md).
@@ -20,7 +20,11 @@ production-cluster deployment remain separate. Shared development is Mac-hosted.
 
 ## Current slice
 
-No active product implementation lane. Mobile 001–003 and migration assessment,
+**Implementing Mobile 004 / 010e4 under D-080.**
+[Mobile stage draft](../specs/MOBILE_004_OFFLINE_STAGE_CHANGES.md),
+[admitted-core refresh draft](../specs/SLICE_010e4.md) and
+[coordinated plan](MOBILE_004_010e4_PARALLEL_LAUNCH.md) are accepted; [actual implementation status](../tasks/MOBILE_004_010e4_IMPLEMENTATION_STATUS.md) tracks gates.
+Mobile 001–003 and migration assessment,
 core capture, People, metadata, notes/tasks, historical capture/timeline, change
 reporting, existing-People refresh and core-only new-Person admission are delivered
 within their approved synthetic scopes. See [latest implementation evidence](../tasks/MOBILE_003_010e3_IMPLEMENTATION_STATUS.md).
@@ -35,13 +39,19 @@ this release; use the latest release record for delivered status.
 
 ## Current branch
 
-`main`; at inspection, HEAD was documentation closeout `6e89776`, with no other
-local worktrees or implementation branches remaining. This documentation pass
-changes the working tree only. Verify Git state before a later task.
+`main`; published documentation baseline `44dcf52`. Implementation starts from this published baseline plus accepted docs in
+`codex/mobile004-010e4-integration`; see implementation status for owned worktrees.
 Keep Cargo targets and Web verification outputs separate from shared runtime
 artifacts; preserve the private demo and owned recovery material.
 
 ## Last accepted decision
+
+**D-080:** user accepted both specifications/contracts and isolated implementation.
+No publication/deployment or live-customer scope is implied.
+
+**D-079:** plan Mobile004 and 010e4; user selected smaller sequential migration
+slices and kept calling afterwards. Proposed implementation contracts are not
+accepted by planning authorization.
 
 **D-078 plus its 2026-09-13 release follow-up:** accepted Mobile 003's reported
 contact occurrence time and 010e3's core-only admission contracts, then authorized
@@ -136,18 +146,19 @@ No application tests were run; application code and runtime were unchanged.
 
 ## Next recommended action
 
-The documentation-only efficiency pass is complete. Product follow-up
-recommendation: specify dependent-family coverage and later refresh for
-010e3-admitted People. Offline mobile stage changes were suggested as a possible
-Mobile 004; neither new contract nor implementation is approved by this docs task.
-Prepare C-gate erasure/restore work before real customer data. Keep user-deferred
-work deferred and scope first production work through the readiness checklist.
+Complete the accepted [Mobile004 / 010e4 implementation](../tasks/MOBILE_004_010e4_IMPLEMENTATION_STATUS.md)
+with frozen contracts, independent review and isolated synthetic verification. The
+[family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md) keeps tags/fields, notes/tasks
+and history as subsequent specifications. Native calling follows this progression.
+Keep physical-phone/design/live-source work deferred; prepare C-gate erasure/restore
+work before real customer data and scope production through the readiness checklist.
 
 ## Approval currently required
 
-Completed D-078 implementation/publication/deployment need no repeated approval.
+D-080 accepts Mobile004 and 010e4 implementation/contracts; no repeat approval
+is pending. Completed D-078 release needs no repeated approval.
 New shared contracts, native distribution, live FUB/customer processing, activation
 and production deployment retain their own scope and gates. Recovery targets,
 retention/erasure, support access, outbound/recording consent and agent-departure
-policy remain open where the decision log says so. This documentation assignment
-authorizes reading/workflow cleanup only; it grants no product or release approval.
+policy remain open where the decision log says so. This planning task grants
+no new implementation or release approval.

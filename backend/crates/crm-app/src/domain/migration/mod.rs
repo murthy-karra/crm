@@ -271,9 +271,3 @@ pub(crate) mod people_admission_queries;
 pub(crate) mod people_admission_source;
 pub(crate) mod people_admission_store;
 pub mod people_admission_worker;
-
-pub mod admitted_people_refresh;
-pub(crate) mod admitted_people_refresh_queries;
-pub(crate) mod admitted_people_refresh_source;
-pub(crate) mod admitted_people_refresh_store;
-pub mod admitted_people_refresh_worker;

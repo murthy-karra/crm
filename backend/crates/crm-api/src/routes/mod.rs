@@ -38,5 +38,3 @@ pub mod mobile;
 
 pub mod people_admissions;
 pub mod people_refreshes;
-
-pub mod admitted_people_refreshes;

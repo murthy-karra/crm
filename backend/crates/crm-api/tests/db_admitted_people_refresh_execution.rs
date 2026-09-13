@@ -332,7 +332,10 @@ async fn mapped_fixture(migrator: &PgPool) -> (Fixture, Uuid) {
     (f, parent)
 }
 
-async fn mapped_fixture_with_two_qualified_stages(migrator: &PgPool) -> (Fixture, Uuid, Uuid) {
+async fn mapped_fixture_with_two_qualified_stages(
+    migrator: &PgPool,
+    same_target: bool,
+) -> (Fixture, Uuid, Uuid) {
     let book = Arc::new(Book::new(vec![json!({
         "id": 101,
         "firstName": "Original",
@@ -376,7 +379,11 @@ async fn mapped_fixture_with_two_qualified_stages(migrator: &PgPool) -> (Fixture
             StagePatch {
                 source_key: "5".into(),
                 choice: StageChoice::Existing {
-                    stage_id: qualified_stage,
+                    stage_id: if same_target {
+                        f.lead_stage
+                    } else {
+                        qualified_stage
+                    },
                 },
             },
         ],
@@ -1270,7 +1277,8 @@ async fn qualified_later_stage_transition_is_once_and_failure_rolls_back_revisio
         .unwrap()
     }
 
-    let (f, parent, qualified_stage) = mapped_fixture_with_two_qualified_stages(&migrator).await;
+    let (f, parent, qualified_stage) =
+        mapped_fixture_with_two_qualified_stages(&migrator, false).await;
     let admission = seal_admission(
         &f,
         parent,
@@ -1303,7 +1311,8 @@ async fn qualified_later_stage_transition_is_once_and_failure_rolls_back_revisio
         "one actual stage transition appends exactly one migration fact"
     );
 
-    let (failure, failure_parent, _) = mapped_fixture_with_two_qualified_stages(&migrator).await;
+    let (failure, failure_parent, _) =
+        mapped_fixture_with_two_qualified_stages(&migrator, false).await;
     let failure_admission = seal_admission(
         &failure,
         failure_parent,
@@ -1375,7 +1384,7 @@ async fn missing_execution_mapping_targets_settle_held_stale_without_native_writ
     }
 
     let (stage, stage_parent, target_stage) =
-        mapped_fixture_with_two_qualified_stages(&migrator).await;
+        mapped_fixture_with_two_qualified_stages(&migrator, false).await;
     let stage_admission = seal_admission(
         &stage,
         stage_parent,
@@ -1400,7 +1409,8 @@ async fn missing_execution_mapping_targets_settle_held_stale_without_native_writ
         .unwrap();
     assert_held_stale(&stage, stage_run, stage_person, stage_before).await;
 
-    let (assignee, assignee_parent, _) = mapped_fixture_with_two_qualified_stages(&migrator).await;
+    let (assignee, assignee_parent, _) =
+        mapped_fixture_with_two_qualified_stages(&migrator, false).await;
     let assignee_admission = seal_admission(
         &assignee,
         assignee_parent,
@@ -1425,6 +1435,44 @@ async fn missing_execution_mapping_targets_settle_held_stale_without_native_writ
         .await
         .unwrap();
     assert_held_stale(&assignee, assignee_run, assignee_person, assignee_before).await;
+}
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn selected_mapping_cannot_be_replaced_by_a_same_target_sibling(migrator: PgPool) {
+    let (f, parent, _) = mapped_fixture_with_two_qualified_stages(&migrator, true).await;
+    let admission = seal_admission(
+        &f,
+        parent,
+        vec![json!({"id":104,"firstName":"Original","stage":"Qualified","assignedUserId":3})],
+    )
+    .await;
+    let person = admitted_person(&f, admission, "104").await;
+    let before = native(&f, person).await;
+    let report_id = report(
+        &f,
+        parent,
+        vec![json!({"id":104,"firstName":"Later","stage":"Qualified","assignedUserId":3})],
+    )
+    .await;
+    let (run, detail) = prepare(&f, admission, report_id).await;
+    confirm(&f, run, &confirmation(&detail)).await;
+    // Source stage 4 remains a qualified sibling for the same native Lead
+    // target.  Only source stage 5 was selected by this item.
+    sqlx::query("UPDATE migration_import_mapping SET qualified=false WHERE organization_id=$1 AND plan_id=(SELECT confirmed_plan_id FROM migration_import WHERE id=$2) AND kind='stage' AND source_key='5'")
+        .bind(f.org)
+        .bind(parent)
+        .execute(&migrator)
+        .await
+        .unwrap();
+    drain(&f, run).await;
+    assert_eq!(native(&f, person).await, before);
+    assert_eq!(
+        refresh::results(&f.pool, &f.key, &f.ctx, run, refresh::Page::default())
+            .await
+            .unwrap()["results"][0]["disposition"],
+        "held_stale"
+    );
 }
 
 #[sqlx::test]

@@ -24,6 +24,7 @@ HISTORY = "fub-history-capture-v1"
 TIMELINE = "fub-history-timeline-v1"
 CORE_CHANGE = "fub-core-change-v1"
 PEOPLE_REFRESH = "fub-people-refresh-v1"
+PEOPLE_ADMISSION = "fub-people-admission-v1"
 
 
 def fixtures(bindings="0", retired=True):
@@ -250,12 +251,13 @@ class PreflightTests(unittest.TestCase):
                      {"count": "3", "unsupported_count": "0"}, {"present": True},
                      {"count": "4", "unsupported_count": "0"}, {"present": True},
                      {"count": "5", "unsupported_count": "0"}, {"present": True, "compatible": True},
-                     {"count": "6", "unsupported_count": "0"}][len(calls)-1]
+                     {"count": "6", "unsupported_count": "0"}, {"present": True, "compatible": True},
+                     {"count": "7", "unsupported_count": "0"}][len(calls)-1]
             return mock.Mock(returncode=0, stdout=json.dumps(value).encode())
         with mock.patch.object(MODULE["subprocess"], "run", side_effect=fake_run):
             result = MODULE["database_state"]()
         self.assertEqual(result["binding_count"], "1")
-        self.assertEqual(len(calls), 12)
+        self.assertEqual(len(calls), 14)
         self.assertEqual(result["activity_binding_count"], "2")
         self.assertIn("confirmed_plan_id IS NOT NULL", calls[3][0][-1])
         self.assertNotIn("state=", calls[3][0][-1])
@@ -275,6 +277,9 @@ class PreflightTests(unittest.TestCase):
         self.assertIn("FROM public.migration_people_refresh", calls[11][0][-1])
         self.assertIn("engine_version<>'fub-people-refresh-v1'", calls[11][0][-1])
         self.assertNotIn("state=", calls[11][0][-1])
+        self.assertEqual(result["people_admission_binding_count"], "7")
+        self.assertIn("FROM public.migration_people_admission", calls[13][0][-1])
+        self.assertNotIn("state=", calls[13][0][-1])
         sql = calls[1][0][-1]
         self.assertIn("FROM public.migration_workspace", sql)
         self.assertNotIn("WHERE", sql)
@@ -526,6 +531,8 @@ class PreflightTests(unittest.TestCase):
                 return {"present": True, "compatible": True}
             if "FROM public.migration_people_refresh" in query:
                 return {"count": "2", "unsupported_count": "1"}
+            if "migration_people_admission" in query:
+                return {"present": False, "compatible": False}
             if "to_regclass" in query:
                 return {"present": False}
             self.fail("unexpected query")
@@ -557,6 +564,134 @@ class PreflightTests(unittest.TestCase):
                             "gate_versions": ["crm-workspace-v1"], "database_name": "synthetic_only"}
                 if "migration_people_refresh" in query:
                     return presence
+                if "migration_people_admission" in query:
+                    return {"present": False, "compatible": False}
+                if "to_regclass" in query:
+                    return {"present": False}
+                self.fail("unexpected query")
+            with self.subTest(presence=presence), mock.patch.dict(
+                    MODULE["database_state"].__globals__, {"sql_json": answer}):
+                with self.assertRaises(EvidenceError):
+                    MODULE["database_state"]()
+
+    def test_people_admission_requires_own_schema_capability_and_candidate(self):
+        for retained in ["0", "1"]:
+            for capabilities in [[], [PEOPLE_REFRESH], [PEOPLE_ADMISSION], [PEOPLE_REFRESH, PEOPLE_ADMISSION]]:
+                values = fixtures("1")
+                values[3].update(people_admission_schema_present=True,
+                                 people_admission_binding_count=retained,
+                                 people_admission_unsupported_count="0")
+                values[0]["artifacts"][0]["capabilities"] = capabilities
+                report = check(values)
+                self.assertEqual(report["people_admission_confirmation_ready"], PEOPLE_ADMISSION in capabilities)
+                self.assertEqual(report["launch_allowed"], retained == "0" or PEOPLE_ADMISSION in capabilities)
+        values = fixtures("1")
+        values[0]["artifacts"][0]["capabilities"] = [PEOPLE_ADMISSION]
+        report = check(values)
+        self.assertFalse(report["people_admission_confirmation_ready"])
+        self.assertIn("people_admission_schema_missing", report["people_admission_confirmation_reasons"])
+
+    def test_people_admission_retained_fences_incapable_candidate_and_running_worker(self):
+        for location in ["candidate", "running"]:
+            values = fixtures("1")
+            values[3].update(people_admission_schema_present=True,
+                             people_admission_binding_count="1",
+                             people_admission_unsupported_count="0")
+            values[0]["artifacts"][0]["capabilities"] = [PEOPLE_ADMISSION]
+            values[0]["artifacts"].append({"sha256": "e" * 64, "role": "worker",
+                                             "gate_version": "crm-workspace-v1", "revision": "e" * 40})
+            if location == "candidate":
+                values[1]["artifacts"].append({"role": "worker", "sha256": "e" * 64})
+            else:
+                values[2]["processes"].append({"id": "old-admission-worker", "role": "worker", "sha256": "e" * 64})
+            report = check(values)
+            self.assertFalse(report["launch_allowed"])
+            self.assertFalse(report["people_admission_confirmation_ready"])
+            self.assertIn("people_admission_binding_requires_compatible_artifacts", report["launch_reasons"])
+            values[0]["artifacts"][-1]["capabilities"] = [PEOPLE_ADMISSION]
+            self.assertTrue(check(values)["people_admission_confirmation_ready"])
+
+    def test_people_admission_malformed_unknown_engine_and_cli_only_evidence_fail_closed(self):
+        for extra in [
+            {"people_admission_binding_count": "1"},
+            {"people_admission_schema_present": False, "people_admission_binding_count": "1",
+             "people_admission_unsupported_count": "0"},
+            {"people_admission_schema_present": True, "people_admission_binding_count": "01",
+             "people_admission_unsupported_count": "0"},
+            {"people_admission_schema_present": True, "people_admission_binding_count": "1",
+             "people_admission_unsupported_count": "2"},
+        ]:
+            values = fixtures("1")
+            values[3].update(extra)
+            with self.subTest(extra=extra), self.assertRaises(EvidenceError):
+                check(values)
+        values = fixtures("1")
+        values[3].update(people_admission_schema_present=True, people_admission_binding_count="1",
+                         people_admission_unsupported_count="1")
+        values[0]["artifacts"][0]["capabilities"] = [PEOPLE_ADMISSION]
+        report = check(values)
+        self.assertFalse(report["launch_allowed"])
+        self.assertIn("people_admission_engine_unsupported", report["launch_reasons"])
+        values = fixtures("1")
+        values[3].update(people_admission_schema_present=True, people_admission_binding_count="0",
+                         people_admission_unsupported_count="0")
+        values[0]["artifacts"][0].update(role="cli", capabilities=[PEOPLE_ADMISSION])
+        values[1]["artifacts"][0]["role"] = "cli"
+        values[2]["processes"] = []
+        report = check(values)
+        self.assertTrue(report["launch_allowed"])
+        self.assertFalse(report["people_admission_confirmation_ready"])
+        self.assertIn("people_admission_candidate_missing", report["people_admission_confirmation_reasons"])
+
+    def test_database_people_admission_inventory_requires_all_guard_objects_and_engine(self):
+        sql = []
+        def answer(query):
+            sql.append(query)
+            if "'database_name'" in query and "to_regclass" in query:
+                return {"present": True, "database_name": "synthetic_only"}
+            if "FROM public.migration_workspace" in query:
+                return {"schema_present": True, "binding_count": "1",
+                        "gate_versions": ["crm-workspace-v1"], "database_name": "synthetic_only"}
+            if "migration_people_admission" in query and "to_regclass" in query:
+                return {"present": True, "compatible": True}
+            if "FROM public.migration_people_admission" in query:
+                return {"count": "2", "unsupported_count": "1"}
+            if "migration_people_refresh" in query:
+                return {"present": False, "compatible": False}
+            if "to_regclass" in query:
+                return {"present": False}
+            self.fail("unexpected query")
+        with mock.patch.dict(MODULE["database_state"].__globals__, {"sql_json": answer}):
+            state = MODULE["database_state"]()
+        MODULE["validate_state"](state)
+        self.assertEqual(state["people_admission_binding_count"], "2")
+        self.assertEqual(state["people_admission_unsupported_count"], "1")
+        schema = next(query for query in sql if "crm_people_admission_mutation_allowed" in query)
+        for required in ["migration_people_admission", "migration_people_admission_plan",
+                         "migration_people_admission_item", "person_admission_provenance",
+                         "person_admitted", "admission_item_id", "confirmed_admission_plan_id",
+                         "crm_people_admission_mutation_allowed(uuid,text,text,text,jsonb)"]:
+            self.assertIn(required, schema)
+        observed = next(query for query in sql if "FROM public.migration_people_admission" in query)
+        self.assertIn("engine_version<>'fub-people-admission-v1'", observed)
+        self.assertNotIn("state=", observed)
+
+    def test_partial_people_admission_schema_cannot_hide_retained_bindings(self):
+        for presence in [
+            {"present": True, "compatible": False},
+            {"present": False, "compatible": True},
+            {"present": True, "compatible": None},
+        ]:
+            def answer(query):
+                if "'database_name'" in query and "to_regclass" in query:
+                    return {"present": True, "database_name": "synthetic_only"}
+                if "FROM public.migration_workspace" in query:
+                    return {"schema_present": True, "binding_count": "1",
+                            "gate_versions": ["crm-workspace-v1"], "database_name": "synthetic_only"}
+                if "migration_people_admission" in query:
+                    return presence
+                if "migration_people_refresh" in query:
+                    return {"present": False, "compatible": False}
                 if "to_regclass" in query:
                     return {"present": False}
                 self.fail("unexpected query")
@@ -661,6 +796,8 @@ class PreflightTests(unittest.TestCase):
                 return {"schema_present": True, "binding_count": "1",
                         "gate_versions": ["crm-workspace-v1"], "database_name": "synthetic_only"}
             if "migration_people_refresh" in query:
+                return {"present": False, "compatible": False}
+            if "migration_people_admission" in query:
                 return {"present": False, "compatible": False}
             if "to_regclass" in query:
                 return {"present": "migration_history_import_anchor" in query}

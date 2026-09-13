@@ -14,6 +14,9 @@ pub const GATE_VERSION: &str = "crm-workspace-v1";
 pub const HISTORY_TIMELINE_CAPABILITY: &str = "fub-history-timeline-v1";
 pub const CORE_CHANGE_CAPABILITY: &str = "fub-core-change-v1";
 pub const PEOPLE_REFRESH_CAPABILITY: &str = "fub-people-refresh-v1";
+pub const PEOPLE_ADMISSION_CAPABILITY: &str = "fub-people-admission-v1";
+const PEOPLE_ADMISSION_SCHEMA: &str = "SELECT (SELECT bool_and(to_regclass('public.'||name) IS NOT NULL) FROM (VALUES ('migration_people_admission'),('migration_people_admission_plan'),('migration_people_admission_item'),('migration_people_admission_contact'),('migration_people_admission_result'),('migration_people_admission_receipt'),('migration_people_admission_reservation'),('person_admission_provenance'),('person_admitted')) required(name)) AND to_regprocedure('public.crm_people_admission_mutation_allowed(uuid,text,text,text,jsonb)') IS NOT NULL AND EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=to_regclass('public.migration_people_admission') AND attname='confirmed_admission_plan_id' AND atttypid='uuid'::regtype AND NOT attisdropped) AND EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=to_regclass('public.migration_people_admission_plan') AND attname='prepared_bytes' AND atttypid='bigint'::regtype AND attnotnull AND NOT attisdropped) AND (SELECT count(*)=2 FROM pg_attribute WHERE attrelid=to_regclass('public.migration_import_identity') AND attname IN ('admission_id','admission_item_id') AND atttypid='uuid'::regtype AND NOT attisdropped)";
+const PEOPLE_ADMISSION_PRESENT: &str = "SELECT (SELECT bool_or(to_regclass('public.'||name) IS NOT NULL) FROM (VALUES ('migration_people_admission'),('migration_people_admission_plan'),('migration_people_admission_item'),('migration_people_admission_contact'),('migration_people_admission_result'),('migration_people_admission_receipt'),('migration_people_admission_reservation'),('person_admission_provenance'),('person_admitted')) required(name)) OR to_regprocedure('public.crm_people_admission_mutation_allowed(uuid,text,text,text,jsonb)') IS NOT NULL OR EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=to_regclass('public.migration_import_identity') AND attname IN ('admission_id','admission_item_id') AND NOT attisdropped)";
 pub const WAIT: Duration = Duration::from_secs(2);
 
 tokio::task_local! {
@@ -234,6 +237,7 @@ pub struct ReleaseReadiness {
     history_timeline: bool,
     core_change: bool,
     people_refresh: bool,
+    people_admission: bool,
 }
 impl ReleaseReadiness {
     pub async fn load_report(pool: &PgPool, path: &std::path::Path) -> Result<Self, sqlx::Error> {
@@ -272,6 +276,7 @@ impl ReleaseReadiness {
             history_timeline: history_timeline_report_ready(&report, &hash),
             core_change: core_change_report_ready(&report, &hash),
             people_refresh: people_refresh_report_ready(&report, &hash),
+            people_admission: people_admission_report_ready(&report, &hash),
             activity: report["activity_confirmation_ready"] == true
                 && report["candidates"].as_array().is_some_and(|items| {
                     items.iter().any(|v| {
@@ -340,6 +345,7 @@ impl ReleaseReadiness {
             history_timeline: true,
             core_change: true,
             people_refresh: true,
+            people_admission: true,
         }
     }
 
@@ -474,6 +480,45 @@ impl ReleaseReadiness {
         }
         Ok(())
     }
+    pub fn people_admission_ready(&self) -> bool {
+        self.people_admission
+            && (self.synthetic
+                || (self.expires_at > Utc::now()
+                    && self.checked_at <= Utc::now()
+                    && Utc::now() - self.checked_at <= chrono::Duration::minutes(5)))
+    }
+
+    pub async fn require_people_admission(
+        &self,
+        conn: &mut PgConnection,
+    ) -> Result<(), sqlx::Error> {
+        self.require_current(conn).await?;
+        if !self.people_admission_ready() {
+            return Err(sqlx::Error::Protocol(
+                "people admission release not ready".into(),
+            ));
+        }
+        let schema: bool = sqlx::query_scalar(PEOPLE_ADMISSION_SCHEMA)
+            .fetch_one(&mut *conn)
+            .await?;
+        if !schema {
+            return Err(sqlx::Error::Protocol(
+                "people admission schema unavailable".into(),
+            ));
+        }
+        let unsupported: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM migration_people_admission WHERE engine_version<>$1)",
+        )
+        .bind(PEOPLE_ADMISSION_CAPABILITY)
+        .fetch_one(conn)
+        .await?;
+        if unsupported {
+            return Err(sqlx::Error::Protocol(
+                "people admission engine incompatible".into(),
+            ));
+        }
+        Ok(())
+    }
 }
 
 fn history_timeline_report_ready(report: &serde_json::Value, hash: &str) -> bool {
@@ -514,6 +559,22 @@ fn people_refresh_report_ready(report: &serde_json::Value, hash: &str) -> bool {
                     && matches!(item["role"].as_str(), Some("api" | "worker"))
                     && item["capabilities"].as_array().is_some_and(|capabilities| {
                         capabilities.iter().any(|v| v == PEOPLE_REFRESH_CAPABILITY)
+                    })
+            })
+        })
+}
+
+fn people_admission_report_ready(report: &serde_json::Value, hash: &str) -> bool {
+    report["people_admission_confirmation_ready"] == true
+        && report["candidates"].as_array().is_some_and(|items| {
+            items.iter().any(|item| {
+                item["sha256"] == hash
+                    && item["gate_version"] == GATE_VERSION
+                    && matches!(item["role"].as_str(), Some("api" | "worker"))
+                    && item["capabilities"].as_array().is_some_and(|capabilities| {
+                        capabilities
+                            .iter()
+                            .any(|v| v == PEOPLE_ADMISSION_CAPABILITY)
                     })
             })
         })
@@ -587,11 +648,36 @@ pub async fn startup_compatible(conn: &mut PgConnection) -> Result<(), sqlx::Err
             "SELECT EXISTS(SELECT 1 FROM migration_people_refresh WHERE engine_version<>$1)",
         )
         .bind(PEOPLE_REFRESH_CAPABILITY)
-        .fetch_one(conn)
+        .fetch_one(&mut *conn)
         .await?;
         if unsupported {
             return Err(sqlx::Error::Protocol(
                 "people refresh artifact incompatible".into(),
+            ));
+        }
+    }
+    // Partial admission schemas cannot hide retained identities or provenance.
+    let admission_exists: bool = sqlx::query_scalar(PEOPLE_ADMISSION_PRESENT)
+        .fetch_one(&mut *conn)
+        .await?;
+    if admission_exists {
+        let compatible: bool = sqlx::query_scalar(PEOPLE_ADMISSION_SCHEMA)
+            .fetch_one(&mut *conn)
+            .await?;
+        if !compatible {
+            return Err(sqlx::Error::Protocol(
+                "people admission schema incompatible".into(),
+            ));
+        }
+        let unsupported: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM migration_people_admission WHERE engine_version<>$1)",
+        )
+        .bind(PEOPLE_ADMISSION_CAPABILITY)
+        .fetch_one(&mut *conn)
+        .await?;
+        if unsupported {
+            return Err(sqlx::Error::Protocol(
+                "people admission artifact incompatible".into(),
             ));
         }
     }
@@ -665,6 +751,32 @@ mod history_capture_readiness_tests {
             .unwrap()
             .remove("people_refresh_confirmation_ready");
         assert!(!people_refresh_report_ready(&report, "verified"));
+    }
+
+    #[test]
+    fn people_admission_cannot_borrow_other_readiness_or_artifact_identity() {
+        let mut report = json!({
+            "people_refresh_confirmation_ready": true,
+            "people_admission_confirmation_ready": true,
+            "candidates": [{"sha256":"verified", "gate_version":GATE_VERSION,
+                "role":"api", "capabilities":[PEOPLE_ADMISSION_CAPABILITY]}]
+        });
+        assert!(people_admission_report_ready(&report, "verified"));
+        assert!(!people_admission_report_ready(&report, "other"));
+        for (field, value) in [
+            ("role", json!("cli")),
+            ("gate_version", json!("pre-010c")),
+            ("capabilities", json!([PEOPLE_REFRESH_CAPABILITY])),
+        ] {
+            let mut changed = report.clone();
+            changed["candidates"][0][field] = value;
+            assert!(!people_admission_report_ready(&changed, "verified"));
+        }
+        report
+            .as_object_mut()
+            .unwrap()
+            .remove("people_admission_confirmation_ready");
+        assert!(!people_admission_report_ready(&report, "verified"));
     }
 
     #[test]
@@ -758,11 +870,13 @@ mod history_capture_readiness_tests {
             history_timeline: true,
             core_change: true,
             people_refresh: true,
+            people_admission: true,
         };
         assert!(ready.history_capture_ready());
         assert!(ready.history_timeline_ready());
         assert!(ready.core_change_ready());
         assert!(ready.people_refresh_ready());
+        assert!(ready.people_admission_ready());
         ready.history_capture = false;
         assert!(!ready.history_capture_ready());
         ready.history_capture = true;
@@ -771,16 +885,19 @@ mod history_capture_readiness_tests {
         assert!(!ready.history_timeline_ready());
         assert!(!ready.core_change_ready());
         assert!(!ready.people_refresh_ready());
+        assert!(!ready.people_admission_ready());
         ready.expires_at = Utc::now() + chrono::Duration::minutes(5);
         ready.checked_at = Utc::now() + chrono::Duration::seconds(60);
         assert!(!ready.history_capture_ready());
         assert!(!ready.history_timeline_ready());
         assert!(!ready.core_change_ready());
         assert!(!ready.people_refresh_ready());
+        assert!(!ready.people_admission_ready());
         ready.checked_at = Utc::now() - chrono::Duration::minutes(6);
         assert!(!ready.history_capture_ready());
         assert!(!ready.history_timeline_ready());
         assert!(!ready.core_change_ready());
         assert!(!ready.people_refresh_ready());
+        assert!(!ready.people_admission_ready());
     }
 }

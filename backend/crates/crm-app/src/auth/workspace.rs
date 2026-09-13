@@ -12,6 +12,7 @@ use crate::ids::{OrganizationId, UserId};
 
 pub const GATE_VERSION: &str = "crm-workspace-v1";
 pub const HISTORY_TIMELINE_CAPABILITY: &str = "fub-history-timeline-v1";
+pub const CORE_CHANGE_CAPABILITY: &str = "fub-core-change-v1";
 pub const WAIT: Duration = Duration::from_secs(2);
 
 tokio::task_local! {
@@ -230,6 +231,7 @@ pub struct ReleaseReadiness {
     activity: bool,
     history_capture: bool,
     history_timeline: bool,
+    core_change: bool,
 }
 impl ReleaseReadiness {
     pub async fn load_report(pool: &PgPool, path: &std::path::Path) -> Result<Self, sqlx::Error> {
@@ -266,6 +268,7 @@ impl ReleaseReadiness {
             synthetic: false,
             history_capture: history_capture_report_ready(&report, &hash),
             history_timeline: history_timeline_report_ready(&report, &hash),
+            core_change: core_change_report_ready(&report, &hash),
             activity: report["activity_confirmation_ready"] == true
                 && report["candidates"].as_array().is_some_and(|items| {
                     items.iter().any(|v| {
@@ -332,6 +335,7 @@ impl ReleaseReadiness {
             activity: true,
             history_capture: true,
             history_timeline: true,
+            core_change: true,
         }
     }
 
@@ -392,6 +396,43 @@ impl ReleaseReadiness {
         }
         Ok(())
     }
+    pub fn core_change_ready(&self) -> bool {
+        self.core_change
+            && (self.synthetic
+                || (self.expires_at > Utc::now()
+                    && self.checked_at <= Utc::now()
+                    && Utc::now() - self.checked_at <= chrono::Duration::minutes(5)))
+    }
+
+    pub async fn require_core_change(&self, conn: &mut PgConnection) -> Result<(), sqlx::Error> {
+        self.require_current(conn).await?;
+        if !self.core_change_ready() {
+            return Err(sqlx::Error::Protocol(
+                "core change release not ready".into(),
+            ));
+        }
+        let schema: bool =
+            sqlx::query_scalar("SELECT to_regclass('migration_core_change_report') IS NOT NULL")
+                .fetch_one(&mut *conn)
+                .await?;
+        if !schema {
+            return Err(sqlx::Error::Protocol(
+                "core change schema unavailable".into(),
+            ));
+        }
+        let unsupported: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM migration_core_change_report WHERE engine_version<>$1)",
+        )
+        .bind(CORE_CHANGE_CAPABILITY)
+        .fetch_one(conn)
+        .await?;
+        if unsupported {
+            return Err(sqlx::Error::Protocol(
+                "core change engine incompatible".into(),
+            ));
+        }
+        Ok(())
+    }
 }
 
 fn history_timeline_report_ready(report: &serde_json::Value, hash: &str) -> bool {
@@ -405,6 +446,20 @@ fn history_timeline_report_ready(report: &serde_json::Value, hash: &str) -> bool
                         capabilities
                             .iter()
                             .any(|v| v == HISTORY_TIMELINE_CAPABILITY)
+                    })
+            })
+        })
+}
+
+fn core_change_report_ready(report: &serde_json::Value, hash: &str) -> bool {
+    report["core_change_confirmation_ready"] == true
+        && report["candidates"].as_array().is_some_and(|items| {
+            items.iter().any(|item| {
+                item["sha256"] == hash
+                    && item["gate_version"] == GATE_VERSION
+                    && matches!(item["role"].as_str(), Some("api" | "worker"))
+                    && item["capabilities"].as_array().is_some_and(|capabilities| {
+                        capabilities.iter().any(|v| v == CORE_CHANGE_CAPABILITY)
                     })
             })
         })
@@ -514,6 +569,32 @@ mod history_capture_readiness_tests {
     use serde_json::json;
 
     #[test]
+    fn core_change_cannot_borrow_other_readiness_or_artifact_identity() {
+        let mut report = json!({
+            "history_timeline_confirmation_ready": true,
+            "core_change_confirmation_ready": true,
+            "candidates": [{"sha256":"verified", "gate_version":GATE_VERSION,
+                "role":"api", "capabilities":[CORE_CHANGE_CAPABILITY]}]
+        });
+        assert!(core_change_report_ready(&report, "verified"));
+        assert!(!core_change_report_ready(&report, "other"));
+        for (field, value) in [
+            ("role", json!("cli")),
+            ("gate_version", json!("pre-010c")),
+            ("capabilities", json!([HISTORY_TIMELINE_CAPABILITY])),
+        ] {
+            let mut changed = report.clone();
+            changed["candidates"][0][field] = value;
+            assert!(!core_change_report_ready(&changed, "verified"));
+        }
+        report
+            .as_object_mut()
+            .unwrap()
+            .remove("core_change_confirmation_ready");
+        assert!(!core_change_report_ready(&report, "verified"));
+    }
+
+    #[test]
     fn timeline_cannot_borrow_capture_readiness_or_another_artifact_role() {
         let mut report = json!({
             "history_capture_confirmation_ready":true,
@@ -576,21 +657,26 @@ mod history_capture_readiness_tests {
             activity: true,
             history_capture: true,
             history_timeline: true,
+            core_change: true,
         };
         assert!(ready.history_capture_ready());
         assert!(ready.history_timeline_ready());
+        assert!(ready.core_change_ready());
         ready.history_capture = false;
         assert!(!ready.history_capture_ready());
         ready.history_capture = true;
         ready.expires_at = Utc::now() - chrono::Duration::seconds(1);
         assert!(!ready.history_capture_ready());
         assert!(!ready.history_timeline_ready());
+        assert!(!ready.core_change_ready());
         ready.expires_at = Utc::now() + chrono::Duration::minutes(5);
         ready.checked_at = Utc::now() + chrono::Duration::seconds(60);
         assert!(!ready.history_capture_ready());
         assert!(!ready.history_timeline_ready());
+        assert!(!ready.core_change_ready());
         ready.checked_at = Utc::now() - chrono::Duration::minutes(6);
         assert!(!ready.history_capture_ready());
         assert!(!ready.history_timeline_ready());
+        assert!(!ready.core_change_ready());
     }
 }

@@ -343,3 +343,6 @@ mod db_history_import_authority;
 mod db_history_import_support;
 mod db_history_review;
 mod db_history_timeline_compat;
+
+#[path = "db_core_change_reports.rs"]
+mod db_core_change_reports;

@@ -2611,3 +2611,15 @@ Preserve shared development and the user's native-demo API/app/store. Publishing
 Git branches, refreshing shared development, app distribution, live FUB/customer
 processing, workspace activation and production deployment remain later release
 or separately authorized scope. Record actual implementation evidence separately.
+
+**Release follow-up — 2026-09-13:** After the completed Mobile 002 / 010e2
+implementation and verification record, the user requested **“commit, merge to
+main, push, cleanup and deploy”**. This authorizes publication of the integrated
+backend/Web/native source, main integration, owned branch cleanup and deployment
+of the compatible backend/Web and additive schema to the existing Mac-hosted
+shared-development environment. Reuse the attributed implementation checks and
+perform release-specific backup, preservation, artifact, capability, HTTP/browser
+and recovery verification. Preserve the private native-demo API and installed
+stores. Native distribution, physical-phone/cellular testing, live FUB/customer
+processing, workspace activation and production-cluster deployment remain
+separate. Actual release evidence belongs to `MOBILE_002_010e2_RELEASE.md`.

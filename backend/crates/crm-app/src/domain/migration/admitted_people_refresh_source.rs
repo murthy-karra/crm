@@ -34,7 +34,7 @@ pub async fn retained_person(
     // variant merely because it sorts last.
     let rows = sqlx::query(
         "SELECT r.id,r.capture_id,r.ordinal,r.semantic_hmac,
-                c.raw_byte_len,octet_length(c.nonce)+octet_length(c.ciphertext) AS sealed_byte_len,c.accepted,c.truncated,c.http_status,
+                c.raw_byte_len,(octet_length(c.nonce)+octet_length(c.ciphertext))::bigint AS sealed_byte_len,c.accepted,c.truncated,c.http_status,
                 c.classification,c.representation
            FROM migration_snapshot_record r
            JOIN migration_snapshot_capture c

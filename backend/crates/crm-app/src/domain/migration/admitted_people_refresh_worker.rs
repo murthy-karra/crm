@@ -402,34 +402,15 @@ fn pause_reason(error: &MigrationError) -> Option<&'static str> {
     }
 }
 
-/// The one-candidate preparation turn reserves its declared worst-case output,
-/// instead of an arbitrary small page allowance. Eight encrypted projections/
-/// contacts conservatively cover B/C/N, the immutable baseline and receipts.
+/// The one-candidate preparation turn reserves the complete permitted work
+/// unit. N comes from the later retained source, so B's admission size cannot
+/// bound it; unused capacity is released with the exact measured delta.
 async fn prepare_reservation_bound(
     conn: &mut sqlx::PgConnection,
     r: &sqlx::postgres::PgRow,
 ) -> Result<i64, MigrationError> {
-    let checkpoint: String = r.get("preparation_checkpoint_key");
-    let bytes: Option<i64> = sqlx::query_scalar(
-        "SELECT octet_length(ai.projection_nonce)+octet_length(ai.projection_ciphertext)
-          + COALESCE((SELECT sum(octet_length(c.value_nonce)+octet_length(c.value_ciphertext))
-              FROM migration_people_admission_contact c
-             WHERE c.admission_id=ai.admission_id AND c.item_id=ai.id AND c.organization_id=ai.organization_id),0)
-           FROM migration_people_admission_result ar
-           JOIN migration_people_admission_item ai ON ai.id=ar.item_id AND ai.admission_id=ar.admission_id AND ai.organization_id=ar.organization_id
-          WHERE ar.admission_id=$1 AND ar.organization_id=$2 AND ar.disposition='settled' AND ar.source_id>$3
-          ORDER BY ar.source_id LIMIT 1",
-    )
-    .bind(r.get::<Uuid, _>("admission_id"))
-    .bind(r.get::<Uuid, _>("organization_id"))
-    .bind(checkpoint)
-    .fetch_optional(&mut *conn)
-    .await?;
-    Ok(bytes
-        .unwrap_or(1024)
-        .saturating_mul(8)
-        .saturating_add(64 * 1024)
-        .clamp(1024, s::ITEM_LIMIT))
+    let _ = (conn, r);
+    Ok(s::ITEM_LIMIT)
 }
 
 /// Persist a closed recovery state only for the work instance that actually

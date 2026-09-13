@@ -23,8 +23,6 @@ The test command sources the repository `.env` privately and never prints a
 connection string or credential. The test harness creates and removes its own
 database for each `#[sqlx::test]` invocation.
 
-## Limits
-
 ## Coordinator integration follow-up
 
 After integrating the foundation and legacy lock-clock correction, the coordinator

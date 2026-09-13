@@ -98,12 +98,30 @@ were unchanged. Evidence: `migration/retained-preview-ledger-upgrade.log`,
 Normalization excludes only legitimate snapshot byte counters and audits the
 Organization ledger separately; it preserves all source evidence columns.
 
-The second/final review identified two additional corrections in progress:
-preparation must not load 50 potentially large payloads in one work unit, and a
-mapping target removed after confirmation must settle as held instead of raising
-an unhandled missing-row error. Focused bounded-input and mapping-race regressions
-are required before final disposition.
+The second/final review identified bounded preparation, exact mapping and natural
+identity/baseline proof, missing targets and commit-time source/target validation
+for every baseline-advancing item. Corrections are being integrated within this
+same review round. Remaining targeted repairs distinguish prior settled B from
+obsolete admission envelopes, missing source instructions from explicit mapping
+choices, and per-Person evidence holds from cryptographic recovery pauses.
 
-Remaining: physical accounting correction and retained-preview upgrade; final
-integrated browser and row/byte reconciliation; one 25k hot-plan and paired Person
-read pass; second/final independent review; repository, SQLx and DB gates.
+Additive `00007`–`00009` bind mapping IDs, source account and semantic HMAC;
+`00010` reconciles the previously omitted receipt digest bytes. Their actual saved
+QA upgrade and final physical audit remain pending. A focused stage run at an
+intermediate snapshot failed in 4.71 seconds because a new SQL INT4 expression was
+decoded as BIGINT; the explicit SQL cast is corrected in `82022fd`, and the affected
+execution tests must rerun (`migration/final-focused-stage.log`).
+
+Coordinator readiness fixes `ddf0027`/`775e63a` require every new proof column with
+its exact type/nullability in both runtime and release preflight. At integrated
+`932e71e`, the disposable-database regression passed in 1.46 seconds: complete
+schema succeeds; each missing proof column and incompatible type/nullability
+fails at startup and confirmation; rollback restores readiness. Evidence:
+`integration/readiness-db.log`. The 48 preflight tests passed at `ddf0027`
+(`integration/readiness-preflight.log`). The candidate test compile passed in
+2m04s (`integration/evidence-candidate-build.log`), with the already recorded
+large-test-binary unwind warning. This is not final-tree execution evidence.
+
+Remaining: final targeted worker regressions and review disposition; integrated
+browser and row/byte reconciliation; one 25k hot-plan and paired Person read pass;
+repository, SQLx and DB gates.

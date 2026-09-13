@@ -33,6 +33,12 @@ creates database migrations. Allocate a unique timestamp before writing one.
 No concurrent edits to shared files. The other worktrees first supply the mobile
 foundation, then the iOS and Android implementations; no fourth worktree opens.
 
+The active implementation now assigns `web/**` and the separate synthetic
+`db_people_refresh_ui_fixture.rs` harness to the coordinator after explicit
+writer transfer. The migration writer retains all other backend/schema/test
+files and the contract checkpoint. This uses the same three worktrees, with
+exclusive file ownership and no overlapping edits.
+
 ## Execution sequence
 
 1. Read AGENTS and the spec's decisions/contracts; inspect actual original
@@ -40,7 +46,7 @@ foundation, then the iOS and Android implementations; no fourth worktree opens.
    exact DTOs, engine semantics, scalar/contact diff paging, private permit,
    baseline identity, request receipts, monotonic boundary, locks, byte accounting
    and capability inventory in an owned contract checkpoint before implementation.
-2. Implement backend then Web under the same writer, using the frozen DTO
+2. Implement backend and Web using the frozen DTO
    checkpoint and exact fixtures. Reuse existing migration UI and command/error
    patterns. Source content is escaped data, never trusted control. Mobile backend
    and later both native writers can proceed independently in their owned files.

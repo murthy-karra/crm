@@ -14,7 +14,8 @@ deployment.
 | Lane | Actual state | Primary writer / branch |
 |---|---|---|
 | Mobile backend | Verified and integrated at `2fd9a9d`; worktree/branch closed | Terra high / former `codex/mobile-002-backend` |
-| Migration backend then Web | Implementing retained People refresh and recovery | Terra high / `codex/migration-010e2` |
+| Migration backend | Baseline and atomic execution tests pass; all-group bounded preparation and recovery in progress | Terra high / `codex/migration-010e2` |
+| Migration Web integration | Coordinator owns `web/**` after explicit transfer; focused tests pass, real API/browser proof pending | Coordinator / same migration worktree |
 | iOS | Implementing protected offline editing and native QA from `2fd9a9d` | Terra high / `codex/mobile-002-ios` |
 | Android | Implementing equivalent behavior concurrently from `2fd9a9d` | Terra high / `codex/mobile-002-android` |
 
@@ -111,3 +112,37 @@ The existing same-build `mobile_today_perf` example passed with unchanged Today
 DTOs, 40 samples per side, old p95 17.120666ms and new p95 17.379083ms against a
 25ms permitted increase. Root inspected the actual JSON log; this is isolated
 synthetic regression evidence, not a production capacity or native success claim.
+
+## Parallel implementation checkpoint — 2026-09-12, 22:27 PDT
+
+Migration backend checkpoint `8378aa2` now includes four passing presence
+interpreter unit tests, the passing original-baseline database case and three
+passing execution cases: mapped changes/contact IDs/clears/facts/replay, stale
+destination hold, and atomic settlement rollback/retry. The verified mobile
+foundation `2fd9a9d` merged cleanly into the migration branch as `0932ded`.
+These focused cases do not establish complete010e2 acceptance. Durable50-item
+preparation is underway; all-report-group traversal, storage/reservations,
+recovery, paired performance and final combined gates remain open.
+
+The migration writer explicitly transferred `web/**` to the coordinator. The
+new admin screen includes sealed-report selection, scoped paged previews and
+contacts, exact counted confirmation, expiry/re-preview, recovery using the same
+request ID, cancellation and fixed result traversal. Focused Web/API/view tests
+pass28/28; typecheck and targeted lint pass. The first test attempt failed three
+fixture assertions that assumed no other component consumed UUIDs; those
+assertions now check valid request identity and exact replay instead of an
+incidental counter. Source behavior was not weakened. Log:
+`/private/tmp/crm-010e2-qa/web-focused.log`. Real production-Web/API evidence
+remains pending while the backend completes.
+
+Native source checkpoints are iOS `f130150` and Android `7641c48` / `6db8445`.
+Their verification records distinguish passing storage/live-API tests from
+incomplete UI and populated legacy-store upgrade proof. Root inspected the
+Android verification record; final dependency verification must run without its
+temporary local bypass. Neither native checkpoint is accepted as complete yet.
+
+API3102 remains responsive. Root read-only inspection found `mobile_capacity`
+429 responses and three unsealed100-Person reconciliation generations for the
+shared synthetic actor. Native lanes are identifying abandoned QA generations
+before scoped cleanup; contexts, operation receipts and business records are
+preserved. No shared/demo service or store is used for these tests.

@@ -1,7 +1,7 @@
 //! Fenced one-Person admission worker. It never updates an existing Person.
 use super::{
     import_source::Entity, people_admission_source as source, people_admission_store as s,
-    snapshot::SnapshotPolicy, MigrationError,
+    snapshot::SnapshotPolicy, snapshot_source::Stream, MigrationError,
 };
 use crate::{auth::workspace::ReleaseReadiness, config::RawPayloadKey, ids::OrganizationId};
 use chrono::Utc;
@@ -41,7 +41,12 @@ async fn prepare_page(
     .bind(org.0)
     .fetch_one(&mut *tx)
     .await?;
-    let plan=if let Some(v)=sqlx::query_scalar::<_,Uuid>("SELECT id FROM migration_people_admission_plan WHERE admission_id=$1 AND organization_id=$2 AND state='building' ORDER BY revision DESC LIMIT 1 FOR UPDATE").bind(id).bind(org.0).fetch_optional(&mut *tx).await?{v}else{let p=Uuid::new_v4();let input=s::seal(key,org,id,p,"inputs",&json!({"parent_import_id":run.get::<Uuid,_>("parent_import_id"),"parent_plan_id":run.get::<Uuid,_>("parent_plan_id"),"report_id":run.get::<Uuid,_>("report_id"),"original_snapshot_id":run.get::<Uuid,_>("original_snapshot_id"),"newer_snapshot_id":run.get::<Uuid,_>("newer_snapshot_id"),"newer_sequence":run.get::<i64,_>("newer_sequence"),"engine":s::ENGINE}))?;sqlx::query("INSERT INTO migration_people_admission_plan(id,admission_id,organization_id,revision,state,inputs_nonce,inputs_ciphertext) VALUES($1,$2,$3,1,'building',$4,$5)").bind(p).bind(id).bind(org.0).bind(input.nonce.as_slice()).bind(input.ciphertext).execute(&mut *tx).await?;p};
+    if run.get::<String, _>("preparation_phase") != "groups" {
+        qualify_one_stream(&mut tx, key, org, id, &run).await?;
+        tx.commit().await?;
+        return Ok(());
+    }
+    let plan=if let Some(v)=sqlx::query_scalar::<_,Uuid>("SELECT id FROM migration_people_admission_plan WHERE admission_id=$1 AND organization_id=$2 AND state='building' ORDER BY revision DESC LIMIT 1 FOR UPDATE").bind(id).bind(org.0).fetch_optional(&mut *tx).await?{v}else{let p=Uuid::new_v4();let revision:i64=sqlx::query_scalar("SELECT COALESCE(max(revision),0)+1 FROM migration_people_admission_plan WHERE admission_id=$1 AND organization_id=$2").bind(id).bind(org.0).fetch_one(&mut *tx).await?;let input=s::seal(key,org,id,p,"inputs",&json!({"parent_import_id":run.get::<Uuid,_>("parent_import_id"),"parent_plan_id":run.get::<Uuid,_>("parent_plan_id"),"report_id":run.get::<Uuid,_>("report_id"),"original_snapshot_id":run.get::<Uuid,_>("original_snapshot_id"),"newer_snapshot_id":run.get::<Uuid,_>("newer_snapshot_id"),"newer_sequence":run.get::<i64,_>("newer_sequence"),"engine":s::ENGINE}))?;sqlx::query("INSERT INTO migration_people_admission_plan(id,admission_id,organization_id,revision,state,inputs_nonce,inputs_ciphertext) VALUES($1,$2,$3,$4,'building',$5,$6)").bind(p).bind(id).bind(org.0).bind(revision).bind(input.nonce.as_slice()).bind(input.ciphertext).execute(&mut *tx).await?;p};
     let checkpoint: String = run.get("preparation_checkpoint_key");
     let rows=sqlx::query("SELECT source_key,source_id FROM migration_core_change_group WHERE report_id=$1 AND organization_id=$2 AND family='people' AND source_key>$3 ORDER BY source_key LIMIT 50").bind(run.get::<Uuid,_>("report_id")).bind(org.0).bind(&checkpoint).fetch_all(&mut *tx).await?;
     if rows.is_empty() {
@@ -72,7 +77,7 @@ async fn prepare_page(
             for c in contacts {
                 let contact_id = Uuid::new_v4();
                 let sealed = s::seal(key, org, id, contact_id, "contact", &c)?;
-                sqlx::query("INSERT INTO migration_people_admission_contact(id,item_id,admission_id,organization_id,kind,import_order,value_nonce,value_ciphertext,primary_contact) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)").bind(contact_id).bind(item).bind(id).bind(org.0).bind(c.kind).bind(c.import_order).bind(sealed.nonce.as_slice()).bind(sealed.ciphertext).bind(c.normalized_value).bind(c.import_order==0).execute(&mut *tx).await?;
+                sqlx::query("INSERT INTO migration_people_admission_contact(id,item_id,admission_id,organization_id,kind,import_order,value_nonce,value_ciphertext,primary_contact) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)").bind(contact_id).bind(item).bind(id).bind(org.0).bind(c.kind).bind(c.import_order).bind(sealed.nonce.as_slice()).bind(sealed.ciphertext).bind(c.import_order==0).execute(&mut *tx).await?;
                 sqlx::query("UPDATE migration_people_admission_plan SET intended_contact_count=intended_contact_count+1 WHERE id=$1 AND organization_id=$2").bind(plan).bind(org.0).execute(&mut *tx).await?;
             }
         }
@@ -87,6 +92,76 @@ async fn prepare_page(
     }
     sqlx::query("UPDATE migration_people_admission SET preparation_checkpoint_key=$3,updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2").bind(id).bind(org.0).bind(last).execute(&mut *tx).await?;
     tx.commit().await?;
+    Ok(())
+}
+async fn qualify_one_stream(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    key: &RawPayloadKey,
+    org: OrganizationId,
+    id: Uuid,
+    run: &sqlx::postgres::PgRow,
+) -> Result<(), MigrationError> {
+    let phase: String = run.get("preparation_phase");
+    let (snapshot, sequence, stream, next) = match phase.as_str() {
+        "original_people" => (
+            run.get("original_snapshot_id"),
+            run.get("original_sequence"),
+            Stream::People,
+            "newer_people",
+        ),
+        "newer_people" => (
+            run.get("newer_snapshot_id"),
+            run.get("newer_sequence"),
+            Stream::People,
+            "newer_users",
+        ),
+        "newer_users" => (
+            run.get("newer_snapshot_id"),
+            run.get("newer_sequence"),
+            Stream::Users,
+            "newer_stages",
+        ),
+        "newer_stages" => (
+            run.get("newer_snapshot_id"),
+            run.get("newer_sequence"),
+            Stream::Stages,
+            "groups",
+        ),
+        _ => return Err(MigrationError::SourceNotEligible),
+    };
+    let cursor = if run
+        .get::<String, _>("preparation_checkpoint_key")
+        .is_empty()
+    {
+        source::QualificationCursor::default()
+    } else {
+        serde_json::from_str(&run.get::<String, _>("preparation_checkpoint_key"))
+            .map_err(|_| MigrationError::SourceNotEligible)?
+    };
+    let page = source::qualify_stream_page(
+        &mut **tx,
+        key,
+        org,
+        snapshot,
+        run.get("source_account_id"),
+        stream,
+        sequence,
+        cursor,
+    )
+    .await?;
+    if page.raw_bytes > s::CAPTURE_LIMIT {
+        return Err(MigrationError::StorageLimit);
+    }
+    let (phase, checkpoint) = if page.complete {
+        (next, String::new())
+    } else {
+        (
+            phase.as_str(),
+            serde_json::to_string(&page.cursor).map_err(|_| MigrationError::Crypto)?,
+        )
+    };
+    sqlx::query("UPDATE migration_people_admission SET preparation_phase=$3,preparation_checkpoint_key=$4,updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2")
+        .bind(id).bind(org.0).bind(phase).bind(checkpoint).execute(&mut **tx).await?;
     Ok(())
 }
 async fn classify(
@@ -173,7 +248,11 @@ async fn classify(
             None,
         ));
     };
-    let stage:Option<Uuid>=sqlx::query_scalar("SELECT target_id FROM migration_import_mapping WHERE plan_id=$1 AND organization_id=$2 AND kind='stage' AND source_key=$3 AND qualified AND disposition IN ('existing','create')").bind(run.get::<Uuid,_>("parent_plan_id")).bind(org.0).bind(stage_label).fetch_optional(&mut *conn).await?;
+    // The original mapping key is the retained stage source ID, while People
+    // carries its stage label.  Resolve only through a frozen qualified mapping
+    // whose already-approved target still has that exact name; this is a
+    // revalidation of the old choice, never a new name-based mapping.
+    let stage:Option<Uuid>=sqlx::query_scalar("SELECT m.target_id FROM migration_import_mapping m JOIN stage s ON s.id=m.target_id AND s.organization_id=m.organization_id WHERE m.plan_id=$1 AND m.organization_id=$2 AND m.kind='stage' AND m.qualified AND m.disposition IN ('existing','create') AND s.name=$3 ORDER BY m.id LIMIT 1").bind(run.get::<Uuid,_>("parent_plan_id")).bind(org.0).bind(stage_label).fetch_optional(&mut *conn).await?;
     let Some(stage) = stage else {
         return Ok((
             "held_mapping_gap".into(),
@@ -299,7 +378,7 @@ async fn execute_one(
         .execute(&mut *tx)
         .await?;
     sqlx::query("INSERT INTO person(id,organization_id,first_name,last_name,stage_id,assigned_user_id) VALUES($1,$2,$3,$4,$5,$6)").bind(person).bind(org.0).bind(projection["first_name"].as_str()).bind(projection["last_name"].as_str()).bind(Uuid::parse_str(projection["stage_id"].as_str().ok_or(MigrationError::Crypto)?).map_err(|_|MigrationError::Crypto)?).bind(projection["assigned_user_id"].as_str().and_then(|x|Uuid::parse_str(x).ok())).execute(&mut *tx).await?;
-    for c in sqlx::query("SELECT * FROM migration_people_admission_contact WHERE item_id=$1 AND admission_id=$2 ORDER BY kind,import_order").bind(item.get::<Uuid,_>("id")).bind(id).fetch_all(&mut *tx).await?{let contact:super::import_source::ContactInput=s::open(key,org,id,c.get("id"),"contact",&c.get::<Vec<u8>,_>("value_nonce"),&c.get::<Vec<u8>,_>("value_ciphertext"))?;sqlx::query("INSERT INTO contact_method(id,organization_id,person_id,kind,value,normalized_value) VALUES($1,$2,$3,$4,$5,$6)").bind(Uuid::new_v4()).bind(org.0).bind(person).bind(contact.kind).bind(contact.value).bind(contact.normalized_value).execute(&mut *tx).await?;}
+    for c in sqlx::query("SELECT * FROM migration_people_admission_contact WHERE item_id=$1 AND admission_id=$2 ORDER BY kind,import_order").bind(item.get::<Uuid,_>("id")).bind(id).fetch_all(&mut *tx).await?{let contact:super::import_source::ContactInput=s::open(key,org,id,c.get("id"),"contact",&c.get::<Vec<u8>,_>("value_nonce"),&c.get::<Vec<u8>,_>("value_ciphertext"))?;sqlx::query("INSERT INTO contact_method(id,organization_id,person_id,kind,value,normalized_value,import_order) VALUES($1,$2,$3,$4,$5,$6,$7)").bind(c.get::<Uuid,_>("id")).bind(org.0).bind(person).bind(contact.kind).bind(contact.value).bind(contact.normalized_value).bind(c.get::<i32,_>("import_order")).execute(&mut *tx).await?;}
     let result = Uuid::new_v4();
     let now = Utc::now();
     sqlx::query("INSERT INTO migration_people_admission_result(id,admission_id,item_id,organization_id,person_id,source_id,disposition,actor_user_id) VALUES($1,$2,$3,$4,$5,$6,'settled',$7)").bind(result).bind(id).bind(item.get::<Uuid,_>("id")).bind(org.0).bind(person).bind(&source_id).bind(run.get::<Uuid,_>("initiated_by_user_id")).execute(&mut *tx).await?;
@@ -307,6 +386,9 @@ async fn execute_one(
     let provenance=sqlx::query("SELECT provenance_nonce,provenance_ciphertext FROM migration_people_admission_item WHERE id=$1").bind(item.get::<Uuid,_>("id")).fetch_one(&mut *tx).await?;
     sqlx::query("INSERT INTO person_admission_provenance(id,organization_id,person_id,admission_id,item_id,result_id,nonce,ciphertext) VALUES($1,$2,$3,$4,$5,$6,$7,$8)").bind(Uuid::new_v4()).bind(org.0).bind(person).bind(id).bind(item.get::<Uuid,_>("id")).bind(result).bind(provenance.get::<Vec<u8>,_>("provenance_nonce")).bind(provenance.get::<Vec<u8>,_>("provenance_ciphertext")).execute(&mut *tx).await?;
     sqlx::query("INSERT INTO person_admitted(id,organization_id,actor_kind,on_behalf_of_user_id,origin,occurred_at,correlation_id,person_id,admission_id,plan_id,item_id,result_id) VALUES($1,$2,'system',$3,'migration',$4,$5,$6,$7,$8,$9,$10)").bind(Uuid::new_v4()).bind(org.0).bind(run.get::<Uuid,_>("initiated_by_user_id")).bind(now).bind(id).bind(person).bind(id).bind(plan).bind(item.get::<Uuid,_>("id")).bind(result).execute(&mut *tx).await?;
+    let admitted_fact = Uuid::new_v4();
+    sqlx::query("INSERT INTO stage_changed(id,organization_id,actor_kind,on_behalf_of_user_id,origin,occurred_at,correlation_id,causation_id,person_id,from_stage_id,to_stage_id,reason) VALUES($1,$2,'system',$3,'migration',$4,$5,$6,$7,NULL,$8,'migration_admission')").bind(Uuid::new_v4()).bind(org.0).bind(run.get::<Uuid,_>("initiated_by_user_id")).bind(now).bind(id).bind(admitted_fact).bind(person).bind(Uuid::parse_str(projection["stage_id"].as_str().ok_or(MigrationError::Crypto)?).map_err(|_|MigrationError::Crypto)?).execute(&mut *tx).await?;
+    sqlx::query("INSERT INTO assignment_changed(id,organization_id,actor_kind,on_behalf_of_user_id,origin,occurred_at,correlation_id,causation_id,person_id,from_user_id,to_user_id,reason) VALUES($1,$2,'system',$3,'migration',$4,$5,$6,$7,NULL,$8,'migration_admission')").bind(Uuid::new_v4()).bind(org.0).bind(run.get::<Uuid,_>("initiated_by_user_id")).bind(now).bind(id).bind(admitted_fact).bind(person).bind(projection["assigned_user_id"].as_str().and_then(|value|Uuid::parse_str(value).ok())).execute(&mut *tx).await?;
     sqlx::query("UPDATE migration_people_admission_item SET settled_result_id=$3,settled_at=clock_timestamp(),disposition='settled' WHERE id=$1 AND admission_id=$2").bind(item.get::<Uuid,_>("id")).bind(id).bind(result).execute(&mut *tx).await?;
     sqlx::query("UPDATE migration_people_admission SET settled_items=settled_items+1 WHERE id=$1 AND organization_id=$2").bind(id).bind(org.0).execute(&mut *tx).await?;
     tx.commit().await?;

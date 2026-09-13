@@ -11,7 +11,7 @@ CREATE TABLE migration_people_admission (
  engine_version TEXT NOT NULL CHECK(engine_version='fub-people-admission-v1'),
  state TEXT NOT NULL CHECK(state IN ('preparing','ready','queued','running','paused','completed','cancelled')),
  lifecycle_revision BIGINT NOT NULL DEFAULT 1 CHECK(lifecycle_revision>0),
- preparation_checkpoint_key TEXT NOT NULL DEFAULT '', preparation_phase TEXT NOT NULL DEFAULT 'groups',
+ preparation_checkpoint_key TEXT NOT NULL DEFAULT '', preparation_phase TEXT NOT NULL DEFAULT 'original_people',
  confirmed_boundary BIGINT, confirmed_snapshot_id UUID, confirmed_completed_at TIMESTAMPTZ,
  confirmed_admission_plan_id UUID, lease_token UUID, lease_epoch BIGINT NOT NULL DEFAULT 0,
  lease_expires_at TIMESTAMPTZ, pause_reason TEXT, retained_bytes BIGINT NOT NULL DEFAULT 0 CHECK(retained_bytes>=0),
@@ -25,7 +25,7 @@ CREATE TABLE migration_people_admission (
  FOREIGN KEY(original_snapshot_id,organization_id) REFERENCES migration_snapshot(id,organization_id),
  FOREIGN KEY(newer_snapshot_id,organization_id) REFERENCES migration_snapshot(id,organization_id),
  CHECK((lease_token IS NULL)=(lease_expires_at IS NULL)),
- CHECK(preparation_phase IN ('groups','seal'))
+ CHECK(preparation_phase IN ('original_people','newer_people','newer_users','newer_stages','groups','seal'))
 );
 CREATE UNIQUE INDEX migration_people_admission_one_active ON migration_people_admission(organization_id,parent_import_id) WHERE state IN ('preparing','ready','queued','running','paused');
 CREATE INDEX migration_people_admission_claim ON migration_people_admission(created_at,id) WHERE state IN ('queued','running');

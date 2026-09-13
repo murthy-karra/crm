@@ -646,7 +646,7 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         require(response.getString("generation_id") == generation && response.getString("revision") == catalog.getString("revision"))
         val items = response.getJSONArray("items").objects()
         require(items.size <= 100 && response.toString().toByteArray().size <= 524_288)
-        items.forEach { item -> uuid(item.getString("id")); require(item.getString("name").isNotBlank()); require(item.getInt("position") >= 0) }
+        items.forEach { item -> uuid(item.getString("id")); require(item.getString("name").isNotBlank()) }
         val next = response.stringOrNull("next_cursor")
         require(response.getBoolean("complete") == (next == null) && next != cursor)
         require(dao.stageCatalogPages(generation).none { it.cursor == cursor })

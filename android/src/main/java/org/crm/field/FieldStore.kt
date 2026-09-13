@@ -18,7 +18,7 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         if (
             old != null &&
                 old.getString("context_id") != binding.context &&
-                (dao.operations().isNotEmpty() || dao.drafts().isNotEmpty() || dao.contactDrafts().isNotEmpty())
+                (dao.operations().isNotEmpty() || dao.drafts().isNotEmpty() || dao.contactDrafts().isNotEmpty() || dao.stageDrafts().isNotEmpty())
         )
             throw AccessLocked()
         val bootstrap = JSONObject(binding.bootstrap)
@@ -229,6 +229,110 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         row
     }
 
+    /** Saves an editable stage proposal against the complete, promoted catalog only. */
+    fun saveStageDraft(
+        id: String,
+        person: String,
+        proposedStageId: String,
+        expectedRevision: Long = 0,
+        baseline: JSONObject? = null,
+    ): StageDraftRow = atomic {
+        requireAccess()
+        uuid(id)
+        uuid(proposedStageId)
+        val cached = dao.person(person) ?: throw AccessLocked()
+        require(cached.stageRevisionsQualified) { "Refresh this Person before changing stage" }
+        val current = dao.stageDraft(id)
+        require((current?.revision ?: 0) == expectedRevision) { "Stage draft changed; reload it" }
+        require(current == null || current.person == person)
+        require(current?.operation.orEmpty().isEmpty()) { "Saved stage proposal is immutable" }
+        val catalog = dao.stage(proposedStageId) ?: throw IllegalArgumentException("Stage is not in the complete catalog")
+        val original = current?.let {
+            json("id" to it.baselineStageId, "name" to it.baselineStageName, "revision" to it.baselineRevision)
+        } ?: baseline ?: run {
+            val summary = JSONObject(cached.summary)
+            val stage = summary.getJSONObject("stage")
+            json("id" to uuid(stage.getString("id")), "name" to stage.getString("name"), "revision" to revision(summary.getString("stage_revision")))
+        }
+        val next = expectedRevision + 1
+        if (current == null) {
+            dao.insertStageDraft(
+                StageDraftRow(
+                    id, person, uuid(original.getString("id")), original.getString("name"),
+                    revision(original.getString("revision")), catalog.id, catalog.name, next,
+                )
+            )
+        } else {
+            require(dao.updateStageDraft(id, catalog.id, catalog.name, next, expectedRevision) == 1)
+        }
+        dao.stageDraft(id)!!
+    }
+
+    /** The proposal/outbox/context appear together or none do. Repeated submit returns its ID. */
+    fun submitStageDraft(id: String, expectedRevision: Long): OperationRow = atomic {
+        requireAccess()
+        val draft = dao.stageDraft(id) ?: throw StorageFailure()
+        require(draft.revision == expectedRevision)
+        require(dao.person(draft.person)?.stageRevisionsQualified == true)
+        if (draft.operation.isNotEmpty()) return@atomic dao.operation(draft.operation) ?: throw ProtocolFailure()
+        revision(draft.baselineRevision)
+        uuid(draft.baselineStageId); uuid(draft.proposedStageId)
+        require(dao.stage(draft.proposedStageId)?.name == draft.proposedStageName) { "Stage catalog changed; refresh before saving" }
+        require(
+            dao.operations().none {
+                it.person == draft.person && it.kind == "change_person_stage" && it.status !in setOf("covered", "superseded")
+            }
+        ) { "Saved proposal — waiting for the previous stage change" }
+        val payload = json("person_id" to draft.person, "stage_id" to draft.proposedStageId, "expected_stage_revision" to draft.baselineRevision)
+        val row = newOperation(draft.person, "change_person_stage", payload)
+        dao.operation(row)
+        require(dao.saveStageOperation(id, row.id) == 1)
+        dao.stageContext(
+            StageContextRow(
+                row.id, draft.person,
+                json("id" to draft.baselineStageId, "name" to draft.baselineStageName, "revision" to draft.baselineRevision).toString(),
+                json("id" to draft.proposedStageId, "name" to draft.proposedStageName).toString(),
+            )
+        )
+        row
+    }
+
+    fun recordCurrentStage(operationId: String, response: JSONObject) = atomic {
+        requireAccess()
+        val operation = dao.operation(operationId) ?: throw ProtocolFailure()
+        val context = dao.stageContext(operationId) ?: throw ProtocolFailure()
+        require(operation.kind == "change_person_stage")
+        require(response.getString("context_id") == binding.context && response.getString("person_id") == operation.person)
+        revision(response.getString("person_revision")); val stageRevision = revision(response.getString("stage_revision"))
+        val stage = response.getJSONObject("stage")
+        uuid(stage.getString("id")); require(stage.getString("name").isNotBlank())
+        dao.currentStageContext(operationId, json("id" to stage.getString("id"), "name" to stage.getString("name"), "revision" to stageRevision, "person_revision" to response.getString("person_revision")).toString(), context.editorRevision + 1)
+    }
+
+    /** Supersede evidence first, then create a separate proposal bound to the newly fetched revision. */
+    fun reviseStageConflict(operationId: String, newDraftId: String): StageDraftRow = atomic {
+        requireAccess()
+        val operation = dao.operation(operationId) ?: throw ProtocolFailure()
+        val context = dao.stageContext(operationId) ?: throw ProtocolFailure()
+        require(operation.kind == "change_person_stage" && operation.status == "attention" && operation.lastError == "revision_conflict")
+        require(context.current.isNotEmpty())
+        require(dao.supersede(operationId) == 1)
+        val current = JSONObject(context.current)
+        val proposal = JSONObject(context.proposal)
+        val chosen = dao.stage(proposal.getString("id")) ?: throw IllegalArgumentException("Proposed stage no longer exists")
+        val row = StageDraftRow(newDraftId, operation.person, current.getString("id"), current.getString("name"), revision(current.getString("revision")), chosen.id, chosen.name, 1)
+        dao.insertStageDraft(row)
+        row
+    }
+
+    fun discardStageConflict(operationId: String) = atomic {
+        requireAccess()
+        val operation = dao.operation(operationId) ?: throw ProtocolFailure()
+        require(operation.kind == "change_person_stage" && operation.status in setOf("attention", "superseded"))
+        dao.removeStageContext(operationId)
+        dao.operationState(operationId, "covered", operation.attempts, 0, "")
+    }
+
     /**
      * A definitive future-time rejection is repairable, but its attempted operation is evidence.
      * Clone only the local input into a new draft ID; never change the uncertain original envelope
@@ -316,6 +420,7 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
             "edit_note" -> "note:${uuid(payload.getString("note_id"))}"
             "update_task" -> "task:${uuid(payload.getString("task_id"))}"
             "complete_task" -> payload.optJSONObject("target")?.stringOrNull("task_id")?.let { "task:${uuid(it)}" }
+            "change_person_stage" -> "person_stage:${uuid(payload.getString("person_id"))}"
             else -> null
         }
 
@@ -342,6 +447,7 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
                 "add_note", "edit_note" -> "note"
                 "create_task", "update_task", "complete_task" -> "task"
                 "log_contact_attempt" -> "contact_attempt"
+                "change_person_stage" -> "person_stage"
                 else -> throw ProtocolFailure()
             }
         if (
@@ -367,6 +473,11 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
                 require(response.isNull("committed_revision"))
                 require(response.getBoolean("changed"))
             }
+            "change_person_stage" -> {
+                require(response.length() == 9)
+                require(response.getString("resource_id") == operation.person)
+                revision(response.getString("committed_revision"))
+            }
             else -> throw ProtocolFailure()
         }
         dao.accept(id, response.toString())
@@ -382,9 +493,15 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
             dao.clearPages()
             dao.clearManifest()
         }
+        if (operation.kind == "change_person_stage") {
+            dao.stageState(id, "accepted", "")
+            // A receipt is authoritative but does not make a partial cache or Today fresh.
+            dao.removeMeta("generation"); dao.removeMeta("manifest_cursor"); dao.removeMeta("manifest_complete")
+            dao.clearPages(); dao.clearManifest(); dao.clearStageCatalogPages()
+        }
         val current = dao.person(operation.person)
         if (
-            operation.kind != "log_contact_attempt" &&
+            operation.kind !in setOf("log_contact_attempt", "change_person_stage") &&
             current != null &&
                 revisionAtLeast(current.revision, response.getString("person_revision"))
         )
@@ -438,6 +555,17 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         require(response.getInt("selected_count") in 0..25_000)
         dao.clearPages()
         dao.clearManifest()
+        dao.clearStageCatalogPages()
+        if (response.has("stage_catalog")) {
+            val catalog = response.getJSONObject("stage_catalog")
+            revision(catalog.getString("revision"))
+            require(catalog.getString("stages_url").startsWith("/api/mobile/v1/reconciliations/${response.getString("generation_id")}/stages"))
+            dao.meta(MetaRow("stage_catalog_cursor", ""))
+            dao.meta(MetaRow("stage_catalog_complete", "false"))
+        } else {
+            dao.removeMeta("stage_catalog_cursor")
+            dao.removeMeta("stage_catalog_complete")
+        }
         dao.meta(MetaRow("generation", response.toString()))
         appendManifest(response.getString("generation_id"), response.getJSONObject("manifest"))
     }
@@ -511,6 +639,33 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         }
     }
 
+    fun stageCatalogPage(generation: String, cursor: String, response: JSONObject) = atomic {
+        requireAccess()
+        val active = JSONObject(dao.meta("generation") ?: throw ProtocolFailure())
+        val catalog = active.optJSONObject("stage_catalog") ?: throw ProtocolFailure()
+        require(response.getString("generation_id") == generation && response.getString("revision") == catalog.getString("revision"))
+        val items = response.getJSONArray("items").objects()
+        require(items.size <= 100 && response.toString().toByteArray().size <= 524_288)
+        items.forEach { item -> uuid(item.getString("id")); require(item.getString("name").isNotBlank()); require(item.getInt("position") >= 0) }
+        val next = response.stringOrNull("next_cursor")
+        require(response.getBoolean("complete") == (next == null) && next != cursor)
+        require(dao.stageCatalogPages(generation).none { it.cursor == cursor })
+        dao.stageCatalogPage(StageCatalogPageRow(generation, cursor, response.toString()))
+        dao.meta(MetaRow("stage_catalog_cursor", next ?: ""))
+        dao.meta(MetaRow("stage_catalog_complete", (next == null).toString()))
+    }
+
+    fun nextStageCatalogPage(generation: String): String? {
+        val pages = dao.stageCatalogPages(generation).associateBy { it.cursor }
+        var cursor = ""
+        val visited = mutableSetOf<String>()
+        while (true) {
+            if (!visited.add(cursor)) throw ProtocolFailure()
+            val page = pages[cursor] ?: return cursor
+            cursor = JSONObject(page.body).stringOrNull("next_cursor") ?: return null
+        }
+    }
+
     private fun component(
         generation: String,
         person: String,
@@ -542,6 +697,13 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
                 dao.meta("manifest_complete") != "true"
         )
             throw ProtocolFailure()
+        val catalog = generation.optJSONObject("stage_catalog")
+        if (catalog != null) {
+            require(dao.meta("stage_catalog_complete") == "true")
+            // The sealed server generation has already revalidated this pinned revision.  The
+            // terminal wire shape intentionally does not echo it; the staged generation is the
+            // authoritative local binding.
+        }
         val manifest = dao.manifest(id)
         require(
             manifest.size == generation.getInt("selected_count") &&
@@ -552,12 +714,13 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         val pending = dao.operations().filter { it.status != "covered" }
         for (item in manifest) {
             val old = dao.person(item.person)
-            val needsQualification = old != null && !old.noteRevisionsQualified
+            val needsQualification = old != null && (!old.noteRevisionsQualified || !old.stageRevisionsQualified)
             if (old == null || old.revision != item.revision || needsQualification) {
                 val summary = component(id, item.person, "summary")
                 val notes = component(id, item.person, "notes").second
                 val tasks = component(id, item.person, "tasks").second
                 require(summary.first?.getString("id") == item.person)
+                if (catalog != null) revision(summary.first!!.getString("stage_revision"))
                 if (old == null || revisionAtLeast(item.revision, old.revision))
                     dao.person(
                         PersonRow(
@@ -570,6 +733,7 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
                             id,
                             seal.getString("evaluated_at"),
                             true,
+                            catalog != null,
                         )
                     )
             }
@@ -577,14 +741,25 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
             pending
                 .filter { it.person == item.person && it.status == "accepted" }
                 .forEach { op ->
-                    if (
-                        revisionAtLeast(
-                            active.revision,
-                            JSONObject(op.receipt!!).getString("person_revision"),
-                        )
-                    )
+                    val receipt = JSONObject(op.receipt!!)
+                    val covered =
+                        if (op.kind == "change_person_stage") {
+                            val currentStageRevision = JSONObject(active.summary).stringOrNull("stage_revision")
+                            currentStageRevision != null && active.stageRevisionsQualified &&
+                                revisionAtLeast(currentStageRevision, receipt.getString("committed_revision"))
+                        } else revisionAtLeast(active.revision, receipt.getString("person_revision"))
+                    if (covered)
                         dao.cover(op.id)
                 }
+        }
+        if (catalog != null) {
+            val staged = dao.stageCatalogPages(id)
+                .flatMap { JSONObject(it.body).getJSONArray("items").objects() }
+                .map { StageCatalogRow(uuid(it.getString("id")), it.getString("name"), it.getInt("position"), id, catalog.getString("revision")) }
+            require(staged.map { it.id }.distinct().size == staged.size)
+            dao.clearStageCatalog()
+            dao.stageCatalog(staged)
+            dao.meta(MetaRow("stage_catalog_revision", catalog.getString("revision")))
         }
         // A contact receipt is never covered merely because its Person revision happened to be
         // unchanged. Reaching this point proves a fresh complete seal (including Today) was
@@ -592,6 +767,9 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         dao.contactDrafts()
             .filter { it.operation.isNotEmpty() && dao.operation(it.operation)?.status == "covered" }
             .forEach { dao.removeContactOperation(it.operation) }
+        dao.stageDrafts()
+            .filter { it.operation.isNotEmpty() && dao.operation(it.operation)?.status == "covered" }
+            .forEach { dao.removeStageOperation(it.operation) }
         val selected = manifest.map { it.person }.toSet()
         var removalConflicts = 0
         for (old in dao.people().filter { it.id !in selected }) {
@@ -621,7 +799,10 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         // receipt appear to retain pre-receipt reconciliation state after the fresh seal.
         dao.removeMeta("manifest_cursor")
         dao.removeMeta("manifest_complete")
+        dao.removeMeta("stage_catalog_cursor")
+        dao.removeMeta("stage_catalog_complete")
         dao.clearPages()
         dao.clearManifest()
+        dao.clearStageCatalogPages()
     }
 }

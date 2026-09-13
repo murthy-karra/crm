@@ -142,6 +142,9 @@ class FieldApi(
     suspend fun currentTask(binding: Binding, person: String, task: String) =
         call("GET", "/api/mobile/v1/people/${uuid(person)}/tasks/${uuid(task)}", binding.context)
 
+    suspend fun currentStage(binding: Binding, person: String) =
+        call("GET", "/api/mobile/v1/people/${uuid(person)}/stage", binding.context)
+
     suspend fun page(path: String, binding: Binding, cursor: String) =
         call(
             "GET",

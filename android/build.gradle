@@ -44,6 +44,15 @@ android {
             buildConfigField 'String', 'API_BASE', '"http://10.0.2.2:3102"'
             buildConfigField 'String', 'VAULT_NAMESPACE', '"field.mobile003qa"'
         }
+        // Isolated Mobile004 verifier. Its package/store cannot replace the user demo, the
+        // Mobile002 fixture, or the Mobile003 installed-store upgrade source.
+        mobile004qa {
+            dimension 'origin'
+            applicationId 'org.crm.field.mobile004qa'
+            testApplicationId 'org.crm.field.mobile004qa.test'
+            buildConfigField 'String', 'API_BASE', '"http://10.0.2.2:3102"'
+            buildConfigField 'String', 'VAULT_NAMESPACE', '"field.mobile004qa"'
+        }
     }
     buildFeatures { compose = true; buildConfig = true }
     buildTypes {
@@ -56,7 +65,9 @@ android {
 }
 // QA verification must never replace the checkout's Gradle build products used by a running
 // demo.  This is intentionally opt-in so normal developer builds keep their existing path.
-if (providers.gradleProperty('CRM_MOBILE003_ANDROID_BUILD_DIR').isPresent()) {
+if (providers.gradleProperty('CRM_MOBILE004_ANDROID_BUILD_DIR').isPresent()) {
+    layout.buildDirectory.set(file(providers.gradleProperty('CRM_MOBILE004_ANDROID_BUILD_DIR').get()))
+} else if (providers.gradleProperty('CRM_MOBILE003_ANDROID_BUILD_DIR').isPresent()) {
     layout.buildDirectory.set(file(providers.gradleProperty('CRM_MOBILE003_ANDROID_BUILD_DIR').get()))
 } else if (providers.gradleProperty('CRM_MOBILE002_ANDROID_BUILD_DIR').isPresent()) {
     layout.buildDirectory.set(file(providers.gradleProperty('CRM_MOBILE002_ANDROID_BUILD_DIR').get()))

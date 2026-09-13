@@ -312,7 +312,7 @@ async fn mapped_fixture(migrator: &PgPool) -> (Fixture, Uuid) {
         }],
         &[AssigneePatch {
             source_key: "3".into(),
-            choice: AssigneeChoice::Member { user_id: f.actor },
+            choice: AssigneeChoice::Member { user_id: f.member },
         }],
     )
     .await;
@@ -793,7 +793,19 @@ async fn checkpointed_preparation_charges_source_keys_and_checkpoint_exactly(mig
     .unwrap();
     assert!(
         !checkpoint.is_empty(),
-        "the first 50-item turn must persist a checkpoint"
+        "the first descriptor turn must persist a checkpoint"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_admitted_people_refresh_item WHERE refresh_id=$1 AND organization_id=$2",
+        )
+        .bind(run)
+        .bind(f.org)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap(),
+        1,
+        "one descriptor, rather than a 50-row projection page, is the transaction unit"
     );
     let stored: i64 = sqlx::query_scalar(
         "SELECT retained_bytes FROM migration_admitted_people_refresh WHERE id=$1 AND organization_id=$2",
@@ -804,7 +816,7 @@ async fn checkpointed_preparation_charges_source_keys_and_checkpoint_exactly(mig
     .await
     .unwrap();
     assert_eq!(stored, ledger_bytes(&f, run).await);
-    for _ in 0..10 {
+    for _ in 0..60 {
         if refresh::detail(&f.pool, &f.key, &f.ctx, run).await.unwrap()["state"] == "ready" {
             break;
         }
@@ -841,6 +853,74 @@ async fn checkpointed_preparation_charges_source_keys_and_checkpoint_exactly(mig
     .await
     .unwrap();
     assert_eq!(stored, ledger_bytes(&f, run).await);
+}
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn oversized_admission_projection_pauses_before_ciphertext_read_without_partial_plan(
+    migrator: PgPool,
+) {
+    let (f, parent, admission) = fixture_with_admission(
+        &migrator,
+        vec![json!({"id":104,"firstName":"Bounded","stage":"Lead","assignedUserId":3})],
+    )
+    .await;
+    let person = admitted_person(&f, admission, "104").await;
+    let before = native(&f, person).await;
+    let report_id = report(
+        &f,
+        parent,
+        vec![json!({"id":104,"firstName":"Later","stage":"Lead","assignedUserId":3})],
+    )
+    .await;
+    let created = refresh::prepare(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &f.ctx,
+        refresh::PrepareAdmittedPeopleRefresh {
+            request_id: Uuid::new_v4(),
+            admission_id: admission,
+            report_id,
+        },
+        Some(&ReleaseReadiness::for_tests()),
+    )
+    .await
+    .unwrap();
+    let run = uuid(&created["refresh_id"]);
+    sqlx::query(
+        "UPDATE migration_people_admission_item
+            SET projection_ciphertext=convert_to(repeat('x',67108865),'UTF8')
+          WHERE admission_id=$1 AND organization_id=$2 AND source_id='104'",
+    )
+    .bind(admission)
+    .bind(f.org)
+    .execute(&f.pool)
+    .await
+    .unwrap();
+    assert!(admitted_people_refresh_worker::run_once(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        Some(&ReleaseReadiness::for_tests()),
+    )
+    .await
+    .unwrap());
+    let detail = refresh::detail(&f.pool, &f.key, &f.ctx, run).await.unwrap();
+    assert_eq!(detail["state"], "paused");
+    assert_eq!(detail["pause_reason"], "storage_budget_exhausted");
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_admitted_people_refresh_item WHERE refresh_id=$1 AND organization_id=$2",
+        )
+        .bind(run)
+        .bind(f.org)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap(),
+        0
+    );
+    assert_eq!(native(&f, person).await, before);
 }
 
 #[sqlx::test]
@@ -1197,6 +1277,75 @@ async fn qualified_later_stage_transition_is_once_and_failure_rolls_back_revisio
         failure_facts,
         "the failed settlement rolls back its migration stage fact"
     );
+}
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn missing_execution_mapping_targets_settle_held_stale_without_native_write(
+    migrator: PgPool,
+) {
+    async fn assert_held_stale(f: &Fixture, run: Uuid, person: Uuid, before: Value) {
+        drain(f, run).await;
+        assert_eq!(native(f, person).await, before);
+        assert_eq!(
+            refresh::results(&f.pool, &f.key, &f.ctx, run, refresh::Page::default())
+                .await
+                .unwrap()["results"][0]["disposition"],
+            "held_stale"
+        );
+    }
+
+    let (stage, stage_parent, target_stage) =
+        mapped_fixture_with_two_qualified_stages(&migrator).await;
+    let stage_admission = seal_admission(
+        &stage,
+        stage_parent,
+        vec![json!({"id":104,"firstName":"Stage","stage":"Lead","assignedUserId":3})],
+    )
+    .await;
+    let stage_person = admitted_person(&stage, stage_admission, "104").await;
+    let stage_before = native(&stage, stage_person).await;
+    let stage_report = report(
+        &stage,
+        stage_parent,
+        vec![json!({"id":104,"firstName":"Later","stage":"Qualified","assignedUserId":3})],
+    )
+    .await;
+    let (stage_run, stage_detail) = prepare(&stage, stage_admission, stage_report).await;
+    confirm(&stage, stage_run, &confirmation(&stage_detail)).await;
+    sqlx::query("DELETE FROM stage WHERE organization_id=$1 AND id=$2")
+        .bind(stage.org)
+        .bind(target_stage)
+        .execute(&stage.pool)
+        .await
+        .unwrap();
+    assert_held_stale(&stage, stage_run, stage_person, stage_before).await;
+
+    let (assignee, assignee_parent, _) = mapped_fixture_with_two_qualified_stages(&migrator).await;
+    let assignee_admission = seal_admission(
+        &assignee,
+        assignee_parent,
+        vec![json!({"id":104,"firstName":"Assignee","stage":"Lead","assignedUserId":3})],
+    )
+    .await;
+    let assignee_person = admitted_person(&assignee, assignee_admission, "104").await;
+    let assignee_before = native(&assignee, assignee_person).await;
+    let assignee_report = report(
+        &assignee,
+        assignee_parent,
+        vec![json!({"id":104,"firstName":"Later","stage":"Lead","assignedUserId":3})],
+    )
+    .await;
+    let (assignee_run, assignee_detail) =
+        prepare(&assignee, assignee_admission, assignee_report).await;
+    confirm(&assignee, assignee_run, &confirmation(&assignee_detail)).await;
+    sqlx::query("UPDATE organization_membership SET status='inactive' WHERE organization_id=$1 AND user_id=$2")
+        .bind(assignee.org)
+        .bind(assignee.member)
+        .execute(&assignee.pool)
+        .await
+        .unwrap();
+    assert_held_stale(&assignee, assignee_run, assignee_person, assignee_before).await;
 }
 
 #[sqlx::test]

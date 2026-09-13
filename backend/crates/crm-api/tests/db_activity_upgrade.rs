@@ -225,9 +225,14 @@ async fn populated_010f1_upgrade_preserves_native_and_import_state(migrator: PgP
     all.run(&migrator).await.unwrap();
     let extended_frozen = existing_rows(&migrator).await;
     let mut extended = extended_frozen.clone();
-    // D-074 adds derived sync revisions with an initial value of one. Verify
-    // exactly those additions, then compare every pre-existing field unchanged.
-    for (table, column) in [("person", "mobile_revision"), ("task", "revision")] {
+    // D-074 and the follow-up note-edit migration add derived sync revisions
+    // with an initial value of one. Verify exactly those additive columns, then
+    // compare every pre-existing field unchanged.
+    for (table, column) in [
+        ("person", "mobile_revision"),
+        ("task", "revision"),
+        ("note", "revision"),
+    ] {
         for row in extended[table].as_array_mut().unwrap() {
             assert_eq!(row[column], json!(1), "initial {table}.{column}");
             row.as_object_mut().unwrap().remove(column);

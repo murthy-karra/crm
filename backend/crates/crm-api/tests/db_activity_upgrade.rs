@@ -223,9 +223,17 @@ async fn populated_010f1_upgrade_preserves_native_and_import_state(migrator: PgP
     // The current executable additionally requires its later additive schema
     // before startup; applying it must preserve the same populated rows too.
     all.run(&migrator).await.unwrap();
+    let mut extended = existing_rows(&migrator).await;
+    // D-074 adds derived sync revisions with an initial value of one. Verify
+    // exactly those additions, then compare every pre-existing field unchanged.
+    for (table, column) in [("person", "mobile_revision"), ("task", "revision")] {
+        for row in extended[table].as_array_mut().unwrap() {
+            assert_eq!(row[column], json!(1), "initial {table}.{column}");
+            row.as_object_mut().unwrap().remove(column);
+        }
+    }
     assert_eq!(
-        existing_rows(&migrator).await,
-        frozen,
+        extended, frozen,
         "later additive schema rewrote the populated upgrade fixture"
     );
     assert_eq!(

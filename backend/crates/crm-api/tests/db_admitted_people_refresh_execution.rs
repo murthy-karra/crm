@@ -448,7 +448,7 @@ pub(super) async fn report(f: &Fixture, parent: Uuid, people: Vec<Value>) -> Uui
 }
 
 async fn ledger_bytes(f: &Fixture, run: Uuid) -> i64 {
-    sqlx::query_scalar("SELECT COALESCE((SELECT sum(octet_length(inputs_nonce)+octet_length(inputs_ciphertext)+COALESCE(octet_length(digest),0)) FROM migration_admitted_people_refresh_plan WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(source_key)+COALESCE(octet_length(source_id),0)+octet_length(proposed_nonce)+octet_length(proposed_ciphertext)+octet_length(baseline_nonce)+octet_length(baseline_ciphertext)+octet_length(current_nonce)+octet_length(current_ciphertext)+octet_length(instructions_nonce)+octet_length(instructions_ciphertext)) FROM migration_admitted_people_refresh_item WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(value_nonce)+octet_length(value_ciphertext)) FROM migration_admitted_people_refresh_contact WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(source_id)+octet_length(before_nonce)+octet_length(before_ciphertext)+octet_length(after_nonce)+octet_length(after_ciphertext)) FROM migration_admitted_people_refresh_result WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(before_nonce)+octet_length(before_ciphertext)+octet_length(after_nonce)+octet_length(after_ciphertext)) FROM person_admitted_refresh_provenance WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(nonce)+octet_length(ciphertext)) FROM migration_admitted_people_refresh_receipt WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(source_id)+octet_length(projection_nonce)+octet_length(projection_ciphertext)) FROM migration_admitted_people_refresh_baseline WHERE refresh_id=$1),0) + COALESCE((SELECT octet_length(preparation_checkpoint_key) FROM migration_admitted_people_refresh WHERE id=$1),0)::bigint")
+    sqlx::query_scalar("SELECT COALESCE((SELECT sum(octet_length(inputs_nonce)+octet_length(inputs_ciphertext)+COALESCE(octet_length(digest),0)) FROM migration_admitted_people_refresh_plan WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(source_key)+COALESCE(octet_length(source_id),0)+COALESCE(octet_length(source_semantic_hmac),0)+octet_length(proposed_nonce)+octet_length(proposed_ciphertext)+octet_length(baseline_nonce)+octet_length(baseline_ciphertext)+octet_length(current_nonce)+octet_length(current_ciphertext)+octet_length(instructions_nonce)+octet_length(instructions_ciphertext)) FROM migration_admitted_people_refresh_item WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(value_nonce)+octet_length(value_ciphertext)) FROM migration_admitted_people_refresh_contact WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(source_id)+octet_length(before_nonce)+octet_length(before_ciphertext)+octet_length(after_nonce)+octet_length(after_ciphertext)) FROM migration_admitted_people_refresh_result WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(before_nonce)+octet_length(before_ciphertext)+octet_length(after_nonce)+octet_length(after_ciphertext)) FROM person_admitted_refresh_provenance WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(digest)+octet_length(nonce)+octet_length(ciphertext)) FROM migration_admitted_people_refresh_receipt WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(source_id)+octet_length(projection_nonce)+octet_length(projection_ciphertext)) FROM migration_admitted_people_refresh_baseline WHERE refresh_id=$1),0) + COALESCE((SELECT octet_length(preparation_checkpoint_key) FROM migration_admitted_people_refresh WHERE id=$1),0)::bigint")
         .bind(run).fetch_one(&f.pool).await.unwrap()
 }
 
@@ -888,6 +888,10 @@ async fn oversized_admission_projection_pauses_before_ciphertext_read_without_pa
     .await
     .unwrap();
     let run = uuid(&created["refresh_id"]);
+    sqlx::query("ALTER TABLE migration_people_admission_item DISABLE TRIGGER USER")
+        .execute(&migrator)
+        .await
+        .unwrap();
     sqlx::query(
         "UPDATE migration_people_admission_item
             SET projection_ciphertext=convert_to(repeat('x',67108865),'UTF8')
@@ -895,9 +899,13 @@ async fn oversized_admission_projection_pauses_before_ciphertext_read_without_pa
     )
     .bind(admission)
     .bind(f.org)
-    .execute(&f.pool)
+    .execute(&migrator)
     .await
     .unwrap();
+    sqlx::query("ALTER TABLE migration_people_admission_item ENABLE TRIGGER USER")
+        .execute(&migrator)
+        .await
+        .unwrap();
     assert!(admitted_people_refresh_worker::run_once(
         &f.pool,
         &f.key,
@@ -1316,7 +1324,7 @@ async fn missing_execution_mapping_targets_settle_held_stale_without_native_writ
     sqlx::query("DELETE FROM stage WHERE organization_id=$1 AND id=$2")
         .bind(stage.org)
         .bind(target_stage)
-        .execute(&stage.pool)
+        .execute(&migrator)
         .await
         .unwrap();
     assert_held_stale(&stage, stage_run, stage_person, stage_before).await;
@@ -1342,7 +1350,7 @@ async fn missing_execution_mapping_targets_settle_held_stale_without_native_writ
     sqlx::query("UPDATE organization_membership SET status='inactive' WHERE organization_id=$1 AND user_id=$2")
         .bind(assignee.org)
         .bind(assignee.member)
-        .execute(&assignee.pool)
+        .execute(&migrator)
         .await
         .unwrap();
     assert_held_stale(&assignee, assignee_run, assignee_person, assignee_before).await;

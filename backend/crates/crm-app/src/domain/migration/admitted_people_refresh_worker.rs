@@ -997,7 +997,13 @@ async fn prepare(
             }
             Err(error) => return Err(error),
         };
-        let mut frozen_stage_mapping = row.get::<Option<Uuid>, _>("stage_mapping_id");
+        // A successor's B is its prior settled result, so an omitted field
+        // carries no original-import mapping proof forward.
+        let mut frozen_stage_mapping = if seed_baseline {
+            row.get::<Option<Uuid>, _>("stage_mapping_id")
+        } else {
+            None
+        };
         match new_stage {
             Instruction::NoInstruction => instructions.push("stage"),
             Instruction::Apply(stage, mapping) => {
@@ -1041,7 +1047,7 @@ async fn prepare(
             }
             Err(error) => return Err(error),
         };
-        let mut frozen_assignee_mapping = if b["assigned_user_id"].is_null() {
+        let mut frozen_assignee_mapping = if !seed_baseline || b["assigned_user_id"].is_null() {
             None
         } else {
             row.get::<Option<Uuid>, _>("assignee_mapping_id")
@@ -1216,7 +1222,7 @@ async fn insert_item(
     let prepared = item_bound
         .saturating_sub(sealed_bytes(&a).saturating_mul(2))
         .saturating_sub(sealed_bytes(&e).saturating_mul(3));
-    sqlx::query("INSERT INTO migration_admitted_people_refresh_item(id,refresh_id,plan_id,organization_id,source_key,source_id,person_id,admission_id,admission_item_id,admission_result_id,baseline_version,disposition,proposed_nonce,proposed_ciphertext,baseline_nonce,baseline_ciphertext,current_nonce,current_ciphertext,instructions_nonce,instructions_ciphertext,name_clear_count,assignment_clear_count,contact_removal_count,source_capture_id,source_ordinal,item_byte_bound) VALUES($1,$2,$3,$4,$5,$6,$7,(SELECT admission_id FROM migration_people_admission_result WHERE id=$8 AND organization_id=$4),(SELECT item_id FROM migration_people_admission_result WHERE id=$8 AND organization_id=$4),$8,(SELECT version FROM migration_admitted_people_refresh_baseline WHERE organization_id=$4 AND admission_id=(SELECT admission_id FROM migration_people_admission_result WHERE id=$8 AND organization_id=$4) AND source_id=$6),$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)").bind(item).bind(refresh).bind(plan).bind(org.0).bind(source_id).bind(source_id).bind(person).bind(result).bind(disposition).bind(e.nonce.as_slice()).bind(e.ciphertext).bind(a.nonce.as_slice()).bind(a.ciphertext).bind(d.nonce.as_slice()).bind(d.ciphertext).bind(instructions.nonce.as_slice()).bind(instructions.ciphertext).bind(name_clears).bind(assignment_clears).bind(contact_removals).bind(capture).bind(ordinal).bind(item_bound).execute(&mut *conn).await?;
+    sqlx::query("INSERT INTO migration_admitted_people_refresh_item(id,refresh_id,plan_id,organization_id,source_key,source_id,person_id,admission_id,admission_item_id,admission_result_id,baseline_version,disposition,proposed_nonce,proposed_ciphertext,baseline_nonce,baseline_ciphertext,current_nonce,current_ciphertext,instructions_nonce,instructions_ciphertext,name_clear_count,assignment_clear_count,contact_removal_count,source_capture_id,source_ordinal,item_byte_bound) VALUES($1,$2,$3,$4,$5,$6,$7,(SELECT admission_id FROM migration_people_admission_result WHERE id=$8 AND organization_id=$4),(SELECT item_id FROM migration_people_admission_result WHERE id=$8 AND organization_id=$4),$8,COALESCE((SELECT version FROM migration_admitted_people_refresh_baseline WHERE organization_id=$4 AND admission_id=(SELECT admission_id FROM migration_people_admission_result WHERE id=$8 AND organization_id=$4) AND source_id=$6),0),$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)").bind(item).bind(refresh).bind(plan).bind(org.0).bind(source_id).bind(source_id).bind(person).bind(result).bind(disposition).bind(e.nonce.as_slice()).bind(e.ciphertext).bind(a.nonce.as_slice()).bind(a.ciphertext).bind(d.nonce.as_slice()).bind(d.ciphertext).bind(instructions.nonce.as_slice()).bind(instructions.ciphertext).bind(name_clears).bind(assignment_clears).bind(contact_removals).bind(capture).bind(ordinal).bind(item_bound).execute(&mut *conn).await?;
     for (side, contact, contact_id, sealed) in contacts {
         sqlx::query("INSERT INTO migration_admitted_people_refresh_contact(id,item_id,refresh_id,organization_id,side,contact_id,kind,import_order,value_nonce,value_ciphertext) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(item_id,side,kind,import_order) DO NOTHING").bind(contact_id).bind(item).bind(refresh).bind(org.0).bind(side).bind(contact["id"].as_str().and_then(|v|Uuid::parse_str(v).ok())).bind(contact["kind"].as_str()).bind(contact["import_order"].as_i64().unwrap_or_default() as i32).bind(sealed.nonce.as_slice()).bind(sealed.ciphertext).execute(&mut *conn).await?;
     }
@@ -1327,21 +1333,40 @@ async fn execute_noop(
             let target_assignee = proposed["assigned_user_id"]
                 .as_str()
                 .and_then(|v| Uuid::parse_str(v).ok());
-            let stage_ok = disposition != "held_stale"
-                && (instructions
-                    .iter()
-                    .any(|instruction| instruction == "stage")
-                    || execution_mapping_target_valid(
-                        conn,
-                        key,
-                        org,
-                        r,
-                        &item,
-                        "stage",
-                        Some(target_stage),
-                    )
-                    .await?);
-            let assignee_ok = if target_assignee.is_some()
+            let stage_omitted = instructions
+                .iter()
+                .any(|instruction| instruction == "stage");
+            let assignee_omitted = instructions
+                .iter()
+                .any(|instruction| instruction == "assignment");
+            let successor_baseline = item.get::<Option<Uuid>, _>("baseline_result_id").is_some();
+            let stage_ok = if stage_omitted && successor_baseline {
+                sqlx::query_scalar::<_, bool>(
+                    "SELECT EXISTS(SELECT 1 FROM stage WHERE organization_id=$1 AND id=$2)",
+                )
+                .bind(org.0)
+                .bind(target_stage)
+                .fetch_one(&mut *conn)
+                .await?
+            } else {
+                execution_mapping_target_valid(
+                    conn,
+                    key,
+                    org,
+                    r,
+                    &item,
+                    "stage",
+                    Some(target_stage),
+                )
+                .await?
+            };
+            let assignee_ok = if assignee_omitted && successor_baseline {
+                match target_assignee {
+                    Some(user) => sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM organization_membership WHERE organization_id=$1 AND user_id=$2 AND status='active')")
+                        .bind(org.0).bind(user).fetch_one(&mut *conn).await?,
+                    None => true,
+                }
+            } else if target_assignee.is_some()
                 || item.get::<Option<Uuid>, _>("assignee_mapping_id").is_some()
             {
                 execution_mapping_target_valid(

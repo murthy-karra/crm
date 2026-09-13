@@ -271,6 +271,12 @@ async fn source_identity_and_permit_misuse_are_rejected(migrator: PgPool) {
     confirm(&f, run, &confirmation(&detail)).await;
     assert!(admitted_people_refresh_worker::run_once(&f.pool, &f.key, &f.policy, Some(&ReleaseReadiness::for_tests())).await.unwrap());
     let person = admitted_person(&f, admission, "104").await;
+    let lease: Uuid = sqlx::query_scalar("SELECT lease_token FROM migration_admitted_people_refresh WHERE id=$1")
+        .bind(run).fetch_one(&f.pool).await.unwrap();
+    let item: Uuid = sqlx::query_scalar("SELECT id FROM migration_admitted_people_refresh_item WHERE refresh_id=$1 AND disposition='eligible'")
+        .bind(run).fetch_one(&f.pool).await.unwrap();
+    let unrelated: Uuid = sqlx::query_scalar("SELECT person_id FROM migration_import_result WHERE import_id=$1 AND source_id='101' AND disposition='imported'")
+        .bind(parent).fetch_one(&f.pool).await.unwrap();
     for (setting, token) in [("crm.people_refresh_permit", Uuid::new_v4().to_string()), ("crm.admitted_people_refresh_permit", json!({"lease":Uuid::new_v4(),"item":Uuid::new_v4()}).to_string())] {
         let mut tx = f.pool.begin().await.unwrap();
         sqlx::query("SELECT set_config($1,$2,true)").bind(setting).bind(token).execute(&mut *tx).await.unwrap();
@@ -278,6 +284,13 @@ async fn source_identity_and_permit_misuse_are_rejected(migrator: PgPool) {
         assert_eq!(denied.as_database_error().and_then(|error| error.code()).as_deref(), Some("P010C"));
         tx.rollback().await.unwrap();
     }
+    let mut tx = f.pool.begin().await.unwrap();
+    sqlx::query("SELECT set_config('crm.admitted_people_refresh_permit',$1,true)")
+        .bind(json!({"lease": lease, "item": item}).to_string()).execute(&mut *tx).await.unwrap();
+    let denied = sqlx::query("UPDATE person SET first_name='valid-token-off-target' WHERE organization_id=$1 AND id=$2")
+        .bind(f.org).bind(unrelated).execute(&mut *tx).await.unwrap_err();
+    assert_eq!(denied.as_database_error().and_then(|error| error.code()).as_deref(), Some("P010C"), "a valid lease/item cannot authorize another Person");
+    tx.rollback().await.unwrap();
 }
 
 #[sqlx::test]

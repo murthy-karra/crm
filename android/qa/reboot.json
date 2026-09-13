@@ -1,0 +1,6 @@
+{
+  "before_boot_count": "2",
+  "queued_actions": 3,
+  "wifi_and_data_disabled_before_reboot": true,
+  "after_boot_count": "3"
+}

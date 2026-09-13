@@ -83,6 +83,27 @@ audit will distinguish immutable snapshot evidence from legitimate shared
 snapshot/Organization ledger changes; it will not label those ledger deltas as
 source corruption or omit them from reconciliation.
 
+Accounting checkpoint `9601962` and coordinator `2936f54` include these fields,
+signed checkpoint deltas and an additive full-footprint reconciliation in
+`20260930000006`. The 51-Person checkpoint accounting case passed in 7.52 seconds
+(`migration/checkpoint-physical-ledger.log`). The existing browser fixture was
+upgraded through `00004`–`00006` using the normal SQLx migrator: its refresh and
+plan IDs remained unchanged, state stayed `ready` and settled count stayed zero.
+Every normalized source/native fingerprint remained identical. Exactly 27 bytes
+were added to each corresponding run/snapshot/Organization ledger; reservations
+were unchanged. Evidence: `migration/retained-preview-ledger-upgrade.log`,
+`ledger-before.json`, `ledger-after-upgrade.json`,
+`preservation-before-normalized.jsonl` and
+`preservation-after-ledger-upgrade.jsonl` in the migration evidence directory.
+Normalization excludes only legitimate snapshot byte counters and audits the
+Organization ledger separately; it preserves all source evidence columns.
+
+The second/final review identified two additional corrections in progress:
+preparation must not load 50 potentially large payloads in one work unit, and a
+mapping target removed after confirmation must settle as held instead of raising
+an unhandled missing-row error. Focused bounded-input and mapping-race regressions
+are required before final disposition.
+
 Remaining: physical accounting correction and retained-preview upgrade; final
 integrated browser and row/byte reconciliation; one 25k hot-plan and paired Person
 read pass; second/final independent review; repository, SQLx and DB gates.

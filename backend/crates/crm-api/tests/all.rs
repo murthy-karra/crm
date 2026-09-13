@@ -348,6 +348,7 @@ mod db_history_timeline_compat;
 mod db_core_change_reports;
 #[path = "db_mobile.rs"]
 mod db_mobile;
+mod db_people_admission_adversarial;
 #[path = "db_people_admission_contract.rs"]
 mod db_people_admission_contract;
 #[path = "db_people_admission_execution.rs"]

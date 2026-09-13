@@ -1,6 +1,7 @@
 package org.crm.field
 
 import java.time.Instant
+import java.time.OffsetDateTime
 import java.util.UUID
 import org.json.JSONArray
 import org.json.JSONObject
@@ -17,7 +18,7 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         if (
             old != null &&
                 old.getString("context_id") != binding.context &&
-                (dao.operations().isNotEmpty() || dao.drafts().isNotEmpty())
+                (dao.operations().isNotEmpty() || dao.drafts().isNotEmpty() || dao.contactDrafts().isNotEmpty())
         )
             throw AccessLocked()
         val bootstrap = JSONObject(binding.bootstrap)
@@ -164,6 +165,114 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         row
     }
 
+    fun saveContactDraft(
+        id: String,
+        person: String,
+        channel: String,
+        outcome: String,
+        occurredAt: String,
+        resolvedOffset: String,
+        expectedRevision: Long = 0,
+    ): ContactDraftRow = atomic {
+        requireAccess()
+        uuid(id)
+        require(dao.person(person) != null)
+        validateContact(channel, outcome, occurredAt, resolvedOffset)
+        val current = dao.contactDraft(id)
+        require((current?.revision ?: 0) == expectedRevision)
+        require(current == null || current.person == person)
+        require(current?.operation.orEmpty().isEmpty()) { "Saved contact is immutable" }
+        val next = expectedRevision + 1
+        if (current == null)
+            dao.insertContactDraft(
+                ContactDraftRow(id, person, channel, outcome, occurredAt, resolvedOffset, next)
+            )
+        else
+            require(
+                dao.updateContactDraft(
+                    id,
+                    channel,
+                    outcome,
+                    occurredAt,
+                    resolvedOffset,
+                    next,
+                    expectedRevision,
+                ) == 1
+            ) { "Contact draft changed; reload the committed revision" }
+        dao.contactDraft(id)!!
+    }
+
+    /**
+     * The draft ID is the local compare-and-set boundary. Repeated taps see the first sealed
+     * operation and return it; different draft IDs for the same Person intentionally remain
+     * different manual contacts.
+     */
+    fun submitContactDraft(id: String, expectedRevision: Long): OperationRow = atomic {
+        requireAccess()
+        val draft = dao.contactDraft(id) ?: throw StorageFailure()
+        require(draft.revision == expectedRevision)
+        require(dao.person(draft.person) != null) {
+            "Person is outside the current authorized offline selection"
+        }
+        if (draft.operation.isNotEmpty()) return@atomic dao.operation(draft.operation) ?: throw ProtocolFailure()
+        validateContact(draft.channel, draft.outcome, draft.occurredAt, draft.resolvedOffset)
+        val payload =
+            json(
+                "person_id" to draft.person,
+                "channel" to draft.channel,
+                "outcome" to draft.outcome,
+                "occurred_at" to draft.occurredAt,
+            )
+        val row = newOperation(draft.person, "log_contact_attempt", payload)
+        dao.operation(row)
+        require(dao.saveContactOperation(id, row.id) == 1)
+        row
+    }
+
+    /**
+     * A definitive future-time rejection is repairable, but its attempted operation is evidence.
+     * Clone only the local input into a new draft ID; never change the uncertain original envelope
+     * or ask a retry to reinterpret it with a new timestamp.
+     */
+    fun reviseFutureContact(operationId: String): ContactDraftRow = atomic {
+        requireAccess()
+        val operation = dao.operation(operationId) ?: throw ProtocolFailure()
+        require(
+            operation.kind == "log_contact_attempt" &&
+                operation.status == "attention" &&
+                operation.lastError == "contact_time_in_future"
+        )
+        val source = dao.contactDrafts().singleOrNull { it.operation == operationId } ?: throw ProtocolFailure()
+        val replacement =
+            ContactDraftRow(
+                UUID.randomUUID().toString(),
+                source.person,
+                source.channel,
+                source.outcome,
+                source.occurredAt,
+                source.resolvedOffset,
+                1,
+            )
+        dao.insertContactDraft(replacement)
+        replacement
+    }
+
+    private fun validateContact(
+        channel: String,
+        outcome: String,
+        occurredAt: String,
+        resolvedOffset: String,
+    ) {
+        require(channel in setOf("call", "text", "email", "other"))
+        require(outcome in setOf("reached", "no_answer", "left_message", "sent", "busy", "wrong_number"))
+        val parsed = OffsetDateTime.parse(occurredAt)
+        require(parsed.year in 1..9999)
+        require(parsed.offset.id == resolvedOffset)
+        // The backend normalizes accepted values to PostgreSQL microseconds. The Android
+        // envelope intentionally keeps the agent's selected RFC3339 offset and precision.
+        require(Instant.parse(parsed.toInstant().toString()).epochSecond == parsed.toInstant().epochSecond)
+    }
+
     fun complete(
         person: String,
         task: JSONObject? = null,
@@ -228,11 +337,17 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
     fun acknowledge(id: String, response: JSONObject) = atomic {
         requireAccess()
         val operation = dao.operation(id) ?: throw ProtocolFailure()
+        val expectedResource =
+            when (operation.kind) {
+                "add_note", "edit_note" -> "note"
+                "create_task", "update_task", "complete_task" -> "task"
+                "log_contact_attempt" -> "contact_attempt"
+                else -> throw ProtocolFailure()
+            }
         if (
             response.getString("operation_id") != id ||
                 response.getString("outcome") != "accepted" ||
-                response.getString("resource_type") !=
-                if (operation.kind in setOf("add_note", "edit_note")) "note" else "task"
+                response.getString("resource_type") != expectedResource
         )
             throw ProtocolFailure()
         uuid(response.getString("resource_id"))
@@ -244,11 +359,32 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
             "add_note" -> require(response.isNull("committed_revision"))
             "edit_note", "create_task", "update_task", "complete_task" ->
                 revision(response.getString("committed_revision"))
+            "log_contact_attempt" -> {
+                // A contact fact is intentionally append-only and does not fabricate a Person
+                // revision. Contact receipts are strict so an old task/note shape cannot hide a
+                // protocol regression or incorrectly settle this independent outbox record.
+                require(response.length() == 9)
+                require(response.isNull("committed_revision"))
+                require(response.getBoolean("changed"))
+            }
             else -> throw ProtocolFailure()
         }
         dao.accept(id, response.toString())
+        if (operation.kind == "log_contact_attempt") {
+            dao.contactState(id, "accepted", "")
+            // A reconciliation begun before this append-only receipt may carry an equal Person
+            // revision and an old Today evaluation. It cannot establish coverage. Drop only its
+            // staging rows; the active complete cache and the durable receipt stay intact, and
+            // the caller immediately starts a new generation/seal.
+            dao.removeMeta("generation")
+            dao.removeMeta("manifest_cursor")
+            dao.removeMeta("manifest_complete")
+            dao.clearPages()
+            dao.clearManifest()
+        }
         val current = dao.person(operation.person)
         if (
+            operation.kind != "log_contact_attempt" &&
             current != null &&
                 revisionAtLeast(current.revision, response.getString("person_revision"))
         )
@@ -450,12 +586,22 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
                         dao.cover(op.id)
                 }
         }
+        // A contact receipt is never covered merely because its Person revision happened to be
+        // unchanged. Reaching this point proves a fresh complete seal (including Today) was
+        // committed after the receipt. Drop only its bounded local display record then.
+        dao.contactDrafts()
+            .filter { it.operation.isNotEmpty() && dao.operation(it.operation)?.status == "covered" }
+            .forEach { dao.removeContactOperation(it.operation) }
         val selected = manifest.map { it.person }.toSet()
         var removalConflicts = 0
         for (old in dao.people().filter { it.id !in selected }) {
             // Selection removal cannot discard pending work or establish that an accepted action
             // was covered.
-            if (pending.any { it.person == old.id } || dao.drafts().any { it.person == old.id })
+            if (
+                pending.any { it.person == old.id } ||
+                    dao.drafts().any { it.person == old.id } ||
+                    dao.contactDrafts().any { it.person == old.id }
+            )
                 removalConflicts++
             dao.removePerson(old.id)
         }

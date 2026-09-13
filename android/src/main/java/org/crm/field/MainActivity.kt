@@ -21,6 +21,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import java.time.Instant
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.util.UUID
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -96,11 +100,13 @@ fun FieldApp(repository: FieldRepository) {
     val scope = rememberCoroutineScope()
     var tab by remember { mutableStateOf("Today") }
     var composer by remember { mutableStateOf<ComposerLaunch?>(null) }
+    var contactComposer by remember { mutableStateOf<Pair<String, String>?>(null) }
     var signOut by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf("") }
     LaunchedEffect(state.locked) {
         if (state.locked) {
             composer = null
+            contactComposer = null
             signOut = false
             tab = "Today"
             notice = ""
@@ -188,6 +194,9 @@ fun FieldApp(repository: FieldRepository) {
                             state,
                             repository,
                             onCompose = { kind, target -> composer = ComposerLaunch(state.person!!.id, kind, target) },
+                            onContact = {
+                                contactComposer = state.person!!.id to UUID.randomUUID().toString()
+                            },
                             onError = { notice = it },
                         )
                     tab == "People" -> PeopleScreen(state, repository, onError = { notice = it })
@@ -218,6 +227,23 @@ fun FieldApp(repository: FieldRepository) {
                                     }
                                 }
                             },
+                            onContactDraft = { draft ->
+                                if (state.people.any { person -> person.id == draft.person })
+                                    contactComposer = draft.person to draft.id
+                                else
+                                    notice =
+                                        "This Person is outside the current offline selection. Saved input remains protected; request availability before reopening it."
+                            },
+                            onRepairFutureContact = { row ->
+                                scope.launch {
+                                    try {
+                                        val replacement = repository.reviseFutureContact(row.operation)
+                                        contactComposer = replacement.person to replacement.id
+                                    } catch (_: Exception) {
+                                        notice = "The original contact remains protected; its corrected draft could not be prepared."
+                                    }
+                                }
+                            },
                         )
                     else -> TodayScreen(state, repository)
                 }
@@ -232,6 +258,18 @@ fun FieldApp(repository: FieldRepository) {
             onClose = { composer = null },
             onSubmitted = {
                 composer = null
+                repository.requestSync()
+            },
+        )
+    }
+    contactComposer?.let { (person, draft) ->
+        ContactComposer(
+            repository,
+            person,
+            draft,
+            onClose = { contactComposer = null },
+            onSubmitted = {
+                contactComposer = null
                 repository.requestSync()
             },
         )
@@ -356,6 +394,12 @@ private fun TodayScreen(state: FieldUi, repository: FieldRepository) {
                     Text("Open notes and tasks")
                     if (state.operations.any { it.person == id })
                         Text("Local work pending", color = MaterialTheme.colorScheme.primary)
+                    if (
+                        state.contactDrafts.any {
+                            it.person == id && (it.operation.isEmpty() || it.state != "accepted")
+                        }
+                    )
+                        Text("Contact saved on device", color = MaterialTheme.colorScheme.primary)
                 }
             }
         }
@@ -422,7 +466,13 @@ private fun PeopleScreen(state: FieldUi, repository: FieldRepository, onError: (
             )
         }
         items(filtered, key = { it.id }) { person ->
-            PersonTile(person, state.operations.any { it.person == person.id }) {
+            PersonTile(
+                person,
+                state.operations.any { it.person == person.id },
+                state.contactDrafts.any {
+                    it.person == person.id && (it.operation.isEmpty() || it.state != "accepted")
+                },
+            ) {
                 repository.select(person.id)
             }
         }
@@ -431,7 +481,7 @@ private fun PeopleScreen(state: FieldUi, repository: FieldRepository, onError: (
 }
 
 @Composable
-private fun PersonTile(person: PersonCard, pending: Boolean, open: () -> Unit) {
+private fun PersonTile(person: PersonCard, pending: Boolean, contactPending: Boolean, open: () -> Unit) {
     val summary = JSONObject(person.summary)
     OutlinedCard(Modifier.fillMaxWidth().testTag("person-${person.id}").clickable(onClick = open)) {
         Column(Modifier.padding(16.dp)) {
@@ -446,6 +496,12 @@ private fun PersonTile(person: PersonCard, pending: Boolean, open: () -> Unit) {
                     color = MaterialTheme.colorScheme.primary,
                     style = MaterialTheme.typography.labelMedium,
                 )
+            if (contactPending)
+                Text(
+                    "Contact saved on device",
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.labelMedium,
+                )
         }
     }
 }
@@ -456,6 +512,7 @@ internal fun PersonScreen(
     repository: FieldRepository,
     onCompose: (String, JSONObject?) -> Unit,
     onError: (String) -> Unit,
+    onContact: () -> Unit = {},
 ) {
     val row = state.person ?: return
     val summary = JSONObject(row.summary)
@@ -463,6 +520,7 @@ internal fun PersonScreen(
     var section by remember(row.id) { mutableStateOf("Notes") }
     val local = state.operations.filter { it.person == row.id }
     val pendingCompletions = local.filter { it.kind == "complete_task" && it.status != "attention" }
+    val localContacts = state.contactDrafts.filter { it.person == row.id }
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -485,6 +543,37 @@ internal fun PersonScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { onCompose("add_note", null) }) { Text("Add note") }
                 OutlinedButton(onClick = { onCompose("create_task", null) }) { Text("Create task") }
+            }
+        }
+        item {
+            OutlinedCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Log a contact", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Record a completed manual contact. This does not place a call, send a message, or change a task.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Button(onClick = onContact) {
+                        Text("Log contact")
+                    }
+                    if (!state.contactLoggingEnabled)
+                        Text(
+                            "Contact logging needs an updated online workspace capability. Existing saved contacts remain protected.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    localContacts.forEach { contact ->
+                        Text(
+                            "${contact.channel.replace('_', ' ')} · ${contact.outcome.replace('_', ' ')} · ${displayContactTime(contact.occurredAt)}",
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                        if (contact.state != "accepted")
+                            Text(
+                                if (contact.state == "attention") "Contact needs attention" else "Contact saved on device",
+                                color = MaterialTheme.colorScheme.primary,
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                    }
+                }
             }
         }
         item {
@@ -630,6 +719,8 @@ private fun SavedWork(
     repository: FieldRepository,
     onDraft: (DraftRow) -> Unit,
     onRevise: (OperationRow, JSONObject) -> Unit,
+    onContactDraft: (ContactDraftRow) -> Unit,
+    onRepairFutureContact: (ContactDraftRow) -> Unit,
 ) {
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -650,7 +741,31 @@ private fun SavedWork(
                 }
             }
         }
-        items(state.operations, key = { it.id }) { row ->
+        items(state.contactDrafts, key = { "contact-${it.id}" }) { draft ->
+            val operation = draft.operation.takeIf { it.isNotEmpty() }?.let { id ->
+                state.operations.firstOrNull { it.id == id }
+            }
+            OutlinedCard(
+                Modifier.fillMaxWidth().then(
+                    if (draft.operation.isEmpty()) Modifier.clickable { onContactDraft(draft) }
+                    else Modifier
+                )
+            ) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Log contact", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "${draft.channel.replace('_', ' ')} · ${draft.outcome.replace('_', ' ')} · ${displayContactTime(draft.occurredAt)}"
+                    )
+                    if (operation != null) StatusBadge(operation)
+                    else Text("Draft revision ${draft.revision} saved on device · Continue editing")
+                    if (draft.lastError == "contact_time_in_future")
+                        TextButton(onClick = { onRepairFutureContact(draft) }) {
+                            Text("Correct reported time")
+                        }
+                }
+            }
+        }
+        items(state.operations.filter { it.kind != "log_contact_attempt" }, key = { it.id }) { row ->
             OutlinedCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text(
@@ -713,7 +828,7 @@ private fun SavedWork(
                 }
             }
         }
-        if (state.operations.isEmpty() && state.drafts.isEmpty())
+        if (state.operations.isEmpty() && state.drafts.isEmpty() && state.contactDrafts.isEmpty())
             item { Text("All saved work is covered by the current download.") }
     }
 }
@@ -968,6 +1083,243 @@ private fun Composer(
             dismissButton = { TextButton(onClick = { discard = false }) { Text("Keep editing") } },
         )
 }
+
+@Composable
+private fun ContactComposer(
+    repository: FieldRepository,
+    person: String,
+    id: String,
+    onClose: () -> Unit,
+    onSubmitted: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    val commits = remember(id) { Mutex() }
+    val pickerContext = LocalContext.current
+    val zone = remember { ZoneId.systemDefault() }
+    var channel by remember(id) { mutableStateOf("call") }
+    var outcome by remember(id) { mutableStateOf("reached") }
+    var occurredAt by
+        remember(id) {
+            mutableStateOf(OffsetDateTime.now(zone).withSecond(0).withNano(0).toString())
+        }
+    var resolvedOffset by remember(id) { mutableStateOf(OffsetDateTime.parse(occurredAt).offset.id) }
+    var revision by remember(id) { mutableLongStateOf(0) }
+    var committed by remember(id) { mutableStateOf("") }
+    var loaded by remember(id) { mutableStateOf(false) }
+    var saving by remember(id) { mutableStateOf(false) }
+    var status by remember(id) { mutableStateOf("Loading saved contact…") }
+    var retry by remember(id) { mutableIntStateOf(0) }
+    var offsetChoices by remember(id) { mutableStateOf<List<OffsetDateTime>>(emptyList()) }
+    var capability by remember(id) { mutableStateOf(false) }
+    fun current() =
+        json(
+                "channel" to channel,
+                "outcome" to outcome,
+                "occurred_at" to occurredAt,
+                "resolved_offset" to resolvedOffset,
+            )
+            .toString()
+    fun setResolved(value: OffsetDateTime) {
+        occurredAt = value.toString()
+        resolvedOffset = value.offset.id
+        offsetChoices = emptyList()
+    }
+    fun chooseLocal(year: Int, month: Int, day: Int, hour: Int, minute: Int) {
+        val local = LocalDateTime.of(year, month, day, hour, minute)
+        val choices = resolveReportedLocal(local, zone)
+        when (choices.size) {
+            0 -> status = "That local time does not exist because of a daylight-saving change. Choose another time."
+            1 -> setResolved(choices.single())
+            else -> {
+                offsetChoices = choices
+                status = "Choose the offset for this repeated local time."
+            }
+        }
+    }
+    val dirty = loaded && current() != committed
+    LaunchedEffect(id) {
+        try {
+            repository.contactDraft(id)?.let { draft ->
+                channel = draft.channel
+                outcome = draft.outcome
+                occurredAt = draft.occurredAt
+                resolvedOffset = draft.resolvedOffset
+                revision = draft.revision
+                committed = current()
+            }
+            capability = repository.contactLoggingSupported()
+            status =
+                if (capability) "Changes will autosave on this device"
+                else "This workspace has not enabled contact logging. You can keep the protected draft."
+            loaded = true
+        } catch (_: Exception) {
+            status = "Could not open this protected contact draft"
+        }
+    }
+    LaunchedEffect(current(), loaded, retry) {
+        if (loaded && current() != committed) {
+            status = "Unsaved contact changes…"
+            delay(350)
+            commits.withLock {
+                withContext(NonCancellable) {
+                    saving = true
+                    try {
+                        val row =
+                            repository.saveContactDraft(
+                                id,
+                                person,
+                                channel,
+                                outcome,
+                                occurredAt,
+                                resolvedOffset,
+                                revision,
+                            )
+                        revision = row.revision
+                        committed = current()
+                        status = "Contact draft revision ${row.revision} saved on this device"
+                    } catch (_: Exception) {
+                        status =
+                            "Not saved. Free storage and retry. Closing keeps the last protected draft."
+                    }
+                    saving = false
+                }
+            }
+        }
+    }
+    AlertDialog(
+        onDismissRequest = { if (!dirty && !saving) onClose() },
+        title = { Text("Log a contact") },
+        text = {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    "Record a completed manual contact. This form never places a call or sends a message.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Text("Channel", fontWeight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("call", "text", "email", "other").forEach { value ->
+                        FilterChip(
+                            channel == value,
+                            { channel = value },
+                            label = { Text(value) },
+                            enabled = !saving,
+                            modifier = Modifier.testTag("contact-channel-$value"),
+                        )
+                    }
+                }
+                Text("Outcome", fontWeight = FontWeight.SemiBold)
+                listOf("reached", "no_answer", "left_message", "sent", "busy", "wrong_number")
+                    .chunked(3)
+                    .forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            row.forEach { value ->
+                                FilterChip(
+                                    outcome == value,
+                                    { outcome = value },
+                                    label = { Text(value.replace('_', ' ')) },
+                                    enabled = !saving,
+                                    modifier = Modifier.testTag("contact-outcome-$value"),
+                                )
+                            }
+                        }
+                    }
+                Text("Reported time", fontWeight = FontWeight.SemiBold)
+                Text(
+                    "${displayContactTime(occurredAt)} (${resolvedOffset})",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                TextButton(
+                    onClick = {
+                        val initial = OffsetDateTime.parse(occurredAt).atZoneSameInstant(zone)
+                        android.app.DatePickerDialog(
+                                pickerContext,
+                                { _, year, month, day ->
+                                    android.app.TimePickerDialog(
+                                            pickerContext,
+                                            { _, hour, minute ->
+                                                chooseLocal(year, month + 1, day, hour, minute)
+                                            },
+                                            initial.hour,
+                                            initial.minute,
+                                            android.text.format.DateFormat.is24HourFormat(pickerContext),
+                                        )
+                                        .show()
+                                },
+                                initial.year,
+                                initial.monthValue - 1,
+                                initial.dayOfMonth,
+                            )
+                            .show()
+                    },
+                    enabled = !saving,
+                    modifier = Modifier.testTag("contact-time-picker"),
+                ) { Text("Choose reported date and time") }
+                Text(status, style = MaterialTheme.typography.bodySmall)
+                if (!capability)
+                    Text(
+                        "Contact logging is unavailable until an online capability update. This draft remains encrypted.",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                if (dirty && !saving) TextButton(onClick = { retry++ }) { Text("Retry save") }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    saving = true
+                    scope.launch {
+                        commits.withLock {
+                            try {
+                                repository.submitContactDraft(id, revision)
+                                onSubmitted()
+                            } catch (error: Exception) {
+                                status =
+                                    if (error is ApiFailure) errorMessage(error.code)
+                                    else "Not submitted. Your committed contact draft remains available."
+                                saving = false
+                            }
+                        }
+                    }
+                },
+                enabled = loaded && capability && !dirty && !saving,
+                modifier = Modifier.testTag("contact-save"),
+            ) { Text("Save contact on device") }
+        },
+        dismissButton = {
+            TextButton(onClick = onClose, enabled = loaded && !dirty && !saving) {
+                Text("Close draft")
+            }
+        },
+    )
+    if (offsetChoices.isNotEmpty())
+        AlertDialog(
+            onDismissRequest = { offsetChoices = emptyList() },
+            title = { Text("Choose time offset") },
+            text = { Text("This local time occurs twice. Choose when the contact happened.") },
+            confirmButton = {
+                TextButton(onClick = { setResolved(offsetChoices.first()) }) {
+                    Text(offsetChoices.first().offset.id)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { setResolved(offsetChoices.last()) }) {
+                    Text(offsetChoices.last().offset.id)
+                }
+            },
+        )
+}
+
+private fun displayContactTime(value: String): String =
+    try {
+        OffsetDateTime.parse(value)
+            .format(java.time.format.DateTimeFormatter.ofPattern("MMM d, uuuu HH:mm xxx"))
+    } catch (_: Exception) {
+        "Protected contact time unavailable"
+    }
 
 private fun displayTime(value: String): String =
     try {

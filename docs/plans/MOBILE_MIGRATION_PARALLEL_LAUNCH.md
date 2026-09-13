@@ -1,8 +1,8 @@
 # Mobile 001 and migration — Coordinated implementation launch
 
 **2026-09-12: Mobile 001 approved under D-074; 010e1 approved under D-075.** This records
-ownership and dependencies before implementation begins, as requested. No
-implementation worktrees exist yet. Tool installation and both virtual-device
+ownership and dependencies established before implementation, as requested. Both
+backend worktrees are now active; see the [coordination record](../tasks/MOBILE_MIGRATION_IMPLEMENTATION_STATUS.md). Tool installation and both virtual-device
 boots are verified in the [setup record](../tasks/MOBILE_NATIVE_TOOLCHAIN_SETUP.md).
 
 ## Deliverables and approval

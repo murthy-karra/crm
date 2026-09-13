@@ -11,8 +11,9 @@ ledger and historical measurements; its old instructions are not current work.
 [specification](../specs/MOBILE_001_OFFLINE_FIELD_WORK.md) and
 [briefs](../tasks/MOBILE_001_IMPL.md) cover both native platforms, protected SQLite,
 seven-day access and durable synchronization. [Toolchain preparation](../tasks/MOBILE_NATIVE_TOOLCHAIN_SETUP.md)
-records installed SDKs and successful iPhone/Android emulator boots; no native
-app or sync endpoint has been implemented yet.
+records installed SDKs and successful iPhone/Android emulator boots. Backend
+implementation is active in its isolated worktree and has reached first compile;
+required verification and both native app implementations remain in progress.
 
 The user requested a concrete migration plan before implementation launch.
 Approved [010e1](../specs/SLICE_010e1.md) compares a newer core capture with the
@@ -197,13 +198,12 @@ follow-up remains open in production readiness.
 
 ## Current branch
 
-Main is the sole worktree, observed at
-`b301819fcf38947ee31f85b25588d9c5398795f0` during D-074 planning. Mobile/migration planning
-documents and decision/state updates are uncommitted; no implementation branch
-has been created. The [010d2 release record](../tasks/SLICE_010d2_RELEASE.md)
-records runtime source `5924f097a7d7475e7e9742bb08e102d7c7ca98d2`; this planning
-turn has not reverified or redeployed that service. Earlier 010f2 integration
-and cleanup evidence remains in its dated release record.
+Implementation is active on local `codex/mobile-migration-integration` from the
+approved planning checkpoint `9eaeb0a`. Two separate worktrees run mobile backend
+and migration010e1; their owners, databases, ports and current verification are
+tracked in the [coordination record](../tasks/MOBILE_MIGRATION_IMPLEMENTATION_STATUS.md).
+Main remains at `b301819fcf38947ee31f85b25588d9c5398795f0`. No implementation has
+been published or deployed; the recorded 010d2 runtime remains unchanged.
 
 ## Last accepted decision
 
@@ -561,7 +561,7 @@ and implementation. Mobile 001 is already approved. Follow the
 [coordinated launch](MOBILE_MIGRATION_PARALLEL_LAUNCH.md): mobile backend and
 migration concurrently, then iOS + Android + migration after backend integration.
 Do not require remaining migration fidelity or live FUB qualification before the
-synthetic native workflow. No implementation worktree has launched yet.
+synthetic native workflow. Both backend worktrees have launched; native lanes follow the integrated mobile foundation.
 
 1. The [010d2 release](../tasks/SLICE_010d2_RELEASE.md) is complete and forms the
    baseline for the next bounded slice. Future import confirmation still requires

@@ -1,0 +1,10 @@
+{
+  "restored_at": "2026-09-13T01:52:26.177107+00:00",
+  "source_commit": "b301819fcf38947ee31f85b25588d9c5398795f0",
+  "released_asset_count": 73,
+  "all_rebuilt_hashes_match_release": true,
+  "all_served_hashes_match_release": true,
+  "shared_api_health": 200,
+  "incident": "Verification build temporarily replaced shared preview assets. Released files rebuilt and restored exactly; QA moved to a separate output directory.",
+  "qa_output": "/private/tmp/crm-010e1-qa/web-dist-final"
+}

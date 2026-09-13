@@ -60,7 +60,7 @@ onBeforeUnmount(() => access.remove(branch.value))
       Published source comparisons
     </h3>
     <p class="mt-1 text-small text-text-muted">
-      These pages share completed output revision {{ outputRevision }}. Values and message bodies are not displayed here.
+      Review the completed report by source family and result. Open a comparison for its retained evidence references.
     </p>
     <p
       v-if="outputInvalid"
@@ -313,7 +313,7 @@ onBeforeUnmount(() => access.remove(branch.value))
             Representative retained evidence
           </h5>
           <p class="mt-1 text-small text-text-muted">
-            {{ row.evidence.length }} references shown, up to 16 per comparison. {{ row.evidence_is_exhaustive ? 'The report marks these references exhaustive for this comparison.' : 'These references are not exhaustive.' }} Total observations: {{ row.baseline_observations }} original / {{ row.newer_observations }} newer.
+            {{ row.evidence.length }} references shown, up to 16 per comparison. These references are not exhaustive. Total observations: {{ row.baseline_observations }} original / {{ row.newer_observations }} newer.
           </p>
           <ul class="mt-2 space-y-3 text-small">
             <li

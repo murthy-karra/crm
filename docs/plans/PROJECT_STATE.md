@@ -12,8 +12,9 @@ ledger and historical measurements; its old instructions are not current work.
 [briefs](../tasks/MOBILE_001_IMPL.md) cover both native platforms, protected SQLite,
 seven-day access and durable synchronization. [Toolchain preparation](../tasks/MOBILE_NATIVE_TOOLCHAIN_SETUP.md)
 records installed SDKs and successful iPhone/Android emulator boots. Backend
-implementation is active in its isolated worktree and has reached first compile;
-required verification and both native app implementations remain in progress.
+implementation and focused database/API proof are locally integrated. Both native
+apps now have dedicated worktrees and are compiling/testing against the isolated
+synthetic API; native acceptance and the combined DB gate remain in progress.
 
 The user requested a concrete migration plan before implementation launch.
 Approved [010e1](../specs/SLICE_010e1.md) compares a newer core capture with the
@@ -32,8 +33,7 @@ independent timeline preflight, backup and exact preservation of 108 prior tenan
 rowsets are recorded in the [010d2 release](../tasks/SLICE_010d2_RELEASE.md).
 The derived review state exactly matches 100,077 existing People; import/fact
 tables remain empty. Public HTTP/browser checks passed. Source was committed,
-merged and pushed, and the implementation branch/worktree removed; main is the
-sole worktree. No live source/customer processing or activation occurred.
+merged and pushed, and the implementation branch/worktree removed at that release. No live source/customer processing or activation occurred.
 Confirmation still requires a fresh five-minute
 `CRM_MIGRATION_RELEASE_REPORT`; consult the current release record for its
 observed expiry and actual running artifact identity before an operational step.
@@ -199,11 +199,15 @@ follow-up remains open in production readiness.
 ## Current branch
 
 Implementation is active on local `codex/mobile-migration-integration` from the
-approved planning checkpoint `9eaeb0a`. Two separate worktrees run mobile backend
-and migration010e1; their owners, databases, ports and current verification are
+approved planning checkpoint `9eaeb0a`. Three implementation worktrees cover iOS, Android and migration010e1;
+both backend additions are locally integrated at `d6e7c74`. Their owners,
+databases, ports and current verification are
 tracked in the [coordination record](../tasks/MOBILE_MIGRATION_IMPLEMENTATION_STATUS.md).
 Main remains at `b301819fcf38947ee31f85b25588d9c5398795f0`. No implementation has
-been published or deployed; the recorded 010d2 runtime remains unchanged.
+been published or intentionally deployed. A verification build temporarily replaced
+the existing shared Web preview assets; all 73 released assets were restored and
+verified by hash. [Restoration evidence](../design/qa/slice-010e1-2026-09-12/shared-preview-restoration.json).
+Subsequent QA output is isolated, and shared services were not restarted.
 
 ## Last accepted decision
 

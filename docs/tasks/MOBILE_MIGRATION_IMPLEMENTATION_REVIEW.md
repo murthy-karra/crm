@@ -39,10 +39,11 @@ lease ownership, output sealing and bounded cursors. Requested targeted fixes:
 5. Always label evidence references representative, per the approved contract.
 6. Include the implemented variant aggregation table in the frozen contract.
 
-The implementer accepted these corrections; item 1 was also observed as an actual
-PostgreSQL permission failure. Targeted recheck and passing recovery evidence are
-pending. The inherited core snapshot handoff receives its separate required
-independent-process reproduction; no outcome is assumed.
+All six corrections passed targeted recheck and the final five real-role DB/API
+tests. Item 1 was also observed as an actual PostgreSQL permission failure before
+the narrow grant. Four-process report handoff passed. The alleged inherited core
+snapshot checkpoint failure did not reproduce across five independent processes;
+no existing collector change was made. See the attributed 010e1 verification record.
 
 ## Shared Web integration gate
 
@@ -50,7 +51,10 @@ Coordinator ran lint, type checking, all Web tests and production build in the
 migration worktree. One initial lint warning in the coordinator's component
 attribute ordering was corrected. The completed run passed 86 files / 1,181
 tests, type checking, lint and build. Vite retained its existing large-chunk
-advisory. This does not substitute for the required actual API browser walkthrough.
+advisory. The subsequent actual API desktop/390px walkthrough passed, including an
+accepted-request/lost-response replay and authorized retained evidence navigation.
+Its source/runtime attribution and the initial harness selector correction are
+recorded in the 010e1 evidence directory.
 
 No third broad implementation review is planned. Any second pass is restricted
 to these findings and concrete test failures under D-050.

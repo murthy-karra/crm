@@ -148,6 +148,23 @@ covers that final addition.
 The broad DB run had 401 passing tests before two process-spawn failures caused
 by a concurrent Cargo rebuild replacing its test executable, not failed product
 assertions. The coordinator is continuing that gate from an immutable archive;
-its final result and the actual desktop/narrow-browser walkthrough remain pending
-at this checkpoint. A release, live FUB qualification, customer readiness,
+its final result is tracked in the combined verification record. The actual
+desktop/narrow-browser walkthrough subsequently passed as recorded below. A release, live FUB qualification, customer readiness,
 repair/deletion/activation and physical-device behavior are not claimed here.
+
+## Coordinator browser and integration proof
+
+The actual production-Web/real-API walkthrough passed cancelled-report handling,
+accepted-request/lost-response retry with identical request identity, filtered
+absence and inaccessible-note review, representative evidence navigation and
+reload recovery. Desktop and 390px screenshots were inspected; no horizontal
+overflow or browser page errors occurred. See the [sanitized evidence and exact
+build attribution](../design/qa/slice-010e1-2026-09-12/README.md).
+
+The coordinator locally integrated backend/Web at `d6e7c74`. The combined
+service-free gate and live SQLx preparation subsequently passed; the complete
+archived DB suite is tracked in [combined verification](MOBILE_MIGRATION_COMBINED_VERIFICATION.md).
+This preserves separate source attribution for targeted worker tests, actual
+browser runtime and merged-source checks. The same evidence directory records
+an incidental shared-preview asset replacement and exact restoration of the
+released Web files; later QA output is isolated.

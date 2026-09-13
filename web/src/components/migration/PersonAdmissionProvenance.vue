@@ -36,6 +36,15 @@ watch([()=>props.personId,access.scope],()=>{cursor.value='';selected.value='';f
     </p><template v-if="detail">
       <p class="mt-2 break-all text-small">
         Admission {{ detail.admission_id }} · result {{ detail.result_id }}
+      </p><p class="mt-2 text-small text-text-muted">
+        These are the original admission values. Later core refreshes retain separate plans and results.
+        <RouterLink
+          to="/migration#admitted-people-refresh"
+          class="text-accent underline"
+        >
+          Review later core refreshes in Migration
+        </RouterLink>
+        by choosing this admission cohort.
       </p><p class="text-small">
         {{ detail.coverage }}
       </p><dl class="mt-3 grid gap-3 sm:grid-cols-2">

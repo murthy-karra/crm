@@ -574,7 +574,7 @@ async fn identity_tombstone_and_sealed_plan_items_are_immutable(migrator: PgPool
     .await
     .unwrap();
     sqlx::query("INSERT INTO migration_import_identity(organization_id,source_account_id,family,source_id,target_id,import_id,plan_id) VALUES($1,17,'people','106',$2,$3,$4)")
-        .bind(f.org).bind(Uuid::new_v4()).bind(parent).bind(parent_plan).execute(&migrator).await.unwrap();
+        .bind(f.org).bind(Uuid::nil()).bind(parent).bind(parent_plan).execute(&migrator).await.unwrap();
     let id = ready(
         &f,
         parent,

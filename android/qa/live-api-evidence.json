@@ -1,0 +1,11 @@
+{
+  "selected_people": 100,
+  "downloaded_notes": 1299,
+  "downloaded_tasks": 1004,
+  "queued_notes": 100,
+  "note_posts": 101,
+  "unique_note_operations": 100,
+  "duplicate_effects": 0,
+  "dependency_completion": true,
+  "actor_isolation": true
+}

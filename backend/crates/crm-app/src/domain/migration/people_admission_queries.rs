@@ -471,6 +471,7 @@ pub async fn contacts(
     let page = contact_page(&mut tx, key, ctx, id, item, &plan, p, "contacts").await?;
     finish(tx, page, PAGE_BYTES).await
 }
+#[allow(clippy::too_many_arguments)] // Explicit scoped identity and cryptographic receipt/page inputs.
 async fn contact_page(
     conn: &mut PgConnection,
     key: &RawPayloadKey,

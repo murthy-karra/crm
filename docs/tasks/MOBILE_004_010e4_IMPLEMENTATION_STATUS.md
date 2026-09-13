@@ -44,8 +44,10 @@ fixture correction are recorded in the backend verification.
 
 Mobile004 independent review used both allowed rounds. Final round found one
 remaining Android reverse-follow-up composer defect: initially selected stage A
-was not persisted while A→B remained unresolved. The Android owner is correcting
-that path and running an actual composer regression. No third review is planned.
+was not persisted while A→B remained unresolved. Commit `5a683d5` corrects that path; its actual emulator composer regression
+passed in 36.858 seconds, preserving the baseline and single outbox envelope.
+Both review findings and their targeted corrections are accounted for; no third
+review is planned. Final combined repository gates remain.
 
 010e4 first independent review identified lifecycle/read, closed settlement,
 physical-byte accounting and source-availability gaps. Root integrated read,
@@ -69,7 +71,7 @@ final-tree gates remain. One early migration test overlapped the mobile gate,
 failed early in its disposable database and is not performance evidence.
 Subsequent DB gates are serialized explicitly.
 
-Remaining: Android final finding regression; integrated migration recovery,
+Remaining: integrated migration recovery,
 source/permit/byte tests; desktop and 390px browser cancellation/remainder,
 preservation and provenance evidence; one migration 25k hot-plan and paired
 Person read pass; second/final migration review; final repository, SQLx and DB

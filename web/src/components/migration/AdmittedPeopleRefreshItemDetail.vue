@@ -36,7 +36,13 @@ function clears(key: typeof fields[number]) { const value = detail.data.value; r
   >
     <template v-if="detail.data.value">
       <p
-        v-if="detail.data.value.disposition !== 'eligible'"
+        v-if="['settled', 'settled_noop'].includes(detail.data.value.disposition)"
+        class="text-text-muted"
+      >
+        This item has settled. The comparison retains the values reviewed for this plan; open the CRM Person for current values.
+      </p>
+      <p
+        v-else-if="detail.data.value.disposition !== 'eligible'"
         class="text-text-muted"
       >
         This Person has no eligible update in this plan. No fields or contacts will be changed.

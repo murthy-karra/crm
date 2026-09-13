@@ -33,22 +33,45 @@ Required owner checkpoints are narrow catalog-revision maintenance during review
 imports and exact OLD→NEW field validation for the admitted-refresh permit.
 Both remain required implementation/tests, not unresolved product decisions.
 
-The mobile-backend worktree is closed. Active Terra high writers:
-`codex/mobile-004-ios` and `codex/mobile-004-android` from `04b5f35`, plus
-`codex/migration-010e4`, in matching directories under
-`/Users/karrad/projects/crm-worktrees/`.
+Native iOS and Android implementations are integrated, including actual installed
+Mobile003→004 encrypted-store upgrades and isolated real-API stage replay,
+conflict and explicit replacement. Evidence is recorded in
+[MOBILE_004_IOS_VERIFICATION.md](MOBILE_004_IOS_VERIFICATION.md),
+[MOBILE_004_ANDROID_VERIFICATION.md](MOBILE_004_ANDROID_VERIFICATION.md) and
+[MOBILE_004_BACKEND_VERIFICATION.md](MOBILE_004_BACKEND_VERIFICATION.md).
+The mobile paired Today gate passed; its source attribution and contact-plan
+fixture correction are recorded in the backend verification.
 
-Combined focused evidence: 18 mobile DB tests passed, including new stage
-rollback, concurrent duplicate publication, scope/deletion and catalog tests;
-3 ordinary stage/tenant/realtime regressions passed. Logs are under the private
-`integration/` evidence directory. Preflight tests passed 48/48. Native/API
-acceptance, migration lifecycle tests, D-050 evidence and final gates remain.
-One migration test began during the mobile DB gate after compilation continued
-automatically; it used disposable databases, failed early, and is not performance
-evidence. Subsequent DB gates require an explicit slot grant.
+Mobile004 independent review used both allowed rounds. Final round found one
+remaining Android reverse-follow-up composer defect: initially selected stage A
+was not persisted while A→B remained unresolved. The Android owner is correcting
+that path and running an actual composer regression. No third review is planned.
 
-Pending: complete implementation and
-focused backend/migration/native acceptance, combined gates, bounded independent
-implementation review, query/byte/preservation and actual browser/device-emulator
-evidence. Physical phones/cellular, new family imports, calling, publication and
+010e4 first independent review identified lifecycle/read, closed settlement,
+physical-byte accounting and source-availability gaps. Root integrated read,
+re-preview/retry/cancel and exact eligible-count fixes, then truthful settled and
+cancelled item filters. The migration owner is finishing retained-source,
+cancelled-cohort, permit, atomic rollback and ledger regressions. A separate
+bounded owner implements server-qualified selected-report availability and its
+Web gating. Source population remains exactly the successful terminal admission
+cohort; unreachable copied traversal of unrelated report groups is being removed.
+
+API3103/Web5174 use isolated retained synthetic records. The first browser
+prepare created a real ready plan, but exposed list/overview contract defects;
+those source fixes are integrated. No browser confirmation/cancellation/remainder
+acceptance is claimed yet. The same retained QA database will be reused after
+integrating and rebuilding the corrected API/Web.
+
+Combined focused evidence includes 18 mobile DB tests, 3 ordinary stage/tenant/
+realtime regressions and 48 preflight tests. Migration lifecycle and valid-lease
+negative tests passed at their recorded checkpoints; expanded regressions and
+final-tree gates remain. One early migration test overlapped the mobile gate,
+failed early in its disposable database and is not performance evidence.
+Subsequent DB gates are serialized explicitly.
+
+Remaining: Android final finding regression; integrated migration recovery,
+source/permit/byte tests; desktop and 390px browser cancellation/remainder,
+preservation and provenance evidence; one migration 25k hot-plan and paired
+Person read pass; second/final migration review; final repository, SQLx and DB
+gates. Physical phones/cellular, later family imports, calling, publication and
 deployment remain separate.

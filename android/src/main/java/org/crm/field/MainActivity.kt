@@ -87,13 +87,15 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private data class ComposerLaunch(val person: String, val kind: String, val target: JSONObject? = null)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FieldApp(repository: FieldRepository) {
     val state by repository.ui.collectAsState()
     val scope = rememberCoroutineScope()
     var tab by remember { mutableStateOf("Today") }
-    var composer by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var composer by remember { mutableStateOf<ComposerLaunch?>(null) }
     var signOut by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf("") }
     LaunchedEffect(state.locked) {
@@ -185,7 +187,7 @@ fun FieldApp(repository: FieldRepository) {
                         PersonScreen(
                             state,
                             repository,
-                            onCompose = { kind -> composer = state.person!!.id to kind },
+                            onCompose = { kind, target -> composer = ComposerLaunch(state.person!!.id, kind, target) },
                             onError = { notice = it },
                         )
                     tab == "People" -> PeopleScreen(state, repository, onError = { notice = it })
@@ -195,21 +197,32 @@ fun FieldApp(repository: FieldRepository) {
                             repository,
                             onDraft = {
                                 if (state.people.any { person -> person.id == it.person })
-                                    composer = it.person to it.kind
+                                    composer = ComposerLaunch(it.person, it.kind)
                                 else
                                     notice =
                                         "This Person is outside the current offline selection. Saved input remains protected; request availability before reopening it."
+                            },
+                            onRevise = { row, current ->
+                                scope.launch {
+                                    try {
+                                        val fresh = repository.supersedeConflict(row.id)
+                                        composer = ComposerLaunch(row.person, row.kind, fresh)
+                                    } catch (_: Exception) {
+                                        notice = "Current version could not be prepared. The original saved proposal remains protected."
+                                    }
+                                }
                             },
                         )
                     else -> TodayScreen(state, repository)
                 }
             }
     }
-    composer?.let { (person, kind) ->
+    composer?.let { launch ->
         Composer(
             repository,
-            person,
-            kind,
+            launch.person,
+            launch.kind,
+            launch.target,
             onClose = { composer = null },
             onSubmitted = {
                 composer = null
@@ -435,7 +448,7 @@ private fun PersonTile(person: PersonCard, pending: Boolean, open: () -> Unit) {
 internal fun PersonScreen(
     state: FieldUi,
     repository: FieldRepository,
-    onCompose: (String) -> Unit,
+    onCompose: (String, JSONObject?) -> Unit,
     onError: (String) -> Unit,
 ) {
     val row = state.person ?: return
@@ -464,8 +477,8 @@ internal fun PersonScreen(
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { onCompose("add_note") }) { Text("Add note") }
-                OutlinedButton(onClick = { onCompose("create_task") }) { Text("Create task") }
+                Button(onClick = { onCompose("add_note", null) }) { Text("Add note") }
+                OutlinedButton(onClick = { onCompose("create_task", null) }) { Text("Create task") }
             }
         }
         item {
@@ -523,6 +536,8 @@ internal fun PersonScreen(
                             "Synced · ${note.optJSONObject("author")?.optString("display_name") ?: "Unknown author"} · ${displayTime(note.getString("created_at"))}",
                             style = MaterialTheme.typography.labelSmall,
                         )
+                        if (state.editsEnabled && row.noteRevisionsQualified && note.optBoolean("can_manage") && note.has("revision"))
+                            TextButton(onClick = { onCompose("edit_note", note) }) { Text("Edit note") }
                     }
                 }
             }
@@ -550,6 +565,8 @@ internal fun PersonScreen(
                             "${task.optString("kind").replace('_', ' ')} · Due ${displayTime(task.stringOrNull("due_at") ?: "None")}",
                             style = MaterialTheme.typography.bodySmall,
                         )
+                        if (state.editsEnabled && task.optBoolean("can_manage") && task.has("revision"))
+                            TextButton(onClick = { onCompose("update_task", task) }) { Text("Edit task") }
                         Text(
                             if (completed) "Synced · Completed" else "Synced · Open",
                             style = MaterialTheme.typography.labelSmall,
@@ -602,7 +619,12 @@ private fun StatusBadge(row: OperationRow) {
 }
 
 @Composable
-private fun SavedWork(state: FieldUi, repository: FieldRepository, onDraft: (DraftRow) -> Unit) {
+private fun SavedWork(
+    state: FieldUi,
+    repository: FieldRepository,
+    onDraft: (DraftRow) -> Unit,
+    onRevise: (OperationRow, JSONObject) -> Unit,
+) {
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -634,6 +656,44 @@ private fun SavedWork(state: FieldUi, repository: FieldRepository, onDraft: (Dra
                         fontWeight = FontWeight.SemiBold,
                     )
                     StatusBadge(row)
+                    val comparison = state.editContexts.firstOrNull { it.operation == row.id }
+                    if (row.lastError == "revision_conflict" && comparison != null) {
+                        Text("Your saved edit", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            JSONObject(row.envelope).getJSONObject("payload")
+                                .optString(if (row.kind == "edit_note") "body" else "title"),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Text("Version you started from", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            if (comparison.baseline.isEmpty()) "Protected baseline unavailable"
+                            else comparison.baseline,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Text("Current version", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            if (comparison.current.isEmpty()) "Waiting for an authorized current-record read"
+                            else comparison.current,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(
+                                onClick = { repository.requestSync(true) },
+                                enabled = row.status == "attention",
+                            ) { Text("Keep draft for later") }
+                            TextButton(
+                                onClick = {
+                                    repository.scope.launch { repository.discardConflict(row.id) }
+                                },
+                            ) { Text("Discard and use current") }
+                            TextButton(
+                                onClick = {
+                                    if (comparison.current.isNotEmpty()) onRevise(row, JSONObject(comparison.current))
+                                },
+                                enabled = comparison.current.isNotEmpty() && row.status == "attention",
+                            ) { Text("Review and revise") }
+                        }
+                    }
                     TextButton(
                         onClick = {
                             repository.select(row.person)
@@ -655,10 +715,11 @@ private fun Composer(
     repository: FieldRepository,
     person: String,
     kind: String,
+    targetRecord: JSONObject? = null,
     onClose: () -> Unit,
     onSubmitted: () -> Unit,
 ) {
-    val id = "$person:$kind"
+    val id = "$person:$kind:${targetRecord?.optString("id").orEmpty()}"
     val scope = rememberCoroutineScope()
     val commits = remember(id) { Mutex() }
     val pickerContext = LocalContext.current
@@ -674,24 +735,39 @@ private fun Composer(
     var status by remember(id) { mutableStateOf("Loading saved draft…") }
     fun payload(): JSONObject =
         if (kind == "add_note") json("person_id" to person, "body" to text)
-        else
+        else if (kind == "edit_note")
             json(
                 "person_id" to person,
+                "note_id" to targetRecord!!.getString("id"),
+                "expected_revision" to targetRecord.getString("revision"),
+                "body" to text,
+            )
+        else {
+            val update = kind == "update_task"
+            json(
+                "person_id" to person,
+                *(if (update) arrayOf("task_id" to targetRecord!!.getString("id"), "expected_revision" to targetRecord.getString("revision")) else emptyArray()),
                 "title" to text,
                 "kind" to taskKind,
                 "due_at" to due.ifBlank { null },
-                "assignee_user_id" to null,
             )
+        }
     val current = payload().toString()
     val dirty = loaded && current != committed
     LaunchedEffect(id) {
         try {
             repository.draft(id)?.let { draft ->
                 val body = JSONObject(draft.payload)
-                text = body.optString(if (kind == "add_note") "body" else "title")
+                text = body.optString(if (kind in setOf("add_note", "edit_note")) "body" else "title")
                 due = body.stringOrNull("due_at") ?: ""
                 taskKind = body.optString("kind", "follow_up")
                 revision = draft.revision
+                committed = payload().toString()
+            }
+            if (targetRecord != null && repository.draft(id) == null) {
+                text = targetRecord.optString(if (kind == "edit_note") "body" else "title")
+                due = targetRecord.stringOrNull("due_at") ?: ""
+                taskKind = targetRecord.optString("kind", "follow_up")
                 committed = payload().toString()
             }
             status = "Changes will autosave on this device"
@@ -709,8 +785,18 @@ private fun Composer(
                 withContext(NonCancellable) {
                     saving = true
                     try {
+                        val target =
+                            targetRecord?.let {
+                                json(
+                                    "person_id" to person,
+                                    "resource_id" to it.getString("id"),
+                                    "expected_revision" to it.getString("revision"),
+                                )
+                            }
                         val row =
-                            repository.saveDraft(id, person, kind, JSONObject(current), revision)
+                            repository.saveDraft(
+                                id, person, kind, JSONObject(current), revision, targetRecord, target
+                            )
                         revision = row.revision
                         committed = current
                         status = "Draft revision ${row.revision} saved on this device"
@@ -725,7 +811,7 @@ private fun Composer(
     }
     AlertDialog(
         onDismissRequest = { if (!dirty && !saving) onClose() },
-        title = { Text(if (kind == "add_note") "Add note" else "Create task") },
+        title = { Text(when (kind) { "add_note" -> "Add note"; "edit_note" -> "Edit note"; "update_task" -> "Edit task"; else -> "Create task" }) },
         text = {
             Column(
                 Modifier.verticalScroll(rememberScrollState()),
@@ -734,14 +820,14 @@ private fun Composer(
                 OutlinedTextField(
                     text,
                     { text = it },
-                    label = { Text(if (kind == "add_note") "Note" else "Task title") },
-                    minLines = if (kind == "add_note") 4 else 1,
+                    label = { Text(if (kind in setOf("add_note", "edit_note")) "Note" else "Task title") },
+                    minLines = if (kind in setOf("add_note", "edit_note")) 4 else 1,
                     modifier = Modifier.fillMaxWidth().testTag("composer-text"),
                     enabled = !saving,
                 )
-                if (kind == "create_task") {
+                if (kind in setOf("create_task", "update_task")) {
                     Text(
-                        "Assigned to you. Choose the kind:",
+                        if (kind == "create_task") "Assigned to you. Choose the kind:" else "Choose the kind:",
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Row(

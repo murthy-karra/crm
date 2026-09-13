@@ -80,6 +80,8 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         kind: String,
         payload: JSONObject,
         expectedRevision: Long = 0,
+        baseline: JSONObject? = null,
+        target: JSONObject? = null,
     ): DraftRow = atomic {
         requireAccess()
         require(dao.person(person) != null)
@@ -87,7 +89,19 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         require((current?.revision ?: 0) == expectedRevision) {
             "Draft changed; reload the committed revision"
         }
-        val value = DraftRow(id, person, kind, payload.toString(), expectedRevision + 1)
+        require(kind in setOf("add_note", "create_task", "edit_note", "update_task"))
+        val value =
+            DraftRow(
+                id,
+                person,
+                kind,
+                payload.toString(),
+                expectedRevision + 1,
+                // An existing edit must not be re-based by a late screen/cache response.
+                current?.baseline ?: baseline?.toString().orEmpty(),
+                current?.target ?: target?.toString().orEmpty(),
+                current?.state ?: "draft",
+            )
         dao.draft(value)
         value
     }
@@ -100,24 +114,52 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
             "Person is outside the current authorized offline selection"
         }
         val payload = JSONObject(draft.payload)
-        val text = payload.getString(if (draft.kind == "add_note") "body" else "title")
-        require(draft.kind in setOf("add_note", "create_task"))
+        val text = payload.getString(if (draft.kind in setOf("add_note", "edit_note")) "body" else "title")
+        require(draft.kind in setOf("add_note", "create_task", "edit_note", "update_task"))
         val normalized = text.trim()
         require(
             normalized.isNotBlank() &&
                 normalized.codePointCount(0, normalized.length) <=
-                    if (draft.kind == "add_note") 10_000 else 500
+                    if (draft.kind in setOf("add_note", "edit_note")) 10_000 else 500
         )
         require(normalized.none { it.isISOControl() && it !in "\n\r\t" })
         require(payload.getString("person_id") == draft.person)
-        if (draft.kind == "create_task") {
+        if (draft.kind in setOf("create_task", "update_task")) {
             require(
                 payload.getString("kind") in setOf("call", "email", "text", "follow_up", "other")
             )
             payload.stringOrNull("due_at")?.let { Instant.parse(it) }
         }
+        if (draft.kind == "edit_note") {
+            require(uuid(payload.getString("note_id")).isNotEmpty())
+            revision(payload.getString("expected_revision"))
+        }
+        if (draft.kind == "update_task") {
+            require(uuid(payload.getString("task_id")).isNotEmpty())
+            revision(payload.getString("expected_revision"))
+            require(payload.has("due_at"))
+        }
+        val targetKey = targetKey(draft.kind, payload)
+        if (draft.kind in setOf("edit_note", "update_task")) {
+            require(draft.baseline.isNotEmpty() && draft.target.isNotEmpty())
+            val frozenTarget = JSONObject(draft.target)
+            require(frozenTarget.getString("person_id") == draft.person)
+            require(frozenTarget.getString("resource_id") == targetKey!!.substringAfter(':'))
+            require(frozenTarget.getString("expected_revision") == payload.getString("expected_revision"))
+        }
+        // Submitted work is immutable.  A later typing session remains a draft and never
+        // replaces its operation ID or gets silently coalesced into it.
+        require(
+            dao.operations().none {
+                it.status !in setOf("covered", "superseded") && targetKey(it.kind, JSONObject(it.envelope).getJSONObject("payload")) == targetKey
+            }
+        ) { "Saved draft — waiting for the previous change" }
         val row = newOperation(draft.person, draft.kind, payload)
         dao.operation(row)
+        if (draft.kind in setOf("edit_note", "update_task"))
+            dao.editContext(
+                EditContextRow(row.id, draft.person, draft.kind, draft.target, draft.baseline)
+            )
         dao.removeDraft(id)
         row
     }
@@ -149,9 +191,24 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
                     "expected_revision" to revision(task.getString("revision")),
                 )
             }
-        newOperation(person, "complete_task", json("person_id" to person, "target" to target))
+        val payload = json("person_id" to person, "target" to target)
+        val key = targetKey("complete_task", payload)
+        require(
+            dao.operations().none {
+                it.status !in setOf("covered", "superseded") && targetKey(it.kind, JSONObject(it.envelope).getJSONObject("payload")) == key
+            }
+        ) { "Saved draft — waiting for the previous change" }
+        newOperation(person, "complete_task", payload)
             .also { dao.operation(it) }
     }
+
+    private fun targetKey(kind: String, payload: JSONObject): String? =
+        when (kind) {
+            "edit_note" -> "note:${uuid(payload.getString("note_id"))}"
+            "update_task" -> "task:${uuid(payload.getString("task_id"))}"
+            "complete_task" -> payload.optJSONObject("target")?.stringOrNull("task_id")?.let { "task:${uuid(it)}" }
+            else -> null
+        }
 
     private fun newOperation(person: String, kind: String, payload: JSONObject): OperationRow {
         val id = UUID.randomUUID().toString()
@@ -175,7 +232,7 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
             response.getString("operation_id") != id ||
                 response.getString("outcome") != "accepted" ||
                 response.getString("resource_type") !=
-                    if (operation.kind == "add_note") "note" else "task"
+                if (operation.kind in setOf("add_note", "edit_note")) "note" else "task"
         )
             throw ProtocolFailure()
         uuid(response.getString("resource_id"))
@@ -183,8 +240,12 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         Instant.parse(response.getString("accepted_at"))
         response.getBoolean("changed")
         response.getBoolean("replayed")
-        if (operation.kind == "add_note") require(response.isNull("committed_revision"))
-        else revision(response.getString("committed_revision"))
+        when (operation.kind) {
+            "add_note" -> require(response.isNull("committed_revision"))
+            "edit_note", "create_task", "update_task", "complete_task" ->
+                revision(response.getString("committed_revision"))
+            else -> throw ProtocolFailure()
+        }
         dao.accept(id, response.toString())
         val current = dao.person(operation.person)
         if (
@@ -192,6 +253,45 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
                 revisionAtLeast(current.revision, response.getString("person_revision"))
         )
             dao.cover(id)
+    }
+
+    /** A current-record read is protected comparison context only: never a person cache seal. */
+    fun recordCurrent(operationId: String, response: JSONObject) = atomic {
+        requireAccess()
+        val operation = dao.operation(operationId) ?: throw ProtocolFailure()
+        val context = dao.editContext(operationId) ?: throw ProtocolFailure()
+        val envelope = JSONObject(operation.envelope)
+        require(response.getString("context_id") == binding.context)
+        require(response.getString("person_id") == operation.person)
+        revision(response.getString("person_revision"))
+        val record = response.getJSONObject(if (operation.kind == "edit_note") "note" else "task")
+        val expectedId = JSONObject(context.target).getString("resource_id")
+        require(uuid(record.getString("id")) == expectedId)
+        require(record.getString("person_id") == operation.person)
+        revision(record.getString("revision"))
+        // The immutable operation still owns the original target/baseline.  Only a response
+        // associated with that exact operation may supply comparison data.
+        require(envelope.getString("operation_id") == operationId)
+        dao.currentEditContext(operationId, record.toString(), context.editorRevision + 1)
+    }
+
+    fun supersedeConflict(operationId: String): JSONObject = atomic {
+        requireAccess()
+        val operation = dao.operation(operationId) ?: throw ProtocolFailure()
+        val context = dao.editContext(operationId) ?: throw ProtocolFailure()
+        require(operation.status == "attention" && operation.lastError == "revision_conflict")
+        require(context.current.isNotEmpty())
+        require(dao.supersede(operationId) == 1)
+        JSONObject(context.current)
+    }
+
+    fun discardConflict(operationId: String) = atomic {
+        requireAccess()
+        val operation = dao.operation(operationId) ?: throw ProtocolFailure()
+        require(operation.status in setOf("attention", "superseded"))
+        // Keep no retained content after an explicit choice of the current version.
+        dao.removeEditContext(operationId)
+        dao.operationState(operationId, "covered", operation.attempts, 0, "")
     }
 
     fun beginGeneration(response: JSONObject) = atomic {
@@ -252,7 +352,7 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
             response.getJSONArray("items").objects().forEach { item ->
                 uuid(item.getString("id"))
                 require(item.getString("person_id") == person)
-                if (section == "tasks") revision(item.getString("revision"))
+                if (section == "tasks" || section == "notes") revision(item.getString("revision"))
             }
         val next = response.stringOrNull("next_cursor")
         if (
@@ -316,7 +416,8 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         val pending = dao.operations().filter { it.status != "covered" }
         for (item in manifest) {
             val old = dao.person(item.person)
-            if (old == null || old.revision != item.revision) {
+            val needsQualification = old != null && !old.noteRevisionsQualified
+            if (old == null || old.revision != item.revision || needsQualification) {
                 val summary = component(id, item.person, "summary")
                 val notes = component(id, item.person, "notes").second
                 val tasks = component(id, item.person, "tasks").second
@@ -332,6 +433,7 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
                             tasks.toString(),
                             id,
                             seal.getString("evaluated_at"),
+                            true,
                         )
                     )
             }

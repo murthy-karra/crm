@@ -19,6 +19,7 @@ data class PersonRow(
     val tasks: String,
     val generation: String,
     val evaluatedAt: String,
+    @ColumnInfo(defaultValue = "0") val noteRevisionsQualified: Boolean = false,
 )
 
 data class PersonCard(val id: String, val revision: String, val summary: String)
@@ -30,6 +31,23 @@ data class DraftRow(
     val kind: String,
     val payload: String,
     val revision: Long,
+    /** Immutable server record at the start of an edit; empty only for Mobile 001 drafts. */
+    @ColumnInfo(defaultValue = "''") val baseline: String = "",
+    /** Canonical target and expected record revision; never inferred from a later cache. */
+    @ColumnInfo(defaultValue = "''") val target: String = "",
+    @ColumnInfo(defaultValue = "'draft'") val state: String = "draft",
+)
+
+/** Protected comparison material.  It is not a reconciliation component or cache promotion. */
+@Entity(tableName = "edit_context")
+data class EditContextRow(
+    @PrimaryKey val operation: String,
+    val person: String,
+    val kind: String,
+    val target: String,
+    val baseline: String,
+    val current: String = "",
+    val editorRevision: Long = 0,
 )
 
 @Entity(tableName = "operations")
@@ -84,6 +102,17 @@ interface FieldDao {
 
     @Query("DELETE FROM drafts WHERE id=:id") fun removeDraft(id: String)
 
+    @Query("SELECT * FROM edit_context WHERE operation=:operation") fun editContext(operation: String): EditContextRow?
+
+    @Query("SELECT * FROM edit_context ORDER BY operation") fun editContexts(): List<EditContextRow>
+
+    @Insert(onConflict = OnConflictStrategy.ABORT) fun editContext(row: EditContextRow)
+
+    @Query("UPDATE edit_context SET current=:current,editorRevision=:editorRevision WHERE operation=:operation")
+    fun currentEditContext(operation: String, current: String, editorRevision: Long)
+
+    @Query("DELETE FROM edit_context WHERE operation=:operation") fun removeEditContext(operation: String)
+
     @Insert(onConflict = OnConflictStrategy.ABORT) fun operation(row: OperationRow)
 
     @Query("SELECT * FROM operations ORDER BY createdAt,id") fun operations(): List<OperationRow>
@@ -94,6 +123,9 @@ interface FieldDao {
         "UPDATE operations SET status=:status,attempts=:attempts,retryAt=:retryAt,lastError=:error WHERE id=:id"
     )
     fun operationState(id: String, status: String, attempts: Int, retryAt: Long, error: String)
+
+    @Query("UPDATE operations SET status='superseded', retryAt=0, lastError='revision_conflict' WHERE id=:id AND status='attention'")
+    fun supersede(id: String): Int
 
     @Query(
         "UPDATE operations SET status='accepted',receipt=:receipt,lastError='',retryAt=0 WHERE id=:id"
@@ -144,8 +176,9 @@ interface FieldDao {
             ManifestRow::class,
             PageRow::class,
             PinRow::class,
+            EditContextRow::class,
         ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class FieldDatabase : RoomDatabase() {
@@ -161,6 +194,22 @@ abstract class FieldDatabase : RoomDatabase() {
                 }
             }
 
+        /**
+         * This upgrade deliberately only adds protected columns/tables.  It never rewrites
+         * legacy JSON envelopes or drafts: their bytes, IDs, receipt-null semantics and
+         * create→complete dependency remain the Mobile 001 record of truth.
+         */
+        val UPGRADE_2_3 =
+            object : Migration(2, 3) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE people ADD COLUMN noteRevisionsQualified INTEGER NOT NULL DEFAULT 0")
+                    db.execSQL("ALTER TABLE drafts ADD COLUMN baseline TEXT NOT NULL DEFAULT ''")
+                    db.execSQL("ALTER TABLE drafts ADD COLUMN target TEXT NOT NULL DEFAULT ''")
+                    db.execSQL("ALTER TABLE drafts ADD COLUMN state TEXT NOT NULL DEFAULT 'draft'")
+                    db.execSQL("CREATE TABLE IF NOT EXISTS edit_context (operation TEXT NOT NULL, person TEXT NOT NULL, kind TEXT NOT NULL, target TEXT NOT NULL, baseline TEXT NOT NULL, current TEXT NOT NULL DEFAULT '', editorRevision INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(operation))")
+                }
+            }
+
         fun open(context: Context, directory: File, key: ByteArray): FieldDatabase {
             System.loadLibrary("sqlcipher")
             val db =
@@ -171,7 +220,7 @@ abstract class FieldDatabase : RoomDatabase() {
                     )
                     .openHelperFactory(SupportOpenHelperFactory(key, null, true))
                     .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                    .addMigrations(UPGRADE_1_2)
+                    .addMigrations(UPGRADE_1_2, UPGRADE_2_3)
                     .addCallback(
                         object : Callback() {
                             override fun onOpen(db: SupportSQLiteDatabase) {

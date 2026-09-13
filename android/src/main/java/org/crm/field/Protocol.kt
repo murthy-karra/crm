@@ -58,6 +58,12 @@ class Binding(
     val installation: String,
     val bootstrap: String,
 ) {
+    fun supportsEdits(): Boolean {
+        val capabilities = JSONObject(bootstrap).getJSONArray("capabilities")
+        return listOf("edit_note", "update_task", "note_revisions").all { wanted ->
+            (0 until capabilities.length()).any { capabilities.getString(it) == wanted }
+        }
+    }
     companion object {
         fun parse(value: JSONObject, actor: String, org: String, installation: String): Binding {
             if (value.getString("protocol") != PROTOCOL)
@@ -68,6 +74,8 @@ class Binding(
                     uuid(value.getString("installation_id")) != installation
             )
                 throw ProtocolFailure()
+            // All three names form one edit feature.  Their absence is valid for an old server;
+            // the repository keeps already-saved edit input rather than degrading it.
             revision(value.getString("workspace_revision"))
             val capabilities = value.getJSONArray("capabilities")
             if (
@@ -92,7 +100,7 @@ class Binding(
 fun errorMessage(code: String): String =
     when (code) {
         "revision_conflict" ->
-            "Task changed elsewhere. Review the latest task before choosing a new completion."
+            "Changed elsewhere. Review the current version before preparing a new saved edit."
         "operation_payload_mismatch" ->
             "Saved operation could not be matched. Original input is preserved for review."
         "not_found" ->

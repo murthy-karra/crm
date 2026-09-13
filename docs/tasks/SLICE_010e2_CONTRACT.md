@@ -17,6 +17,7 @@ current organization administrator and emit `Cache-Control: no-store`.
 | `GET /{id}/items` | optional closed `disposition`, opaque cursor, `limit<=50` | bounded item page |
 | `GET /{id}/items/{item_id}` | none | bounded current/baseline/proposed scalar preview |
 | `GET /{id}/items/{item_id}/contacts` | opaque cursor, `limit<=50` | bounded owned-contact diff page |
+| `GET /{id}/items/{item_id}/fields/{side}/{field}` | opaque cursor, byte `limit` 4–16384 (default 16384); side `baseline/current/proposed`, field `first_name/last_name` only | complete retained scalar in UTF-8-safe pages, bounded 128 KiB response |
 | `POST /{id}/plans` | `{ "request_id": UUID, "expected_plan_revision": integer }` | explicit new immutable preview revision |
 | `POST /{id}/confirm` | `{ "request_id": UUID, "plan_id": UUID, "plan_revision": integer, "plan_digest": string, "acknowledged_coverage": boolean, "acknowledged_exclusions": boolean, "acknowledged_name_clears": integer, "acknowledged_assignment_clears": integer, "acknowledged_contact_removals": integer }` | `202`, queued resource/receipt |
 | `POST /{id}/retry` | `{ "request_id": UUID, "expected_lifecycle_revision": integer }` | `202`, queued resource/receipt |
@@ -26,6 +27,23 @@ current organization administrator and emit `Cache-Control: no-store`.
 `request_id` is bound to organization, actor, action, normalized body and
 resource. Exact replay returns the saved receipt; changed input conflicts.
 Unknown request keys are rejected. Foreign resources are non-disclosing.
+
+Item pages carry metadata only, including nullable `source_id`, disposition,
+separate clear/removal counts and closed `no_instruction` component names. Scalar
+detail includes `contact_counts` and `truncated_fields`; a name longer than
+1024 UTF-8 bytes is shown as an explicitly marked prefix. The field endpoint
+returns `plan_id`, decimal-string `plan_revision`, `side`, `field`, decimal-string
+byte `offset` and `total_bytes`, `fragment`, and opaque `next_cursor`. Fragments
+are read-only; confirmation always names the full immutable plan and never
+submits a displayed prefix. Contacts return their frozen side, exact contact
+identity/order, owned value/normalization and `add/remove/retain/current` label.
+
+All cursor tokens are authenticated and bind the trusted Organization/actor,
+resource, endpoint, plan ID/revision/digest where applicable, filter, and page
+limit. Run and settlement traversals freeze their upper key; a new traversal
+is explicit. Preview dispositions and values remain frozen after settlement;
+the results endpoint carries the resulting outcome. Old sealed previews remain
+inspectable while a successor prepares; partially built previews are unavailable.
 
 ## Persistence and private authority
 

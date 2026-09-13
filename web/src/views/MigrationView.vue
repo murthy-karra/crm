@@ -13,6 +13,7 @@ import ActivityImportPanel from '../components/migration/ActivityImportPanel.vue
 import HistoryCapturePanel from '../components/migration/HistoryCapturePanel.vue'
 import HistoryImportPanel from '../components/migration/HistoryImportPanel.vue'
 import CoreChangeReports from '../components/migration/CoreChangeReports.vue'
+import PeopleRefreshPanel from '../components/migration/PeopleRefreshPanel.vue'
 import { refreshWorkspace, useWorkspacePending, useWorkspaceEpoch } from '../workspaceLifecycle'
 import FormField from '../components/FormField.vue'
 import { queryKeys, useAuthSessionLifetime, useMe } from '../api/queries'
@@ -490,6 +491,11 @@ function checkStatusLabel(check: FubAssessmentCheck) {
       :refresh-workspace="refreshWorkspace"
       @review-snapshot="openCoreSnapshot"
       @recapture="openCoreSnapshot()"
+    />
+
+    <PeopleRefreshPanel
+      :refresh-workspace="refreshWorkspace"
+      @review-snapshot="openCoreSnapshot"
     />
 
     <CoreSnapshotPanel

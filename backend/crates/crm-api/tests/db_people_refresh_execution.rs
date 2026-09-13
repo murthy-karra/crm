@@ -360,6 +360,70 @@ pub(super) async fn mapped_fixture(migrator: &PgPool) -> (Fixture, Uuid, Uuid) {
 
 #[sqlx::test]
 #[ignore = "requires isolated PostgreSQL migrator"]
+async fn live_original_import_permit_cannot_update_or_delete_imported_contacts(migrator: PgPool) {
+    let (f, parent, _) = mapped_fixture(&migrator).await;
+    let contact: Uuid = sqlx::query_scalar(
+        "SELECT c.contact_id FROM migration_import_contact c \
+         JOIN migration_import_result r ON r.id=c.result_id AND r.organization_id=c.organization_id \
+         WHERE r.import_id=$1 AND r.organization_id=$2 AND r.disposition='imported' \
+         ORDER BY c.kind,c.import_order LIMIT 1",
+    )
+    .bind(parent)
+    .bind(f.org)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    let permit = Uuid::new_v4();
+    // Migrator-only setup makes the completed retained parent a valid live
+    // original-import lease. The mutation attempts below still use crm_app,
+    // its real workspace trigger, and the real import session setting.
+    sqlx::query(
+        "UPDATE migration_import SET state='running',lease_token=$3,lease_expires_at=now()+interval '60 seconds' \
+         WHERE id=$1 AND organization_id=$2",
+    )
+    .bind(parent)
+    .bind(f.org)
+    .bind(permit)
+    .execute(&migrator)
+    .await
+    .unwrap();
+
+    for (operation, statement) in [
+        (
+            "UPDATE",
+            "UPDATE contact_method SET value=value WHERE organization_id=$1 AND id=$2",
+        ),
+        (
+            "DELETE",
+            "DELETE FROM contact_method WHERE organization_id=$1 AND id=$2",
+        ),
+    ] {
+        let mut tx = f.pool.begin().await.unwrap();
+        sqlx::query("SELECT set_config('crm.import_token',$1,true)")
+            .bind(permit.to_string())
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+        let denied = sqlx::query(statement)
+            .bind(f.org)
+            .bind(contact)
+            .execute(&mut *tx)
+            .await
+            .unwrap_err();
+        assert_eq!(
+            denied
+                .as_database_error()
+                .and_then(|error| error.code())
+                .as_deref(),
+            Some("P010C"),
+            "live original-import permit must not authorize contact {operation}"
+        );
+        tx.rollback().await.unwrap();
+    }
+}
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
 async fn confirmed_refresh_applies_owned_contacts_clears_mappings_facts_and_replays(
     migrator: PgPool,
 ) {

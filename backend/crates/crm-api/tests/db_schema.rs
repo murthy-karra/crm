@@ -114,11 +114,45 @@ async fn crm_app_has_exactly_the_slice_002_grants(migrator_pool: PgPool) {
         "today_system_feed: TRUNCATE must be denied for crm_app"
     );
 
-    // `contact_method`, `inquiry`, and the fact tables (the five from
-    // Slices 002/003 plus `call_completed`, docs/specs/SLICE_006.md §2):
-    // SELECT + INSERT, no UPDATE/DELETE.
+    // D-076 / Slice 010e2 adds narrow table privileges for the private
+    // refresh executor. The migration-review workspace trigger remains the
+    // authority boundary: it requires a live item-scoped refresh permit
+    // before it accepts a contact UPDATE or DELETE. The actual permitted
+    // path is exercised by the refresh execution DB tests; retain this
+    // inventory proof that crm_app received no broader destructive grant.
+    let contact_select = sqlx::query("SELECT * FROM contact_method")
+        .fetch_all(&app_pool)
+        .await;
+    assert!(
+        contact_select.is_ok(),
+        "contact_method: SELECT must succeed for crm_app"
+    );
+    let contact_update = sqlx::query("UPDATE contact_method SET id = id WHERE false")
+        .execute(&app_pool)
+        .await;
+    assert!(
+        contact_update.is_ok(),
+        "contact_method: UPDATE must be granted for the private refresh executor"
+    );
+    let contact_delete = sqlx::query("DELETE FROM contact_method WHERE false")
+        .execute(&app_pool)
+        .await;
+    assert!(
+        contact_delete.is_ok(),
+        "contact_method: DELETE must be granted for the private refresh executor"
+    );
+    let contact_truncate = sqlx::query("TRUNCATE contact_method")
+        .execute(&app_pool)
+        .await;
+    assert!(
+        contact_truncate.is_err(),
+        "contact_method: TRUNCATE must remain denied for crm_app"
+    );
+
+    // `inquiry` and the fact tables (the five from Slices 002/003 plus
+    // `call_completed`, docs/specs/SLICE_006.md §2): SELECT + INSERT, no
+    // UPDATE/DELETE.
     for table in [
-        "contact_method",
         "inquiry",
         "inquiry_received",
         "routing_decision",

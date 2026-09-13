@@ -381,3 +381,203 @@ mod tests {
         .is_err());
     }
 }
+
+/// Only the original approved mapping may select a native target. The newer
+/// retained source establishes that the same source identity is still qualified.
+pub struct ResolvedMappings {
+    pub stage_id: Uuid,
+    pub assignee_id: Option<Uuid>,
+    pub stage_mapping_id: Uuid,
+    pub assignee_mapping_id: Option<Uuid>,
+    pub raw_bytes: i64,
+}
+pub async fn resolve_mappings(
+    conn: &mut PgConnection,
+    key: &RawPayloadKey,
+    org: OrganizationId,
+    run: &sqlx::postgres::PgRow,
+    person: &ExtractedRecord,
+) -> Result<ResolvedMappings, MigrationError> {
+    let import_source::Entity::People(person) = &person.entity else {
+        return Err(MigrationError::SourceNotEligible);
+    };
+    let label = person.stage_label.as_deref();
+    let hmac =
+        label.map(|label| crypto::snapshot_hmac(key, org, "import-stage-label", label.as_bytes()));
+    let stage = mapping_row(
+        conn,
+        org,
+        run.get("parent_plan_id"),
+        "stage",
+        if label.is_none() {
+            Some("missing")
+        } else {
+            None
+        },
+        hmac.as_ref().map(|v| v.as_slice()),
+    )
+    .await?;
+    let mut raw_bytes = 0;
+    let stage_target = check_mapping(conn, key, org, run, &stage, "stage", &mut raw_bytes)
+        .await?
+        .ok_or(MigrationError::SourceNotEligible)?;
+    let (assignee_id, assignee_mapping_id) =
+        if let Some(source_key) = person.assignee_key.as_deref() {
+            let row = mapping_row(
+                conn,
+                org,
+                run.get("parent_plan_id"),
+                "assignee",
+                Some(source_key),
+                None,
+            )
+            .await?;
+            (
+                check_mapping(conn, key, org, run, &row, "assignee", &mut raw_bytes).await?,
+                Some(row.get("id")),
+            )
+        } else {
+            (None, None)
+        };
+    Ok(ResolvedMappings {
+        stage_id: stage_target,
+        assignee_id,
+        stage_mapping_id: stage.get("id"),
+        assignee_mapping_id,
+        raw_bytes,
+    })
+}
+async fn mapping_row(
+    conn: &mut PgConnection,
+    org: OrganizationId,
+    plan: Uuid,
+    kind: &str,
+    source_key: Option<&str>,
+    label: Option<&[u8]>,
+) -> Result<sqlx::postgres::PgRow, MigrationError> {
+    // Compare descriptor bounds before fetching any encrypted mapping body.
+    let rows = if let Some(source_key) = source_key {
+        sqlx::query("SELECT id,octet_length(nonce) nonce_len,octet_length(ciphertext) cipher_len FROM migration_import_mapping WHERE plan_id=$1 AND organization_id=$2 AND kind=$3 AND source_key=$4 ORDER BY id LIMIT 2")
+            .bind(plan).bind(org.0).bind(kind).bind(source_key).fetch_all(&mut *conn).await?
+    } else {
+        sqlx::query("SELECT id,octet_length(nonce) nonce_len,octet_length(ciphertext) cipher_len FROM migration_import_mapping WHERE plan_id=$1 AND organization_id=$2 AND kind=$3 AND label_hmac=$4 ORDER BY source_key LIMIT 2")
+            .bind(plan).bind(org.0).bind(kind).bind(label.ok_or(MigrationError::SourceNotEligible)?).fetch_all(&mut *conn).await?
+    };
+    if rows.len() != 1
+        || rows[0].get::<i32, _>("nonce_len") != 24
+        || i64::from(rows[0].get::<i32, _>("cipher_len")) > CAPTURE_LIMIT + 16
+    {
+        return Err(MigrationError::SourceNotEligible);
+    }
+    sqlx::query(
+        "SELECT * FROM migration_import_mapping WHERE id=$1 AND plan_id=$2 AND organization_id=$3",
+    )
+    .bind(rows[0].get::<Uuid, _>("id"))
+    .bind(plan)
+    .bind(org.0)
+    .fetch_one(conn)
+    .await
+    .map_err(Into::into)
+}
+async fn check_mapping(
+    conn: &mut PgConnection,
+    key: &RawPayloadKey,
+    org: OrganizationId,
+    run: &sqlx::postgres::PgRow,
+    row: &sqlx::postgres::PgRow,
+    kind: &str,
+    raw_bytes: &mut i64,
+) -> Result<Option<Uuid>, MigrationError> {
+    let disposition: String = row.get("disposition");
+    if !row.get::<bool, _>("qualified")
+        || !matches!(
+            (kind, disposition.as_str()),
+            ("stage", "existing" | "create") | ("assignee", "member" | "unassigned")
+        )
+    {
+        return Err(MigrationError::SourceNotEligible);
+    }
+    let body: serde_json::Value = super::imports::open(
+        key,
+        org,
+        run.get("original_snapshot_id"),
+        run.get("parent_plan_id"),
+        row.get("id"),
+        "mapping",
+        row.get("nonce"),
+        row.get("ciphertext"),
+    )?;
+    let source_key: String = row.get("source_key");
+    if source_key != "missing" && !source_key.starts_with("pond:") {
+        let original: ExtractedRecord =
+            serde_json::from_value(body["source"].clone()).map_err(|_| MigrationError::Crypto)?;
+        if original.source_id.as_deref() != Some(&source_key) || !original.reasons.is_empty() {
+            return Err(MigrationError::SourceNotEligible);
+        }
+        let stream = if kind == "stage" {
+            Stream::Stages
+        } else {
+            Stream::Users
+        };
+        let Observation::Qualified(newer) = retained_record(
+            conn,
+            key,
+            org,
+            run.get("newer_snapshot_id"),
+            stream,
+            run.get("newer_sequence"),
+            &source_key,
+        )
+        .await?
+        else {
+            return Err(MigrationError::SourceNotEligible);
+        };
+        *raw_bytes = raw_bytes
+            .checked_add(newer.raw_bytes)
+            .ok_or(MigrationError::StorageLimit)?;
+        if *raw_bytes > CAPTURE_LIMIT || !newer.record.reasons.is_empty() {
+            return Err(MigrationError::SourceNotEligible);
+        }
+        match (&original.entity, &newer.record.entity) {
+            (import_source::Entity::Stage(old), import_source::Entity::Stage(new))
+                if old.label == new.label => {}
+            (import_source::Entity::User(old), import_source::Entity::User(new))
+                if old.email == new.email && old.name == new.name && old.is_pond == new.is_pond => {
+            }
+            _ => return Err(MigrationError::SourceNotEligible),
+        }
+    } else if source_key.starts_with("pond:") && (kind != "assignee" || disposition != "unassigned")
+    {
+        return Err(MigrationError::SourceNotEligible);
+    }
+    let target: Option<Uuid> = row.get("target_id");
+    match (kind, target) {
+        ("stage", Some(target)) => {
+            let name: Option<String> =
+                sqlx::query_scalar("SELECT name FROM stage WHERE id=$1 AND organization_id=$2")
+                    .bind(target)
+                    .bind(org.0)
+                    .fetch_optional(&mut *conn)
+                    .await?;
+            if name.is_none()
+                || body["target"]["id"] != serde_json::json!(target)
+                || body["target"]["name"] != serde_json::json!(name)
+            {
+                return Err(MigrationError::SourceNotEligible);
+            }
+        }
+        ("assignee", Some(target)) if disposition == "member" => {
+            let email:Option<String>=sqlx::query_scalar("SELECT u.email FROM organization_membership m JOIN app_user u ON u.id=m.user_id WHERE m.organization_id=$1 AND m.user_id=$2 AND m.status='active'")
+                .bind(org.0).bind(target).fetch_optional(&mut *conn).await?;
+            if email.is_none()
+                || body["target"]["id"] != serde_json::json!(target)
+                || body["target"]["email"] != serde_json::json!(email)
+            {
+                return Err(MigrationError::SourceNotEligible);
+            }
+        }
+        ("assignee", None) if disposition == "unassigned" => {}
+        _ => return Err(MigrationError::SourceNotEligible),
+    }
+    Ok(target)
+}

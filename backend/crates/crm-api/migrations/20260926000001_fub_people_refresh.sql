@@ -4,12 +4,14 @@ CREATE TABLE migration_people_refresh (
  id UUID PRIMARY KEY, organization_id UUID NOT NULL REFERENCES organization(id),
  parent_import_id UUID NOT NULL, parent_plan_id UUID NOT NULL, report_id UUID NOT NULL,
  source_account_id BIGINT NOT NULL, newer_snapshot_id UUID NOT NULL,
- newer_sequence BIGINT NOT NULL, workspace_revision BIGINT NOT NULL,
+ newer_sequence BIGINT NOT NULL, newer_started_at TIMESTAMPTZ NOT NULL, newer_completed_at TIMESTAMPTZ NOT NULL, workspace_revision BIGINT NOT NULL,
  initiated_by_user_id UUID NOT NULL REFERENCES app_user(id),
+ preparation_checkpoint_key TEXT NOT NULL DEFAULT '', preparation_checkpoint_id UUID,
+ preparation_phase TEXT NOT NULL DEFAULT 'imported' CHECK(preparation_phase IN ('imported','groups')),
  engine_version TEXT NOT NULL CHECK(engine_version='fub-people-refresh-v1'),
  state TEXT NOT NULL CHECK(state IN ('preparing','ready','queued','running','paused','completed','cancelled')),
  lifecycle_revision BIGINT NOT NULL DEFAULT 1 CHECK(lifecycle_revision>0),
- confirmed_boundary BIGINT, lease_token UUID, lease_epoch BIGINT NOT NULL DEFAULT 0,
+ confirmed_boundary BIGINT, confirmed_snapshot_id UUID, confirmed_started_at TIMESTAMPTZ, confirmed_completed_at TIMESTAMPTZ, confirmed_refresh_plan_id UUID, lease_token UUID, lease_epoch BIGINT NOT NULL DEFAULT 0,
  lease_expires_at TIMESTAMPTZ, pause_reason TEXT, checkpoint_id UUID,
  retained_bytes BIGINT NOT NULL DEFAULT 0 CHECK(retained_bytes>=0),
  reserved_bytes BIGINT NOT NULL DEFAULT 0 CHECK(reserved_bytes>=0),
@@ -24,7 +26,7 @@ CREATE TABLE migration_people_refresh (
  CHECK((lease_token IS NULL)=(lease_expires_at IS NULL))
 );
 CREATE UNIQUE INDEX migration_people_refresh_one_active ON migration_people_refresh(organization_id,parent_import_id) WHERE state IN ('preparing','ready','queued','running','paused');
-CREATE UNIQUE INDEX migration_people_refresh_boundary ON migration_people_refresh(organization_id,parent_import_id,newer_sequence) WHERE state<>'cancelled';
+CREATE UNIQUE INDEX migration_people_refresh_boundary ON migration_people_refresh(organization_id,parent_import_id,newer_snapshot_id) WHERE state<>'cancelled';
 CREATE INDEX migration_people_refresh_claim ON migration_people_refresh(created_at,id) WHERE state IN ('queued','running');
 CREATE INDEX migration_people_refresh_list ON migration_people_refresh(organization_id,parent_import_id,created_at DESC,id DESC);
 
@@ -34,7 +36,7 @@ CREATE TABLE migration_people_refresh_plan (
  digest BYTEA, inputs_nonce BYTEA NOT NULL, inputs_ciphertext BYTEA NOT NULL,
  eligible_count BIGINT NOT NULL DEFAULT 0, already_current_count BIGINT NOT NULL DEFAULT 0,
  held_count BIGINT NOT NULL DEFAULT 0, excluded_count BIGINT NOT NULL DEFAULT 0,
- name_clear_count BIGINT NOT NULL DEFAULT 0, assignment_clear_count BIGINT NOT NULL DEFAULT 0, contact_removal_count BIGINT NOT NULL DEFAULT 0, no_instruction_count BIGINT NOT NULL DEFAULT 0,
+ name_clear_count BIGINT NOT NULL DEFAULT 0, assignment_clear_count BIGINT NOT NULL DEFAULT 0, contact_removal_count BIGINT NOT NULL DEFAULT 0, no_instruction_count BIGINT NOT NULL DEFAULT 0, prepared_bytes BIGINT NOT NULL DEFAULT 0 CHECK(prepared_bytes>=0),
  created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(), sealed_at TIMESTAMPTZ, expires_at TIMESTAMPTZ,
  UNIQUE(refresh_id,organization_id,revision), UNIQUE(id,refresh_id,organization_id),
  FOREIGN KEY(refresh_id,organization_id) REFERENCES migration_people_refresh(id,organization_id),
@@ -42,15 +44,16 @@ CREATE TABLE migration_people_refresh_plan (
 );
 CREATE TABLE migration_people_refresh_item (
  id UUID PRIMARY KEY, refresh_id UUID NOT NULL, plan_id UUID NOT NULL, organization_id UUID NOT NULL,
- source_id TEXT NOT NULL CHECK(source_id ~ '^[1-9][0-9]{0,127}$'), person_id UUID,
+ source_key TEXT NOT NULL CHECK(octet_length(source_key)<=180), source_id TEXT CHECK(source_id ~ '^[1-9][0-9]{0,127}$'), person_id UUID,
  original_result_id UUID, baseline_result_id UUID, disposition TEXT NOT NULL CHECK(disposition IN ('eligible','already_current','held_local_change','held_evidence_gap','held_mapping_gap','held_target_missing','held_original_hold','excluded_source_only','not_seen_again','settled','settled_noop','held_stale','cancelled')),
  proposed_nonce BYTEA NOT NULL, proposed_ciphertext BYTEA NOT NULL,
  baseline_nonce BYTEA NOT NULL, baseline_ciphertext BYTEA NOT NULL,
  current_nonce BYTEA NOT NULL, current_ciphertext BYTEA NOT NULL,
  instructions_nonce BYTEA NOT NULL, instructions_ciphertext BYTEA NOT NULL,
+ name_clear_count BIGINT NOT NULL DEFAULT 0 CHECK(name_clear_count>=0), assignment_clear_count BIGINT NOT NULL DEFAULT 0 CHECK(assignment_clear_count>=0), contact_removal_count BIGINT NOT NULL DEFAULT 0 CHECK(contact_removal_count>=0),
  source_capture_id UUID, source_ordinal INTEGER, item_byte_bound BIGINT NOT NULL CHECK(item_byte_bound>0 AND item_byte_bound<=67108864),
  settled_result_id UUID, settled_at TIMESTAMPTZ,
- UNIQUE(plan_id,organization_id,source_id), UNIQUE(id,refresh_id,organization_id),
+ UNIQUE(plan_id,organization_id,source_key), UNIQUE(id,refresh_id,organization_id),
  FOREIGN KEY(refresh_id,organization_id) REFERENCES migration_people_refresh(id,organization_id),
  FOREIGN KEY(plan_id,refresh_id,organization_id) REFERENCES migration_people_refresh_plan(id,refresh_id,organization_id),
  FOREIGN KEY(original_result_id,organization_id) REFERENCES migration_import_result(id,organization_id),
@@ -58,6 +61,7 @@ CREATE TABLE migration_people_refresh_item (
 );
 CREATE INDEX migration_people_refresh_item_page ON migration_people_refresh_item(refresh_id,organization_id,disposition,id);
 CREATE INDEX migration_people_refresh_item_claim ON migration_people_refresh_item(refresh_id,organization_id,id) WHERE settled_at IS NULL;
+CREATE INDEX migration_people_refresh_item_plan_walk ON migration_people_refresh_item(refresh_id,organization_id,plan_id,id);
 CREATE TABLE migration_people_refresh_contact (
  id UUID PRIMARY KEY, item_id UUID NOT NULL, refresh_id UUID NOT NULL, organization_id UUID NOT NULL,
  side TEXT NOT NULL CHECK(side IN ('baseline','current','proposed')), contact_id UUID,
@@ -66,6 +70,8 @@ CREATE TABLE migration_people_refresh_contact (
  UNIQUE(item_id,side,kind,import_order),
  FOREIGN KEY(item_id,refresh_id,organization_id) REFERENCES migration_people_refresh_item(id,refresh_id,organization_id)
 );
+CREATE INDEX migration_people_refresh_contact_walk ON migration_people_refresh_contact(item_id,id);
+CREATE INDEX migration_people_refresh_contact_side ON migration_people_refresh_contact(item_id,side,contact_id);
 CREATE INDEX migration_people_refresh_contact_page ON migration_people_refresh_contact(item_id,side,kind,import_order,id);
 CREATE TABLE migration_people_refresh_baseline (
  organization_id UUID NOT NULL, parent_import_id UUID NOT NULL, source_id TEXT NOT NULL,
@@ -80,7 +86,7 @@ CREATE TABLE migration_people_refresh_baseline (
 CREATE UNIQUE INDEX migration_people_refresh_baseline_person ON migration_people_refresh_baseline(organization_id,parent_import_id,person_id);
 CREATE TABLE migration_people_refresh_result (
  id UUID PRIMARY KEY, refresh_id UUID NOT NULL, item_id UUID NOT NULL, organization_id UUID NOT NULL,
- person_id UUID, source_id TEXT NOT NULL, disposition TEXT NOT NULL CHECK(disposition IN ('settled','settled_noop','held_stale','cancelled')),
+ person_id UUID, source_id TEXT NOT NULL, disposition TEXT NOT NULL CHECK(disposition IN ('settled','settled_noop','held_stale','held_local_change','held_evidence_gap','held_mapping_gap','held_target_missing','held_original_hold','excluded_source_only','not_seen_again','cancelled')),
  before_nonce BYTEA NOT NULL, before_ciphertext BYTEA NOT NULL, after_nonce BYTEA NOT NULL, after_ciphertext BYTEA NOT NULL,
  actor_user_id UUID NOT NULL REFERENCES app_user(id), committed_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
  UNIQUE(refresh_id,item_id), UNIQUE(id,organization_id),
@@ -93,6 +99,7 @@ CREATE TABLE migration_people_refresh_receipt (
  created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
  PRIMARY KEY(organization_id,actor_user_id,action,request_id), FOREIGN KEY(refresh_id,organization_id) REFERENCES migration_people_refresh(id,organization_id)
 );
+CREATE INDEX migration_people_refresh_result_walk ON migration_people_refresh_result(refresh_id,organization_id,committed_at,id);
 CREATE TABLE migration_people_refresh_reservation (
  token UUID PRIMARY KEY, refresh_id UUID NOT NULL, organization_id UUID NOT NULL, purpose TEXT NOT NULL CHECK(purpose IN ('work','cancel','prepare')),
  lease_token UUID, byte_count BIGINT NOT NULL CHECK(byte_count>0 AND byte_count<=67108864),

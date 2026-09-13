@@ -1,5 +1,7 @@
 //! Typed command boundary for D-076 People refreshes.
-pub use super::people_refresh_queries::{contacts, detail, item, items, list, results, Page};
+pub use super::people_refresh_queries::{
+    contacts, detail, field, item, items, list, results, Page,
+};
 use super::{people_refresh_store as s, snapshot::SnapshotPolicy, MigrationError};
 use crate::{
     auth::workspace::ReleaseReadiness, config::RawPayloadKey, domain::envelope::CommandContext,
@@ -80,7 +82,7 @@ fn decode_digest(value: &str) -> Result<Vec<u8>, MigrationError> {
 pub async fn prepare(
     pool: &PgPool,
     key: &RawPayloadKey,
-    _policy: &SnapshotPolicy,
+    policy: &SnapshotPolicy,
     ctx: &CommandContext,
     cmd: PreparePeopleRefresh,
     release_evidence: Option<&ReleaseReadiness>,
@@ -91,7 +93,7 @@ pub async fn prepare(
         return Ok(v);
     }
     release(&mut tx, release_evidence).await?;
-    let report=sqlx::query("SELECT r.*,i.state AS parent_state,i.confirmed_plan_id,i.snapshot_id AS parent_snapshot,i.source_account_id AS parent_account,o.workspace_mode,o.workspace_revision FROM migration_core_change_report r JOIN migration_import i ON i.id=r.parent_import_id AND i.organization_id=r.organization_id JOIN organization o ON o.id=r.organization_id WHERE r.id=$1 AND r.organization_id=$2 FOR UPDATE")
+    let report=sqlx::query("SELECT r.*,i.state AS parent_state,i.confirmed_plan_id,i.snapshot_id AS parent_snapshot,i.source_account_id AS parent_account,o.workspace_mode,o.workspace_revision,ns.started_at AS newer_started_at,ns.completed_at AS newer_completed_at FROM migration_core_change_report r JOIN migration_import i ON i.id=r.parent_import_id AND i.organization_id=r.organization_id JOIN organization o ON o.id=r.organization_id JOIN migration_snapshot ns ON ns.id=r.newer_snapshot_id AND ns.organization_id=r.organization_id WHERE r.id=$1 AND r.organization_id=$2 FOR UPDATE")
   .bind(cmd.report_id).bind(ctx.organization_id.0).fetch_optional(&mut *tx).await?.ok_or(MigrationError::NotFound)?;
     if report.get::<String, _>("state") != "completed"
         || report.get::<String, _>("parent_state") != "completed"
@@ -100,9 +102,47 @@ pub async fn prepare(
     {
         return Err(MigrationError::SourceNotEligible);
     }
+    let newer_started = report
+        .get::<Option<chrono::DateTime<chrono::Utc>>, _>("newer_started_at")
+        .ok_or(MigrationError::SourceNotEligible)?;
+    let newer_completed = report
+        .get::<Option<chrono::DateTime<chrono::Utc>>, _>("newer_completed_at")
+        .ok_or(MigrationError::SourceNotEligible)?;
+    let prior=sqlx::query("SELECT confirmed_snapshot_id,confirmed_completed_at FROM migration_people_refresh WHERE organization_id=$1 AND parent_import_id=$2 AND confirmed_snapshot_id IS NOT NULL AND confirmed_completed_at IS NOT NULL ORDER BY confirmed_completed_at DESC,id DESC LIMIT 1 FOR SHARE")
+        .bind(ctx.organization_id.0).bind(report.get::<Uuid,_>("parent_import_id")).fetch_optional(&mut *tx).await?;
+    if prior.is_some_and(|prior| {
+        prior.get::<Uuid, _>("confirmed_snapshot_id") != report.get::<Uuid, _>("newer_snapshot_id")
+            && newer_started
+                <= prior.get::<chrono::DateTime<chrono::Utc>, _>("confirmed_completed_at")
+    }) {
+        return Err(MigrationError::Conflict);
+    }
     let id = Uuid::new_v4();
-    sqlx::query("INSERT INTO migration_people_refresh(id,organization_id,parent_import_id,parent_plan_id,report_id,source_account_id,newer_snapshot_id,newer_sequence,workspace_revision,initiated_by_user_id,engine_version,state) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'preparing')")
-  .bind(id).bind(ctx.organization_id.0).bind(report.get::<Uuid,_>("parent_import_id")).bind(report.get::<Uuid,_>("parent_plan_id")).bind(cmd.report_id).bind(report.get::<i64,_>("source_account_id")).bind(report.get::<Uuid,_>("newer_snapshot_id")).bind(report.get::<i64,_>("newer_sequence")).bind(report.get::<i64,_>("workspace_revision")).bind(ctx.actor_user_id.0).bind(s::ENGINE).execute(&mut *tx).await?;
+    sqlx::query("INSERT INTO migration_people_refresh(id,organization_id,parent_import_id,parent_plan_id,report_id,source_account_id,newer_snapshot_id,newer_sequence,newer_started_at,newer_completed_at,workspace_revision,initiated_by_user_id,engine_version,state) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'preparing')")
+  .bind(id).bind(ctx.organization_id.0).bind(report.get::<Uuid,_>("parent_import_id")).bind(report.get::<Uuid,_>("parent_plan_id")).bind(cmd.report_id).bind(report.get::<i64,_>("source_account_id")).bind(report.get::<Uuid,_>("newer_snapshot_id")).bind(report.get::<i64,_>("newer_sequence")).bind(newer_started).bind(newer_completed).bind(report.get::<i64,_>("workspace_revision")).bind(ctx.actor_user_id.0).bind(s::ENGINE).execute(&mut *tx).await?;
+    // Preserve an independent cancellation allowance before any preparation
+    // bytes are admitted, so cancellation remains possible at a full ledger.
+    s::reserve(
+        &mut tx,
+        ctx.organization_id,
+        id,
+        "cancel",
+        None,
+        64 * 1024,
+        policy,
+    )
+    .await?;
+    let receipt_before = s::measured_bytes(&mut tx, ctx.organization_id, id).await?;
+    let receipt_reservation = s::reserve(
+        &mut tx,
+        ctx.organization_id,
+        id,
+        "prepare",
+        None,
+        8 * 1024,
+        policy,
+    )
+    .await?;
     let value = json!({"refresh_id":id,"state":"preparing"});
     s::receipt(
         &mut tx,
@@ -113,6 +153,15 @@ pub async fn prepare(
         id,
         &digest,
         &value,
+    )
+    .await?;
+    let receipt_after = s::measured_bytes(&mut tx, ctx.organization_id, id).await?;
+    s::release(
+        &mut tx,
+        ctx.organization_id,
+        id,
+        receipt_reservation,
+        receipt_after.saturating_sub(receipt_before),
     )
     .await?;
     tx.commit().await?;
@@ -137,6 +186,17 @@ pub async fn repreview(
     {
         return Err(MigrationError::Conflict);
     };
+    let receipt_before = s::measured_bytes(&mut tx, ctx.organization_id, id).await?;
+    let receipt_reservation = s::reserve(
+        &mut tx,
+        ctx.organization_id,
+        id,
+        "prepare",
+        None,
+        8 * 1024,
+        &SnapshotPolicy::default(),
+    )
+    .await?;
     let superseded = sqlx::query("UPDATE migration_people_refresh_plan SET state='superseded' WHERE refresh_id=$1 AND organization_id=$2 AND state='ready'")
         .bind(id)
         .bind(ctx.organization_id.0)
@@ -146,7 +206,7 @@ pub async fn repreview(
     if superseded != 1 {
         return Err(MigrationError::Conflict);
     }
-    sqlx::query("UPDATE migration_people_refresh SET state='preparing',lifecycle_revision=lifecycle_revision+1,updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id.0).execute(&mut *tx).await?;
+    sqlx::query("UPDATE migration_people_refresh SET state='preparing',preparation_phase='imported',preparation_checkpoint_key='',preparation_checkpoint_id=NULL,lifecycle_revision=lifecycle_revision+1,updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id.0).execute(&mut *tx).await?;
     let value = json!({"refresh_id":id,"state":"preparing"});
     s::receipt(
         &mut tx,
@@ -157,6 +217,15 @@ pub async fn repreview(
         id,
         &digest,
         &value,
+    )
+    .await?;
+    let receipt_after = s::measured_bytes(&mut tx, ctx.organization_id, id).await?;
+    s::release(
+        &mut tx,
+        ctx.organization_id,
+        id,
+        receipt_reservation,
+        receipt_after.saturating_sub(receipt_before),
     )
     .await?;
     tx.commit().await?;
@@ -199,7 +268,18 @@ pub async fn confirm(
     if p.get::<i64, _>("eligible_count") == 0 {
         return Err(MigrationError::Conflict);
     }
-    sqlx::query("UPDATE migration_people_refresh SET state='queued',confirmed_boundary=newer_sequence,lifecycle_revision=lifecycle_revision+1,updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id.0).execute(&mut *tx).await?;
+    let receipt_before = s::measured_bytes(&mut tx, ctx.organization_id, id).await?;
+    let receipt_reservation = s::reserve(
+        &mut tx,
+        ctx.organization_id,
+        id,
+        "prepare",
+        None,
+        8 * 1024,
+        &SnapshotPolicy::default(),
+    )
+    .await?;
+    sqlx::query("UPDATE migration_people_refresh SET state='queued',confirmed_boundary=newer_sequence,confirmed_snapshot_id=newer_snapshot_id,confirmed_started_at=newer_started_at,confirmed_completed_at=newer_completed_at,confirmed_refresh_plan_id=$3,lifecycle_revision=lifecycle_revision+1,updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id.0).bind(cmd.plan_id).execute(&mut *tx).await?;
     let value = json!({"refresh_id":id,"state":"queued"});
     s::receipt(
         &mut tx,
@@ -210,6 +290,15 @@ pub async fn confirm(
         id,
         &digest,
         &value,
+    )
+    .await?;
+    let receipt_after = s::measured_bytes(&mut tx, ctx.organization_id, id).await?;
+    s::release(
+        &mut tx,
+        ctx.organization_id,
+        id,
+        receipt_reservation,
+        receipt_after.saturating_sub(receipt_before),
     )
     .await?;
     tx.commit().await?;
@@ -252,6 +341,11 @@ async fn lifecycle(
         release(&mut tx, release_evidence).await?
     };
     let r = resource(&mut tx, ctx.organization_id.0, id).await?;
+    let cancellation_before = if action == "cancel" {
+        Some(s::measured_bytes(&mut tx, ctx.organization_id, id).await?)
+    } else {
+        None
+    };
     if r.get::<i64, _>("lifecycle_revision") != cmd.expected_lifecycle_revision {
         return Err(MigrationError::Conflict);
     };
@@ -279,6 +373,25 @@ async fn lifecycle(
         &value,
     )
     .await?;
+    if let Some(before) = cancellation_before {
+        let token = sqlx::query_scalar::<_, Uuid>(
+            "SELECT token FROM migration_people_refresh_reservation WHERE refresh_id=$1 AND organization_id=$2 AND purpose='cancel' FOR UPDATE",
+        )
+        .bind(id)
+        .bind(ctx.organization_id.0)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or(MigrationError::Conflict)?;
+        let after = s::measured_bytes(&mut tx, ctx.organization_id, id).await?;
+        s::release(
+            &mut tx,
+            ctx.organization_id,
+            id,
+            token,
+            after.saturating_sub(before),
+        )
+        .await?;
+    }
     tx.commit().await?;
     Ok(value)
 }

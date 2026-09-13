@@ -350,4 +350,10 @@ mod db_core_change_reports;
 mod db_mobile;
 #[path = "db_people_refresh.rs"]
 mod db_people_refresh;
+mod db_people_refresh_accounting;
 mod db_people_refresh_execution;
+#[cfg(feature = "perf-harness")]
+mod db_people_refresh_plans;
+mod db_people_refresh_reads;
+#[cfg(feature = "perf-harness")]
+mod db_people_refresh_ui_fixture;

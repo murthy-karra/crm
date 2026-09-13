@@ -79,6 +79,10 @@ pub fn router() -> Router<AppState> {
             "/api/migrations/fub/people-refreshes/{id}/results",
             get(results),
         )
+        .route(
+            "/api/migrations/fub/people-refreshes/{id}/items/{item}/fields/{side}/{field}",
+            get(field),
+        )
         .layer(DefaultBodyLimit::max(8192))
 }
 async fn prepare(
@@ -283,6 +287,26 @@ async fn results(
     Ok(response(
         StatusCode::OK,
         h::results(
+            s.db.as_ref().ok_or(ApiError::Unavailable)?,
+            &s.raw_payload_key,
+            &CommandContext::from_auth(&a.auth),
+            path(p)?,
+            query(q)?,
+        )
+        .await
+        .map_err(error)?,
+    ))
+}
+
+async fn field(
+    State(s): State<AppState>,
+    a: OrgAdminContext,
+    p: Result<Path<(Uuid, Uuid, String, String)>, PathRejection>,
+    q: Result<Query<h::Page>, QueryRejection>,
+) -> Result<Response, ApiError> {
+    Ok(response(
+        StatusCode::OK,
+        h::field(
             s.db.as_ref().ok_or(ApiError::Unavailable)?,
             &s.raw_payload_key,
             &CommandContext::from_auth(&a.auth),

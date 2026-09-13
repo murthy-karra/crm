@@ -3,6 +3,7 @@
 use super::{
     crypto,
     import_source::{self, Entity, ExtractedRecord},
+    people_refresh_store::CAPTURE_LIMIT,
     snapshot_source::Stream,
     MigrationError,
 };
@@ -17,50 +18,110 @@ pub async fn retained_person(
     snapshot: Uuid,
     source_id: &str,
 ) -> Result<Option<(ExtractedRecord, Uuid, i32)>, MigrationError> {
-    let r=sqlx::query("SELECT r.id,r.capture_id,r.ordinal,r.semantic_hmac,c.nonce,c.ciphertext,c.raw_byte_len,c.accepted,c.truncated,c.http_status,c.classification,c.representation FROM migration_snapshot_record r JOIN migration_snapshot_capture c ON c.id=r.capture_id AND c.snapshot_id=r.snapshot_id AND c.organization_id=r.organization_id WHERE r.snapshot_id=$1 AND r.organization_id=$2 AND r.family='people' AND r.source_id=$3 ORDER BY r.capture_sequence DESC,r.ordinal DESC LIMIT 2").bind(snapshot).bind(org.0).bind(source_id).fetch_all(&mut *conn).await?;
-    if r.len() != 1 {
-        return Ok(None);
-    }
-    let r = &r[0];
-    if !r.get::<bool, _>("accepted")
-        || r.get::<bool, _>("truncated")
-        || !(200..300).contains(&r.get::<i32, _>("http_status"))
-        || r.get::<String, _>("classification") != "success"
-        || r.get::<String, _>("representation") != Stream::People.representation()
-        || r.get::<i64, _>("raw_byte_len") > 16 * 1024 * 1024
-    {
-        return Ok(None);
-    }
-    let raw = crypto::open_snapshot(
-        key,
-        org,
-        snapshot,
-        r.get("capture_id"),
-        "capture",
-        &r.get::<Vec<u8>, _>("nonce"),
-        &r.get::<Vec<u8>, _>("ciphertext"),
+    // A source ID may have been observed on more than one retained page. Every
+    // observation is evidence: equal semantic records are safe repetition,
+    // while a semantic disagreement is ambiguity. Do not choose a later
+    // variant merely because it sorts last.
+    let rows = sqlx::query(
+        "SELECT r.id,r.capture_id,r.ordinal,r.semantic_hmac,
+                c.raw_byte_len,c.accepted,c.truncated,c.http_status,
+                c.classification,c.representation
+           FROM migration_snapshot_record r
+           JOIN migration_snapshot_capture c
+             ON c.id=r.capture_id AND c.snapshot_id=r.snapshot_id
+            AND c.organization_id=r.organization_id
+          WHERE r.snapshot_id=$1 AND r.organization_id=$2
+            AND r.family='people' AND r.source_id=$3
+          ORDER BY r.capture_sequence DESC,r.ordinal DESC LIMIT 51",
     )
-    .map_err(|_| MigrationError::Crypto)?;
-    if raw.len() as i64 != r.get::<i64, _>("raw_byte_len") {
-        return Err(MigrationError::Crypto);
+    .bind(snapshot)
+    .bind(org.0)
+    .bind(source_id)
+    .fetch_all(&mut *conn)
+    .await?;
+    if rows.is_empty() || rows.len() > 50 {
+        return Ok(None);
     }
-    let item = import_source::extract_page(Stream::People, &raw)
-        .map_err(|_| MigrationError::SourceNotEligible)?
-        .get(usize::try_from(r.get::<i32, _>("ordinal")).map_err(|_| MigrationError::Crypto)?)
-        .cloned()
-        .ok_or(MigrationError::SourceNotEligible)?;
-    let semantic = crypto::snapshot_hmac(
-        key,
-        org,
-        &format!("semantic:{}", Stream::People.representation()),
-        &item.canonical,
-    );
-    if item.source_id.as_deref() != Some(source_id)
-        || r.get::<Vec<u8>, _>("semantic_hmac") != semantic
-    {
-        return Err(MigrationError::Crypto);
+
+    let mut semantic: Option<Vec<u8>> = None;
+    let mut raw_total = 0_i64;
+    let mut selected: Option<(ExtractedRecord, Uuid, i32)> = None;
+    for row in rows {
+        let raw_len: i64 = row.get("raw_byte_len");
+        if !row.get::<bool, _>("accepted")
+            || row.get::<bool, _>("truncated")
+            || !(200..300).contains(&row.get::<i32, _>("http_status"))
+            || row.get::<String, _>("classification") != "success"
+            || row.get::<String, _>("representation") != Stream::People.representation()
+            || raw_len > CAPTURE_LIMIT
+            || raw_total.saturating_add(raw_len) > CAPTURE_LIMIT
+        {
+            return Ok(None);
+        }
+        // Fetch and open one raw capture at a time. This validates every
+        // repeated observation without materializing an unbounded capture set.
+        let capture_id: Uuid = row.get("capture_id");
+        let capture = sqlx::query(
+            "SELECT nonce,ciphertext FROM migration_snapshot_capture
+              WHERE id=$1 AND snapshot_id=$2 AND organization_id=$3",
+        )
+        .bind(capture_id)
+        .bind(snapshot)
+        .bind(org.0)
+        .fetch_optional(&mut *conn)
+        .await?
+        .ok_or(MigrationError::Crypto)?;
+        let raw = crypto::open_snapshot(
+            key,
+            org,
+            snapshot,
+            capture_id,
+            "capture",
+            &capture.get::<Vec<u8>, _>("nonce"),
+            &capture.get::<Vec<u8>, _>("ciphertext"),
+        )
+        .map_err(|_| MigrationError::Crypto)?;
+        if raw.len() as i64 != raw_len {
+            return Err(MigrationError::Crypto);
+        }
+        raw_total += raw_len;
+        let item = import_source::extract_page(Stream::People, &raw)
+            .map_err(|_| MigrationError::SourceNotEligible)?
+            .get(
+                usize::try_from(row.get::<i32, _>("ordinal"))
+                    .map_err(|_| MigrationError::Crypto)?,
+            )
+            .cloned()
+            .ok_or(MigrationError::SourceNotEligible)?;
+        let observed = crypto::snapshot_hmac(
+            key,
+            org,
+            &format!("semantic:{}", Stream::People.representation()),
+            &item.canonical,
+        );
+        if item.source_id.as_deref() != Some(source_id)
+            || row.get::<Vec<u8>, _>("semantic_hmac") != observed
+        {
+            return Err(MigrationError::Crypto);
+        }
+        if !same_semantic(&mut semantic, &observed) {
+            return Ok(None);
+        }
+        if selected.is_none() {
+            selected = Some((item, capture_id, row.get("ordinal")));
+        }
     }
-    Ok(Some((item, r.get("capture_id"), r.get("ordinal"))))
+    Ok(selected)
+}
+
+fn same_semantic(expected: &mut Option<Vec<u8>>, observed: &[u8]) -> bool {
+    match expected {
+        Some(value) => value.as_slice() == observed,
+        None => {
+            *expected = Some(observed.to_vec());
+            true
+        }
+    }
 }
 
 /// Presence-aware refresh overlay. `ExtractedRecord` is retained raw evidence:
@@ -215,6 +276,20 @@ mod tests {
         assert_eq!(contacts.len(), 1);
         assert_eq!(contacts[0]["kind"], "phone");
         assert_eq!(contacts[0]["id"], "00000000-0000-0000-0000-000000000011");
+    }
+
+    #[test]
+    fn equal_repeated_observations_are_qualified() {
+        let mut expected = None;
+        assert!(same_semantic(&mut expected, b"same"));
+        assert!(same_semantic(&mut expected, b"same"));
+    }
+
+    #[test]
+    fn conflicting_repeated_observations_are_ambiguous() {
+        let mut expected = None;
+        assert!(same_semantic(&mut expected, b"first"));
+        assert!(!same_semantic(&mut expected, b"second"));
     }
 
     #[test]

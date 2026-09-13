@@ -66,7 +66,7 @@ async fn recapture(f: &Fixture, people: Vec<Value>) -> Uuid {
     id
 }
 
-async fn ready(f: &Fixture, parent: Uuid, people: Vec<Value>) -> (Uuid, Value) {
+pub(super) async fn ready(f: &Fixture, parent: Uuid, people: Vec<Value>) -> (Uuid, Value) {
     let newer = recapture(f, people).await;
     let calls = f.reader.calls();
     let report = core_change_reports::prepare(
@@ -156,7 +156,7 @@ async fn ready(f: &Fixture, parent: Uuid, people: Vec<Value>) -> (Uuid, Value) {
     panic!("bounded synthetic preview failed to become ready");
 }
 
-fn confirmation(detail: &Value) -> Value {
+pub(super) fn confirmation(detail: &Value) -> Value {
     let p = &detail["plan"];
     json!({"request_id":Uuid::new_v4(),"plan_id":p["id"],"plan_revision":number(&p["revision"]),
         "plan_digest":p["digest"],"acknowledged_coverage":true,"acknowledged_exclusions":true,
@@ -165,7 +165,7 @@ fn confirmation(detail: &Value) -> Value {
         "acknowledged_contact_removals":number(&p["counts"]["contact_removals"])})
 }
 
-async fn confirm(f: &Fixture, id: Uuid, cmd: &Value) -> Value {
+pub(super) async fn confirm(f: &Fixture, id: Uuid, cmd: &Value) -> Value {
     refresh::confirm(
         &f.pool,
         &f.key,
@@ -178,7 +178,7 @@ async fn confirm(f: &Fixture, id: Uuid, cmd: &Value) -> Value {
     .expect("exact reviewed confirmation must queue")
 }
 
-async fn drain(f: &Fixture, id: Uuid) {
+pub(super) async fn drain(f: &Fixture, id: Uuid) {
     let calls = f.reader.calls();
     for _ in 0..100 {
         let detail = refresh::detail(&f.pool, &f.key, &f.ctx, id).await.unwrap();
@@ -282,7 +282,7 @@ fn rich_people() -> Vec<Value> {
     ]
 }
 
-async fn mapped_fixture(migrator: &PgPool) -> (Fixture, Uuid, Uuid) {
+pub(super) async fn mapped_fixture(migrator: &PgPool) -> (Fixture, Uuid, Uuid) {
     let book = Arc::new(Book::new(rich_people()));
     book.set_records(
         Stream::Stages,
@@ -499,11 +499,10 @@ async fn confirmed_refresh_applies_owned_contacts_clears_mappings_facts_and_repl
     )
     .unwrap();
     let mut expected_after = preview["proposed"].clone();
-    expected_after
-        .as_object_mut()
-        .unwrap()
-        .remove("contact_counts");
-    expected_after["contacts"] = Value::Array(planned_contacts.clone());
+    let expected_after_object = expected_after.as_object_mut().unwrap();
+    expected_after_object.remove("contact_counts");
+    expected_after_object.remove("truncated_fields");
+    expected_after_object.insert("contacts".into(), Value::Array(planned_contacts.clone()));
     assert_eq!(
         serde_json::from_slice::<Value>(&after).unwrap(),
         expected_after
@@ -534,6 +533,15 @@ async fn confirmed_refresh_applies_owned_contacts_clears_mappings_facts_and_repl
         .await
         .unwrap();
     assert_eq!(mode, "migration_review");
+
+    // The next retained capture returns to the original source value. Its B is
+    // the immutable settled result above, rather than original import/current
+    // state, so this must be a new eligible reversion.
+    let (reversion, reversion_detail) = ready(&f, parent, rich_people()).await;
+    assert_eq!(number(&reversion_detail["plan"]["counts"]["eligible"]), 2);
+    let reverted = item(&f, reversion, "101").await;
+    assert_eq!(reverted["baseline"]["first_name"], "Updated");
+    assert_eq!(reverted["proposed"]["first_name"], "Original");
 }
 
 async fn simple(migrator: &PgPool) -> (Fixture, Uuid, Uuid, Uuid, Value) {
@@ -639,4 +647,302 @@ async fn settlement_failure_rolls_back_native_provenance_and_progress_then_retri
         .unwrap();
     assert_eq!(results["results"].as_array().unwrap().len(), 1);
     assert_eq!(results["results"][0]["disposition"], "settled");
+}
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn changed_stage_and_member_mapping_targets_hold_the_whole_person_at_commit(
+    migrator: PgPool,
+) {
+    let (f, parent, other_stage) = mapped_fixture(&migrator).await;
+    let person = person_id(&f, parent, "101").await;
+    let (run, detail) = ready(
+        &f,
+        parent,
+        vec![
+            json!({"id":101,"firstName":"Should not apply","lastName":"Family","stage":"Qualified","assignedUserId":9,
+                "emails":[{"value":"first@synthetic.test"}],"phones":[{"value":"4155550100"}]}),
+            json!({"id":102,"firstName":"Clear Me","lastName":"Keep Family","stage":"Lead","assignedUserId":3,
+                "emails":[{"value":"clear@synthetic.test"}],"phones":[{"value":"4155550101"}]}),
+        ],
+    )
+    .await;
+    assert_eq!(
+        item(&f, run, "101").await["proposed"]["stage_id"],
+        other_stage.to_string()
+    );
+    confirm(&f, run, &confirmation(&detail)).await;
+
+    // Both values are frozen as original confirmed mapping evidence. Changing
+    // their currently resolved targets after preview must never turn a source
+    // key or matching email into a new authorization to write the Person.
+    sqlx::query("UPDATE stage SET name='Renamed after preview' WHERE id=$1 AND organization_id=$2")
+        .bind(other_stage)
+        .bind(f.org)
+        .execute(&migrator)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE app_user SET email='changed-member@synthetic.test' WHERE id=$1")
+        .bind(f.member)
+        .execute(&migrator)
+        .await
+        .unwrap();
+    let before = native(&f, person).await;
+    drain(&f, run).await;
+
+    assert_eq!(native(&f, person).await, before);
+    let result = refresh::results(&f.pool, &f.key, &f.ctx, run, refresh::Page::default())
+        .await
+        .unwrap();
+    assert!(result["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|row| row["source_id"] == "101" && row["disposition"] == "held_stale"));
+    let facts: i64 = sqlx::query_scalar(
+        "SELECT (SELECT count(*) FROM stage_changed WHERE correlation_id=$1)
+           + (SELECT count(*) FROM assignment_changed WHERE correlation_id=$1)",
+    )
+    .bind(run)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    assert_eq!(facts, 0);
+}
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn repreview_confirm_executes_only_the_exact_successor_plan(migrator: PgPool) {
+    let (f, _parent, person, run, first) = simple(&migrator).await;
+    let superseded = uuid(&first["plan"]["id"]);
+    refresh::repreview(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        run,
+        refresh::RepreviewPeopleRefresh {
+            request_id: Uuid::new_v4(),
+            expected_plan_revision: 1,
+        },
+    )
+    .await
+    .unwrap();
+    for _ in 0..100 {
+        if refresh::detail(&f.pool, &f.key, &f.ctx, run).await.unwrap()["state"] == "ready" {
+            break;
+        }
+        assert!(people_refresh_worker::run_once(
+            &f.pool,
+            &f.key,
+            &f.policy,
+            Some(&ReleaseReadiness::for_tests()),
+        )
+        .await
+        .unwrap());
+    }
+    let successor = refresh::detail(&f.pool, &f.key, &f.ctx, run).await.unwrap();
+    let successor_id = uuid(&successor["plan"]["id"]);
+    assert_ne!(successor_id, superseded);
+    confirm(&f, run, &confirmation(&successor)).await;
+    drain(&f, run).await;
+
+    assert_eq!(native(&f, person).await["person"]["first_name"], "Proposed");
+    let old_settled: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM migration_people_refresh_item
+          WHERE refresh_id=$1 AND plan_id=$2 AND settled_at IS NOT NULL",
+    )
+    .bind(run)
+    .bind(superseded)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    assert_eq!(old_settled, 0);
+    let confirmed: Uuid = sqlx::query_scalar(
+        "SELECT confirmed_refresh_plan_id FROM migration_people_refresh WHERE id=$1",
+    )
+    .bind(run)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    assert_eq!(confirmed, successor_id);
+}
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn cancelled_run_fences_stale_worker_and_keeps_native_state_unchanged(migrator: PgPool) {
+    let (f, _parent, person, run, detail) = simple(&migrator).await;
+    let before = native(&f, person).await;
+    confirm(&f, run, &confirmation(&detail)).await;
+    // First turn claims the 60-second execution lease but settles no item.
+    assert!(people_refresh_worker::run_once(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        Some(&ReleaseReadiness::for_tests()),
+    )
+    .await
+    .unwrap());
+    let revision: i64 =
+        sqlx::query_scalar("SELECT lifecycle_revision FROM migration_people_refresh WHERE id=$1")
+            .bind(run)
+            .fetch_one(&f.pool)
+            .await
+            .unwrap();
+    refresh::cancel(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        run,
+        refresh::LifecyclePeopleRefresh {
+            request_id: Uuid::new_v4(),
+            expected_lifecycle_revision: revision,
+        },
+    )
+    .await
+    .unwrap();
+
+    assert!(!people_refresh_worker::run_once(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        Some(&ReleaseReadiness::for_tests()),
+    )
+    .await
+    .unwrap());
+    assert_eq!(native(&f, person).await, before);
+    let state: String =
+        sqlx::query_scalar("SELECT state FROM migration_people_refresh WHERE id=$1")
+            .bind(run)
+            .fetch_one(&f.pool)
+            .await
+            .unwrap();
+    assert_eq!(state, "cancelled");
+    let reservations: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM migration_people_refresh_reservation WHERE refresh_id=$1",
+    )
+    .bind(run)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        reservations, 0,
+        "stale execution must not release or create a reservation"
+    );
+}
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn retained_integrity_failure_pauses_without_native_write_or_reservation_release(
+    migrator: PgPool,
+) {
+    let (f, _parent, person, run, detail) = simple(&migrator).await;
+    let before = native(&f, person).await;
+    confirm(&f, run, &confirmation(&detail)).await;
+    assert!(people_refresh_worker::run_once(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        Some(&ReleaseReadiness::for_tests()),
+    )
+    .await
+    .unwrap());
+    sqlx::query(
+        "UPDATE migration_people_refresh_item SET baseline_ciphertext=decode('00','hex')
+          WHERE refresh_id=$1 AND plan_id=(SELECT confirmed_refresh_plan_id FROM migration_people_refresh WHERE id=$1)",
+    )
+    .bind(run)
+    .execute(&migrator)
+    .await
+    .unwrap();
+
+    assert!(people_refresh_worker::run_once(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        Some(&ReleaseReadiness::for_tests()),
+    )
+    .await
+    .unwrap());
+    assert_eq!(native(&f, person).await, before);
+    let row = sqlx::query("SELECT state,pause_reason FROM migration_people_refresh WHERE id=$1")
+        .bind(run)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap();
+    assert_eq!(row.get::<String, _>("state"), "paused");
+    assert_eq!(
+        row.get::<Option<String>, _>("pause_reason").as_deref(),
+        Some("retained_integrity_failed")
+    );
+    let cancellation_reservations: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM migration_people_refresh_reservation
+          WHERE refresh_id=$1 AND purpose='cancel'",
+    )
+    .bind(run)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    assert_eq!(cancellation_reservations, 1);
+}
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn missing_release_evidence_pauses_queued_refresh_before_any_write(migrator: PgPool) {
+    let (f, _parent, person, run, detail) = simple(&migrator).await;
+    let before = native(&f, person).await;
+    confirm(&f, run, &confirmation(&detail)).await;
+
+    assert!(
+        people_refresh_worker::run_once(&f.pool, &f.key, &f.policy, None)
+            .await
+            .unwrap()
+    );
+    assert_eq!(native(&f, person).await, before);
+    let row = sqlx::query("SELECT state,pause_reason FROM migration_people_refresh WHERE id=$1")
+        .bind(run)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap();
+    assert_eq!(row.get::<String, _>("state"), "paused");
+    assert_eq!(
+        row.get::<Option<String>, _>("pause_reason").as_deref(),
+        Some("release_not_ready")
+    );
+}
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn absent_newer_person_is_not_seen_again_without_synthetic_clear_counts(migrator: PgPool) {
+    let (f, parent, person, first_run, _detail) = simple(&migrator).await;
+    let before = native(&f, person).await;
+    refresh::cancel(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        first_run,
+        refresh::LifecyclePeopleRefresh {
+            request_id: Uuid::new_v4(),
+            expected_lifecycle_revision: 1,
+        },
+    )
+    .await
+    .unwrap();
+    let (run, detail) = ready(&f, parent, vec![]).await;
+
+    assert_eq!(detail["plan"]["counts"]["eligible"], "0");
+    assert_eq!(detail["plan"]["counts"]["held"], "1");
+    assert_eq!(detail["plan"]["counts"]["name_clears"], "0");
+    assert_eq!(detail["plan"]["counts"]["assignment_clears"], "0");
+    assert_eq!(detail["plan"]["counts"]["contact_removals"], "0");
+    let preview = item(&f, run, "101").await;
+    assert_eq!(preview["disposition"], "not_seen_again");
+    assert_eq!(
+        preview["baseline"]["first_name"],
+        preview["proposed"]["first_name"]
+    );
+    assert_eq!(
+        preview["baseline"]["contact_counts"],
+        preview["proposed"]["contact_counts"]
+    );
+    assert_eq!(native(&f, person).await, before);
 }

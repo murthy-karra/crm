@@ -453,7 +453,7 @@ impl ReleaseReadiness {
             ));
         }
         let schema: bool =
-            sqlx::query_scalar("SELECT to_regclass('migration_people_refresh') IS NOT NULL AND to_regclass('migration_people_refresh_plan') IS NOT NULL AND to_regclass('migration_people_refresh_item') IS NOT NULL AND to_regclass('migration_people_refresh_baseline') IS NOT NULL AND to_regprocedure('crm_people_refresh_mutation_allowed(uuid,text,text,text,jsonb)') IS NOT NULL")
+            sqlx::query_scalar("SELECT (SELECT bool_and(to_regclass('public.'||name) IS NOT NULL) FROM (VALUES ('migration_people_refresh'),('migration_people_refresh_plan'),('migration_people_refresh_item'),('migration_people_refresh_contact'),('migration_people_refresh_result'),('migration_people_refresh_baseline'),('migration_people_refresh_receipt'),('migration_people_refresh_reservation')) required(name)) AND to_regprocedure('public.crm_people_refresh_mutation_allowed(uuid,text,text,text,jsonb)') IS NOT NULL AND EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=to_regclass('public.migration_people_refresh') AND attname='confirmed_refresh_plan_id' AND atttypid='uuid'::regtype AND NOT attisdropped) AND EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=to_regclass('public.migration_people_refresh_plan') AND attname='prepared_bytes' AND atttypid='bigint'::regtype AND attnotnull AND NOT attisdropped)")
                 .fetch_one(&mut *conn)
                 .await?;
         if !schema {

@@ -2755,3 +2755,15 @@ Preserve shared development and the native demo. Later migration families,
 physical phones/cellular, broad mobile design, native calling, live FUB/customer
 processing, activation, app distribution, Git publication and deployment remain
 separately scoped. No production release follows from this implementation approval.
+
+**Release follow-up — 2026-09-13:** After implementation and all required checks
+completed, the user requested **“ok commit and push, cleanup and deploy”**.
+This authorizes publication/main integration of Mobile004 / 010e4, cleanup of
+merged milestone branches and deployment of the compatible backend/Web and
+additive schema to existing Mac-hosted shared development. Reuse the completed
+implementation evidence and execute release-specific backup, preservation,
+artifact, compatibility, HTTP/mobile and browser checks. Preserve the native demo,
+installed stores, retained evidence and recovery material. Native distribution,
+physical phones, live FUB/customer processing, activation and production-cluster
+work remain separate. Actual release evidence belongs to
+`docs/tasks/MOBILE_004_010e4_RELEASE.md`.

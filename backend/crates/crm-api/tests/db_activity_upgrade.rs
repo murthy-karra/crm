@@ -1,17 +1,7 @@
 //! A12: the actual additive migration preserves populated 010f1 data.
 use crate::{common, db_activity_source as source, import_support};
 use axum::http::StatusCode;
-use crm_api::{
-    auth::workspace,
-    domain::{
-        envelope::{CommandContext, Origin},
-        migration::imports,
-        note::{self, AddNote},
-        task::{self, CompleteTask, CreateTask, TaskKind},
-    },
-    ids::{CorrelationId, OrganizationId, PersonId, UserId},
-    realtime::Publisher,
-};
+use crm_api::{auth::workspace, domain::migration::imports};
 use serde_json::{json, Value};
 use sqlx::{migrate::Migrator, PgPool};
 use std::borrow::Cow;
@@ -94,57 +84,18 @@ async fn populated_010f1_upgrade_preserves_native_and_import_state(migrator: PgP
     .await
     .unwrap();
     let person:Uuid=sqlx::query_scalar("INSERT INTO person(organization_id,first_name,stage_id) VALUES($1,'Preserved native Person',$2) RETURNING id").bind(org).bind(stage).fetch_one(&app).await.unwrap();
-    let ctx = CommandContext {
-        organization_id: OrganizationId::new(org),
-        actor_user_id: UserId::new(actor),
-        origin: Origin::WebSession,
-        correlation_id: CorrelationId::new(Uuid::new_v4()),
-    };
-    let publisher = Publisher::recording();
-    note::add_note(
-        &app,
-        &publisher,
-        &ctx,
-        AddNote {
-            person_id: PersonId::new(person),
-            body: "Preserved ordinary Unicode note 🏡".into(),
-        },
-    )
-    .await
-    .unwrap();
+    // Seed rows using the historical schema, not current note/task commands:
+    // today's shared Person lock requires Mobile004's later stage_revision.
+    // This fixture proves additive preservation, not command lifecycle behavior.
+    sqlx::query("INSERT INTO note(organization_id,person_id,author_user_id,body,origin,correlation_id) VALUES($1,$2,$3,$4,'web_session',$5)")
+        .bind(org).bind(person).bind(actor).bind("Preserved ordinary Unicode note 🏡")
+        .bind(Uuid::new_v4()).execute(&app).await.unwrap();
     for completed in [false, true] {
-        let t = task::create_task(
-            &app,
-            &publisher,
-            &ctx,
-            CreateTask {
-                person_id: PersonId::new(person),
-                title: if completed {
-                    "Preserved completed task"
-                } else {
-                    "Preserved open task"
-                }
-                .into(),
-                kind: TaskKind::FollowUp,
-                due_at: None,
-                assignee_user_id: None,
-            },
-        )
-        .await
-        .unwrap();
-        if completed {
-            task::complete_task(
-                &app,
-                &publisher,
-                &ctx,
-                CompleteTask {
-                    person_id: PersonId::new(person),
-                    task_id: t.id,
-                },
-            )
-            .await
-            .unwrap();
-        }
+        sqlx::query("INSERT INTO task(organization_id,person_id,title,kind,assignee_user_id,created_by_user_id,completed_at,completed_by_user_id,origin,correlation_id) VALUES($1,$2,$3,'follow_up',$4,$4,CASE WHEN $5 THEN now() ELSE NULL END,CASE WHEN $5 THEN $4 ELSE NULL END,'web_session',$6)")
+            .bind(org).bind(person)
+            .bind(if completed { "Preserved completed task" } else { "Preserved open task" })
+            .bind(actor).bind(completed).bind(Uuid::new_v4())
+            .execute(&app).await.unwrap();
     }
     // Fixture construction reuses today's core command helpers, whose new
     // exclusive-source lookup also names the history relation. Supply only an
@@ -225,11 +176,13 @@ async fn populated_010f1_upgrade_preserves_native_and_import_state(migrator: PgP
     all.run(&migrator).await.unwrap();
     let extended_frozen = existing_rows(&migrator).await;
     let mut extended = extended_frozen.clone();
-    // D-074 and the follow-up note-edit migration add derived sync revisions
+    // D-074, note-edit and Mobile004 migrations add derived sync revisions
     // with an initial value of one. Verify exactly those additive columns, then
     // compare every pre-existing field unchanged.
     for (table, column) in [
         ("person", "mobile_revision"),
+        ("person", "stage_revision"),
+        ("organization", "stage_catalog_revision"),
         ("task", "revision"),
         ("note", "revision"),
     ] {

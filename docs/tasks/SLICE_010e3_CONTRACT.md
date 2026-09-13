@@ -28,7 +28,7 @@ Migration `20260928000001_fub_people_admission.sql` defines
 `migration_people_admission`, `_plan`, `_item`, `_contact`, `_result`,
 `_receipt`, `_reservation`, plus `person_admission_provenance` and IDs-only
 `person_admitted`. `migration_import_identity` remains the sole global key and
-gets nullable `admission_id`/`admission_item_id`; original manifest/mapping
+gets nullable `admission_id`/`admission_item_id`/`admission_result_id`; original manifest/mapping
 columns remain populated only for original origins. Admission People identities
 have `family='people'`, original import/plan parent references, null original
 manifest/mapping, matching admission/item/result/target and no target cascade.

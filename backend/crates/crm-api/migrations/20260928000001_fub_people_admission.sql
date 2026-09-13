@@ -18,7 +18,7 @@ CREATE TABLE migration_people_admission (
  reserved_bytes BIGINT NOT NULL DEFAULT 0 CHECK(reserved_bytes>=0), settled_items BIGINT NOT NULL DEFAULT 0 CHECK(settled_items>=0),
  created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(), updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
  completed_at TIMESTAMPTZ, cancelled_at TIMESTAMPTZ,
- UNIQUE(id,organization_id),
+ UNIQUE(id,organization_id), UNIQUE(id,organization_id,parent_import_id,parent_plan_id),
  FOREIGN KEY(parent_import_id,organization_id) REFERENCES migration_import(id,organization_id),
  FOREIGN KEY(parent_plan_id,parent_import_id,organization_id) REFERENCES migration_import_plan(id,import_id,organization_id),
  FOREIGN KEY(report_id,organization_id) REFERENCES migration_core_change_report(id,organization_id),
@@ -102,7 +102,7 @@ CREATE TABLE person_admission_provenance (
  FOREIGN KEY(person_id,organization_id) REFERENCES person(id,organization_id),
  FOREIGN KEY(admission_id,organization_id) REFERENCES migration_people_admission(id,organization_id),
  FOREIGN KEY(item_id,admission_id,organization_id) REFERENCES migration_people_admission_item(id,admission_id,organization_id),
- FOREIGN KEY(result_id,organization_id) REFERENCES migration_people_admission_result(id,organization_id)
+ FOREIGN KEY(result_id,admission_id,item_id,organization_id,person_id) REFERENCES migration_people_admission_result(id,admission_id,item_id,organization_id,person_id)
 );
 CREATE TABLE person_admitted (
  id UUID PRIMARY KEY, organization_id UUID NOT NULL REFERENCES organization(id), actor_kind TEXT NOT NULL CHECK(actor_kind='system'),
@@ -114,14 +114,14 @@ CREATE TABLE person_admitted (
  FOREIGN KEY(admission_id,organization_id) REFERENCES migration_people_admission(id,organization_id),
  FOREIGN KEY(plan_id,admission_id,organization_id) REFERENCES migration_people_admission_plan(id,admission_id,organization_id),
  FOREIGN KEY(item_id,admission_id,organization_id) REFERENCES migration_people_admission_item(id,admission_id,organization_id),
- FOREIGN KEY(result_id,organization_id) REFERENCES migration_people_admission_result(id,organization_id)
+ FOREIGN KEY(result_id,admission_id,item_id,organization_id,person_id) REFERENCES migration_people_admission_result(id,admission_id,item_id,organization_id,person_id)
 );
 CREATE INDEX person_admitted_history ON person_admitted(organization_id,person_id,occurred_at,id);
 CREATE TRIGGER person_admitted_append_only BEFORE UPDATE OR DELETE ON person_admitted FOR EACH ROW EXECUTE FUNCTION reject_mutation();
 CREATE TRIGGER person_admitted_no_truncate BEFORE TRUNCATE ON person_admitted FOR EACH STATEMENT EXECUTE FUNCTION reject_mutation();
 
 ALTER TABLE migration_import_identity ADD COLUMN admission_id UUID, ADD COLUMN admission_item_id UUID, ADD COLUMN admission_result_id UUID;
-ALTER TABLE migration_import_identity ADD CONSTRAINT migration_import_identity_admission_fk FOREIGN KEY(admission_id,organization_id) REFERENCES migration_people_admission(id,organization_id);
+ALTER TABLE migration_import_identity ADD CONSTRAINT migration_import_identity_admission_fk FOREIGN KEY(admission_id,organization_id,import_id,plan_id) REFERENCES migration_people_admission(id,organization_id,parent_import_id,parent_plan_id);
 ALTER TABLE migration_import_identity ADD CONSTRAINT migration_import_identity_admission_item_fk FOREIGN KEY(admission_item_id,admission_id,organization_id,target_id) REFERENCES migration_people_admission_item(id,admission_id,organization_id,prospective_person_id);
 ALTER TABLE migration_import_identity ADD CONSTRAINT migration_import_identity_admission_result_fk FOREIGN KEY(admission_result_id,admission_id,admission_item_id,organization_id,target_id) REFERENCES migration_people_admission_result(id,admission_id,item_id,organization_id,person_id);
 ALTER TABLE migration_import_identity ADD CONSTRAINT migration_import_identity_origin CHECK(
@@ -138,10 +138,10 @@ DECLARE lease UUID; unit UUID; target UUID;
 BEGIN
  IF permit IS NULL OR permit='' THEN RETURN false; END IF;
  BEGIN lease:=(permit::jsonb->>'lease')::uuid; unit:=(permit::jsonb->>'item')::uuid; EXCEPTION WHEN others THEN RETURN false; END;
- SELECT i.prospective_person_id INTO target FROM migration_people_admission_item i JOIN migration_people_admission a ON a.id=i.admission_id AND a.organization_id=i.organization_id JOIN migration_workspace w ON w.organization_id=a.organization_id AND w.import_id=a.parent_import_id AND w.plan_id=a.parent_plan_id JOIN organization_membership m ON m.organization_id=a.organization_id AND m.user_id=a.initiated_by_user_id WHERE i.id=unit AND i.organization_id=org AND i.disposition='eligible' AND i.settled_at IS NULL AND a.state='running' AND a.lease_token=lease AND a.lease_expires_at>clock_timestamp() AND m.role='admin' AND m.status='active';
+ SELECT i.prospective_person_id INTO target FROM migration_people_admission_item i JOIN migration_people_admission a ON a.id=i.admission_id AND a.organization_id=i.organization_id JOIN migration_workspace w ON w.organization_id=a.organization_id AND w.import_id=a.parent_import_id AND w.plan_id=a.parent_plan_id JOIN organization_membership m ON m.organization_id=a.organization_id AND m.user_id=a.initiated_by_user_id WHERE i.id=unit AND i.organization_id=org AND i.disposition='eligible' AND i.settled_at IS NULL AND a.state='running' AND a.confirmed_admission_plan_id=i.plan_id AND EXISTS(SELECT 1 FROM organization o WHERE o.id=a.organization_id AND o.workspace_revision=a.workspace_revision) AND a.lease_token=lease AND a.lease_expires_at>clock_timestamp() AND m.role='admin' AND m.status='active';
  IF target IS NULL THEN RETURN false; END IF;
  IF table_name='person' THEN RETURN operation='INSERT' AND (row_value->>'id')::uuid=target; END IF;
- IF table_name='contact_method' THEN RETURN operation='INSERT' AND (row_value->>'person_id')::uuid=target AND EXISTS(SELECT 1 FROM migration_people_admission_contact c WHERE c.item_id=unit AND c.organization_id=org AND c.kind=row_value->>'kind'); END IF;
+ IF table_name='contact_method' THEN RETURN operation='INSERT' AND (row_value->>'person_id')::uuid=target AND EXISTS(SELECT 1 FROM migration_people_admission_contact c WHERE c.item_id=unit AND c.organization_id=org AND c.id=(row_value->>'id')::uuid AND c.kind=row_value->>'kind'); END IF;
  IF table_name IN ('assignment_changed','stage_changed') THEN RETURN operation='INSERT' AND (row_value->>'person_id')::uuid=target AND row_value->>'origin'='migration' AND row_value->>'reason'='migration_admission'; END IF;
  IF table_name='person_admitted' THEN RETURN operation='INSERT' AND (row_value->>'person_id')::uuid=target AND (row_value->>'item_id')::uuid=unit; END IF;
  RETURN false;

@@ -1,11 +1,26 @@
 # Project state
 
-Last updated: 2026-09-12 (010d2 deployed and verified in shared development under D-072's release follow-up).
+Last updated: 2026-09-12 (D-075 coordinated Mobile 001 and 010e1 implementation; 010d2 remains the recorded shared-development release).
 This file holds current operational status, active work and live residuals.
 [PROJECT_HISTORY.md](PROJECT_HISTORY.md) preserves earlier progress, the slice
 ledger and historical measurements; its old instructions are not current work.
 
 ## Current state
+
+**Mobile 001 implementation is approved under D-074.** The reviewed
+[specification](../specs/MOBILE_001_OFFLINE_FIELD_WORK.md) and
+[briefs](../tasks/MOBILE_001_IMPL.md) cover both native platforms, protected SQLite,
+seven-day access and durable synchronization. [Toolchain preparation](../tasks/MOBILE_NATIVE_TOOLCHAIN_SETUP.md)
+records installed SDKs and successful iPhone/Android emulator boots; no native
+app or sync endpoint has been implemented yet.
+
+The user requested a concrete migration plan before implementation launch.
+Approved [010e1](../specs/SLICE_010e1.md) compares a newer core capture with the
+original import baseline and reports source changes without updating CRM data.
+Its reviewed contracts and implementation are approved under D-075. The
+[coordinated launch plan](MOBILE_MIGRATION_PARALLEL_LAUNCH.md) starts mobile backend
+and migration together, then replaces the completed backend lane with iOS and
+Android: at most three simultaneous implementation worktrees.
 
 **010d2 is deployed and verified in shared development.** The current runtime
 source is `5924f097a7d7475e7e9742bb08e102d7c7ca98d2`, incorporating implementation
@@ -182,22 +197,32 @@ follow-up remains open in production readiness.
 
 ## Current branch
 
-Main contains 010f2 implementation `9f457bc8db8707fa4ce361aac485fd6bf928bf34`
-and merge `fc5a8757bcb2591a43976544e282722b3616039f`, published to origin/main.
-Shared development runs that merge; all 1,016 verified source hashes match.
-The subsequent release documentation records evidence without changing the
-runtime implementation. Only main remains; the merged activity branch/worktree
-and disposable QA directory are removed. The temporary integration stash was
-dropped after preserving the eight pending planning files and checking their
-merged versions (four identical, four expected implementation/status updates).
-
-Shared `crm_dev` data and historical recovery material are preserved. All 32
-recorded retired binary paths retain their bytes without executable permission.
-Recovery requires the compatibility runbook and fresh activity-capable workload
-evidence. Inspect Git and [the release record](../tasks/SLICE_010f2_RELEASE.md)
-for current source/runtime identity.
+Main is the sole worktree, observed at
+`b301819fcf38947ee31f85b25588d9c5398795f0` during D-074 planning. Mobile/migration planning
+documents and decision/state updates are uncommitted; no implementation branch
+has been created. The [010d2 release record](../tasks/SLICE_010d2_RELEASE.md)
+records runtime source `5924f097a7d7475e7e9742bb08e102d7c7ca98d2`; this planning
+turn has not reverified or redeployed that service. Earlier 010f2 integration
+and cleanup evidence remains in its dated release record.
 
 ## Last accepted decision
+
+**D-075:** reviewed 010e1 contracts and implementation approved; start the
+coordinated Mobile 001 and migration lanes. Local worktree checkpoints/integration
+supply the same approved base; external release remains separate.
+
+**D-074:** the user approves the reviewed Mobile 001 contracts and implementation
+for backend, iOS and Android, and confirms parallel migration development.
+Prepare the next migration specification and ownership plan before launch. No
+repeat mobile approval is pending; a new migration contract needs its own scope.
+
+**D-073:** initial offline record selection, SQLite and seven-day access were
+accepted during planning. D-074 supersedes its pending Mobile 001 approval.
+Native SDK licenses were separately authorized and setup is verified.
+
+**D-072:** reviewed 010d2 implementation and the subsequent explicitly authorized
+commit/merge/push/cleanup/shared-development deployment are complete. See current
+release evidence above; this does not authorize future releases or activation.
 
 **D-070:** the user said “Ok go for it” after the complete 010d1 plan and READY
 review were presented. The full spec/contracts, implementation and isolated
@@ -531,6 +556,13 @@ and now lives only in git history.
 
 ## Next recommended action
 
+D-075 approves the reviewed [010e1](../specs/SLICE_010e1.md) comparison contract
+and implementation. Mobile 001 is already approved. Follow the
+[coordinated launch](MOBILE_MIGRATION_PARALLEL_LAUNCH.md): mobile backend and
+migration concurrently, then iOS + Android + migration after backend integration.
+Do not require remaining migration fidelity or live FUB qualification before the
+synthetic native workflow. No implementation worktree has launched yet.
+
 1. The [010d2 release](../tasks/SLICE_010d2_RELEASE.md) is complete and forms the
    baseline for the next bounded slice. Future import confirmation still requires
    fresh actual artifact inventory and independent timeline readiness.
@@ -553,6 +585,11 @@ and now lives only in git history.
    and the owning verification records before acting.
 
 ## Approval currently required
+
+- D-075 approves the 010e1 source-change report, its HTTP/persistence and
+  compatibility contracts and implementation. No repeat scope approval is pending. Mobile 001 is already approved under D-074, including its
+  operation/reconciliation, origin and local-lifecycle contracts; do not ask again.
+  Native SDK license acceptance also has existing authorization.
 
 - D-072 approves 010d2 contracts, implementation and isolated synthetic checks.
   Its explicit follow-up authorized the completed commit, merge, push, cleanup

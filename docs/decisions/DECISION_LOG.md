@@ -2486,3 +2486,84 @@ deployment of 010d2 to the existing Mac-hosted shared-development API/Web using
 the compatibility runbook, additive migration, preserved recovery artifacts and
 release verification. It does not authorize live FUB/customer processing,
 body/media access, workspace activation or a production-cluster deployment.
+
+### D-073 — Offline native mobile foundation and seven-day access (2026-09-12)
+
+The user established that field agents must work through unreliable cellular
+connections and complete outages without discarding saved information, proposed
+local SQLite, and endorsed the resulting offline-first direction. After the
+[first mobile plan](../plans/MOBILE_OFFLINE_FIRST.md) recommended native tooling,
+an owned sync contract, a backend foundation and parallel iOS/Android/migration
+worktrees, the user replied **“Ok...sounds good”**. This accepts that planning and
+preparation sequence, using Today-related People, assigned People and explicitly
+saved records as the initial offline selection. Selection governs downloaded
+availability, not Organization-wide Person visibility.
+
+The user then explicitly chose **“7 days: supports extended outages with a
+bounded access window (Recommended)”** for how long downloaded CRM data remains
+usable after the last successful online authorization. On expiry, require online
+reauthorization to reopen CRM data and preserve unsynced work in protected
+storage. This is an access window, not a deletion deadline, receipt-retention
+period, permission to process revoked work or promise of immediate remote wipe.
+
+Prepare the [Mobile 001 specification](../specs/MOBILE_001_OFFLINE_FIELD_WORK.md),
+[execution briefs](../tasks/MOBILE_001_IMPL.md) and
+[toolchain setup](../tasks/MOBILE_NATIVE_TOOLCHAIN_SETUP.md). Swift/SwiftUI and
+Kotlin/Jetpack Compose remain D-001; SQLite is on-device persistence while the
+existing Rust commands and PostgreSQL remain authoritative for accepted shared
+state. Committed local saves must survive ordinary app restart; this cannot
+recover never-synced data from a destroyed device or removed app storage.
+
+The new HTTP/persistence contracts, detailed conflict/local-data lifecycle and
+client compatibility policies remain proposals pending their concrete review
+and approval. This planning approval does not silently amend Slices 015/016,
+authorize real customer data, change the migration review hold or authorize a
+release. Existing D-015/O-012/O-013 and production readiness gates still apply.
+
+### D-074 — Reviewed Mobile 001 implementation and parallel work approved (2026-09-12)
+
+After the reviewed Mobile 001 contracts, execution briefs and completed native
+tooling setup were presented for implementation approval, the user replied
+**“This is approved”** and confirmed that iOS, Android and migration should run
+in parallel. The user also requested planning the next migration task before
+starting those implementation lanes.
+
+This accepts the reviewed [Mobile 001 specification](../specs/MOBILE_001_OFFLINE_FIELD_WORK.md)
+and [briefs](../tasks/MOBILE_001_IMPL.md), including shared HTTP/persistence
+contracts, transaction-compatible commands, atomic operation receipts, task and
+Person revisions, bounded reconciliation, encrypted local storage, conflict and
+sign-out/revocation behavior. The two corrections in the
+[planning review](../tasks/MOBILE_001_REVIEW.md) are included. Implementation and
+isolated synthetic backend/iOS/Android verification are authorized. Exact schema,
+locking, DTO fixtures and compatible native library versions are implementation
+details to freeze within this scope, not a repeat approval request.
+
+Prepare a bounded migration brief and coordinated ownership/check plan before
+launch. Keep at most three short-lived implementation worktrees. The shared
+mobile backend is a prerequisite for native API integration; migration need not
+wait on that backend when file/schema ownership is disjoint. A newly proposed
+migration contract is not accepted merely by approving Mobile 001.
+
+This does not authorize live FUB/customer-data processing, workspace activation,
+independent app distribution or a new deployment. Existing customer readiness
+gates remain. Record implementation and verification evidence separately from
+this approval and the already verified developer tooling.
+
+### D-075 — Reviewed 010e1 and coordinated implementation approved (2026-09-12)
+
+After the complete 010e1 specification, execution brief, READY review and parallel
+launch sequence were presented, the user replied **“010e1 is approved...”**.
+This accepts [SLICE_010e1.md](../specs/SLICE_010e1.md), its
+[brief](../tasks/SLICE_010e1_IMPL.md) and corrected publication/pagination contract.
+Implementation and isolated synthetic verification are authorized. D-074 already
+approves Mobile 001 backend and both native apps; neither scope needs repeat
+implementation approval.
+
+Execute the [coordinated launch](../plans/MOBILE_MIGRATION_PARALLEL_LAUNCH.md):
+mobile backend and 010e1 concurrently, then iOS and Android after backend
+integration, with at most three implementation worktrees. Local checkpoints and
+integration are used to supply a consistent approved base to dependent lanes.
+Publishing Git branches, refreshing shared development, app distribution and
+production deployment remain subsequent release scope. Live FUB/customer-data
+processing, delta application/repair, deletion inference and workspace activation
+remain outside this implementation.

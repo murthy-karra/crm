@@ -132,15 +132,6 @@ pub async fn receipt(
     Ok(())
 }
 
-pub async fn prepared_bytes(
-    conn: &mut PgConnection,
-    org: OrganizationId,
-    refresh: Uuid,
-) -> Result<i64, MigrationError> {
-    sqlx::query_scalar("SELECT COALESCE(sum(prepared_bytes),0)::bigint FROM migration_admitted_people_refresh_plan WHERE refresh_id=$1 AND organization_id=$2")
-        .bind(refresh).bind(org.0).fetch_one(&mut *conn).await.map_err(MigrationError::from)
-}
-
 /// Return the precise retained encrypted byte footprint owned by one refresh.
 /// The snapshot ledger is charged only when a refresh reservation settles, so
 /// retries cannot charge the same durable row twice.
@@ -152,12 +143,13 @@ pub async fn measured_bytes(
     sqlx::query_scalar(
         "SELECT
           COALESCE((SELECT sum(octet_length(inputs_nonce)+octet_length(inputs_ciphertext)+COALESCE(octet_length(digest),0)) FROM migration_admitted_people_refresh_plan WHERE refresh_id=$1 AND organization_id=$2),0)
-        + COALESCE((SELECT sum(octet_length(proposed_nonce)+octet_length(proposed_ciphertext)+octet_length(baseline_nonce)+octet_length(baseline_ciphertext)+octet_length(current_nonce)+octet_length(current_ciphertext)+octet_length(instructions_nonce)+octet_length(instructions_ciphertext)) FROM migration_admitted_people_refresh_item WHERE refresh_id=$1 AND organization_id=$2),0)
+        + COALESCE((SELECT sum(octet_length(source_key)+COALESCE(octet_length(source_id),0)+octet_length(proposed_nonce)+octet_length(proposed_ciphertext)+octet_length(baseline_nonce)+octet_length(baseline_ciphertext)+octet_length(current_nonce)+octet_length(current_ciphertext)+octet_length(instructions_nonce)+octet_length(instructions_ciphertext)) FROM migration_admitted_people_refresh_item WHERE refresh_id=$1 AND organization_id=$2),0)
         + COALESCE((SELECT sum(octet_length(value_nonce)+octet_length(value_ciphertext)) FROM migration_admitted_people_refresh_contact WHERE refresh_id=$1 AND organization_id=$2),0)
-        + COALESCE((SELECT sum(octet_length(before_nonce)+octet_length(before_ciphertext)+octet_length(after_nonce)+octet_length(after_ciphertext)) FROM migration_admitted_people_refresh_result WHERE refresh_id=$1 AND organization_id=$2),0)
+        + COALESCE((SELECT sum(octet_length(source_id)+octet_length(before_nonce)+octet_length(before_ciphertext)+octet_length(after_nonce)+octet_length(after_ciphertext)) FROM migration_admitted_people_refresh_result WHERE refresh_id=$1 AND organization_id=$2),0)
         + COALESCE((SELECT sum(octet_length(before_nonce)+octet_length(before_ciphertext)+octet_length(after_nonce)+octet_length(after_ciphertext)) FROM person_admitted_refresh_provenance WHERE refresh_id=$1 AND organization_id=$2),0)
         + COALESCE((SELECT sum(octet_length(nonce)+octet_length(ciphertext)) FROM migration_admitted_people_refresh_receipt WHERE refresh_id=$1 AND organization_id=$2),0)
-        + COALESCE((SELECT sum(octet_length(projection_nonce)+octet_length(projection_ciphertext)) FROM migration_admitted_people_refresh_baseline WHERE refresh_id=$1 AND organization_id=$2),0)",
+        + COALESCE((SELECT sum(octet_length(source_id)+octet_length(projection_nonce)+octet_length(projection_ciphertext)) FROM migration_admitted_people_refresh_baseline WHERE refresh_id=$1 AND organization_id=$2),0)
+        + COALESCE((SELECT octet_length(preparation_checkpoint_key) FROM migration_admitted_people_refresh WHERE id=$1 AND organization_id=$2),0)",
     )
     .bind(refresh)
     .bind(org.0)
@@ -256,11 +248,26 @@ pub async fn release(
     Ok(())
 }
 
-/// Transfer the encrypted baseline row's retained-byte ownership before its
-/// pointer moves to a successor refresh. The caller holds the baseline row and
-/// current refresh fence; this debits the predecessor run/snapshot/Org exactly
-/// once, including when predecessor and successor are the same refresh.
-pub async fn debit_baseline_owner(
+/// Settle a precise physical-footprint delta while releasing the reservation
+/// that fenced the mutation. A checkpoint replacement can shrink the owned
+/// footprint, so its debit must be propagated to the run, snapshot and Org.
+pub async fn release_delta(
+    conn: &mut PgConnection,
+    org: OrganizationId,
+    refresh: Uuid,
+    token: Uuid,
+    delta: i64,
+) -> Result<(), MigrationError> {
+    release(conn, org, refresh, token, delta.max(0)).await?;
+    if delta < 0 {
+        debit_retained_owner(conn, org, refresh, delta.saturating_abs()).await?;
+    }
+    Ok(())
+}
+
+/// Debit a physical row whose ownership is leaving this refresh. The caller
+/// holds the row and current refresh fence, so the run/snapshot/Org move once.
+pub async fn debit_retained_owner(
     conn: &mut PgConnection,
     org: OrganizationId,
     prior_refresh: Uuid,

@@ -446,7 +446,7 @@ pub(super) async fn report(f: &Fixture, parent: Uuid, people: Vec<Value>) -> Uui
 }
 
 async fn ledger_bytes(f: &Fixture, run: Uuid) -> i64 {
-    sqlx::query_scalar("SELECT COALESCE((SELECT sum(octet_length(inputs_nonce)+octet_length(inputs_ciphertext)+COALESCE(octet_length(digest),0)) FROM migration_admitted_people_refresh_plan WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(proposed_nonce)+octet_length(proposed_ciphertext)+octet_length(baseline_nonce)+octet_length(baseline_ciphertext)+octet_length(current_nonce)+octet_length(current_ciphertext)+octet_length(instructions_nonce)+octet_length(instructions_ciphertext)) FROM migration_admitted_people_refresh_item WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(value_nonce)+octet_length(value_ciphertext)) FROM migration_admitted_people_refresh_contact WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(before_nonce)+octet_length(before_ciphertext)+octet_length(after_nonce)+octet_length(after_ciphertext)) FROM migration_admitted_people_refresh_result WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(before_nonce)+octet_length(before_ciphertext)+octet_length(after_nonce)+octet_length(after_ciphertext)) FROM person_admitted_refresh_provenance WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(nonce)+octet_length(ciphertext)) FROM migration_admitted_people_refresh_receipt WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(projection_nonce)+octet_length(projection_ciphertext)) FROM migration_admitted_people_refresh_baseline WHERE refresh_id=$1),0)::bigint")
+    sqlx::query_scalar("SELECT COALESCE((SELECT sum(octet_length(inputs_nonce)+octet_length(inputs_ciphertext)+COALESCE(octet_length(digest),0)) FROM migration_admitted_people_refresh_plan WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(source_key)+COALESCE(octet_length(source_id),0)+octet_length(proposed_nonce)+octet_length(proposed_ciphertext)+octet_length(baseline_nonce)+octet_length(baseline_ciphertext)+octet_length(current_nonce)+octet_length(current_ciphertext)+octet_length(instructions_nonce)+octet_length(instructions_ciphertext)) FROM migration_admitted_people_refresh_item WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(value_nonce)+octet_length(value_ciphertext)) FROM migration_admitted_people_refresh_contact WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(source_id)+octet_length(before_nonce)+octet_length(before_ciphertext)+octet_length(after_nonce)+octet_length(after_ciphertext)) FROM migration_admitted_people_refresh_result WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(before_nonce)+octet_length(before_ciphertext)+octet_length(after_nonce)+octet_length(after_ciphertext)) FROM person_admitted_refresh_provenance WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(nonce)+octet_length(ciphertext)) FROM migration_admitted_people_refresh_receipt WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(source_id)+octet_length(projection_nonce)+octet_length(projection_ciphertext)) FROM migration_admitted_people_refresh_baseline WHERE refresh_id=$1),0) + COALESCE((SELECT octet_length(preparation_checkpoint_key) FROM migration_admitted_people_refresh WHERE id=$1),0)::bigint")
         .bind(run).fetch_one(&f.pool).await.unwrap()
 }
 
@@ -731,6 +731,114 @@ async fn mixed_eligible_and_held_cohort_settles_every_closed_outcome(migrator: P
         ledger_bytes(&f, run).await,
         "mixed settlement charges every result and provenance envelope exactly once"
     );
+}
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn checkpointed_preparation_charges_source_keys_and_checkpoint_exactly(migrator: PgPool) {
+    let admitted: Vec<Value> = (104..=154)
+        .map(|id| {
+            json!({
+                "id": id,
+                "firstName": format!("Admitted {id}"),
+                "stage": "Lead",
+                "assignedUserId": 3,
+            })
+        })
+        .collect();
+    let (f, parent, admission) = fixture_with_admission(&migrator, admitted).await;
+    let refreshed: Vec<Value> = (104..=154)
+        .map(|id| {
+            json!({
+                "id": id,
+                "firstName": format!("Refreshed {id}"),
+                "stage": "Lead",
+                "assignedUserId": 3,
+            })
+        })
+        .collect();
+    let report_id = report(&f, parent, refreshed).await;
+    let created = refresh::prepare(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &f.ctx,
+        refresh::PrepareAdmittedPeopleRefresh {
+            request_id: Uuid::new_v4(),
+            admission_id: admission,
+            report_id,
+        },
+        Some(&ReleaseReadiness::for_tests()),
+    )
+    .await
+    .unwrap();
+    let run = uuid(&created["refresh_id"]);
+    assert!(admitted_people_refresh_worker::run_once(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        Some(&ReleaseReadiness::for_tests()),
+    )
+    .await
+    .unwrap());
+    let checkpoint: String = sqlx::query_scalar(
+        "SELECT preparation_checkpoint_key FROM migration_admitted_people_refresh WHERE id=$1 AND organization_id=$2",
+    )
+    .bind(run)
+    .bind(f.org)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    assert!(
+        !checkpoint.is_empty(),
+        "the first 50-item turn must persist a checkpoint"
+    );
+    let stored: i64 = sqlx::query_scalar(
+        "SELECT retained_bytes FROM migration_admitted_people_refresh WHERE id=$1 AND organization_id=$2",
+    )
+    .bind(run)
+    .bind(f.org)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    assert_eq!(stored, ledger_bytes(&f, run).await);
+    for _ in 0..10 {
+        if refresh::detail(&f.pool, &f.key, &f.ctx, run).await.unwrap()["state"] == "ready" {
+            break;
+        }
+        assert!(admitted_people_refresh_worker::run_once(
+            &f.pool,
+            &f.key,
+            &f.policy,
+            Some(&ReleaseReadiness::for_tests()),
+        )
+        .await
+        .unwrap());
+    }
+    assert_eq!(
+        refresh::detail(&f.pool, &f.key, &f.ctx, run).await.unwrap()["state"],
+        "ready"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, String>(
+            "SELECT preparation_checkpoint_key FROM migration_admitted_people_refresh WHERE id=$1 AND organization_id=$2",
+        )
+        .bind(run)
+        .bind(f.org)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap(),
+        ""
+    );
+    let stored: i64 = sqlx::query_scalar(
+        "SELECT retained_bytes FROM migration_admitted_people_refresh WHERE id=$1 AND organization_id=$2",
+    )
+    .bind(run)
+    .bind(f.org)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    assert_eq!(stored, ledger_bytes(&f, run).await);
 }
 
 #[sqlx::test]

@@ -30,6 +30,7 @@ CREATE TABLE migration_people_admission (
 CREATE UNIQUE INDEX migration_people_admission_one_active ON migration_people_admission(organization_id,parent_import_id) WHERE state IN ('preparing','ready','queued','running','paused');
 CREATE INDEX migration_people_admission_claim ON migration_people_admission(created_at,id) WHERE state IN ('queued','running');
 CREATE INDEX migration_people_admission_list ON migration_people_admission(organization_id,parent_import_id,created_at DESC,id DESC);
+CREATE INDEX migration_people_admission_confirmed_boundary ON migration_people_admission(organization_id,parent_import_id,confirmed_completed_at DESC,created_at DESC,id DESC) WHERE confirmed_admission_plan_id IS NOT NULL;
 
 CREATE TABLE migration_people_admission_plan (
  id UUID PRIMARY KEY, admission_id UUID NOT NULL, organization_id UUID NOT NULL,

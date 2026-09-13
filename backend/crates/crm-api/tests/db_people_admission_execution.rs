@@ -21,7 +21,7 @@ fn number(v: &Value) -> i64 {
     v.as_str().unwrap().parse().unwrap()
 }
 
-async fn report(f: &import_support::Fixture, parent: Uuid, people: Vec<Value>) -> Uuid {
+pub(super) async fn report(f: &import_support::Fixture, parent: Uuid, people: Vec<Value>) -> Uuid {
     f.reader.set_records(Stream::People, people);
     let connection =
         sqlx::query("SELECT id,revision FROM migration_connection WHERE organization_id=$1")
@@ -94,7 +94,7 @@ async fn report(f: &import_support::Fixture, parent: Uuid, people: Vec<Value>) -
     id
 }
 
-async fn ready(f: &import_support::Fixture, parent: Uuid, people: Vec<Value>) -> Uuid {
+pub(super) async fn ready(f: &import_support::Fixture, parent: Uuid, people: Vec<Value>) -> Uuid {
     let report = report(f, parent, people).await;
     let value = people_admission::prepare(
         &f.pool,

@@ -43,7 +43,9 @@ async fn prepare_page(
     }
     let plan=if let Some(v)=sqlx::query_scalar::<_,Uuid>("SELECT id FROM migration_people_admission_plan WHERE admission_id=$1 AND organization_id=$2 AND state='building' ORDER BY revision DESC LIMIT 1 FOR UPDATE").bind(id).bind(org.0).fetch_optional(&mut *tx).await?{v}else{let p=Uuid::new_v4();let revision:i64=sqlx::query_scalar("SELECT COALESCE(max(revision),0)+1 FROM migration_people_admission_plan WHERE admission_id=$1 AND organization_id=$2").bind(id).bind(org.0).fetch_one(&mut *tx).await?;let input=s::seal(key,org,id,p,"inputs",&frozen)?;sqlx::query("INSERT INTO migration_people_admission_plan(id,admission_id,organization_id,revision,state,inputs_nonce,inputs_ciphertext) VALUES($1,$2,$3,$4,'building',$5,$6)").bind(p).bind(id).bind(org.0).bind(revision).bind(input.nonce.as_slice()).bind(input.ciphertext).execute(&mut *tx).await?;p};
     let checkpoint: String = run.get("preparation_checkpoint_key");
-    let rows=sqlx::query("SELECT source_key,source_id FROM migration_core_change_group WHERE report_id=$1 AND organization_id=$2 AND family='people' AND source_key>$3 ORDER BY source_key LIMIT 50").bind(run.get::<Uuid,_>("report_id")).bind(org.0).bind(&checkpoint).fetch_all(&mut *tx).await?;
+    // A qualified candidate may consume the entire 16 MiB raw-input budget,
+    // so one descriptor is the bounded preparation transaction unit.
+    let rows=sqlx::query("SELECT source_key,source_id FROM migration_core_change_group WHERE report_id=$1 AND organization_id=$2 AND family='people' AND source_key>$3 ORDER BY source_key LIMIT 1").bind(run.get::<Uuid,_>("report_id")).bind(org.0).bind(&checkpoint).fetch_all(&mut *tx).await?;
     if rows.is_empty() {
         let totals=sqlx::query("SELECT total_count,eligible_count,already_imported_count,already_admitted_count,excluded_original_count,held_count,intended_contact_count FROM migration_people_admission_plan WHERE id=$1 AND organization_id=$2").bind(plan).bind(org.0).fetch_one(&mut *tx).await?;
         let digest=Sha256::digest(serde_json::to_vec(&json!({"admission":id,"plan":plan,"total":totals.get::<i64,_>("total_count"),"eligible":totals.get::<i64,_>("eligible_count"),"already_imported":totals.get::<i64,_>("already_imported_count"),"already_admitted":totals.get::<i64,_>("already_admitted_count"),"excluded_original":totals.get::<i64,_>("excluded_original_count"),"held":totals.get::<i64,_>("held_count")})).map_err(|_|MigrationError::Crypto)?);
@@ -62,7 +64,7 @@ async fn prepare_page(
         let item = Uuid::new_v4();
         let target = Uuid::new_v4();
         let projection=record.as_ref().map(|v|json!({"first_name":v.0,"last_name":v.1,"stage_id":stage,"assigned_user_id":assignee})).unwrap_or(Value::Null);
-        let provenance = json!({"source_id":key_id,"original_snapshot_id":run.get::<Uuid,_>("original_snapshot_id"),"newer_snapshot_id":run.get::<Uuid,_>("newer_snapshot_id"),"coverage":"core_only_notes_tasks_metadata_history_deferred"});
+        let provenance = json!({"source_id":key_id,"source_capture_id":capture,"source_ordinal":ordinal,"original_snapshot_id":run.get::<Uuid,_>("original_snapshot_id"),"original_sequence":run.get::<i64,_>("original_sequence").to_string(),"newer_snapshot_id":run.get::<Uuid,_>("newer_snapshot_id"),"newer_sequence":run.get::<i64,_>("newer_sequence").to_string(),"coverage":"core_only_notes_tasks_metadata_history_deferred"});
         let p = s::seal(key, org, id, item, "projection", &projection)?;
         let e = s::seal(key, org, id, item, "provenance", &provenance)?;
         let bound =
@@ -173,7 +175,6 @@ async fn classify(
             Option<String>,
             Vec<super::import_source::ContactInput>,
         )>,
-        Option<Uuid>,
         Option<i32>,
         Option<Uuid>,
         Option<Uuid>,
@@ -195,9 +196,15 @@ async fn classify(
             None,
         ));
     }
-    let original =
-        source::retained_person(conn, key, org, run.get("original_snapshot_id"), source_id).await?;
-    if original.is_some() {
+    if source::original_contains(
+        conn,
+        org,
+        run.get("original_snapshot_id"),
+        run.get("original_sequence"),
+        source_id,
+    )
+    .await?
+    {
         return Ok((
             "excluded_original".into(),
             None,

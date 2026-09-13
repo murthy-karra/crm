@@ -19,7 +19,9 @@ fn statement(source: &str, prefix: &str) -> String {
     let start = source
         .find(&format!("\"{prefix}"))
         .expect("production SQL still present");
-    serde_json::Deserializer::from_str(&source[start..])
+    // Rust permits literal newlines in SQL strings; JSON needs them escaped.
+    let literal = source[start..].replace('\n', "\\n");
+    serde_json::Deserializer::from_str(&literal)
         .into_iter::<String>()
         .next()
         .unwrap()

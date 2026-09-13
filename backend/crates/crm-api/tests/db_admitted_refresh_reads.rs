@@ -139,6 +139,14 @@ async fn admission_scoped_http_reads_repreview_and_preparation_retry(migrator: P
     assert_eq!(second["state"], "ready");
     assert_eq!(second["plan"]["revision"], "2");
     assert_eq!(second["plan"]["counts"]["eligible"], "1");
+    let items = get(&f, &format!("/api/migrations/fub/admitted-people-refreshes/{id}/items")).await;
+    let item_id = items["items"][0]["id"].as_str().unwrap();
+    let comparison = get(&f, &format!("/api/migrations/fub/admitted-people-refreshes/{id}/items/{item_id}")).await;
+    for side in ["baseline", "current", "proposed"] {
+        assert_eq!(comparison[side]["stage_id"], f.lead_stage.to_string());
+        assert_eq!(comparison[side]["current_stage_label"], "Lead");
+        assert!(comparison[side]["current_assignee_label"].as_str().is_some_and(|value| !value.is_empty()));
+    }
     assert_eq!(
         refresh::repreview(
             &f.pool,

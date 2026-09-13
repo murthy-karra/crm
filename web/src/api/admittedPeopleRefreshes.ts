@@ -21,6 +21,7 @@ export interface RefreshItem {
 export interface RefreshProjection {
   first_name?: string | null; last_name?: string | null; stage_id?: string | null; assigned_user_id?: string | null
   contact_counts?: { email: string; phone: string }; truncated_fields?: string[]
+  current_stage_label?: string | null; current_assignee_label?: string | null
 }
 export interface RefreshItemDetail extends RefreshItem {
   plan_id: string; plan_revision: string; baseline: RefreshProjection; current: RefreshProjection; proposed: RefreshProjection

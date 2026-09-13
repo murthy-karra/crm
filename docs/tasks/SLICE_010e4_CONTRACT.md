@@ -89,6 +89,12 @@ contact UUID/order. Result/provenance snapshots are append-only. A baseline
 stores the result pointer/version and encrypted native projection; transferring
 that ownership precedes replacing the pointer.
 
+The item-detail projections retain exact stage/assignee IDs and may also return
+`current_stage_label` / `current_assignee_label`: current same-Organization catalog
+display hints, bounded to 256 characters each. The UI labels them as current,
+keeps identifiers inspectable, and never submits these hints as source evidence
+or substitutes them for the frozen mapping checks.
+
 The capability is `fub-admitted-people-refresh-v1`. Release readiness names
 `ADMITTED_PEOPLE_REFRESH_CAPABILITY`, `admitted_people_refresh_ready`, and
 `require_admitted_people_refresh`; the schema inventory requires all nine

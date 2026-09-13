@@ -17,7 +17,7 @@ function refresh(state: AdmittedPeopleRefresh['state'] = 'ready'): AdmittedPeopl
 const boundary = { snapshot_id: 'capture', capture_sequence: '123', profile_version: 'fub-core-v1', schema_version: 'schema', started_at: '2026-09-10T00:00:00Z', completed_at: '2026-09-10T01:00:00Z', streams: [] }
 const source = { id: 'report', parent_import_id: 'parent', state: 'completed', output_revision: 'output', created_at: '2026-09-12T00:00:00Z', inputs: { baseline: boundary, newer: { ...boundary, snapshot_id: 'newer' }, source_scope: 'unknown_identity', warnings: ['effective_access_not_proven'] } }
 function item(): RefreshItemDetail {
-  const baseline = { first_name: 'Synthetic <script>unsafe()</script>', last_name: 'Original', stage_id: 'stage', assigned_user_id: 'member', contact_counts: { email: '2', phone: '0' } }
+  const baseline = { first_name: 'Synthetic <script>unsafe()</script>', last_name: 'Original', stage_id: 'stage', assigned_user_id: 'member', current_stage_label: 'Qualified lead', current_assignee_label: 'Synthetic assignee', contact_counts: { email: '2', phone: '0' } }
   return { id: 'item', source_id: '9007199254740993123', person_id: 'person', disposition: 'eligible', settled_at: null, clear_counts: { names: '1', assignments: '1', contacts: '2' }, no_instruction: ['phones'], plan_id: 'plan', plan_revision: '2', baseline, current: baseline, proposed: { ...baseline, last_name: null, assigned_user_id: null, contact_counts: { email: '0', phone: '0' } } }
 }
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(yes => { resolve = yes }); return { promise, resolve } }
@@ -77,6 +77,7 @@ describe('Admitted People refresh workflow', () => {
     await setup({ handle: url => url.endsWith('/confirm') ? { refresh_id: 'refresh', state: 'queued' } : undefined })
     await choose('Saved Admitted People refresh', 'refresh'); button('Inspect Person preview').click(); await flushPromises()
     expect(document.body.textContent).toContain('Synthetic <script>unsafe()</script>'); expect(document.querySelector('script')).toBeNull()
+    expect(document.body.textContent).toContain('Qualified lead'); expect(document.body.textContent).toContain('Synthetic assignee'); expect(document.body.textContent).toContain('Inspect identifier');
     expect(document.body.textContent).toContain('Will clear'); expect(document.body.textContent).toContain('synthetic@example.test')
     expect(button('Review confirmation').disabled).toBe(true); await acknowledge(); button('Review confirmation').click(); await flushPromises()
     expect(writes()).toHaveLength(0); button('Confirm exact People plan').click(); await flushPromises()

@@ -603,6 +603,24 @@ pub async fn item(
     for side in ["baseline", "current", "proposed"] {
         value[side] = scalar_projection(projection(key, ctx, id, &row, side)?);
     }
+    // Labels are bounded current-catalog hints, never frozen source evidence or
+    // command inputs. Exact IDs remain in each immutable projection.
+    let ids = |field: &str| -> Vec<Uuid> {
+        ["baseline", "current", "proposed"]
+            .iter()
+            .filter_map(|side| value[*side][field].as_str().and_then(|v| Uuid::parse_str(v).ok()))
+            .collect()
+    };
+    let stages = sqlx::query("SELECT id,left(name,256) AS label FROM stage WHERE organization_id=$1 AND id=ANY($2)")
+        .bind(ctx.organization_id.0).bind(ids("stage_id")).fetch_all(&mut *tx).await?;
+    let assignees = sqlx::query("SELECT u.id,left(u.display_name,256) AS label FROM organization_membership m JOIN app_user u ON u.id=m.user_id WHERE m.organization_id=$1 AND u.id=ANY($2)")
+        .bind(ctx.organization_id.0).bind(ids("assigned_user_id")).fetch_all(&mut *tx).await?;
+    for side in ["baseline", "current", "proposed"] {
+        for (field, label, rows) in [("stage_id", "current_stage_label", &stages), ("assigned_user_id", "current_assignee_label", &assignees)] {
+            let id = value[side][field].as_str().and_then(|v| Uuid::parse_str(v).ok());
+            value[side][label] = json!(rows.iter().find(|row| Some(row.get::<Uuid,_>("id")) == id).map(|row| row.get::<String,_>("label")));
+        }
+    }
     finish(tx, value, SUMMARY_BYTES).await
 }
 pub async fn contacts(

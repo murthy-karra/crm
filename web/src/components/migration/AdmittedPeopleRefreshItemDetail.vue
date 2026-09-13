@@ -25,7 +25,13 @@ watch([() => props.refreshId, () => props.itemId, () => props.plan.id, () => pro
 function openField(side: typeof sides[number], field: string) { if (field === 'first_name' || field === 'last_name') selectedField.value = { side, field } }
 const sideLabel = { baseline: 'Last settled baseline', current: 'CRM at preview', proposed: 'Proposed after refresh' }
 const fields = ['first_name', 'last_name', 'stage_id', 'assigned_user_id'] as const
-function field(value: RefreshProjection, key: typeof fields[number]) { return value[key] === undefined ? 'Unavailable' : value[key] === null ? 'Empty / unassigned' : value[key] }
+function field(value: RefreshProjection, key: typeof fields[number]) {
+  if (value[key] === undefined) return 'Unavailable'
+  if (value[key] === null) return 'Empty / unassigned'
+  if (key === 'stage_id') return value.current_stage_label ?? 'Stage label unavailable'
+  if (key === 'assigned_user_id') return value.current_assignee_label ?? 'Assignee label unavailable'
+  return value[key]
+}
 function clears(key: typeof fields[number]) { const value = detail.data.value; return value && value.disposition === 'eligible' && value.baseline[key] != null && value.proposed[key] === null }
 </script>
 <template>
@@ -35,6 +41,9 @@ function clears(key: typeof fields[number]) { const value = detail.data.value; r
     aria-label="Frozen Person value comparison"
   >
     <template v-if="detail.data.value">
+      <p class="text-text-muted">
+        Stage and assignee labels reflect the current catalog. The exact identifiers remain fixed in this preview.
+      </p>
       <p
         v-if="['settled', 'settled_noop'].includes(detail.data.value.disposition)"
         class="text-text-muted"
@@ -67,6 +76,15 @@ function clears(key: typeof fields[number]) { const value = detail.data.value; r
                 >Will clear</strong>
               </dt><dd class="whitespace-pre-wrap break-all">
                 {{ field(detail.data.value[side], key) }}
+                <details
+                  v-if="(key === 'stage_id' || key === 'assigned_user_id') && detail.data.value[side][key]"
+                  class="mt-1 text-text-muted"
+                >
+                  <summary class="cursor-pointer">
+                    Inspect identifier
+                  </summary>
+                  {{ detail.data.value[side][key] }}
+                </details>
                 <template v-if="detail.data.value[side].truncated_fields?.includes(key)">
                   <p class="mt-1 text-text-muted">
                     Display prefix; the complete retained name is available in pages.

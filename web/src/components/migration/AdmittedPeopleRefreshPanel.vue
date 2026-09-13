@@ -19,7 +19,7 @@ const props = defineProps<{ refreshWorkspace: () => Promise<void> }>()
 const emit = defineEmits<{ reviewSnapshot: [snapshotId: string] }>()
 const access = useAdmittedPeopleRefreshAccess()
 const parentId = ref(''); const admissionId = ref(''); const reportId = ref(''); const refreshId = ref('')
-const parentPages = ref(['']); const reportPages = ref(['']); const refreshPages = ref([''])
+const parentPages = ref(['']); const admissionPages = ref(['']); const reportPages = ref(['']); const refreshPages = ref([''])
 const listEpoch = ref(0); const outputEpoch = ref(0)
 const pending = ref(false); const uncertain = ref(false); const actionError = ref('')
 const coverageAck = ref(false); const exclusionsAck = ref(false); const removalsAck = ref(false)
@@ -35,14 +35,14 @@ let disposed = false; let identityEpoch = 0; let authorityEpoch = 0; let selecti
 const busy = computed(() => pending.value || intent.value !== null)
 const parentsKey = computed(() => [...access.prefix.value, 'parents', parentPages.value.at(-1)])
 const parentKey = computed(() => [...access.prefix.value, 'parent', parentId.value])
-const admissionsKey = computed(() => [...access.prefix.value, 'admissions', parentId.value])
+const admissionsKey = computed(() => [...access.prefix.value, 'admissions', parentId.value, admissionPages.value.at(-1), listEpoch.value])
 const reportsKey = computed(() => [...access.prefix.value, 'reports', parentId.value, reportPages.value.at(-1), listEpoch.value])
 const listKey = computed(() => [...access.prefix.value, 'list', parentId.value, refreshPages.value.at(-1), listEpoch.value])
 const detailKey = computed(() => [...access.prefix.value, 'detail', refreshId.value])
 const reportKey = computed(() => [...access.prefix.value, 'report', current.value?.report_id ?? reportId.value])
 const parents = useQuery({ queryKey: parentsKey, enabled: access.enabled, retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(parentsKey.value, () => parentsKey.value, () => fetchImports(parentPages.value.at(-1) || undefined, signal)) })
 const parent = useQuery({ queryKey: parentKey, enabled: computed(() => access.enabled.value && !!parentId.value), retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(parentKey.value, () => parentKey.value, () => fetchImport(parentId.value, signal)) })
-const admissions = useQuery({ queryKey: admissionsKey, enabled: computed(() => access.enabled.value && !!parentId.value), retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(admissionsKey.value, () => admissionsKey.value, () => fetchPeopleAdmissions(parentId.value, undefined, signal)) })
+const admissions = useQuery({ queryKey: admissionsKey, enabled: computed(() => access.enabled.value && !!parentId.value), retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(admissionsKey.value, () => admissionsKey.value, () => fetchPeopleAdmissions(parentId.value, admissionPages.value.at(-1) || undefined, signal)) })
 const reports = useQuery({ queryKey: reportsKey, enabled: computed(() => access.enabled.value && !!parentId.value), retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(reportsKey.value, () => reportsKey.value, () => fetchCoreChangeReports(parentId.value, reportPages.value.at(-1) || undefined, signal)) })
 const firstRefreshPage = ref<Awaited<ReturnType<typeof fetchAdmittedPeopleRefreshes>> | null>(null)
 const listing = useQuery({ queryKey: listKey, enabled: computed(() => access.enabled.value && !!admissionId.value), retry: false, gcTime: 0, staleTime: Infinity, refetchOnWindowFocus: false, refetchOnReconnect: false, queryFn: ({ signal }) => access.read(listKey.value, () => listKey.value, async () => {
@@ -63,7 +63,7 @@ const canPrepare = computed(() => access.enabled.value && access.org.value?.work
 const canConfirm = computed(() => !!current.value?.actions.confirm && !!plan.value && plan.value.counts.eligible !== '0' && !expired.value && !!source.value && coverageAck.value && exclusionsAck.value && removalsAck.value && !busy.value)
 const errors = computed(() => [parents.error.value, parent.error.value, reports.error.value, listing.error.value, detail.error.value, report.error.value].filter(Boolean))
 function resetAcknowledgments() { coverageAck.value = false; exclusionsAck.value = false; removalsAck.value = false; confirmation.value = null }
-function resetLists() { firstRefreshPage.value = null; refreshPages.value = ['']; reportPages.value = ['']; listEpoch.value++ }
+function resetLists() { firstRefreshPage.value = null; refreshPages.value = ['']; admissionPages.value = ['']; reportPages.value = ['']; listEpoch.value++ }
 function deny() { access.denied.value = true; resetAcknowledgments(); void props.refreshWorkspace().catch(() => {}) }
 watch(parents.data, value => { if (access.enabled.value && !parentId.value) parentId.value = value?.imports.find(v => v.state === 'completed' && v.confirmed_plan_id)?.id ?? '' })
 watch(parentId, () => { selectionEpoch++; reportId.value = ''; refreshId.value = ''; resetLists(); resetAcknowledgments() }, { flush: 'sync' })
@@ -80,7 +80,7 @@ onBeforeUnmount(() => { disposed = true; clearInterval(timer); intent.value = nu
 function reload() {
   if (!access.enabled.value) return
   resetLists(); resetAcknowledgments(); outputEpoch.value++
-  for (const key of [parentsKey.value, parentKey.value, detailKey.value, reportKey.value]) void access.client.invalidateQueries({ queryKey: key, exact: true })
+  for (const key of [parentsKey.value, parentKey.value, admissionsKey.value, detailKey.value, reportKey.value]) void access.client.invalidateQueries({ queryKey: key, exact: true })
 }
 async function submit(value: Intent) {
   if (pending.value || !access.enabled.value || value.identity !== access.identity.value) return
@@ -129,12 +129,12 @@ function confirm() {
 <template>
   <Card
     class="mb-6 min-w-0"
-    data-testid="people-refresh-panel"
+    data-testid="admitted-people-refresh-panel"
   >
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h2 class="text-section font-medium">
-          Refresh imported People
+          Refresh later-admitted People
         </h2><p class="mt-1 max-w-3xl text-small text-text-muted">
           Review names, contacts, stage and assignment from a completed retained change report. Local changes are held for review. This workspace stays in migration review.
         </p>
@@ -218,6 +218,23 @@ function confirm() {
               </option>
             </select>
           </FormField>
+          <div class="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              :class="buttonClasses('ghost')"
+              :disabled="busy || admissionPages.length < 2 || admissions.isFetching.value"
+              @click="admissionPages.pop()"
+            >
+              Previous admission cohorts
+            </button><button
+              type="button"
+              :class="buttonClasses('ghost')"
+              :disabled="busy || !admissions.data.value?.next_cursor || admissions.isFetching.value"
+              @click="admissions.data.value?.next_cursor && admissionPages.push(admissions.data.value.next_cursor)"
+            >
+              More admission cohorts
+            </button>
+          </div>
         </div>
         <div class="min-w-0">
           <FormField

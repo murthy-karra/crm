@@ -111,16 +111,14 @@ async fn execution_mapping_target_valid(
     .flatten()
     .ok_or(MigrationError::SourceNotEligible)?;
     let rows = sqlx::query(
-        "SELECT m.* FROM migration_import_mapping m JOIN migration_people_admission_result ar ON ar.id=$5 AND ar.organization_id=m.organization_id
-          JOIN migration_people_admission_item ai ON ai.id=ar.item_id AND ai.admission_id=ar.admission_id AND ai.organization_id=ar.organization_id
-          WHERE m.plan_id=$1 AND m.organization_id=$2 AND m.kind=$3 AND m.target_id=$4 AND m.qualified=true
-            AND m.id=CASE WHEN $3='stage' THEN ai.stage_mapping_id ELSE ai.assignee_mapping_id END ORDER BY m.id",
+        "SELECT * FROM migration_import_mapping
+          WHERE plan_id=$1 AND organization_id=$2 AND kind=$3 AND target_id=$4
+            AND qualified=true ORDER BY id",
     )
     .bind(refresh.get::<Uuid, _>("parent_plan_id"))
     .bind(org.0)
     .bind(kind)
     .bind(target)
-    .bind(item.get::<Option<Uuid>, _>("admission_result_id"))
     .fetch_all(&mut *conn)
     .await?;
     if rows.is_empty() {
@@ -586,19 +584,21 @@ async fn prepare(
         let mut b: Value = super::people_admission_store::open(key, org, row.get("admission_id"), row.get("admission_item_id"), "projection", &row.get::<Vec<u8>, _>("projection_nonce"), &row.get::<Vec<u8>, _>("projection_ciphertext"))?;
         let owned = sqlx::query("SELECT id,kind,import_order,value_nonce,value_ciphertext FROM migration_people_admission_contact WHERE admission_id=$1 AND item_id=$2 AND organization_id=$3 ORDER BY kind,import_order")
             .bind(row.get::<Uuid,_>("admission_id")).bind(row.get::<Uuid,_>("admission_item_id")).bind(org.0).fetch_all(&mut *conn).await?;
-        let contacts = b["contacts"].as_array_mut().ok_or(MigrationError::Crypto)?;
-        if contacts.len() != owned.len() {
+        let contacts = b.as_object_mut().ok_or(MigrationError::Crypto)?
+            .entry("contacts").or_insert_with(|| Value::Array(Vec::new()))
+            .as_array_mut().ok_or(MigrationError::Crypto)?;
+        if !contacts.is_empty() {
             return Err(MigrationError::Crypto);
         }
-        for (contact, owned) in contacts.iter_mut().zip(owned) {
-            if contact["kind"] != owned.get::<String, _>("kind")
-                || contact["import_order"] != owned.get::<i32, _>("import_order")
-            {
-                return Err(MigrationError::Crypto);
-            }
+        for owned in owned {
             let input: super::import_source::ContactInput = super::people_admission_store::open(key, org, row.get("admission_id"), owned.get("id"), "contact", &owned.get::<Vec<u8>, _>("value_nonce"), &owned.get::<Vec<u8>, _>("value_ciphertext"))?;
-            if contact["value"] != json!(input.value) || contact["normalized_value"] != json!(input.normalized_value) { return Err(MigrationError::Crypto); }
-            contact["id"] = json!(owned.get::<Uuid, _>("id"));
+            contacts.push(json!({
+                "id": owned.get::<Uuid, _>("id"),
+                "kind": owned.get::<String, _>("kind"),
+                "value": input.value,
+                "normalized_value": input.normalized_value,
+                "import_order": owned.get::<i32, _>("import_order"),
+            }));
         }
         // A later settled result is the only successor to original import
         // provenance. Current native state is deliberately absent from B.
@@ -633,7 +633,7 @@ async fn prepare(
                 plan,
                 item,
                 &source_id,
-                row.get("id"),
+                row.get("admission_result_id"),
                 row.get("person_id"),
                 "held_target_missing",
                 &b,
@@ -659,7 +659,7 @@ async fn prepare(
                 plan,
                 item,
                 &source_id,
-                row.get("id"),
+                row.get("admission_result_id"),
                 row.get("person_id"),
                 "not_seen_again",
                 &b,
@@ -690,7 +690,7 @@ async fn prepare(
                     plan,
                     item,
                     &source_id,
-                    row.get("id"),
+                    row.get("admission_result_id"),
                     row.get("person_id"),
                     "held_evidence_gap",
                     &b,
@@ -726,7 +726,7 @@ async fn prepare(
                     plan,
                     item,
                     &source_id,
-                    row.get("id"),
+                    row.get("admission_result_id"),
                     row.get("person_id"),
                     "held_mapping_gap",
                     &b,
@@ -766,7 +766,7 @@ async fn prepare(
                     plan,
                     item,
                     &source_id,
-                    row.get("id"),
+                    row.get("admission_result_id"),
                     row.get("person_id"),
                     "held_mapping_gap",
                     &b,
@@ -813,7 +813,7 @@ async fn prepare(
             plan,
             item,
             &source_id,
-            row.get("id"),
+            row.get("admission_result_id"),
             row.get("person_id"),
             disposition,
             &b,

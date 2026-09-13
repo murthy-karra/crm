@@ -5,7 +5,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use sqlx::{PgConnection, PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
 
-pub const ENGINE: &str = "fub-admitted-admitted-people-refresh-v1";
+pub const ENGINE: &str = "fub-admitted-people-refresh-v1";
 pub const ITEM_LIMIT: i64 = 64 * 1024 * 1024;
 pub const CAPTURE_LIMIT: i64 = 16 * 1024 * 1024;
 

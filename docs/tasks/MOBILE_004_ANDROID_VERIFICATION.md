@@ -175,14 +175,17 @@ operation ID, one total unchanged outbox envelope, and the visible waiting
 receipt.
 
 ```sh
-./gradlew assembleMobile004upgradeqaDebugAndroidTest --no-daemon \
-  -PCRM_MOBILE004_ANDROID_BUILD_DIR=/private/tmp/crm-mobile004-010e4/android/followup-round2-build
-adb -s emulator-5554 install -r CrmField-mobile004upgradeqa-debug-androidTest.apk
+./gradlew assembleMobile004upgradeqaDebug assembleMobile004upgradeqaDebugAndroidTest --no-daemon \
+  -PCRM_MOBILE004_ANDROID_BUILD_DIR=/private/tmp/crm-mobile004-010e4/android/followup-round3-build
+adb -s emulator-5554 install -r \
+  /private/tmp/crm-mobile004-010e4/android/followup-round3-build/outputs/apk/mobile004upgradeqa/debug/CrmField-mobile004upgradeqa-debug.apk
+adb -s emulator-5554 install -r \
+  /private/tmp/crm-mobile004-010e4/android/followup-round3-build/outputs/apk/androidTest/mobile004upgradeqa/debug/CrmField-mobile004upgradeqa-debug-androidTest.apk
 adb -s emulator-5554 shell '
   (am instrument -w -r -e class \
     org.crm.field.Mobile004StageFollowupUiTest#baselineStageFollowupIsExplicitlySavedWithoutASecondOutboxOperation \
     org.crm.field.mobile004upgradeqa.test/androidx.test.runner.AndroidJUnitRunner \
-    > /data/local/tmp/mobile004-followup-round2.log 2>&1) &'
+    > /data/local/tmp/mobile004-followup-round3.log 2>&1) &'
 ```
 
 The initial direct test invocation failed before execution because Kotlin inferred
@@ -192,3 +195,14 @@ an ordinary `Unit` test body, rebuilt, and the actual emulator run passed
 `OK (1 test)` in 36.858 seconds. The retained device result was copied to
 `/private/tmp/crm-mobile004-010e4/android/followup-round2-ui.log`; the matching
 build log is `/private/tmp/crm-mobile004-010e4/android/followup-round2-build.log`.
+
+A final clean-draft guard disables **Save follow-up draft** while the selection is
+dirty. This prevents a failed changed-selection autosave from reusing an older
+saved draft and reporting a false save; the user must first establish the
+current CAS draft. The initial cached-stage-A case remains clean and actionable.
+For the final regression based on `5a683d5`, the target
+`CrmField-mobile004upgradeqa-debug.apk` and its test APK were both installed with `adb install -r` using the exact paths
+above, preserving the dedicated upgrade-QA store. The focused rerun passed
+`OK (1 test)` in 36.391 seconds; its device result is
+`/private/tmp/crm-mobile004-010e4/android/followup-round3-ui.log` and its build
+log is `/private/tmp/crm-mobile004-010e4/android/followup-round3-build.log`.

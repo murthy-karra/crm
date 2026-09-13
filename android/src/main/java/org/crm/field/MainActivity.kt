@@ -1495,7 +1495,7 @@ internal fun StageComposer(
                             }
                         }
                     },
-                    enabled = loaded && !saving && selectedStage.isNotEmpty() && catalog.isNotEmpty(),
+                    enabled = loaded && !dirty && !saving && selectedStage.isNotEmpty() && catalog.isNotEmpty(),
                     modifier = Modifier.testTag("stage-save-followup"),
                 ) { Text("Save follow-up draft") }
             else

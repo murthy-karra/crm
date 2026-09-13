@@ -93,7 +93,7 @@ async fn execution_mapping_target_valid(
     refresh: &sqlx::postgres::PgRow,
     item: &sqlx::postgres::PgRow,
     kind: &str,
-    target: Uuid,
+    target: Option<Uuid>,
 ) -> Result<bool, MigrationError> {
     // The item carries an immutable original import result. Re-open approved
     // mapping evidence and compare its frozen identity with the live target;
@@ -121,7 +121,7 @@ async fn execution_mapping_target_valid(
     let mapping = sqlx::query(
         "SELECT * FROM migration_import_mapping
           WHERE id=$1 AND plan_id=$2 AND organization_id=$3 AND kind=$4
-            AND target_id=$5 AND qualified=true LIMIT 1",
+            AND target_id IS NOT DISTINCT FROM $5 AND qualified=true LIMIT 1",
     )
     .bind(binding)
     .bind(refresh.get::<Uuid, _>("parent_plan_id"))
@@ -133,8 +133,8 @@ async fn execution_mapping_target_valid(
     let Some(mapping) = mapping else {
         return Ok(false);
     };
-    let live = match kind {
-        "stage" => json!(sqlx::query_scalar::<_, Option<String>>(
+    let live = match (kind, target) {
+        ("stage", Some(target)) => json!(sqlx::query_scalar::<_, Option<String>>(
             "SELECT name FROM stage WHERE organization_id=$1 AND id=$2",
         )
         .bind(org.0)
@@ -142,7 +142,7 @@ async fn execution_mapping_target_valid(
         .fetch_optional(&mut *conn)
         .await?
         .flatten()),
-        "assignee" => json!(sqlx::query_scalar::<_, Option<String>>(
+        ("assignee", Some(target)) => json!(sqlx::query_scalar::<_, Option<String>>(
             "SELECT u.email FROM organization_membership m
               JOIN app_user u ON u.id=m.user_id
               WHERE m.organization_id=$1 AND m.user_id=$2 AND m.status='active'",
@@ -152,12 +152,13 @@ async fn execution_mapping_target_valid(
         .fetch_optional(&mut *conn)
         .await?
         .flatten()),
+        ("assignee", None) => Value::Null,
         _ => return Ok(false),
     };
     let disposition: String = mapping.get("disposition");
     if !matches!(
         (kind, disposition.as_str()),
-        ("stage", "existing" | "create") | ("assignee", "member")
+        ("stage", "existing" | "create") | ("assignee", "member") | ("assignee", "unassigned")
     ) {
         return Ok(false);
     }
@@ -171,7 +172,11 @@ async fn execution_mapping_target_valid(
         &mapping.get::<Vec<u8>, _>("nonce"),
         &mapping.get::<Vec<u8>, _>("ciphertext"),
     )?;
-    Ok(frozen["target"][if kind == "stage" { "name" } else { "email" }] == live)
+    Ok(if target.is_none() {
+        disposition == "unassigned" && frozen["target"].is_null()
+    } else {
+        frozen["target"][if kind == "stage" { "name" } else { "email" }] == live
+    })
 }
 
 async fn execution_evidence_valid(
@@ -214,26 +219,30 @@ async fn execution_evidence_valid(
         return Ok(false);
     }
     match source::retained_person(conn, key, org, refresh.get("newer_snapshot_id"), &source_id)
-        .await?
+        .await
     {
-        source::RetainedPerson::Present(record, capture, ordinal) => {
-            let semantic = crypto::snapshot_hmac(
-                key,
-                org,
-                &format!(
-                    "semantic:{}",
-                    super::snapshot_source::Stream::People.representation()
-                ),
-                &record.canonical,
-            );
-            Ok(
-                item.get::<Option<Uuid>, _>("source_capture_id") == Some(capture)
-                    && item.get::<Option<i32>, _>("source_ordinal") == Some(ordinal)
-                    && item.get::<Option<Vec<u8>>, _>("source_semantic_hmac")
-                        == Some(semantic.to_vec()),
-            )
-        }
-        source::RetainedPerson::Missing | source::RetainedPerson::EvidenceGap => Ok(false),
+        Err(MigrationError::SourceNotEligible) => Ok(false),
+        Err(error) => Err(error),
+        Ok(value) => match value {
+            source::RetainedPerson::Present(record, capture, ordinal) => {
+                let semantic = crypto::snapshot_hmac(
+                    key,
+                    org,
+                    &format!(
+                        "semantic:{}",
+                        super::snapshot_source::Stream::People.representation()
+                    ),
+                    &record.canonical,
+                );
+                Ok(
+                    item.get::<Option<Uuid>, _>("source_capture_id") == Some(capture)
+                        && item.get::<Option<i32>, _>("source_ordinal") == Some(ordinal)
+                        && item.get::<Option<Vec<u8>>, _>("source_semantic_hmac")
+                            == Some(semantic.to_vec()),
+                )
+            }
+            source::RetainedPerson::Missing | source::RetainedPerson::EvidenceGap => Ok(false),
+        },
     }
 }
 
@@ -667,22 +676,13 @@ async fn prepare(
         last_source = source_id.clone();
         let admission_id: Uuid = row.get("admission_id");
         let admission_item_id: Uuid = row.get("admission_item_id");
-        let admission_payload_bytes: i64 = sqlx::query_scalar(
-            "SELECT octet_length(ai.projection_nonce)+octet_length(ai.projection_ciphertext)
-                + COALESCE((SELECT sum(octet_length(c.value_nonce)+octet_length(c.value_ciphertext))
-                    FROM migration_people_admission_contact c
-                   WHERE c.admission_id=ai.admission_id AND c.item_id=ai.id
-                     AND c.organization_id=ai.organization_id),0)
-               FROM migration_people_admission_item ai
-              WHERE ai.id=$1 AND ai.admission_id=$2 AND ai.organization_id=$3",
-        )
-        .bind(admission_item_id)
-        .bind(admission_id)
-        .bind(org.0)
-        .fetch_one(&mut *conn)
-        .await?;
-        let prior_bytes: i64 = sqlx::query_scalar(
-            "SELECT COALESCE(octet_length(projection_nonce)+octet_length(projection_ciphertext),0)
+        // A successor's B is the settled baseline, never the original
+        // admission payload.  Select that branch before reading any encrypted
+        // admission projection or contact rows: loading both is both wasteful
+        // and could reject two separately valid 40 MiB payloads.
+        let previous = sqlx::query(
+            "SELECT refresh_id,projection_row_id,projection_nonce,projection_ciphertext,
+                    (octet_length(projection_nonce)+octet_length(projection_ciphertext))::bigint AS sealed_bytes
                FROM migration_admitted_people_refresh_baseline
               WHERE organization_id=$1 AND admission_id=$2 AND source_id=$3",
         )
@@ -690,11 +690,92 @@ async fn prepare(
         .bind(admission_id)
         .bind(&source_id)
         .fetch_optional(&mut *conn)
-        .await?
-        .unwrap_or(0);
-        if admission_payload_bytes.saturating_add(prior_bytes) > s::ITEM_LIMIT {
-            return Err(MigrationError::StorageLimit);
-        }
+        .await?;
+        let b: Value = if let Some(previous) = previous {
+            if previous.get::<i64, _>("sealed_bytes") > s::ITEM_LIMIT {
+                return Err(MigrationError::StorageLimit);
+            }
+            s::open(
+                key,
+                org,
+                previous.get("refresh_id"),
+                previous.get("projection_row_id"),
+                "last-baseline",
+                &previous.get::<Vec<u8>, _>("projection_nonce"),
+                &previous.get::<Vec<u8>, _>("projection_ciphertext"),
+            )?
+        } else {
+            let admission_payload_bytes: i64 = sqlx::query_scalar(
+                "SELECT octet_length(ai.projection_nonce)+octet_length(ai.projection_ciphertext)
+                + COALESCE((SELECT sum(octet_length(c.value_nonce)+octet_length(c.value_ciphertext))
+                    FROM migration_people_admission_contact c
+                   WHERE c.admission_id=ai.admission_id AND c.item_id=ai.id
+                     AND c.organization_id=ai.organization_id),0)
+               FROM migration_people_admission_item ai
+              WHERE ai.id=$1 AND ai.admission_id=$2 AND ai.organization_id=$3",
+            )
+            .bind(admission_item_id)
+            .bind(admission_id)
+            .bind(org.0)
+            .fetch_one(&mut *conn)
+            .await?;
+            if admission_payload_bytes > s::ITEM_LIMIT {
+                return Err(MigrationError::StorageLimit);
+            }
+            let projection = sqlx::query("SELECT projection_nonce,projection_ciphertext FROM migration_people_admission_item WHERE id=$1 AND admission_id=$2 AND organization_id=$3")
+            .bind(admission_item_id).bind(admission_id).bind(org.0).fetch_one(&mut *conn).await?;
+            // B is the exact encrypted admission projection plus committed contact
+            // UUIDs. It is never reconstructed from today's native Person state.
+            let mut b: Value = super::people_admission_store::open(
+                key,
+                org,
+                admission_id,
+                admission_item_id,
+                "projection",
+                &projection.get::<Vec<u8>, _>("projection_nonce"),
+                &projection.get::<Vec<u8>, _>("projection_ciphertext"),
+            )?;
+            let owned = sqlx::query("SELECT id,kind,import_order,value_nonce,value_ciphertext FROM migration_people_admission_contact WHERE admission_id=$1 AND item_id=$2 AND organization_id=$3 ORDER BY kind,import_order")
+            .bind(admission_id).bind(admission_item_id).bind(org.0).fetch_all(&mut *conn).await?;
+            let contacts = b
+                .as_object_mut()
+                .ok_or(MigrationError::Crypto)?
+                .entry("contacts")
+                .or_insert_with(|| Value::Array(Vec::new()))
+                .as_array_mut()
+                .ok_or(MigrationError::Crypto)?;
+            if !contacts.is_empty() {
+                return Err(MigrationError::Crypto);
+            }
+            for owned in owned {
+                let input: super::import_source::ContactInput =
+                    super::people_admission_store::open(
+                        key,
+                        org,
+                        admission_id,
+                        owned.get("id"),
+                        "contact",
+                        &owned.get::<Vec<u8>, _>("value_nonce"),
+                        &owned.get::<Vec<u8>, _>("value_ciphertext"),
+                    )?;
+                contacts.push(json!({
+                    "id": owned.get::<Uuid, _>("id"),
+                    "kind": owned.get::<String, _>("kind"),
+                    "value": input.value,
+                    "normalized_value": input.normalized_value,
+                    "import_order": owned.get::<i32, _>("import_order"),
+                }));
+            }
+            // Seed only once from original executable provenance.
+            let sealed_baseline = s::seal(key, org, id, item, "last-baseline", &b)?;
+            let baseline_bytes = sealed_bytes(&sealed_baseline);
+            let baseline_inserted = sqlx::query("INSERT INTO migration_admitted_people_refresh_baseline(organization_id,admission_id,source_id,person_id,refresh_id,admission_result_id,projection_row_id,projection_nonce,projection_ciphertext) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(organization_id,admission_id,source_id) DO NOTHING")
+            .bind(org.0).bind(admission_id).bind(&source_id).bind(row.get::<Uuid,_>("person_id")).bind(id).bind(row.get::<Uuid,_>("admission_result_id")).bind(item).bind(sealed_baseline.nonce.as_slice()).bind(sealed_baseline.ciphertext).execute(&mut *conn).await?.rows_affected();
+            if baseline_inserted == 1 {
+                sqlx::query("UPDATE migration_admitted_people_refresh_plan SET prepared_bytes=prepared_bytes+$3 WHERE id=$1 AND organization_id=$2").bind(plan).bind(org.0).bind(baseline_bytes).execute(&mut *conn).await?;
+            }
+            b
+        };
         let identity_bound: bool = sqlx::query_scalar(
             "SELECT EXISTS(SELECT 1 FROM migration_import_identity mi
               WHERE mi.organization_id=$1 AND mi.source_account_id=$2
@@ -712,72 +793,27 @@ async fn prepare(
         .fetch_one(&mut *conn)
         .await?;
         if !identity_bound {
-            return Err(MigrationError::SourceNotEligible);
-        }
-        let projection = sqlx::query("SELECT projection_nonce,projection_ciphertext FROM migration_people_admission_item WHERE id=$1 AND admission_id=$2 AND organization_id=$3")
-            .bind(admission_item_id).bind(admission_id).bind(org.0).fetch_one(&mut *conn).await?;
-        // B is the exact encrypted admission projection plus committed contact
-        // UUIDs. It is never reconstructed from today's native Person state.
-        let mut b: Value = super::people_admission_store::open(
-            key,
-            org,
-            admission_id,
-            admission_item_id,
-            "projection",
-            &projection.get::<Vec<u8>, _>("projection_nonce"),
-            &projection.get::<Vec<u8>, _>("projection_ciphertext"),
-        )?;
-        let owned = sqlx::query("SELECT id,kind,import_order,value_nonce,value_ciphertext FROM migration_people_admission_contact WHERE admission_id=$1 AND item_id=$2 AND organization_id=$3 ORDER BY kind,import_order")
-            .bind(admission_id).bind(admission_item_id).bind(org.0).fetch_all(&mut *conn).await?;
-        let contacts = b
-            .as_object_mut()
-            .ok_or(MigrationError::Crypto)?
-            .entry("contacts")
-            .or_insert_with(|| Value::Array(Vec::new()))
-            .as_array_mut()
-            .ok_or(MigrationError::Crypto)?;
-        if !contacts.is_empty() {
-            return Err(MigrationError::Crypto);
-        }
-        for owned in owned {
-            let input: super::import_source::ContactInput = super::people_admission_store::open(
+            held += 1;
+            insert_item(
+                conn,
                 key,
                 org,
-                admission_id,
-                owned.get("id"),
-                "contact",
-                &owned.get::<Vec<u8>, _>("value_nonce"),
-                &owned.get::<Vec<u8>, _>("value_ciphertext"),
-            )?;
-            contacts.push(json!({
-                "id": owned.get::<Uuid, _>("id"),
-                "kind": owned.get::<String, _>("kind"),
-                "value": input.value,
-                "normalized_value": input.normalized_value,
-                "import_order": owned.get::<i32, _>("import_order"),
-            }));
-        }
-        // A later settled result is the only successor to original import
-        // provenance. Current native state is deliberately absent from B.
-        let previous=sqlx::query("SELECT refresh_id,projection_row_id,projection_nonce,projection_ciphertext FROM migration_admitted_people_refresh_baseline WHERE organization_id=$1 AND admission_id=$2 AND source_id=$3").bind(org.0).bind(admission_id).bind(&source_id).fetch_optional(&mut *conn).await?;
-        if let Some(previous) = previous {
-            b = s::open(
-                key,
-                org,
-                previous.get("refresh_id"),
-                previous.get("projection_row_id"),
-                "last-baseline",
-                &previous.get::<Vec<u8>, _>("projection_nonce"),
-                &previous.get::<Vec<u8>, _>("projection_ciphertext"),
-            )?;
-        }
-        // Seed only once from original executable provenance.
-        let sealed_baseline = s::seal(key, org, id, item, "last-baseline", &b)?;
-        let baseline_bytes = sealed_bytes(&sealed_baseline);
-        let baseline_inserted = sqlx::query("INSERT INTO migration_admitted_people_refresh_baseline(organization_id,admission_id,source_id,person_id,refresh_id,admission_result_id,projection_row_id,projection_nonce,projection_ciphertext) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(organization_id,admission_id,source_id) DO NOTHING")
-            .bind(org.0).bind(admission_id).bind(&source_id).bind(row.get::<Uuid,_>("person_id")).bind(id).bind(row.get::<Uuid,_>("admission_result_id")).bind(item).bind(sealed_baseline.nonce.as_slice()).bind(sealed_baseline.ciphertext).execute(&mut *conn).await?.rows_affected();
-        if baseline_inserted == 1 {
-            sqlx::query("UPDATE migration_admitted_people_refresh_plan SET prepared_bytes=prepared_bytes+$3 WHERE id=$1 AND organization_id=$2").bind(plan).bind(org.0).bind(baseline_bytes).execute(&mut *conn).await?;
+                id,
+                plan,
+                item,
+                &source_id,
+                row.get("admission_result_id"),
+                row.get("person_id"),
+                "held_evidence_gap",
+                &b,
+                &json!({}),
+                &json!({}),
+                None,
+                None,
+                &[],
+            )
+            .await?;
+            continue;
         }
         let native_contact_bytes: i64 = sqlx::query_scalar("SELECT COALESCE(sum(octet_length(value)+octet_length(normalized_value)+128),0) FROM contact_method WHERE person_id=$1 AND organization_id=$2")
             .bind(row.get::<Option<Uuid>,_>("person_id")).bind(org.0).fetch_one(&mut *conn).await?;
@@ -810,7 +846,35 @@ async fn prepare(
         };
         let c = json!({"first_name":native.get::<Option<String>,_>("first_name"),"last_name":native.get::<Option<String>,_>("last_name"),"stage_id":native.get::<Uuid,_>("stage_id"),"assigned_user_id":native.get::<Option<Uuid>,_>("assigned_user_id"),"contacts":native.get::<Value,_>("contacts")});
         let newer =
-            source::retained_person(conn, key, org, r.get("newer_snapshot_id"), &source_id).await?;
+            match source::retained_person(conn, key, org, r.get("newer_snapshot_id"), &source_id)
+                .await
+            {
+                Err(MigrationError::SourceNotEligible) => {
+                    held += 1;
+                    insert_item(
+                        conn,
+                        key,
+                        org,
+                        id,
+                        plan,
+                        item,
+                        &source_id,
+                        row.get("admission_result_id"),
+                        row.get("person_id"),
+                        "held_evidence_gap",
+                        &b,
+                        &c,
+                        &json!({}),
+                        None,
+                        None,
+                        &[],
+                    )
+                    .await?;
+                    continue;
+                }
+                Err(error) => return Err(error),
+                Ok(value) => value,
+            };
         let (newer, capture, ordinal) = match newer {
             source::RetainedPerson::Missing => {
                 held += 1;
@@ -1251,14 +1315,33 @@ async fn execute_noop(
                 .as_str()
                 .and_then(|v| Uuid::parse_str(v).ok());
             let stage_ok = disposition != "held_stale"
-                && execution_mapping_target_valid(conn, key, org, r, &item, "stage", target_stage)
-                    .await?;
-            let assignee_ok = match target_assignee {
-                Some(user) => {
-                    execution_mapping_target_valid(conn, key, org, r, &item, "assignee", user)
-                        .await?
-                }
-                None => true,
+                && execution_mapping_target_valid(
+                    conn,
+                    key,
+                    org,
+                    r,
+                    &item,
+                    "stage",
+                    Some(target_stage),
+                )
+                .await?;
+            let assignee_ok = if target_assignee.is_some()
+                || item.get::<Option<Uuid>, _>("assignee_mapping_id").is_some()
+            {
+                execution_mapping_target_valid(
+                    conn,
+                    key,
+                    org,
+                    r,
+                    &item,
+                    "assignee",
+                    target_assignee,
+                )
+                .await?
+            } else {
+                // Explicit clear/no instruction has no selected mapping.  Its
+                // native value is still fenced by the immutable C comparison.
+                true
             };
             if !stage_ok || !assignee_ok {
                 disposition = "held_stale";

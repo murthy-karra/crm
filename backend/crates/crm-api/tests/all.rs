@@ -347,6 +347,7 @@ mod db_history_timeline_compat;
 mod db_admitted_people_refresh_execution;
 mod db_admitted_people_refresh_ui_fixture;
 mod db_admitted_refresh_availability;
+mod db_admitted_refresh_commit_proof;
 #[cfg(feature = "perf-harness")]
 mod db_admitted_refresh_perf;
 mod db_admitted_refresh_reads;

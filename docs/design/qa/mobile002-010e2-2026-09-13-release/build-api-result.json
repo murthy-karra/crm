@@ -1,0 +1,32 @@
+{
+  "command": [
+    "cargo",
+    "build",
+    "--manifest-path",
+    "backend/Cargo.toml",
+    "--target-dir",
+    "/private/tmp/crm-mobile010e2-release-enuz4h9k/cargo-target",
+    "-p",
+    "crm-api",
+    "--bin",
+    "crm-api",
+    "--bin",
+    "crm-admin",
+    "--bin",
+    "migrate",
+    "--locked"
+  ],
+  "cwd": "/Users/karrad/projects/crm",
+  "exit_code": 0,
+  "started_at": "2026-09-13T07:39:03.762694Z",
+  "completed_at": "2026-09-13T07:39:52.316423Z",
+  "elapsed_seconds": 48.554,
+  "revision": "9d04755e405848cb06a8e4c135793d9994176648",
+  "log_sha256": "39fb5645e03250d6e30bbbb63972d32d0b77053d39e452176fbc785f753d9962",
+  "source_manifest_sha256": "004fe3fc604421b496a3fe45f3b44e235472e0a2ead7994d5246f5a7766a6ee1",
+  "explicit_environment": {
+    "SQLX_OFFLINE": "true",
+    "CARGO_TARGET_DIR": "/private/tmp/crm-mobile010e2-release-enuz4h9k/cargo-target"
+  },
+  "database_url_removed": true
+}

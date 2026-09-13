@@ -1,0 +1,24 @@
+{
+  "revision": "9d04755e405848cb06a8e4c135793d9994176648",
+  "observed_at": "2026-09-13T07:45:48.473852+00:00",
+  "stable_elapsed_seconds": 263.434,
+  "source_files_unchanged": 1083,
+  "api_listener": 49067,
+  "web_listener": 49082,
+  "demo_api_preserved": 71121,
+  "artifact_hashes": {
+    "crm-api": "2ff150b720d2ea789ecb154018502636552139aed5b2df91ed318539abd554b8",
+    "crm-admin": "358523125a91d51d3df77ea4d7374fec187b5008e6b95d5e0ed4ca3e98217a2e",
+    "migrate": "d2ec7a357247b0b9f41701858c3d0617ca8914d19be3de83beb1466c704755b2"
+  },
+  "all_43_schema_checksums_match": true,
+  "all_142_upgraded_tenant_rowsets_preserved_after_smoke": true,
+  "shared_development_deployed": true,
+  "native_distribution": false,
+  "live_fub_processing": false,
+  "activation": false,
+  "api_errors": 0,
+  "expected_mobile_warnings": 12,
+  "confirmation_evidence_expires_at": "2026-09-13T07:50:46Z",
+  "recovery_directory": "/private/tmp/crm-mobile010e2-release-enuz4h9k"
+}

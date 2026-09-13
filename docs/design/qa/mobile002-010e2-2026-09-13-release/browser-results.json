@@ -1,0 +1,20 @@
+{
+  "status": "passed",
+  "origin": "https://app.tarams.org",
+  "session": "Existing authenticated browser session reused for read-only checks; not logged out or exported",
+  "checks": [
+    "Migration loaded with new Refresh imported People panel",
+    "Reload People refreshes completed",
+    "Preview and report selection disabled without completed import",
+    "Desktop screenshot actually inspected",
+    "390x844 screenshot actually inspected",
+    "Refresh panel clientWidth=scrollWidth=277 at narrow viewport",
+    "Full reload restored panel and guarded empty state",
+    "Today loaded 4 work items",
+    "No browser warning/error logs",
+    "Temporary viewport reset and created tab closed"
+  ],
+  "screenshots": "Two screenshots inspected inline in release conversation; no standalone screenshot files claimed",
+  "business_mutations": 0,
+  "scope": "Existing empty import workspace; populated refresh execution uses implementation evidence"
+}

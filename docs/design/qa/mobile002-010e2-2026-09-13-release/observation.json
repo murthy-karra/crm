@@ -1,0 +1,20 @@
+{
+  "observed_at": "2026-09-13T07:44:55.650048+00:00",
+  "api_errors": 0,
+  "api_warnings": 12,
+  "warnings_attributed_to_deliberate_mobile_denials": true,
+  "warning_kinds": {
+    "not_found": 3,
+    "unauthenticated": 8,
+    "protocol_unsupported": 1
+  },
+  "api_listener": [
+    49067
+  ],
+  "web_listener": [
+    49082
+  ],
+  "private_demo_listener": [
+    71121
+  ]
+}

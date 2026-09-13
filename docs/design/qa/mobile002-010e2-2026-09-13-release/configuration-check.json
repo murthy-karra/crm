@@ -1,0 +1,13 @@
+{
+  "changed_names": [
+    "CRM_MIGRATION_RELEASE_REPORT"
+  ],
+  "mobile_key_ids": [
+    "mobile-dev-20260912"
+  ],
+  "historical_keys_preserved": true,
+  "new_distinct_key_generated": false,
+  "other_configuration_unchanged": true,
+  "credentials_published": false,
+  "mobile_receipt_key_ring_unchanged": true
+}

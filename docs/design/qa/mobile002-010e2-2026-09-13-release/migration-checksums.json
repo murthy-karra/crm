@@ -1,0 +1,221 @@
+{
+  "all_match": true,
+  "count": 43,
+  "migrations": [
+    {
+      "version": "20260820000001",
+      "checksum": "20e0f54ae8ebf00784a20bed25061904a1582fa6219ce2fba50d6c9b55c214bf18af4fb45a944f3f06a4e7470a06ca76",
+      "success": true
+    },
+    {
+      "version": "20260821000001",
+      "checksum": "5243c29c9c8a8511a4a5c7ff27463194d48770cf5b1a5ab2c626265fc6f31890e39509951ef125a457b525990b8850f1",
+      "success": true
+    },
+    {
+      "version": "20260821000002",
+      "checksum": "37ce737940391091cad86ac8c2290c50b9cde2bc6e769ab9fc683c5661b1f47eae4e89a1ae92881dda849b727d61fb91",
+      "success": true
+    },
+    {
+      "version": "20260821000003",
+      "checksum": "b5ef336ba2484ef03f76063b8a250342afebfc353b3b94958eda007c01a2f498e185f91e0e7cde672dd4ec0644d91974",
+      "success": true
+    },
+    {
+      "version": "20260821000004",
+      "checksum": "38cc89560cc6ffbcbccda029682d29e4ab3e1c5c4d5bb093de4aac05d8e18f82c163e3c70306b6eea36c82209362eea9",
+      "success": true
+    },
+    {
+      "version": "20260822000001",
+      "checksum": "9868740c5da65b86b60af2688d6313ecb75aa1509623970fa25b3a8991c94affa9b7d061a1b7b048ab5a754977b53353",
+      "success": true
+    },
+    {
+      "version": "20260823000001",
+      "checksum": "85f991b407ffdbde3fad86331912b2e32b3aa5b1d1868edede5e48bb3165a35082719e48a37f59e9e92bea95b4c47a51",
+      "success": true
+    },
+    {
+      "version": "20260824000001",
+      "checksum": "41607ccebd3430e386aaeb6fad5cd19cc405ee1a08bfc9fae111cf5cfe106719396130232b333dd7218fdf2369942c36",
+      "success": true
+    },
+    {
+      "version": "20260825000001",
+      "checksum": "9890288f1e78f9dff1c9d3cd0479cf90a5224254b38f311ab7975c691111e96236b416dbb68746258fdb2a584846e14c",
+      "success": true
+    },
+    {
+      "version": "20260826000001",
+      "checksum": "3661c64e0ed56c725fee555ee3638d68937579247af7f4f511c83b2ccbad53fd4cff9290914ff44b071d6e0575b72be7",
+      "success": true
+    },
+    {
+      "version": "20260826000002",
+      "checksum": "a1f61f19a271d37b3408d1d837a5a1949b9c43deb8bab878bd813b33164563c58ce58f0c643f7bff637444c73e374a02",
+      "success": true
+    },
+    {
+      "version": "20260827000001",
+      "checksum": "f5e689755ac25cb405d32bc52a570ef7b4a68c3c4aba2435406f2dcce4730062b1bf5a896ebf7818f269849d665c7a5c",
+      "success": true
+    },
+    {
+      "version": "20260828000001",
+      "checksum": "6083317eeeb738daf02ae4700103b30e7b60d2872cf9dd02c124ddecd9b453fc20887ddc229649e5c7f68db1cc49ca75",
+      "success": true
+    },
+    {
+      "version": "20260829000001",
+      "checksum": "3d99cb69c2692736fe85d1def16ba0880aa962529f0495869057f1358864edb3abcb829a4c9de0830511ece013c3d7d8",
+      "success": true
+    },
+    {
+      "version": "20260830000001",
+      "checksum": "61ba53383aa2bfd3435a9fbc3a91c0f56b5072142f68c7891097367003f875b9fc71e11eb3066c54bce097f0ee43ea41",
+      "success": true
+    },
+    {
+      "version": "20260901000001",
+      "checksum": "686fc91867ec62c2c7b76d1d6db241638a62448af8f38a86375e4225bcae5d22871b443a450f0daef11e34511393e1de",
+      "success": true
+    },
+    {
+      "version": "20260902000001",
+      "checksum": "7c2491dc293596878376c5964659cdcb99c7d515d547f36282479c41c644440c691dbb9fd879b8a5e4ca8b9cb1b1a567",
+      "success": true
+    },
+    {
+      "version": "20260903000001",
+      "checksum": "eb7b884f58dfd71caf18a74219c862d543c91787a959a2e2d7a8dc82b047259367d8005d4016bdfb6819b7d6f156887e",
+      "success": true
+    },
+    {
+      "version": "20260904000001",
+      "checksum": "e590e860032f2bad0cdbb6ecb505a5a4a95cf849249e2cf9cf611013a46a6ef58452ffcee07370635fc066e9a3f42654",
+      "success": true
+    },
+    {
+      "version": "20260906000001",
+      "checksum": "21f9f3260d81b9331f98f24655de799a97de3cf0292121d181bddd767fb5bfdbdeaa10751ab17a62be0741f0ae818974",
+      "success": true
+    },
+    {
+      "version": "20260906000002",
+      "checksum": "a57f9ec528a8c76c16e70fbe25ec1d650661f0ff1653129422524b9a6495809513a447aea88da53ee44f1d3caec0bfb1",
+      "success": true
+    },
+    {
+      "version": "20260907000001",
+      "checksum": "5a4bd651c0d4a3d476e9ad15a60155aa713d3bcfb43ec8ed57799cf87c8264ae59ad9848d78cefed34df19887268669e",
+      "success": true
+    },
+    {
+      "version": "20260908000001",
+      "checksum": "91eab6fb72a9155c91dce93d45feb89263bfeef48dcc59502451ca1509fab5697c205e2252e7670c2402876fb96eb96a",
+      "success": true
+    },
+    {
+      "version": "20260909000001",
+      "checksum": "a2bb9cad62ba47ddffc6677dc3b31ae113fb2bab551873fee0cef77db1f89075ae19fba1a90402b75e7c0ed3a77842b1",
+      "success": true
+    },
+    {
+      "version": "20260910000001",
+      "checksum": "34739bd32e45a2e2ac0486919922a7cfd8595512f8223b3f030625de174e75cedd3fd20802cec603bfca0f2c3e9512c0",
+      "success": true
+    },
+    {
+      "version": "20260911000001",
+      "checksum": "4db549ab9dc09bf2332b3cc1e37208600625bc4706ec23519f61b3f2134b333509f59bcaf419955a4cbf677888f5c4b4",
+      "success": true
+    },
+    {
+      "version": "20260912000001",
+      "checksum": "d3102a78f3817ce5262617b7f117f43a6cb7b5fa3897ca137bea4184fc5a21b9e9f27b6606e380194cb13e3a351e4565",
+      "success": true
+    },
+    {
+      "version": "20260913000001",
+      "checksum": "06e099a05fbb631956123fecbcc77df681f7da9c774705ff0adb6b9b5086c4d71f6e331c13cd7fea6b24cc094032930d",
+      "success": true
+    },
+    {
+      "version": "20260914000001",
+      "checksum": "279cd34cf7847fbc9763fa01f1d062fb5fa735a9ff4a4a493d0ebd771781c84512da49e1bc661dc36f3ad56af2d2566a",
+      "success": true
+    },
+    {
+      "version": "20260915000001",
+      "checksum": "e5e3a9b3ac794667a869feaaf092c14259e8d2ac96c35dd92ca5513dc3f208d1ae6557ccb7d7d2a7cf1e5f5d9fa48ad7",
+      "success": true
+    },
+    {
+      "version": "20260916000001",
+      "checksum": "f91b14e4faf9d7095d9e574d6ca8f37443056855207e4ab2c805ec755c63a831131b213e7f694690ba1274484449b872",
+      "success": true
+    },
+    {
+      "version": "20260917000001",
+      "checksum": "e5577a19f18af6e02b95c2563053f6aebd6abe30377cb71abbf1b0d34abb7d7835c7183419080313bf4317a34d52924b",
+      "success": true
+    },
+    {
+      "version": "20260918000001",
+      "checksum": "01033839fa88383df2af604f78dbb5715aa6a52fedf5f3c8e6e8cf16e3774e0f9c80aeb0bbd6409c7177730915aaf780",
+      "success": true
+    },
+    {
+      "version": "20260919000001",
+      "checksum": "34f93c0ddb68ba981ba486fa13f7eb048d2c242b1e23035c799fe49038a9467b1a681340a104596e1aceb1dbab7350db",
+      "success": true
+    },
+    {
+      "version": "20260920000001",
+      "checksum": "0fabb99dee66698085b68cafa9118d79ab4d7845b7b2406f67a73b4acdb4c1021fcd2c7f10128912d13578d1f56ae9a7",
+      "success": true
+    },
+    {
+      "version": "20260921000001",
+      "checksum": "ffde0e44d394954f38d759005f5366147902a85805cb39cd86438408c5e732eb50895cce2296f14fe27844b9f35da4d3",
+      "success": true
+    },
+    {
+      "version": "20260922000001",
+      "checksum": "ab8d968dd15c20d65c6be6bf71f3af26ee7e5917f790fe962ffba63f71425dd03a4c8705f8b03f1d650af160c5b68fe3",
+      "success": true
+    },
+    {
+      "version": "20260923000001",
+      "checksum": "021732320efa7c94279d8b29fa4a8be66bd9dcc0a9a1f7dbfb8de14542cf9d2c3e5677e2ab1825d653e3baf5795f1c28",
+      "success": true
+    },
+    {
+      "version": "20260923000002",
+      "checksum": "49fe9fa74419c04402da098770dfa441a3cc8e927da0f067e1021b02b26634b794cbfacc3d30157209395f21f15caff7",
+      "success": true
+    },
+    {
+      "version": "20260923000003",
+      "checksum": "d944743a7c71bb472b8ca3d763ea78c3edbe7f2a043533fa6a6b7c3a46f6bf4d525ad2e453eb7faa60511a56c9d6399e",
+      "success": true
+    },
+    {
+      "version": "20260924000001",
+      "checksum": "92c13a1754529e6e74d98ade876ec07fcb929316be7e3c206896a91c363598a567b19d85852e1f498f612c8265cabebe",
+      "success": true
+    },
+    {
+      "version": "20260925000001",
+      "checksum": "76daa367b2303ed75aed0bf6f3c2b36a56201ece7eafc58aadc8211df07a378f3a9f1128ae85dffce1f59d06e1e42d05",
+      "success": true
+    },
+    {
+      "version": "20260926000001",
+      "checksum": "1e506b62712f2db730c443dd9e1cfc1f3536fa9257a4cb8d2076182346830163dd8e2eee2b67f5d07f7b5de083fa6f9f",
+      "success": true
+    }
+  ]
+}

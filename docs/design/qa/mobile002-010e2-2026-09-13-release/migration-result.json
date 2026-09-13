@@ -1,0 +1,10 @@
+{
+  "exit_code": 0,
+  "elapsed_seconds": 0.113,
+  "applied_versions": [
+    20260925000001,
+    20260926000001
+  ],
+  "binary_sha256": "d2ec7a357247b0b9f41701858c3d0617ca8914d19be3de83beb1466c704755b2",
+  "backup_sha256": "d8f02162c1d0fb1a47f185c705dda5a05375b4daf9f003b8a6aa27a57dd54c84"
+}

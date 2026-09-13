@@ -1,0 +1,19 @@
+{
+  "builds_passed": true,
+  "revision": "9d04755e405848cb06a8e4c135793d9994176648",
+  "source_files": 1083,
+  "web_files": 73,
+  "backend_artifacts": {
+    "crm-api": "2ff150b720d2ea789ecb154018502636552139aed5b2df91ed318539abd554b8",
+    "crm-admin": "358523125a91d51d3df77ea4d7374fec187b5008e6b95d5e0ed4ca3e98217a2e",
+    "migrate": "d2ec7a357247b0b9f41701858c3d0617ca8914d19be3de83beb1466c704755b2"
+  },
+  "runtime_directory": "/private/tmp/crm-mobile010e2-release-enuz4h9k/bin-runtime",
+  "web_directory": "/private/tmp/crm-mobile010e2-release-enuz4h9k/web-dist-staged",
+  "backend_profile": "dev (same as prior shared-development release)",
+  "web_mode": "production",
+  "source_manifest_sha256": "004fe3fc604421b496a3fe45f3b44e235472e0a2ead7994d5246f5a7766a6ee1",
+  "protected_artifacts_unchanged": true,
+  "protected_file_count": 77,
+  "deployed": false
+}

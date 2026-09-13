@@ -1,18 +1,19 @@
 # Mobile 002 / 010e2 — Implementation status
 
-**Implemented and verified locally — D-076, 2026-09-13.** Both approved contracts
+**Implemented, verified and released — D-076, 2026-09-13.** Both approved contracts
 are complete for their isolated synthetic scope. Terra high owned the mobile
 backend, iOS, Android and migration
 backend lanes; the coordinator owned protected-read/Web integration and final
 verification. Physical phones/cellular and broad mobile redesign remain deferred.
 No new implementation approval is pending.
 
-The local integration branch is `codex/mobile002-010e2-integration`. The combined
-source is `07a0fbf` plus upgrade-fixture correction `214364e` and final permission
-guard/test correction `864ff6c`. Main/origin and shared
-development are still the previous released milestone. This implementation does
-not authorize publication, shared deployment, native distribution, live FUB or
-customer processing, or activation.
+The implementation source is `07a0fbf` plus upgrade-fixture correction `214364e`
+and permission guard/test correction `864ff6c`, closed at `c883a3c`. The user's
+subsequent commit/main merge/push/cleanup/deploy request authorized release.
+Runtime source `9d04755e405848cb06a8e4c135793d9994176648` is published and deployed;
+[the release record](MOBILE_002_010e2_RELEASE.md) owns exact preservation, runtime
+and public verification. Native distribution, physical phones, live FUB/customer
+processing and activation remain separate.
 
 | Component | Verified implementation |
 |---|---|
@@ -21,10 +22,11 @@ customer processing, or activation.
 | Android | `b8a7f95`: encrypted in-place upgrade, native offline edits, process-death replay, completed-task field preservation, conflict/revised accepted receipt |
 | Migration | `a0eb294` + `864ff6c`: qualified retained evidence, immutable bounded plans/confirmation, per-Person atomic updates, exact ownership/accounting, cancellation/recovery, protected paged Web review and restricted legacy contact permits |
 
-All implementation lanes are merged locally; their short-lived worktrees and
-branches are closed. The integration branch remains for the next release.
-No shared source output, API3000/Web5173, demoAPI3101 or original mobile demo
-bundle/store was used for these mutations. The native QA apps use distinct
+All implementation lanes are merged and published on main; their short-lived
+worktrees/branches and the integration branch are closed.
+Implementation mutations used isolated resources; the later authorized release
+updated API3000/Web5173. DemoAPI3101 and the original mobile demo bundle/store
+remain intact. The native QA apps use distinct
 identities and protected storage namespaces.
 
 ## Actual verification

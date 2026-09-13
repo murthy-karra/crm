@@ -44,10 +44,12 @@ authoritative.
   residuals and the next action.
 - [Approved migration 010e2](specs/SLICE_010e2.md): previewed refresh of existing
   imported People, with [execution ownership](tasks/SLICE_010e2_IMPL.md) and
-  [planning review](tasks/SLICE_010e2_REVIEW.md); approved for implementation under D-076.
+  [planning review](tasks/SLICE_010e2_REVIEW.md); implemented and released under D-076.
 - [Approved Mobile 002](specs/MOBILE_002_OFFLINE_EDITS.md): offline note/task
   editing with protected drafts and explicit conflicts; [three-worktree plan](plans/MOBILE_002_010e2_PARALLEL_LAUNCH.md)
-  coordinates iOS, Android and migration after the shared backend foundation.
+  records the completed parallel implementation. The
+  [milestone release](tasks/MOBILE_002_010e2_RELEASE.md) owns publication and
+  shared backend/Web deployment evidence.
 - [Historical progress](plans/PROJECT_HISTORY.md): archived checkpoints, slice
   ledger and old measurements; not current implementation instructions.
 - [Foundations proposal](plans/FOUNDATIONS.md): Organization portability, durable

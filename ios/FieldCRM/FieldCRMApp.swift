@@ -83,7 +83,7 @@ struct WorkspaceView: View {
                             Text(model.account).font(.caption).textSelection(.enabled)
                             Button("Sign out", role: .destructive) { signOutPrompt = true }.accessibilityIdentifier("signOut")
                         }
-                        Section("About this build") { Text("Mobile 001 · Synthetic development. Calls, messages, editing existing records and background delivery are outside this field workflow.").font(.footnote) }
+                        Section("About this build") { Text("Mobile 002 · Synthetic development. Downloaded notes and tasks can be edited offline with explicit conflict review. Calls, messages and background delivery are outside this field workflow.").font(.footnote) }
                     }.navigationTitle("Settings")
                 }.tabItem { Label("Settings", systemImage: "gearshape") }
             }
@@ -181,6 +181,9 @@ struct PersonView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(task["title"].text)
                             Text(task["kind"].text.replacingOccurrences(of: "_", with: " ") + (task["due_at"].text.isEmpty ? "" : " · " + task["due_at"].text)).font(.caption).foregroundStyle(.secondary)
+                            if task["can_manage"].flag && !task["revision"].text.isEmpty {
+                                Button("Edit task") { composer = try? model.startEdit(person: personID, type: "task", record: task) }.accessibilityIdentifier("editTask_" + task["id"].text)
+                            } else if task["can_manage"].flag { Button("Refresh task to edit") { Task { composer = try? await model.startEditFromCurrent(person: personID, type: "task", id: task["id"].text) } }.font(.caption) }
                             if task["completed_at"] != .null { Label("Completed", systemImage: "checkmark.circle.fill").font(.caption) }
                             else if let pending {
                                 if pending.status == "attention" {
@@ -200,6 +203,9 @@ struct PersonView: View {
                         VStack(alignment: .leading, spacing: 7) {
                             Text(note["body"].text).textSelection(.enabled)
                             Text(note["author"]["display_name"].text + " · " + note["created_at"].text).font(.caption).foregroundStyle(.secondary)
+                            if note["can_manage"].flag && !note["revision"].text.isEmpty {
+                                Button("Edit note") { composer = try? model.startEdit(person: personID, type: "note", record: note) }.accessibilityIdentifier("editNote_" + note["id"].text)
+                            } else if note["can_manage"].flag { Button("Refresh note to edit") { Task { composer = try? await model.startEditFromCurrent(person: personID, type: "note", id: note["id"].text) } }.font(.caption) }
                         }.padding(.vertical, 4)
                     }
                 }
@@ -226,23 +232,34 @@ struct ComposerView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section(draft.kind == "add_note" ? "Note" : "Task title") {
+                Section(draft.kind == "add_note" || draft.kind == "edit_note" ? "Note" : "Task title") {
                     TextEditor(text: $draft.text).frame(minHeight: 150).accessibilityIdentifier("composerText")
                         .onChange(of: draft.text) { _, _ in autosave() }
                 }
-                if draft.kind == "create_task" {
+                if draft.kind == "create_task" || draft.kind == "update_task" {
                     Picker("Kind", selection: $draft.taskKind) { ForEach(["call", "email", "text", "follow_up", "other"], id: \.self) { Text($0.replacingOccurrences(of: "_", with: " ").capitalized).tag($0) } }.onChange(of: draft.taskKind) { _, _ in autosave() }
                     Toggle("Set a due date", isOn: $hasDue).onChange(of: hasDue) { _, value in draft.dueAt = value ? stamp(due) : nil; autosave() }
                     if hasDue { DatePicker("Due", selection: $due).onChange(of: due) { _, value in draft.dueAt = stamp(value); autosave() } }
-                    Text("Assigned to you. Server validation applies when this task syncs.").font(.caption)
+                    Text(draft.kind == "update_task" ? "Assignee and completion state are preserved by the server." : "Assigned to you. Server validation applies when this task syncs.").font(.caption)
+                }
+                if let baseline = draft.baseline, draft.isEdit {
+                    Section("Version you started from") { Text(editableText(baseline)).font(.caption).textSelection(.enabled) }
+                }
+                if draft.mode == "conflict" {
+                    Section("Your saved edit") { Text(draft.text).textSelection(.enabled) }
+                    Section("Current version") { Text(draft.current.map(editableText) ?? "Current version could not be fetched yet. Your saved edit is protected.").textSelection(.enabled) }
+                    Text("Choosing the current version discards your saved proposal.").font(.caption).foregroundStyle(.orange)
+                    Button("Use current version and discard my saved edit", role: .destructive) { do { try model.resolveUsingCurrent(draft); dismiss() } catch { status = error.localizedDescription; failed = true } }
+                    Button("Prepare revised edit against current version") { do { draft = try model.revisedDraft(draft); status = "Revised draft saved on device" } catch { status = error.localizedDescription; failed = true } }
                 }
                 Section { Text(status).font(.caption).foregroundStyle(failed ? .red : .secondary).accessibilityIdentifier("draftStatus") }
-                Button("Save action on device") {
+                Button(draft.mode == "follow_up" ? "Save draft — waiting for the previous change" : "Save action on device") {
                     do { if draft.revision == 0 { draft = try model.save(draft) }; try model.submit(draft); dismiss() }
+                    catch LocalError.waitingPredecessor { status = LocalError.waitingPredecessor.localizedDescription; failed = false }
                     catch { status = error.localizedDescription; failed = true }
                 }.disabled(draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || failed).accessibilityIdentifier("saveAction")
                 if failed { Button("Retry saving draft") { autosave() } }
-            }.navigationTitle(draft.kind == "add_note" ? "New note" : "New task")
+            }.navigationTitle(draft.kind == "add_note" ? "New note" : draft.kind == "edit_note" ? "Edit note" : draft.kind == "update_task" ? "Edit task" : "New task")
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() }.disabled(failed) } }
                 .interactiveDismissDisabled(failed)
         }
@@ -250,6 +267,11 @@ struct ComposerView: View {
     private func autosave() {
         do { draft = try model.save(draft); status = "Draft saved on device · revision \(draft.revision)"; failed = false }
         catch { status = error.localizedDescription; failed = true }
+    }
+    private func editableText(_ value: JSON) -> String {
+        if !value["body"].text.isEmpty { return value["body"].text }
+        let due = value["due_at"] == .null ? "No due date" : value["due_at"].text
+        return value["title"].text + "\n" + value["kind"].text + " · " + due
     }
 }
 struct QueueView: View {
@@ -259,7 +281,11 @@ struct QueueView: View {
         List {
             Section { Text("\(model.pendingCount) pending · \(model.drafts.count) saved drafts").accessibilityIdentifier("queueCount") }
             if !model.drafts.isEmpty {
-                Section("Drafts") { ForEach(model.drafts) { draft in Button(draft.text.isEmpty ? "Empty draft" : draft.text) { composer = draft } } }
+                Section("Drafts") { ForEach(model.drafts) { draft in
+                    Button(draft.text.isEmpty ? "Empty draft" : draft.text) { composer = draft }
+                    if draft.mode == "follow_up" { Text("Saved draft — waiting for the previous change").font(.caption).foregroundStyle(.orange) }
+                    if draft.mode == "conflict" { Text("Conflict requires review").font(.caption).foregroundStyle(.orange) }
+                } }
             }
             Section("Actions") {
                 ForEach(model.queue.reversed()) { op in
@@ -268,7 +294,9 @@ struct QueueView: View {
                         Text(op.envelope.kind.replacingOccurrences(of: "_", with: " ").capitalized).font(.subheadline.bold())
                         if op.error != "not_found" && op.error != "forbidden" { Text(op.title.isEmpty ? "Task completion" : op.title).lineLimit(4) }
                         if let error = op.error { Text(APIError(status: 409, code: error).localizedDescription).font(.caption).foregroundStyle(.secondary) }
-                        if op.status == "attention" && ["invalid_input", "invalid_assignee", "over_limit"].contains(op.error ?? "") && op.envelope.kind != "complete_task" {
+                        if op.status == "conflict", let draft = model.drafts.first(where: { $0.predecessor == op.id }) {
+                            Button("Review conflict") { composer = draft }
+                        } else if op.status == "attention" && ["invalid_input", "invalid_assignee", "over_limit"].contains(op.error ?? "") && op.envelope.kind != "complete_task" {
                             Button("Prepare a separate revised draft") { composer = Draft(id: UUID().uuidString, person: op.envelope.person, kind: op.envelope.kind, text: op.title, revision: 0) }
                         }
                         DisclosureGroup("Sync details") { Text(op.id).font(.caption2).foregroundStyle(.secondary).textSelection(.enabled) }

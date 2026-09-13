@@ -2,6 +2,17 @@ import Foundation
 import Security
 import Darwin
 
+var appDefaults: UserDefaults {
+    #if MOBILE002_QA
+    // The QA bundle already has a separate container.  Some simulator hosts do
+    // not grant an arbitrary app-group suite, so retain that isolation by
+    // falling back to this QA app's own defaults rather than crashing.
+    return UserDefaults(suiteName: "dev.crm.FieldCRM.mobile002qa") ?? .standard
+    #else
+    return .standard
+    #endif
+}
+
 // mach_continuous_time advances during device sleep; systemUptime is not the lease clock.
 func continuousSeconds() -> Double {
     var info = mach_timebase_info_data_t()
@@ -58,7 +69,10 @@ final class SecureStorage {
         #else
         self.synthetic = false
         #endif
-        let base = self.synthetic ? "dev.crm.field.synthetic" : "dev.crm.field.protected"
+        var base = self.synthetic ? "dev.crm.field.synthetic" : "dev.crm.field.protected"
+        #if MOBILE002_QA
+        base += ".mobile002qa"
+        #endif
         #if DEBUG
         service = testingNamespace.map { base + ".test." + $0 } ?? base
         #else
@@ -133,7 +147,14 @@ final class SecureStorage {
     }
     static func directory(synthetic: Bool) throws -> URL {
         var url = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-            .appendingPathComponent(synthetic ? "SyntheticFieldCRM" : "FieldCRM", isDirectory: true)
+            .appendingPathComponent(
+                synthetic ? {
+                    #if MOBILE002_QA
+                    return "SyntheticFieldCRMMobile002QA"
+                    #else
+                    return "SyntheticFieldCRM"
+                    #endif
+                }() : "FieldCRM", isDirectory: true)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true,
                                               attributes: [.protectionKey: FileProtectionType.complete])
         var values = URLResourceValues(); values.isExcludedFromBackup = true

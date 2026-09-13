@@ -32,7 +32,13 @@ private final class NoRedirect: NSObject, URLSessionTaskDelegate, @unchecked Sen
               url.fragment == nil, url.path.isEmpty || url.path == "/" else { throw LocalError.invalidProtocol }
         var permitted = url.scheme == "https"
         #if DEBUG && targetEnvironment(simulator)
-        permitted = permitted || (url.scheme == "http" && url.host == "127.0.0.1" && url.port == 3101)
+        let debugPort: Int
+        #if MOBILE002_QA
+        debugPort = 3102
+        #else
+        debugPort = 3101
+        #endif
+        permitted = permitted || (url.scheme == "http" && url.host == "127.0.0.1" && url.port == debugPort)
         #endif
         guard permitted else { throw LocalError.invalidProtocol }
         self.base = url
@@ -59,6 +65,12 @@ private final class NoRedirect: NSObject, URLSessionTaskDelegate, @unchecked Sen
         if dropNextOperationResponse { dropNextOperationResponse = false; throw LocalError.lostResponse }
         #endif
         return try decode(Receipt.self, data)
+    }
+    func currentNote(person: String, note: String, context: String) async throws -> CurrentRecordResponse {
+        try await call("/people/\(person)/notes/\(note)", context: context)
+    }
+    func currentTask(person: String, task: String, context: String) async throws -> CurrentRecordResponse {
+        try await call("/people/\(person)/tasks/\(task)", context: context)
     }
     func verifyAuthority(_ boot: Bootstrap) async throws {
         let (data, _) = try await raw("/api/me", method: "GET")

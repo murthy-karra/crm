@@ -25,6 +25,12 @@ the work it owns; other lanes return a proposed state update. Preserve unrelated
 active tracks and distinguish historical status from the actual checkout.
 Record accepted decisions only with actual user acceptance and the right
 decision-log/spec amendments. Completion cannot erase unresolved residuals.
+Keep PROJECT_STATE.md focused on current release, active work, gates and residuals
+(aim for 100–150 lines); move completed chronology into PROJECT_HISTORY.md with
+links to original evidence. Avoid repeating release narratives across plans.
+When a decision is added or its title/applicability changes, update
+docs/decisions/DECISION_INDEX.md in the same documentation change. Preserve
+decision text and authority; index labels do not accept or supersede policy.
 
 Capture only lessons supported by a concrete failure or successful technique.
 Separate a task-specific observation from a proposed standing rule. Suggest a

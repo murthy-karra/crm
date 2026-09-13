@@ -436,7 +436,14 @@ Do not create permanent backend, frontend, or AI branches.
 Before modifying code:
 
 1. Read this file.
-2. Read `docs/decisions/DECISION_LOG.md`.
+2. Use `docs/decisions/DECISION_INDEX.md` to select required decision reading:
+   retain the core invariants in this file (D-001–D-012), read full D-015 and
+   D-050 once per task context, then read the full applicable decisions and
+   open items in `docs/decisions/DECISION_LOG.md`, including amendments,
+   follow-ups and referenced dependencies. Scan the log's decision headings
+   for additions or changed titles absent from the index. The index is a
+   navigation aid, never a replacement authority; widen reading when scope
+   or applicability is uncertain. A full-log read is not required routinely.
 3. Read the assigned task brief.
 4. Read the referenced specification and accepted ADRs.
 5. Inspect the existing implementation.
@@ -447,6 +454,21 @@ Before modifying code:
 Do not perform unrelated cleanup or speculative refactoring.
 
 Do not add infrastructure, dependencies, abstractions, or services without a concrete requirement.
+
+### Context and evidence efficiency
+
+- Reuse instructions and decisions already read in the current task context;
+  reread when changed, missing after handoff, or needed to resolve uncertainty.
+- After required context, search headings/symbols before reading large files.
+  Return bounded excerpts; keep full test logs in files and report exit status,
+  relevant summaries/failures and evidence paths. Do not hide failed checks.
+- Use one authoritative record per fact. Keep current status concise and move
+  completed chronology to `docs/plans/PROJECT_HISTORY.md`, preserving residuals
+  and links. Update status at meaningful milestones, not after every small edit.
+- Reuse applicable verification evidence with its runner and tested revision.
+  Run all task-required checks and final-tree gates; repeat when changed code,
+  failures, stale evidence or explicit requirements justify it. D-050's review
+  and performance limits remain in force; blocking gaps are never a pass.
 
 ## 14. Testing expectations
 

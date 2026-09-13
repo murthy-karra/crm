@@ -1,7 +1,8 @@
 # Plan execution and ownership
 
 Use when an accepted or review-ready specification needs an execution plan.
-Default profile: `design`, with planning effort from
+Default profile: `implement` for routine decomposition, `design` for contracts
+or multi-lane dependencies; use the planning effort from
 [MODEL_ROUTING.md](MODEL_ROUTING.md). Provide the specification, existing plan,
 task constraints, and any known role/branch assignments.
 

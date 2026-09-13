@@ -132,7 +132,7 @@ async fn admission_real_release_partial_schema_and_unknown_engine_fail_closed(mi
             "{case}: no receipt or state change"
         );
     }
-    for mutation in ["ALTER TABLE migration_people_admission_contact RENAME TO synthetic_missing_admission_contact", "ALTER TABLE migration_import_identity RENAME COLUMN admission_result_id TO synthetic_missing_result_id"] {
+    for mutation in ["ALTER TABLE migration_people_admission_contact RENAME TO synthetic_missing_admission_contact", "ALTER TABLE migration_import_identity RENAME COLUMN admission_result_id TO synthetic_missing_result_id", "ALTER FUNCTION crm_people_admission_lock_stage(uuid,uuid) RENAME TO synthetic_missing_admission_stage_lock"] {
         let mut tx=migrator.begin().await.unwrap();
         sqlx::query(mutation).execute(&mut *tx).await.unwrap();
         assert!(workspace::startup_compatible(&mut tx).await.is_err());
@@ -193,7 +193,10 @@ async fn admission_cursor_pages_and_full_utf8_provenance_do_not_truncate(migrato
     )
     .await
     .unwrap();
-    let cursor = first["next_cursor"].as_str().unwrap().to_owned();
+    let cursor = first["next_cursor"]
+        .as_str()
+        .unwrap_or_else(|| panic!("missing cursor: {first}"))
+        .to_owned();
     let second = admission::items(
         &f.pool,
         &f.key,
@@ -233,6 +236,38 @@ async fn admission_cursor_pages_and_full_utf8_provenance_do_not_truncate(migrato
     };
     let item = Uuid::parse_str(selected["id"].as_str().unwrap()).unwrap();
     let other = Uuid::parse_str(other["id"].as_str().unwrap()).unwrap();
+    let preview = admission::item(&f.pool, &f.key, &f.ctx, id, item)
+        .await
+        .unwrap();
+    assert_eq!(preview["fields"]["sourceUrl"]["truncated"], true);
+    let mut reviewed = String::new();
+    let mut review_cursor = None;
+    for _ in 0..10 {
+        let page = admission::field(
+            &f.pool,
+            &f.key,
+            &f.ctx,
+            (id, item, "proposed".into(), "sourceUrl".into()),
+            admission::Page {
+                cursor: review_cursor,
+                limit: Some(16384),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            page["offset"].as_str().unwrap().parse::<usize>().unwrap(),
+            reviewed.len()
+        );
+        reviewed.push_str(page["fragment"].as_str().unwrap());
+        review_cursor = page["next_cursor"].as_str().map(str::to_owned);
+        if review_cursor.is_none() {
+            break;
+        }
+    }
+    assert!(review_cursor.is_none());
+    assert_eq!(serde_json::from_str::<String>(&reviewed).unwrap(), long);
     let a = admission::contacts(
         &f.pool,
         &f.key,
@@ -297,6 +332,9 @@ async fn admission_cursor_pages_and_full_utf8_provenance_do_not_truncate(migrato
     let detail = admission::detail(&f.pool, &f.key, &f.ctx, id)
         .await
         .unwrap();
+    assert!(detail["source_boundary"]["original"]["started_at"].is_string());
+    assert!(detail["source_boundary"]["newer"]["completed_at"].is_string());
+    assert_eq!(detail["coverage"]["review_hold"], true);
     admission::confirm(
         &f.pool,
         &f.key,
@@ -325,6 +363,25 @@ async fn admission_cursor_pages_and_full_utf8_provenance_do_not_truncate(migrato
             .await
             .unwrap()["state"],
         "completed"
+    );
+    let actual = admission::retained_byte_audit(&f.pool, &f.ctx, id)
+        .await
+        .unwrap();
+    let ledger = admission::detail(&f.pool, &f.key, &f.ctx, id)
+        .await
+        .unwrap();
+    assert_eq!(
+        ledger["retained_bytes"]
+            .as_str()
+            .unwrap()
+            .parse::<i64>()
+            .unwrap(),
+        actual,
+        "each retained admission byte is charged exactly once"
+    );
+    assert_eq!(
+        ledger["reserved_bytes"], "0",
+        "completion releases owned control reserve"
     );
     let person:Uuid=sqlx::query_scalar("SELECT person_id FROM migration_people_admission_result WHERE admission_id=$1 AND source_id='106'").bind(id).fetch_one(&f.pool).await.unwrap();
     let summary = admission::admission_provenance(&f.pool, &f.key, &f.ctx, person)

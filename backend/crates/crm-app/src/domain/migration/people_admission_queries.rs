@@ -305,6 +305,18 @@ pub async fn detail(
     let mut tx = begin(pool, ctx).await?;
     let r = resource(&mut tx, key, ctx, id).await?;
     let mut v = overview(&r);
+    let original = sqlx::query(
+        "SELECT started_at,completed_at FROM migration_snapshot WHERE id=$1 AND organization_id=$2",
+    )
+    .bind(r.get::<Uuid, _>("original_snapshot_id"))
+    .bind(ctx.organization_id.0)
+    .fetch_one(&mut *tx)
+    .await?;
+    v["source_boundary"] = json!({
+        "original":{"snapshot_id":r.get::<Uuid,_>("original_snapshot_id"),"sequence":r.get::<i64,_>("original_sequence").to_string(),"started_at":original.get::<Option<DateTime<Utc>>,_>("started_at"),"completed_at":original.get::<Option<DateTime<Utc>>,_>("completed_at")},
+        "newer":{"snapshot_id":r.get::<Uuid,_>("newer_snapshot_id"),"sequence":r.get::<i64,_>("newer_sequence").to_string(),"started_at":r.get::<DateTime<Utc>,_>("newer_started_at"),"completed_at":r.get::<DateTime<Utc>,_>("newer_completed_at")}
+    });
+    v["coverage"] = json!({"covered_families":["Person core values","contacts","initial stage","initial assignment","admission provenance"],"deferred_families":["notes","tasks","tags","custom fields","historical events/calls/texts","later refresh"],"review_hold":true});
     if let Some(p)=sqlx::query("SELECT id,admission_id,organization_id,revision,state,digest,total_count,eligible_count,already_imported_count,already_admitted_count,excluded_original_count,held_count,intended_contact_count,prepared_bytes,sealed_at,expires_at FROM migration_people_admission_plan WHERE admission_id=$1 AND organization_id=$2 ORDER BY revision DESC LIMIT 1").bind(id).bind(ctx.organization_id.0).fetch_optional(&mut *tx).await?{if p.get::<Option<DateTime<Utc>>,_>("sealed_at").is_some(){let d:Vec<u8>=p.get("digest");v["plan"]=json!({"id":p.get::<Uuid,_>("id"),"revision":p.get::<i64,_>("revision").to_string(),"digest":d.iter().map(|b|format!("{b:02x}")).collect::<String>(),"expires_at":p.get::<Option<DateTime<Utc>>,_>("expires_at"),"counts":{"total":p.get::<i64,_>("total_count").to_string(),"eligible":p.get::<i64,_>("eligible_count").to_string(),"already_imported":p.get::<i64,_>("already_imported_count").to_string(),"already_admitted":p.get::<i64,_>("already_admitted_count").to_string(),"excluded_original":p.get::<i64,_>("excluded_original_count").to_string(),"held":p.get::<i64,_>("held_count").to_string(),"intended_contacts":p.get::<i64,_>("intended_contact_count").to_string()}})}}
     let state = r.get::<String, _>("state");
     let initiator = r.get::<Uuid, _>("initiated_by_user_id") == ctx.actor_user_id.0;
@@ -399,7 +411,51 @@ pub async fn item(
     let (r, p) = item_row(&mut tx, ctx, id, item).await?;
     let mut v = summary(key, ctx, id, &r)?;
     v["plan_revision"] = json!(p.get::<i64, _>("revision").to_string());
+    v["fields"] = field_summaries(&item_fields(&mut tx, key, ctx, id, &r).await?)?;
+    v["held_reasons"] = if v["disposition"]
+        .as_str()
+        .is_some_and(|d| d.starts_with("held_"))
+    {
+        json!([v["disposition"].clone()])
+    } else {
+        json!([])
+    };
     finish(tx, v, SUMMARY_BYTES).await
+}
+async fn item_fields(
+    conn: &mut PgConnection,
+    key: &RawPayloadKey,
+    ctx: &CommandContext,
+    id: Uuid,
+    row: &PgRow,
+) -> Result<Value, MigrationError> {
+    let item: Uuid = row.get("id");
+    let descriptor=sqlx::query("SELECT octet_length(provenance_nonce) nonce_len,octet_length(provenance_ciphertext) cipher_len FROM migration_people_admission_item WHERE id=$1 AND admission_id=$2 AND organization_id=$3")
+        .bind(item).bind(id).bind(ctx.organization_id.0).fetch_one(&mut *conn).await?;
+    if descriptor.get::<i32, _>("nonce_len") != 24
+        || i64::from(descriptor.get::<i32, _>("cipher_len")) > s::ITEM_LIMIT + 16
+    {
+        return Err(MigrationError::StorageLimit);
+    }
+    let stored=sqlx::query("SELECT provenance_nonce,provenance_ciphertext FROM migration_people_admission_item WHERE id=$1 AND admission_id=$2 AND organization_id=$3")
+        .bind(item).bind(id).bind(ctx.organization_id.0).fetch_one(conn).await?;
+    let value: Value = s::open(
+        key,
+        ctx.organization_id,
+        id,
+        item,
+        "provenance",
+        stored.get("provenance_nonce"),
+        stored.get("provenance_ciphertext"),
+    )?;
+    let mut fields = value["fields"].as_object().cloned().unwrap_or_default();
+    let proposed = projection(key, ctx, id, row)?;
+    for name in ["first_name", "last_name"] {
+        if let Some(value) = proposed[name].as_str() {
+            fields.insert(name.into(), json!(value));
+        }
+    }
+    Ok(Value::Object(fields))
 }
 pub async fn contacts(
     pool: &PgPool,
@@ -591,13 +647,13 @@ pub async fn field(
     p: Page,
 ) -> Result<Value, MigrationError> {
     let n = field_limit(&p)?;
-    if side != "proposed" || !matches!(field.as_str(), "first_name" | "last_name") {
+    if side != "proposed" || field.is_empty() || field.len() > 2048 {
         return Err(MigrationError::InvalidInput);
     }
     let mut tx = begin(pool, ctx).await?;
     resource(&mut tx, key, ctx, id).await?;
     let (r, plan) = item_row(&mut tx, ctx, id, item).await?;
-    let value = projection(key, ctx, id, &r)?;
+    let value = item_fields(&mut tx, key, ctx, id, &r).await?;
     let text = value[&field].as_str().ok_or(MigrationError::NotFound)?;
     let bind = binding(
         ctx,

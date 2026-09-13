@@ -466,10 +466,10 @@ impl ConfirmWire {
 mod tests {
     #[test]
     fn admission_wire_revisions_never_round_through_json_numbers() {
-        assert_eq!(
-            super::decimal("9007199254740993", true).unwrap(),
-            9007199254740993
-        );
+        assert!(matches!(
+            super::decimal("9007199254740993", true),
+            Ok(9007199254740993)
+        ));
         for bad in ["01", "+1", "1.0", "-1", "9223372036854775808", " 1"] {
             assert!(super::decimal(bad, true).is_err());
         }

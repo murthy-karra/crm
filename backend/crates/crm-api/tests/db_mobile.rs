@@ -2359,3 +2359,305 @@ async fn mobile003_atomic_contact_and_current_receipt_authority(pool: PgPool) {
         "opaque absence must neither consume again nor erase the marker"
     );
 }
+
+/// New stage receipts must remain atomic and publish only committed changes.
+#[sqlx::test]
+#[ignore]
+async fn mobile004_stage_atomic_failure_duplicate_publication_and_scope(pool: PgPool) {
+    let mut f = fixture(&pool).await;
+    let publisher = Publisher::recording();
+    f.router = crate::common::build_router_with_publisher(&pool, publisher.clone()).await;
+    let stages: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM stage WHERE organization_id=$1 ORDER BY position LIMIT 2",
+    )
+    .bind(f.org)
+    .fetch_all(&f.app)
+    .await
+    .unwrap();
+    let before: (Uuid, i64, i64) =
+        sqlx::query_as("SELECT stage_id,stage_revision,mobile_revision FROM person WHERE id=$1")
+            .bind(f.person)
+            .fetch_one(&f.app)
+            .await
+            .unwrap();
+    let operation = f.operation(
+        "change_person_stage",
+        json!({"person_id":f.person,"stage_id":stages[1],"expected_stage_revision":"1"}),
+    );
+    sqlx::raw_sql("CREATE FUNCTION mobile004_fail_receipt() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic stage receipt failure'; END $$; CREATE TRIGGER mobile004_receipt_failure BEFORE INSERT ON mobile_operation_receipt FOR EACH ROW EXECUTE FUNCTION mobile004_fail_receipt();")
+        .execute(&pool).await.unwrap();
+    assert_eq!(
+        f.post("/api/mobile/v1/operations", operation.clone())
+            .await
+            .0,
+        StatusCode::SERVICE_UNAVAILABLE
+    );
+    let after: (Uuid, i64, i64) =
+        sqlx::query_as("SELECT stage_id,stage_revision,mobile_revision FROM person WHERE id=$1")
+            .bind(f.person)
+            .fetch_one(&f.app)
+            .await
+            .unwrap();
+    assert_eq!(before, after);
+    let counts: (i64,i64) = sqlx::query_as("SELECT (SELECT count(*) FROM stage_changed WHERE person_id=$1),(SELECT count(*) FROM mobile_operation_receipt WHERE person_id=$1)")
+        .bind(f.person).fetch_one(&f.app).await.unwrap();
+    assert_eq!(counts, (0, 0));
+    let Publisher::Recording(events, _) = &publisher else {
+        unreachable!()
+    };
+    assert!(events.lock().await.is_empty());
+    sqlx::query("DROP TRIGGER mobile004_receipt_failure ON mobile_operation_receipt")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let server_before = chrono::Utc::now();
+    let (left, right) = tokio::join!(
+        f.post("/api/mobile/v1/operations", operation.clone()),
+        f.post("/api/mobile/v1/operations", operation.clone())
+    );
+    assert_eq!(left.0, StatusCode::OK, "{}", left.1);
+    assert_eq!(right.0, StatusCode::OK, "{}", right.1);
+    assert_ne!(left.1["replayed"], right.1["replayed"]);
+    assert_eq!(left.1["committed_revision"], "2");
+    assert_eq!(events.lock().await.len(), 1);
+    let fact: (String, String, chrono::DateTime<chrono::Utc>) =
+        sqlx::query_as("SELECT origin,reason,occurred_at FROM stage_changed WHERE person_id=$1")
+            .bind(f.person)
+            .fetch_one(&f.app)
+            .await
+            .unwrap();
+    assert_eq!(fact.0, "mobile_session");
+    assert_eq!(fact.1, "manual");
+    assert!(fact.2 >= server_before);
+    let noop = f.operation(
+        "change_person_stage",
+        json!({"person_id":f.person,"stage_id":stages[1],"expected_stage_revision":"2"}),
+    );
+    assert_eq!(
+        f.post("/api/mobile/v1/operations", noop).await.1["changed"],
+        false
+    );
+    assert_eq!(events.lock().await.len(), 1);
+    let mut mismatch = operation.clone();
+    mismatch["payload"]["stage_id"] = json!(stages[0]);
+    assert_eq!(
+        f.post("/api/mobile/v1/operations", mismatch).await.1["error"],
+        "operation_payload_mismatch"
+    );
+    let (foreign_org, _) = crate::common::create_org_with_stages_and_member(
+        &pool,
+        "Stage Foreign",
+        "stage-foreign@fixture.test",
+        "Foreign",
+        PW,
+    )
+    .await;
+    let foreign_stage: Uuid =
+        sqlx::query_scalar("SELECT id FROM stage WHERE organization_id=$1 LIMIT 1")
+            .bind(foreign_org)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let foreign_person: Uuid = sqlx::query_scalar(
+        "INSERT INTO person(organization_id,stage_id) VALUES($1,$2) RETURNING id",
+    )
+    .bind(foreign_org)
+    .bind(foreign_stage)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    for target_person in [foreign_person, Uuid::new_v4()] {
+        let invalid = f.operation(
+            "change_person_stage",
+            json!({"person_id":target_person,"stage_id":stages[0],"expected_stage_revision":"2"}),
+        );
+        assert_eq!(
+            f.post("/api/mobile/v1/operations", invalid).await.0,
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            request(
+                &f.router,
+                &f.cookie,
+                Some(f.context),
+                "GET",
+                &format!("/api/mobile/v1/people/{target_person}/stage"),
+                json!(null)
+            )
+            .await
+            .0,
+            StatusCode::NOT_FOUND
+        );
+    }
+    for stage in [foreign_stage, Uuid::new_v4()] {
+        let invalid = f.operation(
+            "change_person_stage",
+            json!({"person_id":f.person,"stage_id":stage,"expected_stage_revision":"2"}),
+        );
+        assert_eq!(
+            f.post("/api/mobile/v1/operations", invalid).await.1["error"],
+            "invalid_stage"
+        );
+    }
+    let lookup = format!(
+        "/api/mobile/v1/operations/{}",
+        id(&operation, "operation_id")
+    );
+    sqlx::query("DELETE FROM person WHERE id=$1")
+        .bind(f.person)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        f.post("/api/mobile/v1/operations", operation.clone())
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        request(
+            &f.router,
+            &f.cookie,
+            Some(f.context),
+            "GET",
+            &lookup,
+            json!(null)
+        )
+        .await
+        .0,
+        StatusCode::NOT_FOUND
+    );
+    let retained:(i64,i64)=sqlx::query_as("SELECT (SELECT count(*) FROM stage_changed WHERE person_id=$1),(SELECT count(*) FROM mobile_operation_receipt WHERE person_id=$1)").bind(f.person).fetch_one(&f.app).await.unwrap();
+    assert_eq!(retained, (1, 2));
+    assert_eq!(events.lock().await.len(), 1);
+}
+
+#[sqlx::test]
+#[ignore]
+async fn mobile004_catalog_rollback_seal_and_current_authority(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let create = json!({"protocol":"mobile-v1","installation_id":f.install,"pinned_person_ids":[],"include_stage_catalog":true});
+    let generation = f
+        .post("/api/mobile/v1/reconciliations", create.clone())
+        .await
+        .1;
+    let generation_id = id(&generation, "generation_id");
+    let revision: i64 =
+        sqlx::query_scalar("SELECT stage_catalog_revision FROM organization WHERE id=$1")
+            .bind(f.org)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query(
+        "INSERT INTO stage(organization_id,name,position) VALUES($1,'rolled back catalog',200)",
+    )
+    .bind(f.org)
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+    tx.rollback().await.unwrap();
+    let still: i64 =
+        sqlx::query_scalar("SELECT stage_catalog_revision FROM organization WHERE id=$1")
+            .bind(f.org)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(revision, still);
+    assert_eq!(
+        f.post(
+            &format!("/api/mobile/v1/reconciliations/{generation_id}/seal"),
+            json!({})
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    let legacy = f.gen().await;
+    assert!(legacy.get("stage_catalog").is_none());
+    let legacy_id = id(&legacy, "generation_id");
+    let generation = f.post("/api/mobile/v1/reconciliations", create).await.1;
+    let generation_id = id(&generation, "generation_id");
+    let spare:Uuid=sqlx::query_scalar("INSERT INTO stage(organization_id,name,position) VALUES($1,'catalog deletion',201) RETURNING id").bind(f.org).fetch_one(&pool).await.unwrap();
+    sqlx::query("DELETE FROM stage WHERE id=$1")
+        .bind(spare)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let changed: i64 =
+        sqlx::query_scalar("SELECT stage_catalog_revision FROM organization WHERE id=$1")
+            .bind(f.org)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(changed, revision + 2);
+    assert_eq!(
+        f.post(
+            &format!("/api/mobile/v1/reconciliations/{generation_id}/seal"),
+            json!({})
+        )
+        .await
+        .1["error"],
+        "generation_changed"
+    );
+    // Catalog-only changes do not impose the new opt-in contract on old clients.
+    assert_eq!(
+        f.post(
+            &format!("/api/mobile/v1/reconciliations/{legacy_id}/seal"),
+            json!({})
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    let stage_url = format!("/api/mobile/v1/people/{}/stage", f.person);
+    let other_cookie = crate::common::login_cookie(&f.router, "second@fixture.test", PW).await;
+    assert_eq!(
+        request(
+            &f.router,
+            &other_cookie,
+            Some(f.context),
+            "GET",
+            &stage_url,
+            json!(null)
+        )
+        .await
+        .0,
+        StatusCode::UNAUTHORIZED
+    );
+    sqlx::query(
+        "UPDATE organization_membership SET role='admin' WHERE organization_id=$1 AND user_id=$2",
+    )
+    .bind(f.org)
+    .bind(f.actor)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query("UPDATE organization SET workspace_mode='migration_review',workspace_revision=workspace_revision+1 WHERE id=$1").bind(f.org).execute(&pool).await.unwrap();
+    assert_eq!(
+        request(
+            &f.router,
+            &f.cookie,
+            Some(f.context),
+            "GET",
+            &stage_url,
+            json!(null)
+        )
+        .await
+        .1["error"],
+        "workspace_in_migration_review"
+    );
+    assert_eq!(
+        request(
+            &f.router,
+            &f.cookie,
+            Some(f.context),
+            "GET",
+            &format!("/api/mobile/v1/reconciliations/{generation_id}/stages"),
+            json!(null)
+        )
+        .await
+        .1["error"],
+        "workspace_in_migration_review"
+    );
+}

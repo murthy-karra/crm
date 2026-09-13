@@ -5,6 +5,9 @@ import Network
 struct StageProposal: Identifiable {
     let id = UUID()
     let person: String, baseline: Stage, expected: String, superseding: String?
+    /// A saved follow-up remains mutable input until the agent explicitly
+    /// submits it after the earlier operation has resolved.
+    let draftID: String?, draftRevision: Int?
     var selectedID: String
 }
 
@@ -337,21 +340,36 @@ struct StageProposal: Identifiable {
         let id = bundle.summary["stage"]["id"].text
         return (try? store?.activeStages().first(where: { $0.id == id })?.name) ?? bundle.summary["stage"]["name"].text
     }
-    func queueStage(person: String, baseline: Stage, expected: String, proposal: Stage, superseding: String? = nil) throws {
+    func queueStage(person: String, baseline: Stage, expected: String, proposal: Stage, superseding: String? = nil, draftID: String? = nil, draftRevision: Int? = nil) throws {
         guard validateAccess(), stageCapabilitiesReady, let store else { throw LocalError.locked }
         guard try store.activeStages().contains(where: { $0.id == proposal.id }) else { throw LocalError.invalidInput }
-        _ = try store.queueStage(person: person, baseline: baseline, stage: proposal, expected: expected, superseding: superseding)
-        try reload(); message = "Stage proposal saved on device. The server stage and Today remain unchanged until it is accepted."; Task { await sync() }
+        let saved = try store.queueStage(person: person, baseline: baseline, stage: proposal, expected: expected, superseding: superseding, draftID: draftID, draftRevision: draftRevision)
+        try reload()
+        if saved.mode == "follow_up" {
+            message = "Stage follow-up saved on device. It is waiting for the previous stage change and will not submit automatically."
+        } else {
+            message = "Stage proposal saved on device. The server stage and Today remain unchanged until it is accepted."
+            Task { await sync() }
+        }
     }
     func newStageProposal(person: String) throws -> StageProposal {
         let baseline = try stageBaseline(person: person)
-        return StageProposal(person: person, baseline: baseline.0, expected: baseline.1, superseding: nil, selectedID: baseline.0.id)
+        return StageProposal(person: person, baseline: baseline.0, expected: baseline.1, superseding: nil, draftID: nil, draftRevision: nil, selectedID: baseline.0.id)
     }
     func revisedStageProposal(_ draft: Draft) throws -> StageProposal {
-        guard draft.kind == "change_person_stage", let current = draft.current,
-              let expected = Optional(current["stage_revision"].text), (try? revision(expected)) != nil,
-              let id = Optional(current["id"].text), !id.isEmpty, let name = Optional(current["name"].text), !name.isEmpty else { throw LocalError.invalidProtocol }
-        return StageProposal(person: draft.person, baseline: Stage(id: id, name: name, position: 0), expected: expected, superseding: draft.predecessor, selectedID: draft.targetID ?? id)
+        guard draft.kind == "change_person_stage" else { throw LocalError.invalidProtocol }
+        if draft.mode == "conflict" {
+            guard let current = draft.current,
+                  let expected = Optional(current["stage_revision"].text), (try? revision(expected)) != nil,
+                  let id = Optional(current["id"].text), !id.isEmpty, let name = Optional(current["name"].text), !name.isEmpty else { throw LocalError.invalidProtocol }
+            return StageProposal(person: draft.person, baseline: Stage(id: id, name: name, position: 0), expected: expected,
+                                 superseding: draft.predecessor, draftID: nil, draftRevision: nil, selectedID: draft.targetID ?? id)
+        }
+        guard draft.mode == "follow_up", let baseline = draft.baseline,
+              let expected = Optional(baseline["stage_revision"].text), (try? revision(expected)) != nil,
+              let id = Optional(baseline["id"].text), !id.isEmpty, let name = Optional(baseline["name"].text), !name.isEmpty else { throw LocalError.invalidProtocol }
+        return StageProposal(person: draft.person, baseline: Stage(id: id, name: name, position: 0), expected: expected,
+                             superseding: nil, draftID: draft.id, draftRevision: draft.revision, selectedID: draft.targetID ?? id)
     }
     func startEdit(person: String, type: String, record: JSON) throws -> Draft {
         guard validateAccess(), let store, let id = Optional(record["id"].text), !id.isEmpty,

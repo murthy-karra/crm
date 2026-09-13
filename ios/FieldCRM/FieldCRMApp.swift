@@ -260,7 +260,7 @@ struct StageProposalView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var proposal: StageProposal
     @State private var status = "Choose a stage. The downloaded server stage remains in place until sync succeeds."
-    @State private var failed = false
+    @State private var hasError = false
     init(initial: StageProposal) { _proposal = State(initialValue: initial) }
     var stages: [Stage] { model.availableStages() }
     var selected: Stage? { stages.first(where: { $0.id == proposal.selectedID }) }
@@ -272,17 +272,16 @@ struct StageProposalView: View {
                     Picker("Stage", selection: $proposal.selectedID) { ForEach(stages) { stage in Text(stage.name).tag(stage.id) } }.accessibilityIdentifier("stagePicker")
                     Text("This saves a proposal on this device. Today is not recomputed locally.").font(.caption).foregroundStyle(.secondary)
                 }
-                Section { Text(status).font(.caption).foregroundStyle(failed ? .red : .secondary).accessibilityIdentifier("stageDraftStatus") }
+                Section { Text(status).font(.caption).foregroundStyle(hasError ? .red : .secondary).accessibilityIdentifier("stageDraftStatus") }
                 Button("Save stage proposal on device") {
                     do {
                         guard let selected else { throw LocalError.invalidInput }
-                        try model.queueStage(person: proposal.person, baseline: proposal.baseline, expected: proposal.expected, proposal: selected, superseding: proposal.superseding)
+                        try model.queueStage(person: proposal.person, baseline: proposal.baseline, expected: proposal.expected, proposal: selected, superseding: proposal.superseding, draftID: proposal.draftID, draftRevision: proposal.draftRevision)
                         dismiss()
-                    } catch { status = error.localizedDescription; failed = true }
-                }.disabled(selected == nil || failed).accessibilityIdentifier("saveStage")
+                    } catch { status = error.localizedDescription; hasError = true }
+                }.disabled(selected == nil).accessibilityIdentifier("saveStage")
             }.navigationTitle("Change stage")
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() }.disabled(failed) } }
-                .interactiveDismissDisabled(failed)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
         }
     }
 }
@@ -414,7 +413,7 @@ struct QueueView: View {
                         if draft.kind == "log_contact_attempt" { contactComposer = draft }
                         else if draft.kind == "change_person_stage" { stageProposal = try? model.revisedStageProposal(draft) }
                         else { composer = draft }
-                    }
+                    }.accessibilityIdentifier(draft.kind == "change_person_stage" && draft.mode == "follow_up" ? "stageFollowUp_" + draft.id : "draft_" + draft.id)
                     if draft.mode == "follow_up" { Text("Saved draft — waiting for the previous change").font(.caption).foregroundStyle(.orange) }
                     if draft.mode == "conflict" { Text("Conflict requires review").font(.caption).foregroundStyle(.orange) }
                 } }

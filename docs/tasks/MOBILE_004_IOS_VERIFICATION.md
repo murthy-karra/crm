@@ -113,3 +113,43 @@ save the displayed server stage and the rerun above passed.
 
 All evidence is simulator-only; no physical-device, cellular, or distribution
 claim is made.
+
+## Round-one follow-up and conflict review correction
+
+The independent review identified that conflict replacement checked the supplied
+conflicted predecessor as an unresolved operation before it could be
+superseded, and that a second stage selection was not retained as a draft. The
+corrected storage test proves that only the explicitly supplied conflicting
+predecessor is excluded, its immutable bytes remain unchanged, the replacement
+has a new operation ID, and a second selection remains a typed follow-up draft
+until the agent explicitly submits it after the predecessor receipt. The test
+also promotes a valid 2 KiB stage label, under the server component budget.
+
+```
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
+  -project ios/FieldCRM.xcodeproj -scheme FieldCRMMobile004QA \
+  -destination 'platform=iOS Simulator,id=007BB316-AB17-4D10-979D-C1F6D50AA285' \
+  -derivedDataPath /private/tmp/crm-mobile004-010e4/ios-round1 test \
+  -only-testing:FieldCRMTests/StorageTests -only-testing:FieldCRMTests/ModelTests \
+  CODE_SIGN_IDENTITY=-
+```
+
+Passed: 35 tests. Result bundle:
+`/private/tmp/crm-mobile004-010e4/ios-round1-final/Logs/Test/Test-FieldCRMMobile004QA-2026.09.13_09-33-04--0700.xcresult`.
+
+The native upgrade-QA simulator flow now visibly creates a follow-up while its
+predecessor is pending, persists it through termination/relaunch, accepts the
+first operation, then requires an explicit follow-up Save before a second
+outbox operation is created and synced.
+
+```
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
+  -project ios/FieldCRM.xcodeproj -scheme FieldCRMMobile004UpgradeQA \
+  -destination 'platform=iOS Simulator,id=007BB316-AB17-4D10-979D-C1F6D50AA285' \
+  -derivedDataPath /private/tmp/crm-mobile004-010e4/ios-round1-ui test \
+  -only-testing:FieldCRMUITests/FieldFlowTests/testMobile004NativeOfflineStageTerminatesRelaunchesAndSynchronizes \
+  CODE_SIGN_IDENTITY=-
+```
+
+Passed. Result bundle:
+`/private/tmp/crm-mobile004-010e4/ios-round1-ui/Logs/Test/Test-FieldCRMMobile004UpgradeQA-2026.09.13_09-30-48--0700.xcresult`.

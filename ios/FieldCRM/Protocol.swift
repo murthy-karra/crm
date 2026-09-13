@@ -74,21 +74,63 @@ struct Seal: Codable, Sendable {
     let generation_id: String, context_id: String, sealed_at: String, evaluated_at: String
     let selected_count: Int, today: JSON
 }
-struct Bundle: Codable, Sendable {
-    let person: String, revision: String, summary: JSON, contacts: [JSON], notes: [JSON], tasks: [JSON]
+struct CurrentRecordResponse: Codable, Sendable {
+    let context_id: String, person_id: String, person_revision: String
+    let note: JSON?
+    let task: JSON?
+    var record: JSON? { note ?? task }
 }
+struct Bundle: Codable, Sendable {
+    let person: String, revision: String, summary: JSON, contacts: [JSON], tasks: [JSON]
+    var notes: [JSON]
+}
+/// A draft is protected input, not a projection of the replaceable downloaded
+/// bundle.  `baseline` and `proposal` deliberately live in the encrypted store.
 struct Draft: Codable, Identifiable, Sendable {
     var id: String, person: String, kind: String, text: String, revision: Int
-    var taskKind = "follow_up", dueAt: String? = nil
+    var taskKind: String = "follow_up", dueAt: String? = nil
+    var targetID: String? = nil
+    var expectedRevision: String? = nil
+    var baseline: JSON? = nil
+    var proposal: JSON? = nil
+    var mode: String = "editing" // editing, follow_up, conflict, superseded, unavailable
+    var predecessor: String? = nil
+    var current: JSON? = nil
+    var editorEpoch: String = UUID().uuidString.lowercased()
+    enum CodingKeys: String, CodingKey { case id, person, kind, text, revision, taskKind, dueAt, targetID, expectedRevision, baseline, proposal, mode, predecessor, current, editorEpoch }
+    init(id: String, person: String, kind: String, text: String, revision: Int, taskKind: String = "follow_up", dueAt: String? = nil, targetID: String? = nil, expectedRevision: String? = nil, baseline: JSON? = nil, proposal: JSON? = nil, mode: String = "editing", predecessor: String? = nil, current: JSON? = nil, editorEpoch: String = UUID().uuidString.lowercased()) {
+        self.id = id; self.person = person; self.kind = kind; self.text = text; self.revision = revision
+        self.taskKind = taskKind; self.dueAt = dueAt; self.targetID = targetID; self.expectedRevision = expectedRevision
+        self.baseline = baseline; self.proposal = proposal; self.mode = mode; self.predecessor = predecessor; self.current = current; self.editorEpoch = editorEpoch
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id); person = try c.decode(String.self, forKey: .person)
+        kind = try c.decode(String.self, forKey: .kind); text = try c.decode(String.self, forKey: .text)
+        revision = try c.decode(Int.self, forKey: .revision)
+        taskKind = try c.decodeIfPresent(String.self, forKey: .taskKind) ?? "follow_up"; dueAt = try c.decodeIfPresent(String.self, forKey: .dueAt)
+        targetID = try c.decodeIfPresent(String.self, forKey: .targetID); expectedRevision = try c.decodeIfPresent(String.self, forKey: .expectedRevision)
+        baseline = try c.decodeIfPresent(JSON.self, forKey: .baseline); proposal = try c.decodeIfPresent(JSON.self, forKey: .proposal)
+        mode = try c.decodeIfPresent(String.self, forKey: .mode) ?? "editing"; predecessor = try c.decodeIfPresent(String.self, forKey: .predecessor)
+        current = try c.decodeIfPresent(JSON.self, forKey: .current); editorEpoch = try c.decodeIfPresent(String.self, forKey: .editorEpoch) ?? UUID().uuidString.lowercased()
+    }
+    var isEdit: Bool { kind == "edit_note" || kind == "update_task" }
+    var resourceType: String? { kind == "edit_note" ? "note" : kind == "update_task" ? "task" : nil }
 }
 struct Queued: Identifiable, Sendable {
     let envelope: Envelope, bytes: Data, status: String, error: String?, receipt: Receipt?, overlay: Bool
     let attempts: Int, retryAt: Double
     var id: String { envelope.operation_id }
-    var title: String { envelope.kind == "add_note" ? envelope.payload["body"].text : envelope.payload["title"].text }
+    var title: String { envelope.kind == "add_note" || envelope.kind == "edit_note" ? envelope.payload["body"].text : envelope.payload["title"].text }
+    var targetID: String? {
+        if envelope.kind == "edit_note" { return envelope.payload["note_id"].text }
+        if envelope.kind == "update_task" { return envelope.payload["task_id"].text }
+        if envelope.kind == "complete_task" { return envelope.payload["target"]["task_id"].text.isEmpty ? nil : envelope.payload["target"]["task_id"].text }
+        return nil
+    }
 }
 enum LocalError: Error, LocalizedError {
-    case locked, storage, invalidProtocol, staleDraft, invalidInput, unavailableKey, identityChanged, lostResponse
+    case locked, storage, invalidProtocol, staleDraft, invalidInput, unavailableKey, identityChanged, lostResponse, waitingPredecessor
     var errorDescription: String? {
         switch self {
         case .locked: "Online sign-in is required. Saved work remains protected on this device."
@@ -99,6 +141,7 @@ enum LocalError: Error, LocalizedError {
         case .unavailableKey: "Protected storage is unavailable. Set a device passcode and unlock the device, then retry."
         case .identityChanged: "Account changed. Work from the previous account remains protected."
         case .lostResponse: "Response interrupted after upload. Retry will use the same saved action."
+        case .waitingPredecessor: "Saved draft — waiting for the previous change."
         }
     }
 }

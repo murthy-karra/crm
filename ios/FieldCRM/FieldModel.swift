@@ -13,7 +13,7 @@ import Network
     @Published var syncing = false
     @Published var updateRequired = false
     @Published var signingIn = false
-    @Published var paused = UserDefaults.standard.bool(forKey: "pauseSync") { didSet { UserDefaults.standard.set(paused, forKey: "pauseSync") } }
+    @Published var paused = appDefaults.bool(forKey: "pauseSync") { didSet { appDefaults.set(paused, forKey: "pauseSync") } }
     @Published var connected = true
     @Published var account = ""
     @Published var selectedPerson: String?
@@ -24,10 +24,22 @@ import Network
     let installation: String
     let synthetic: Bool
     var pendingCount: Int { queue.filter { $0.status != "accepted" }.count }
+    #if MOBILE002_QA
+    @Published var qaFixtureStage = "not requested"
+    @Published var qaMigrationStage = "not inspected"
+    @Published var qaConflictStage = "no pending edit"
+    private var qaConflictNoteID = ""
+    #endif
     init(synthetic: Bool = false, startMonitor: Bool = true, restoreOnInit: Bool = true) {
         secure = SecureStorage(synthetic: synthetic); self.synthetic = secure.synthetic
-        if let existing = UserDefaults.standard.string(forKey: "installation") { installation = existing }
-        else { installation = UUID().uuidString.lowercased(); UserDefaults.standard.set(installation, forKey: "installation") }
+        #if MOBILE002_QA
+        // UI acceptance needs to form a real immutable envelope before the
+        // second actor advances its server revision.  This is a launch-only,
+        // synthetic-QA pause; customer configurations do not compile it.
+        if ProcessInfo.processInfo.arguments.contains("--mobile002-qa-start-offline") { paused = true }
+        #endif
+        if let existing = appDefaults.string(forKey: "installation") { installation = existing }
+        else { installation = UUID().uuidString.lowercased(); appDefaults.set(installation, forKey: "installation") }
         if restoreOnInit { restore() }
         if startMonitor {
             monitor.pathUpdateHandler = { [weak self] path in
@@ -54,6 +66,13 @@ import Network
         if let testingDirectory { return testingDirectory }
         #endif
         return try SecureStorage.directory(synthetic: synthetic)
+    }
+    private var qaBaseURL: String {
+        #if MOBILE002_QA
+        return "http://127.0.0.1:3102"
+        #else
+        return "http://127.0.0.1:3101"
+        #endif
     }
     deinit { monitor.cancel() }
     func restore() {
@@ -82,7 +101,7 @@ import Network
         guard !signingIn else { return }; signingIn = true; let loginEpoch = epoch; defer { signingIn = false }
         do {
             #if DEBUG && targetEnvironment(simulator)
-            let base = "http://127.0.0.1:3101"
+            let base = qaBaseURL
             #else
             // Independent distribution requires an approved HTTPS environment/signing configuration.
             throw LocalError.invalidProtocol
@@ -100,6 +119,116 @@ import Network
             #endif
         } catch { message = error.localizedDescription }
     }
+    #if MOBILE002_QA
+    func loadQANoteFixture() async {
+        guard !syncing, unlocked, let store else { qaFixtureStage = "complete a sync before loading"; return }
+        do { guard try store.activeBundle(qaFixturePersonID()) != nil else { qaFixtureStage = "no complete Person bundle"; return } }
+        catch { qaFixtureStage = "bundle inspection failed"; return }
+        await installQANoteFixtureIfRequested()
+    }
+    /// QA-only proof surface: hashes operation bytes and reports only structural
+    /// migration state, never cached CRM text.
+    func inspectQAMigration() {
+        guard let store else { qaMigrationStage = "protected store unavailable"; return }
+        do {
+            let operations = try store.queue()
+            let fingerprints = operations.map { $0.id.prefix(8) + ":" + String(byteDigest($0.bytes), radix: 16) }.joined(separator: ",")
+            let legacyNotes = people.flatMap(\.notes).filter { $0["revision"].text.isEmpty }.count
+            let qualified = people.flatMap(\.notes).filter { !$0["revision"].text.isEmpty }.count
+            qaMigrationStage = "ops=" + String(operations.count) + " drafts=" + String(drafts.count) + " legacyNotes=" + String(legacyNotes) + " versionedNotes=" + String(qualified) + " ids:digest=" + fingerprints
+        } catch { qaMigrationStage = "probe error: " + error.localizedDescription }
+    }
+    private func byteDigest(_ bytes: Data) -> UInt64 {
+        bytes.reduce(1469598103934665603) { ($0 ^ UInt64($1)) &* 1099511628211 }
+    }
+    func advanceQAPendingEditAsSecondActor() async {
+        let targetNote = qaConflictNoteID.isEmpty ? qaFixtureNoteID() : qaConflictNoteID
+        guard let pending = queue.first(where: { $0.envelope.kind == "edit_note" && $0.targetID == targetNote && !["accepted", "superseded", "discarded", "unavailable"].contains($0.status) }),
+              let noteID = pending.targetID else {
+            qaConflictStage = "no pending note edit"; return
+        }
+        do {
+            let other = try client(base: qaBaseURL); try await other.login(email: "second@mobile.test", password: "Mobile-demo-only-123!")
+            let key = "mobile002.qa.second.installation"
+            let installation = appDefaults.string(forKey: key) ?? { let value = UUID().uuidString.lowercased(); appDefaults.set(value, forKey: key); return value }()
+            let boot: Bootstrap = try await other.call("/bootstrap", method: "POST", body: .object(["protocol": .s("mobile-v1"), "installation_id": .s(installation)]))
+            let expected = pending.envelope.payload["expected_revision"].text
+            guard !expected.isEmpty else { qaConflictStage = "pending edit has no baseline"; return }
+            let replacement = Envelope(context_id: boot.context_id, operation_id: UUID().uuidString.lowercased(), kind: "edit_note", device_recorded_at: stamp(), payload: .object(["person_id": .s(pending.envelope.person), "note_id": .s(noteID), "expected_revision": .s(expected), "body": .s("second actor current version " + UUID().uuidString.lowercased())]))
+            let receipt = try await other.operation(try encode(replacement), context: boot.context_id)
+            qaConflictStage = "second actor accepted revision " + (receipt.committed_revision ?? "?")
+        } catch { qaConflictStage = "second actor error: " + error.localizedDescription }
+    }
+    func createQAFreshConflictNote() async {
+        guard let api, let credential, let store else { qaConflictStage = "fresh note unavailable"; return }
+        let person = qaFixturePersonID(), body = "iOS QA conflict seed " + UUID().uuidString.lowercased()
+        guard !person.isEmpty else { qaConflictStage = "fresh note missing Person"; return }
+        do {
+            let envelope = Envelope(context_id: credential.bootstrap.context_id, operation_id: UUID().uuidString.lowercased(), kind: "add_note", device_recorded_at: stamp(), payload: .object(["person_id": .s(person), "body": .s(body)]))
+            let receipt = try await api.operation(try encode(envelope), context: credential.bootstrap.context_id)
+            let current = try await api.currentNote(person: person, note: receipt.resource_id, context: credential.bootstrap.context_id)
+            guard current.context_id == credential.bootstrap.context_id, current.person_id == person, let note = current.note else { throw LocalError.invalidProtocol }
+            try store.installQANoteFixture(person: person, note: note)
+            qaConflictNoteID = receipt.resource_id; try reload()
+            qaConflictStage = "fresh note " + receipt.resource_id + " revision " + note["revision"].text
+        } catch { qaConflictStage = "fresh note error: " + error.localizedDescription }
+    }
+    func prepareQAPendingConflictEdit() {
+        guard let store, let person = people.first(where: { $0.person == qaFixturePersonID() }),
+              let note = person.notes.first(where: { $0["id"].text == (qaConflictNoteID.isEmpty ? qaFixtureNoteID() : qaConflictNoteID) }) else {
+            qaConflictStage = "fixture note unavailable"; return
+        }
+        if let pending = queue.first(where: { $0.envelope.kind == "edit_note" && $0.targetID == (qaConflictNoteID.isEmpty ? qaFixtureNoteID() : qaConflictNoteID) && !["accepted", "superseded", "discarded", "unavailable"].contains($0.status) }) {
+            qaConflictStage = "primary edit already queued " + pending.id; return
+        }
+        do {
+            var draft = try startEdit(person: person.person, type: "note", record: note)
+            draft.text += " primary conflict proposal " + UUID().uuidString.lowercased()
+            // Avoid submit()'s normal background wakeup: this QA-only setup
+            // must leave actor one's immutable envelope unsent until actor two
+            // has committed the deliberately intervening revision.
+            draft = try save(draft); try store.submit(draft); try reload()
+            guard let operation = try store.queue().first(where: { $0.envelope.kind == "edit_note" && $0.status == "pending" }) else { throw LocalError.invalidProtocol }
+            qaConflictStage = "primary edit queued " + operation.id
+        } catch { qaConflictStage = "primary edit error: " + error.localizedDescription }
+    }
+    func resumeQASync() { paused = false }
+    func drainQAConflict() async {
+        await sync(manual: true)
+        let target = qaConflictNoteID.isEmpty ? qaFixtureNoteID() : qaConflictNoteID
+        if let operation = queue.last(where: { $0.targetID == target }) {
+            qaConflictStage = "target " + operation.status + " receipt " + operation.id
+        } else { qaConflictStage = "target operation unavailable" }
+    }
+    private func qaFixturePersonID() -> String {
+        let args = ProcessInfo.processInfo.arguments
+        guard let index = args.firstIndex(of: "--mobile002-qa-person-id"), args.indices.contains(index + 1) else { return "" }
+        return args[index + 1]
+    }
+    private func qaFixtureNoteID() -> String {
+        let args = ProcessInfo.processInfo.arguments
+        guard let index = args.firstIndex(of: "--mobile002-qa-note-id"), args.indices.contains(index + 1) else { return "" }
+        return args[index + 1]
+    }
+    private func installQANoteFixtureIfRequested() async {
+        let args = ProcessInfo.processInfo.arguments
+        guard let noteIndex = args.firstIndex(of: "--mobile002-qa-note-id"), args.indices.contains(noteIndex + 1),
+              let personIndex = args.firstIndex(of: "--mobile002-qa-person-id"), args.indices.contains(personIndex + 1),
+              let api, let credential, let store else { qaFixtureStage = "missing launch flag or protected context"; return }
+        let noteID = args[noteIndex + 1], personID = args[personIndex + 1], run = epoch
+        do {
+            qaFixtureStage = "fixture requested"
+            guard try store.activeBundle(personID) != nil else { qaFixtureStage = "no active Person bundle"; return }
+            qaFixtureStage = "active Person bundle"
+            let current = try await api.currentNote(person: personID, note: noteID, context: credential.bootstrap.context_id)
+            try self.current(run)
+            guard current.context_id == credential.bootstrap.context_id, current.person_id == personID, let note = current.note else { qaFixtureStage = "current-note context mismatch"; return }
+            qaFixtureStage = "current note " + note["id"].text
+            try store.installQANoteFixture(person: personID, note: note); try reload(); qaFixtureStage = "injection committed"
+            message = "QA fixture loaded from the authorized current-note response."
+        } catch { qaFixtureStage = "fixture error: " + error.localizedDescription; message = error.localizedDescription }
+    }
+    #endif
     @discardableResult func validateAccess() -> Bool {
         do {
             guard var saved = credential, !saved.signedOut, unlocked else { throw LocalError.locked }
@@ -148,6 +277,61 @@ import Network
         do { try store.submit(draft); try reload(); message = "Saved on device. Queued for sync."; Task { await sync() } }
         catch { message = error.localizedDescription; throw error }
     }
+    func startEdit(person: String, type: String, record: JSON) throws -> Draft {
+        guard validateAccess(), let store, let id = Optional(record["id"].text), !id.isEmpty,
+              let expected = Optional(record["revision"].text), !expected.isEmpty, record["can_manage"].flag else { throw LocalError.invalidInput }
+        guard try store.editableRecord(person: person, type: type, id: id) != nil else { throw LocalError.invalidInput }
+        _ = try revision(expected)
+        return try makeEditDraft(person: person, type: type, record: record)
+    }
+    private func makeEditDraft(person: String, type: String, record: JSON) throws -> Draft {
+        let id = record["id"].text, expected = record["revision"].text
+        guard !id.isEmpty, !expected.isEmpty, record["can_manage"].flag else { throw LocalError.invalidInput }
+        _ = try revision(expected)
+        let kind = type == "note" ? "edit_note" : "update_task"
+        let text = type == "note" ? record["body"].text : record["title"].text
+        let baseline: JSON = type == "note" ? .object(["body": .s(text)]) : .object(["title": .s(text), "kind": record["kind"], "due_at": record["due_at"]])
+        let draft = Draft(id: UUID().uuidString.lowercased(), person: person, kind: kind, text: text, revision: 0,
+                          taskKind: record["kind"].text.isEmpty ? "follow_up" : record["kind"].text,
+                          dueAt: record["due_at"] == .null ? nil : record["due_at"].text,
+                          targetID: id, expectedRevision: expected, baseline: baseline, proposal: baseline)
+        return try save(draft)
+    }
+    func startEditFromCurrent(person: String, type: String, id: String) async throws -> Draft {
+        guard validateAccess(), let api, let credential else { throw LocalError.locked }
+        let run = epoch
+        let response = type == "note" ? try await api.currentNote(person: person, note: id, context: credential.bootstrap.context_id) : try await api.currentTask(person: person, task: id, context: credential.bootstrap.context_id)
+        try current(run)
+        guard response.context_id == credential.bootstrap.context_id, response.person_id == person, let record = response.record, record["id"].text == id else { throw LocalError.invalidProtocol }
+        return try makeEditDraft(person: person, type: type, record: record)
+    }
+    func requalifyEdit(_ draft: Draft) async throws -> Draft {
+        guard validateAccess(), let api, let credential, let id = draft.targetID else { throw LocalError.locked }
+        let run = epoch, response: CurrentRecordResponse
+        if draft.kind == "edit_note" { response = try await api.currentNote(person: draft.person, note: id, context: credential.bootstrap.context_id) }
+        else { response = try await api.currentTask(person: draft.person, task: id, context: credential.bootstrap.context_id) }
+        try current(run)
+        guard response.context_id == credential.bootstrap.context_id, response.person_id == draft.person,
+              let record = response.record, record["id"].text == id, record["can_manage"].flag,
+              !record["revision"].text.isEmpty else { throw LocalError.invalidProtocol }
+        guard let store else { throw LocalError.locked }
+        let saved = try store.saveCurrent(draft.id, current: record, contextID: response.context_id, person: draft.person, editorEpoch: draft.editorEpoch)
+        try reload(); return saved
+    }
+    func resolveUsingCurrent(_ draft: Draft) throws {
+        guard let store else { throw LocalError.locked }
+        if let predecessor = draft.predecessor { try store.markSuperseded(predecessor) }
+        try store.discardDraft(draft.id); try reload(); message = "Your saved proposal was discarded. The current version remains available."
+    }
+    func revisedDraft(_ draft: Draft) throws -> Draft {
+        guard let current = draft.current, let id = draft.targetID, let store else { throw LocalError.invalidProtocol }
+        guard !current["revision"].text.isEmpty else { throw LocalError.invalidProtocol }
+        if let predecessor = draft.predecessor { try store.markSuperseded(predecessor) }
+        var next = Draft(id: UUID().uuidString.lowercased(), person: draft.person, kind: draft.kind, text: draft.text, revision: 0,
+                         taskKind: draft.kind == "update_task" ? draft.taskKind : "follow_up", dueAt: draft.kind == "update_task" ? draft.dueAt : nil,
+                         targetID: id, expectedRevision: current["revision"].text, baseline: draft.kind == "edit_note" ? .object(["body": current["body"]]) : .object(["title": current["title"], "kind": current["kind"], "due_at": current["due_at"]]), proposal: draft.proposal, mode: "editing", predecessor: draft.predecessor)
+        next = try store.saveDraft(next); try reload(); return next
+    }
     func complete(person: String, target: JSON) {
         guard validateAccess(), let store else { return }
         do { try store.complete(person: person, target: target); try reload(); message = "Completion saved on device."; Task { await sync() } }
@@ -176,6 +360,18 @@ import Network
                     if error.status == 403 {
                         do { try await api.verifyAuthority(credential.bootstrap); try current(run) }
                         catch { lock("Online authorization is required before reopening saved work."); return }
+                    }
+                    if error.code == "revision_conflict" {
+                        var currentRecord: JSON? = nil
+                        if let draft = try store.draftForOperation(op.id), let target = draft.targetID {
+                            do {
+                                let currentResponse = draft.kind == "edit_note" ? try await api.currentNote(person: draft.person, note: target, context: credential.bootstrap.context_id) : try await api.currentTask(person: draft.person, task: target, context: credential.bootstrap.context_id)
+                                try current(run)
+                                if currentResponse.context_id == credential.bootstrap.context_id, currentResponse.person_id == draft.person { currentRecord = currentResponse.record }
+                            } catch { /* Preserve original proposal and baseline while offline/unavailable. */ }
+                        }
+                        try store.recordConflict(op.id, current: currentRecord, contextID: credential.bootstrap.context_id, person: op.envelope.person)
+                        try reload(); continue
                     }
                     let transient = error.status == 429 || error.status >= 500 || error.code == "dependency_pending"
                     try store.failure(op.id, code: error.code, permanent: !transient, delay: error.status == 429 ? 30 : backoff(op.attempts))

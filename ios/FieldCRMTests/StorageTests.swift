@@ -12,7 +12,7 @@ final class StorageTests: XCTestCase {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
     override func tearDownWithError() throws { try FileManager.default.removeItem(at: directory) }
-    func open(_ name: String = "store", version: Int = 3) throws -> LocalStore {
+    func open(_ name: String = "store", version: Int = 5) throws -> LocalStore {
         try LocalStore(url: directory.appendingPathComponent(name + ".sqlite"), key: key, identity: identity, context: context, schemaTarget: version)
     }
     func draft(_ text: String = "Synthetic iOS private note") -> Draft { Draft(id: UUID().uuidString, person: person, kind: "add_note", text: text, revision: 0) }
@@ -58,7 +58,7 @@ final class StorageTests: XCTestCase {
         try old!.submit(saved)
         old = nil
         var upgraded: LocalStore? = try open()
-        XCTAssertEqual(try upgraded!.rows("PRAGMA user_version")[0][0], "3")
+        XCTAssertEqual(try upgraded!.rows("PRAGMA user_version")[0][0], "5")
         XCTAssertEqual(try upgraded!.queue().count, 1)
         XCTAssertEqual(try upgraded!.queue()[0].attempts, 0)
         try upgraded!.run("PRAGMA user_version=999"); upgraded = nil
@@ -146,7 +146,10 @@ final class StorageTests: XCTestCase {
         XCTAssertFalse(try ClockSample.current().boot.isEmpty)
     }
     func fixture<T: Decodable>(_ type: T.Type, _ name: String) throws -> T {
-        let url = try XCTUnwrap(Foundation.Bundle(for: StorageTests.self).url(forResource: name, withExtension: "json", subdirectory: "contracts"))
+        let parts = name.split(separator: "/").map(String.init)
+        let resource = parts.last ?? name
+        let folder = (["contracts"] + parts.dropLast()).joined(separator: "/")
+        let url = try XCTUnwrap(Foundation.Bundle(for: StorageTests.self).url(forResource: resource, withExtension: "json", subdirectory: folder))
         return try decode(T.self, Data(contentsOf: url))
     }
     func testDurableLockMarkerSurvivesCredentialWriteFailureAndReopen() throws {
@@ -204,8 +207,55 @@ final class StorageTests: XCTestCase {
         _ = try fixture(Seal.self, "seal")
         _ = try fixture(Receipt.self, "create_task_receipt")
         _ = try fixture(Envelope.self, "add_note_request")
+        _ = try fixture(CurrentRecordResponse.self, "mobile002/mobile002_current_note")
+        _ = try fixture(CurrentRecordResponse.self, "mobile002/mobile002_current_task")
+        _ = try fixture(Receipt.self, "mobile002/mobile002_edit_note_receipt")
+        _ = try fixture(Receipt.self, "mobile002/mobile002_update_task_receipt")
         XCTAssertEqual(try revision("9007199254740993"), 9007199254740993)
         XCTAssertThrowsError(try revision("01")); XCTAssertThrowsError(try revision("0"))
         XCTAssertEqual(try date("2026-09-13T01:27:15.217133+00:00"), try date("2026-09-13T01:27:15.217133Z"))
+    }
+    func testMobile002UpgradeKeepsLegacyBytesButRequiresVersionedNoteQualification() throws {
+        var old: LocalStore? = try open(version: 3)
+        let legacy = try old!.submit(old!.saveDraft(draft("Old envelope must remain byte exact")))
+        let bytes = try old!.queue().first!.bytes
+        let generation = self.generation(); try stage(old!, generation, notes: [.object(["id": .s("55555555-5555-4555-8555-555555555555"), "body": .s("Legacy readable note"), "can_manage": .bool(true)])]); try old!.promote(seal(generation))
+        old = nil
+        let upgraded = try open()
+        XCTAssertEqual(try upgraded.rows("PRAGMA user_version")[0][0], "5")
+        XCTAssertEqual(try upgraded.queue().first?.id, legacy.operation_id)
+        XCTAssertEqual(try upgraded.queue().first?.bytes, bytes)
+        XCTAssertNil(try upgraded.editableRecord(person: person, type: "note", id: "55555555-5555-4555-8555-555555555555"))
+        XCTAssertEqual(try upgraded.activeBundle(person)?.notes.first?["body"].text, "Legacy readable note")
+    }
+    func testEditProposalCASFollowUpAndReceiptIdentityFences() throws {
+        let store = try open()
+        let note = "66666666-6666-4666-8666-666666666666"
+        let initial = Draft(id: UUID().uuidString, person: person, kind: "edit_note", text: "Proposal A", revision: 0, targetID: note, expectedRevision: "2", baseline: .object(["body": .s("Baseline")]), proposal: .object(["body": .s("Proposal A")]))
+        let saved = try store.saveDraft(initial)
+        var revised = saved; revised.text = "Proposal B"; revised.proposal = .object(["body": .s("Proposal B")])
+        let current = try store.saveDraft(revised)
+        XCTAssertThrowsError(try store.submit(saved))
+        let op = try store.submit(current)
+        XCTAssertEqual(op.kind, "edit_note"); XCTAssertEqual(op.payload["expected_revision"].text, "2")
+        let follow = try store.saveDraft(Draft(id: UUID().uuidString, person: person, kind: "edit_note", text: "Follow up", revision: 0, targetID: note, expectedRevision: "2", baseline: .object(["body": .s("Baseline")]), proposal: .object(["body": .s("Follow up")])) )
+        XCTAssertThrowsError(try store.submit(follow)) { XCTAssertTrue($0 is LocalError) }
+        let persisted = try XCTUnwrap(store.drafts().first { $0.id == follow.id }); XCTAssertEqual(persisted.mode, "follow_up"); XCTAssertEqual(persisted.predecessor, op.operation_id)
+        let wrong = Receipt(operation_id: op.operation_id, outcome: "accepted", resource_type: "note", resource_id: UUID().uuidString, committed_revision: "3", person_revision: "3", accepted_at: stamp(), changed: true, replayed: false)
+        XCTAssertThrowsError(try store.acknowledge(wrong))
+        let accepted = Receipt(operation_id: op.operation_id, outcome: "accepted", resource_type: "note", resource_id: note, committed_revision: "3", person_revision: "3", accepted_at: stamp(), changed: true, replayed: false)
+        XCTAssertNoThrow(try store.acknowledge(accepted))
+    }
+    func testOperationAndReceiptNotFoundKeepProtectedOriginalIdentityUnavailable() throws {
+        let store = try open(); let note = "77777777-7777-4777-8777-777777777777"
+        let saved = try store.saveDraft(Draft(id: UUID().uuidString, person: person, kind: "edit_note", text: "Protected uncertain proposal", revision: 0, targetID: note, expectedRevision: "1", baseline: .object(["body": .s("old")]), proposal: .object(["body": .s("Protected uncertain proposal")])))
+        let op = try store.submit(saved); let bytes = try XCTUnwrap(store.queue().first?.bytes)
+        // POST-operation 404 and a later receipt lookup 404 are both ambiguous:
+        // no replacement ID is minted and private proposal/baseline survive.
+        try store.failure(op.operation_id, code: "not_found", permanent: true, delay: 0)
+        XCTAssertEqual(try store.queue().first?.status, "unavailable")
+        XCTAssertEqual(try store.queue().first?.bytes, bytes)
+        let protected = try XCTUnwrap(store.draftForOperation(op.operation_id))
+        XCTAssertEqual(protected.text, "Protected uncertain proposal"); XCTAssertEqual(protected.baseline?["body"].text, "old")
     }
 }

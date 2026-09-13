@@ -1,6 +1,9 @@
 use super::*;
 use crate::domain::{
-    commands::{self, ContactChannel, ContactOutcome, LogContactAttemptInTransaction},
+    commands::{
+        self, change_person_stage_in_transaction, ChangePersonStage, ContactChannel,
+        ContactOutcome, LogContactAttemptInTransaction,
+    },
     envelope::{CommandContext, Origin},
     note, task,
 };
@@ -93,6 +96,13 @@ struct LogContactAttempt {
     outcome: ContactOutcome,
     occurred_at: DateTime<Utc>,
 }
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct ChangePersonStagePayload {
+    person_id: Uuid,
+    stage_id: Uuid,
+    expected_stage_revision: String,
+}
 enum Payload {
     Add(Add),
     Create(Create),
@@ -100,6 +110,7 @@ enum Payload {
     EditNote(EditNote),
     UpdateTask(UpdateTask),
     LogContactAttempt(LogContactAttempt),
+    ChangePersonStage(ChangePersonStagePayload),
 }
 impl Payload {
     fn parse(kind: &str, value: Value) -> Result<Self, MobileError> {
@@ -154,6 +165,12 @@ impl Payload {
                 v.occurred_at = normalize_contact_time(v.occurred_at)?;
                 Self::LogContactAttempt(v)
             }
+            "change_person_stage" => {
+                let v: ChangePersonStagePayload =
+                    serde_json::from_value(value).map_err(|_| invalid())?;
+                revision(&v.expected_stage_revision)?;
+                Self::ChangePersonStage(v)
+            }
             _ => return Err(invalid()),
         })
     }
@@ -165,6 +182,7 @@ impl Payload {
             Self::EditNote(v) => v.person_id,
             Self::UpdateTask(v) => v.person_id,
             Self::LogContactAttempt(v) => v.person_id,
+            Self::ChangePersonStage(v) => v.person_id,
         }
     }
     fn json(&self) -> Result<Value, MobileError> {
@@ -175,6 +193,7 @@ impl Payload {
             Self::EditNote(v) => serialize(v),
             Self::UpdateTask(v) => serialize(v),
             Self::LogContactAttempt(v) => serialize(v),
+            Self::ChangePersonStage(v) => serialize(v),
         }
     }
 }
@@ -256,6 +275,7 @@ async fn visible(
         "note"=>"SELECT EXISTS(SELECT 1 FROM note n JOIN person p ON p.id=n.person_id AND p.organization_id=n.organization_id WHERE n.organization_id=$1 AND n.person_id=$2 AND n.id=$3 AND n.deleted_at IS NULL)",
         "task"=>"SELECT EXISTS(SELECT 1 FROM task n JOIN person p ON p.id=n.person_id AND p.organization_id=n.organization_id WHERE n.organization_id=$1 AND n.person_id=$2 AND n.id=$3 AND n.deleted_at IS NULL)",
         "contact_attempt"=>"SELECT EXISTS(SELECT 1 FROM contact_attempted c JOIN person p ON p.id=c.person_id AND p.organization_id=c.organization_id WHERE c.organization_id=$1 AND c.person_id=$2 AND c.id=$3)",
+        "person_stage"=>"SELECT EXISTS(SELECT 1 FROM person p WHERE p.organization_id=$1 AND p.id=$2 AND p.id=$3)",
         _=>return Err(code(503,"unavailable")),
     };
     if !sqlx::query_scalar::<_, bool>(sql)
@@ -445,9 +465,39 @@ pub async fn execute(
             })?;
             ("contact_attempt", attempt.attempt.id, true)
         }
+        Payload::ChangePersonStage(v) => {
+            let result = change_person_stage_in_transaction(
+                &mut tx,
+                &ctx,
+                ChangePersonStage {
+                    person_id: person,
+                    stage_id: crate::ids::StageId(v.stage_id),
+                },
+                Some(revision(&v.expected_stage_revision)?),
+            )
+            .await
+            .map_err(|error| match error {
+                crate::domain::commands::CommandError::PersonNotFound => missing(),
+                crate::domain::commands::CommandError::InvalidStage => code(422, "invalid_stage"),
+                crate::domain::commands::CommandError::Database(error) => error.into(),
+                crate::domain::commands::CommandError::Corrupt => code(503, "unavailable"),
+                _ => code(503, "unavailable"),
+            })?
+            .ok_or(code(409, "revision_conflict"))?;
+            ("person_stage", person.0, result.changed)
+        }
     };
     let resource_revision: Option<i64> = match kind.as_str() {
         "add_note" | "log_contact_attempt" => None,
+        "change_person_stage" => Some(
+            sqlx::query_scalar(
+                "SELECT stage_revision FROM person WHERE organization_id=$1 AND id=$2",
+            )
+            .bind(auth.active_organization_id.0)
+            .bind(person.0)
+            .fetch_one(&mut *tx)
+            .await?,
+        ),
         "create_task" | "complete_task" | "update_task" => Some(
             sqlx::query_scalar("SELECT revision FROM task WHERE organization_id=$1 AND id=$2")
                 .bind(auth.active_organization_id.0)
@@ -485,6 +535,7 @@ pub async fn execute(
                     "note" => PersonChange::NoteChanged,
                     "task" => PersonChange::TaskChanged,
                     "contact_attempt" => PersonChange::ContactAttempted,
+                    "person_stage" => PersonChange::StageChanged,
                     _ => return Err(code(503, "unavailable")),
                 },
             )))

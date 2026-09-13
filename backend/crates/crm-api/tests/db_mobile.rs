@@ -758,6 +758,178 @@ async fn mobile002_edit_authority_scope_and_atomic_failure_matrix(pool: PgPool) 
 
 #[sqlx::test]
 #[ignore]
+async fn mobile004_stage_receipts_catalog_and_review_hold(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let stages: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM stage WHERE organization_id=$1 ORDER BY position,id LIMIT 2",
+    )
+    .bind(f.org)
+    .fetch_all(&f.app)
+    .await
+    .unwrap();
+    let initial = stages[0];
+    let target = stages[1];
+    let accepted = f.operation(
+        "change_person_stage",
+        json!({"person_id":f.person,"stage_id":target,"expected_stage_revision":"1"}),
+    );
+    let (status, receipt) = f.post("/api/mobile/v1/operations", accepted.clone()).await;
+    assert_eq!(status, StatusCode::OK, "{receipt}");
+    assert_eq!(receipt["resource_type"], "person_stage");
+    assert_eq!(receipt["resource_id"], f.person.to_string());
+    assert_eq!(receipt["committed_revision"], "2");
+    assert_eq!(receipt["changed"], true);
+
+    note::add_note(
+        &f.app,
+        &Publisher::recording(),
+        &CommandContext::from_auth(&f.auth()),
+        note::AddNote {
+            person_id: PersonId(f.person),
+            body: note::NoteBody::parse("unrelated note").unwrap(),
+        },
+    )
+    .await
+    .unwrap();
+    let no_op = f.operation(
+        "change_person_stage",
+        json!({"person_id":f.person,"stage_id":target,"expected_stage_revision":"2"}),
+    );
+    let (status, no_op_receipt) = f.post("/api/mobile/v1/operations", no_op).await;
+    assert_eq!(status, StatusCode::OK, "{no_op_receipt}");
+    assert_eq!(no_op_receipt["changed"], false);
+    assert_eq!(no_op_receipt["committed_revision"], "2");
+
+    crm_api::domain::commands::change_person_stage(
+        &f.app,
+        &Publisher::recording(),
+        &CommandContext::from_auth(&f.auth()),
+        crm_api::domain::commands::ChangePersonStage {
+            person_id: PersonId(f.person),
+            stage_id: crm_api::ids::StageId(initial),
+        },
+    )
+    .await
+    .unwrap();
+    let aba = f.operation(
+        "change_person_stage",
+        json!({"person_id":f.person,"stage_id":initial,"expected_stage_revision":"1"}),
+    );
+    let (status, conflict) = f.post("/api/mobile/v1/operations", aba).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{conflict}");
+    assert_eq!(conflict["error"], "revision_conflict");
+    let (status, replay) = f.post("/api/mobile/v1/operations", accepted).await;
+    assert_eq!(status, StatusCode::OK, "{replay}");
+    assert_eq!(replay["replayed"], true);
+    assert_eq!(replay["committed_revision"], "2");
+
+    let (status, current) = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &format!("/api/mobile/v1/people/{}/stage", f.person),
+        json!(null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{current}");
+    assert_eq!(current["stage"]["id"], initial.to_string());
+    assert_eq!(current["stage_revision"], "3");
+
+    let before_catalog: i64 =
+        sqlx::query_scalar("SELECT stage_catalog_revision FROM organization WHERE id=$1")
+            .bind(f.org)
+            .fetch_one(&f.app)
+            .await
+            .unwrap();
+    for position in 100..=201_i16 {
+        sqlx::query("INSERT INTO stage(organization_id,name,position) VALUES($1,$2,$3)")
+            .bind(f.org)
+            .bind(format!("Mobile004 {position}"))
+            .bind(position)
+            .execute(&f.app)
+            .await
+            .unwrap();
+    }
+    let after_catalog: i64 =
+        sqlx::query_scalar("SELECT stage_catalog_revision FROM organization WHERE id=$1")
+            .bind(f.org)
+            .fetch_one(&f.app)
+            .await
+            .unwrap();
+    assert_eq!(after_catalog, before_catalog + 102);
+    assert!(sqlx::query(
+        "UPDATE organization SET stage_catalog_revision=stage_catalog_revision+1 WHERE id=$1"
+    )
+    .bind(f.org)
+    .execute(&f.app)
+    .await
+    .is_err());
+    let (status, generation) = f
+        .post(
+            "/api/mobile/v1/reconciliations",
+            json!({"protocol":"mobile-v1","installation_id":f.install,"pinned_person_ids":[],"include_stage_catalog":true}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{generation}");
+    let generation_id = id(&generation, "generation_id");
+    let (status, first) = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &format!("/api/mobile/v1/reconciliations/{generation_id}/stages"),
+        json!(null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{first}");
+    assert_eq!(first["items"].as_array().unwrap().len(), 100);
+    let cursor = first["next_cursor"].as_str().unwrap();
+    let (status, second) = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &format!("/api/mobile/v1/reconciliations/{generation_id}/stages?cursor={cursor}"),
+        json!(null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{second}");
+    assert_eq!(second["complete"], true);
+    sqlx::query("UPDATE stage SET name='Mobile004 renamed' WHERE organization_id=$1 AND id=$2")
+        .bind(f.org)
+        .bind(initial)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        request(
+            &f.router,
+            &f.cookie,
+            Some(f.context),
+            "GET",
+            &format!("/api/mobile/v1/reconciliations/{generation_id}/stages"),
+            json!(null)
+        )
+        .await
+        .1["error"],
+        "generation_changed"
+    );
+
+    sqlx::query("UPDATE organization SET workspace_mode='migration_review',workspace_revision=workspace_revision+1 WHERE id=$1")
+        .bind(f.org).execute(&pool).await.unwrap();
+    let held = f.operation(
+        "change_person_stage",
+        json!({"person_id":f.person,"stage_id":target,"expected_stage_revision":"3"}),
+    );
+    assert_eq!(
+        f.post("/api/mobile/v1/operations", held).await.1["error"],
+        "workspace_in_migration_review"
+    );
+}
+
+#[sqlx::test]
+#[ignore]
 async fn current_authority_cross_org_receipts_and_workspace_hold(pool: PgPool) {
     let f = fixture(&pool).await;
     let (foreign_org, _) = crate::common::create_org_with_stages_and_member(

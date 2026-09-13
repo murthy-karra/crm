@@ -13,7 +13,9 @@ pub mod start_call;
 pub mod update_intake_settings;
 
 pub use assign_person::{assign_person, AssignPerson};
-pub use change_person_stage::{change_person_stage, ChangePersonStage};
+pub use change_person_stage::{
+    change_person_stage, change_person_stage_in_transaction, ChangePersonStage, ChangedPersonStage,
+};
 pub use correct_call_outcome::{
     correct_call_outcome, CallOutcomeCorrection, CorrectCallOutcome, CorrectedAttemptRef,
     CorrectionResult,

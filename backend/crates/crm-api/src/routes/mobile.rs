@@ -34,7 +34,15 @@ pub fn router() -> Router<AppState> {
             "/api/mobile/v1/people/{person_id}/tasks/{task_id}",
             get(current_task).layer(DefaultBodyLimit::max(1024)),
         )
+        .route(
+            "/api/mobile/v1/people/{person_id}/stage",
+            get(current_stage).layer(DefaultBodyLimit::max(1024)),
+        )
         .route("/api/mobile/v1/reconciliations", post(reconcile))
+        .route(
+            "/api/mobile/v1/reconciliations/{id}/stages",
+            get(stages).layer(DefaultBodyLimit::max(1024)),
+        )
         .route(
             "/api/mobile/v1/reconciliations/{id}/manifest",
             get(manifest),
@@ -143,6 +151,22 @@ async fn receipt(
         mobile::lookup_receipt(pool, &auth, context(&headers)?, id).await?,
     ))
 }
+async fn current_stage(
+    State(state): State<AppState>,
+    auth: AuthContext,
+    headers: HeaderMap,
+    path: Result<Path<Uuid>, PathRejection>,
+    query: Result<Query<Empty>, QueryRejection>,
+    body: Result<axum::body::Bytes, BytesRejection>,
+) -> Result<Json<Value>, Error> {
+    let Path(person_id) = path.map_err(|_| Error(MobileError::Code(400, "malformed_request")))?;
+    query.map_err(|_| Error(MobileError::Code(400, "malformed_request")))?;
+    empty_body(&body.map_err(|_| Error(MobileError::Code(400, "malformed_request")))?)?;
+    let (pool, _) = dependencies(&state)?;
+    Ok(Json(
+        mobile::current_stage(pool, &auth, context(&headers)?, person_id).await?,
+    ))
+}
 async fn current_note(
     State(state): State<AppState>,
     auth: AuthContext,
@@ -202,6 +226,30 @@ async fn reconcile(
 #[serde(deny_unknown_fields)]
 struct CursorQuery {
     cursor: Option<String>,
+}
+async fn stages(
+    State(state): State<AppState>,
+    auth: AuthContext,
+    headers: HeaderMap,
+    path: Result<Path<Uuid>, PathRejection>,
+    query: Result<Query<CursorQuery>, QueryRejection>,
+    request_body: Result<axum::body::Bytes, BytesRejection>,
+) -> Result<Json<Value>, Error> {
+    let Path(id) = path.map_err(|_| Error(MobileError::Code(400, "malformed_request")))?;
+    let Query(query) = query.map_err(|_| Error(MobileError::Code(400, "malformed_request")))?;
+    empty_body(&request_body.map_err(|_| Error(MobileError::Code(400, "malformed_request")))?)?;
+    let (pool, keys) = dependencies(&state)?;
+    Ok(Json(
+        mobile::stages(
+            pool,
+            keys,
+            &auth,
+            context(&headers)?,
+            id,
+            query.cursor.as_deref(),
+        )
+        .await?,
+    ))
 }
 async fn manifest(
     State(state): State<AppState>,

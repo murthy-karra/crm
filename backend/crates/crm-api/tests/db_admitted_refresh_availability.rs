@@ -2,7 +2,10 @@
 use crate::{common, db_admitted_people_refresh_execution as execution, import_support::Fixture};
 use crm_api::{
     auth::workspace::ReleaseReadiness,
-    domain::migration::admitted_people_refresh::{self as refresh, AvailabilityQuery},
+    domain::migration::{
+        admitted_people_refresh::{self as refresh, AvailabilityQuery},
+        MigrationError,
+    },
 };
 use serde_json::json;
 use sqlx::{PgPool, Row};
@@ -11,6 +14,7 @@ use uuid::Uuid;
 async fn availability(f: &Fixture, admission_id: Uuid, report_id: Uuid) -> serde_json::Value {
     refresh::availability(
         &f.pool,
+        &f.key,
         &f.ctx,
         AvailabilityQuery {
             admission_id,
@@ -95,6 +99,29 @@ async fn availability_reuses_prepare_qualification_and_hides_foreign_bindings(mi
     .await;
     assert_eq!(foreign.status(), 404);
     assert_eq!(foreign.headers()["cache-control"], "no-store");
+
+    sqlx::query(
+        "UPDATE organization_membership SET status='inactive' WHERE organization_id=$1 AND user_id=$2",
+    )
+    .bind(f.org)
+    .bind(f.actor)
+    .execute(&f.pool)
+    .await
+    .unwrap();
+    assert!(matches!(
+        refresh::availability(
+            &f.pool,
+            &f.key,
+            &f.ctx,
+            AvailabilityQuery {
+                admission_id: admission,
+                report_id: report,
+            },
+            Some(&ReleaseReadiness::for_tests()),
+        )
+        .await,
+        Err(MigrationError::Forbidden)
+    ));
 }
 
 #[sqlx::test]

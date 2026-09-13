@@ -1,4 +1,4 @@
-//! D-076 current-admin Admitted People refresh API. Values remain in bounded encrypted plan rows.
+//! D-080 current-admin admitted People refresh API. Values remain in bounded encrypted plan rows.
 use crate::{
     auth::OrgAdminContext,
     domain::{
@@ -131,6 +131,7 @@ async fn availability(
         StatusCode::OK,
         h::availability(
             s.db.as_ref().ok_or(ApiError::Unavailable)?,
+            &s.raw_payload_key,
             &CommandContext::from_auth(&a.auth),
             query(q)?,
             release.as_deref(),

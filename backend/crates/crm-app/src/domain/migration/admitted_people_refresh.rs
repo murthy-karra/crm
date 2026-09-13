@@ -1,8 +1,11 @@
-//! Typed command boundary for D-076 Admitted Admitted People refreshes.
+//! Typed command boundary for D-080 admitted People refreshes.
 pub use super::admitted_people_refresh_queries::{
     contacts, detail, field, item, items, list, results, Page,
 };
-use super::{admitted_people_refresh_store as s, snapshot::SnapshotPolicy, MigrationError};
+use super::{
+    admitted_people_refresh_store as s, core_change_store, snapshot::SnapshotPolicy, store,
+    MigrationError,
+};
 use crate::{
     auth::workspace::ReleaseReadiness, config::RawPayloadKey, domain::envelope::CommandContext,
 };
@@ -175,17 +178,18 @@ fn decode_digest(value: &str) -> Result<Vec<u8>, MigrationError> {
 
 async fn qualification(
     conn: &mut sqlx::PgConnection,
+    key: &RawPayloadKey,
     org: Uuid,
     admission_id: Uuid,
     report_id: Uuid,
     release_evidence: Option<&ReleaseReadiness>,
     lock: bool,
 ) -> Result<Qualification, MigrationError> {
-    const REPORT: &str = "SELECT r.*,a.id AS admission_id,a.state AS admission_state,a.parent_import_id AS admission_parent_import_id,a.parent_plan_id AS admission_parent_plan_id,a.source_account_id AS admission_account,a.workspace_revision AS admission_workspace_revision,a.confirmed_admission_plan_id,a.newer_completed_at AS admission_completed_at,i.state AS parent_state,i.confirmed_plan_id,i.snapshot_id AS parent_snapshot,i.source_account_id AS parent_account,o.workspace_mode,o.workspace_revision,ns.started_at AS newer_started_at,ns.completed_at AS newer_completed_at FROM migration_core_change_report r JOIN migration_people_admission a ON a.id=$1 AND a.organization_id=r.organization_id JOIN migration_import i ON i.id=r.parent_import_id AND i.organization_id=r.organization_id JOIN organization o ON o.id=r.organization_id JOIN migration_snapshot ns ON ns.id=r.newer_snapshot_id AND ns.organization_id=r.organization_id WHERE r.id=$2 AND r.organization_id=$3";
+    const REPORT: &str = "SELECT r.*,a.id AS admission_id,a.state AS admission_state,a.parent_import_id AS admission_parent_import_id,a.parent_plan_id AS admission_parent_plan_id,a.source_account_id AS admission_account,a.workspace_revision AS admission_workspace_revision,a.confirmed_admission_plan_id,a.newer_completed_at AS admission_completed_at,i.state AS parent_state,i.confirmed_plan_id,i.snapshot_id AS parent_snapshot,i.source_account_id AS parent_account,o.workspace_mode,o.workspace_revision AS current_workspace_revision,ns.started_at AS newer_started_at,ns.completed_at AS newer_completed_at FROM migration_core_change_report r JOIN migration_people_admission a ON a.id=$1 AND a.organization_id=r.organization_id JOIN migration_import i ON i.id=r.parent_import_id AND i.organization_id=r.organization_id JOIN organization o ON o.id=r.organization_id JOIN migration_snapshot ns ON ns.id=r.newer_snapshot_id AND ns.organization_id=r.organization_id WHERE r.id=$2 AND r.organization_id=$3";
     let sql = if lock {
         format!("{REPORT} FOR UPDATE")
     } else {
-        REPORT.to_owned()
+        format!("{REPORT} FOR SHARE")
     };
     let report = sqlx::query(&sql)
         .bind(admission_id)
@@ -212,7 +216,9 @@ async fn qualification(
             ClosedReason::ReleaseNotReady,
         ));
     }
-    if report.get::<String, _>("state") != "completed" {
+    if report.get::<String, _>("state") != "completed"
+        || report.get::<Option<Uuid>, _>("output_revision").is_none()
+    {
         return Ok(Qualification::closed(
             bindings,
             ClosedReason::ReportNotCompleted,
@@ -258,11 +264,31 @@ async fn qualification(
         || report.get::<i64, _>("source_account_id") != report.get::<i64, _>("parent_account")
         || report.get::<i64, _>("workspace_revision")
             != report.get::<i64, _>("admission_workspace_revision")
+        || report.get::<i64, _>("workspace_revision")
+            != report.get::<i64, _>("current_workspace_revision")
+        || report.get::<i64, _>("admission_workspace_revision")
+            != report.get::<i64, _>("current_workspace_revision")
     {
         return Ok(Qualification::closed(
             bindings,
             ClosedReason::BindingMismatch,
         ));
+    }
+    match core_change_store::validate(conn, key, crate::ids::OrganizationId(org), &report).await {
+        Ok(_) => {}
+        Err(MigrationError::ReleaseNotReady) => {
+            return Ok(Qualification::closed(
+                bindings,
+                ClosedReason::ReleaseNotReady,
+            ));
+        }
+        Err(MigrationError::SourceNotEligible | MigrationError::SourceAccountMismatch) => {
+            return Ok(Qualification::closed(
+                bindings,
+                ClosedReason::BindingMismatch,
+            ));
+        }
+        Err(error) => return Err(error),
     }
     let successful: i64 = sqlx::query_scalar("SELECT count(*) FROM migration_people_admission_result WHERE admission_id=$1 AND organization_id=$2 AND disposition='settled'")
         .bind(admission_id)
@@ -335,13 +361,27 @@ async fn qualification(
 
 pub async fn availability(
     pool: &PgPool,
+    key: &RawPayloadKey,
     ctx: &CommandContext,
     query: AvailabilityQuery,
     release_evidence: Option<&ReleaseReadiness>,
 ) -> Result<Value, MigrationError> {
-    let mut conn = pool.acquire().await?;
-    Ok(qualification(
-        &mut conn,
+    let mut tx = pool.begin().await?;
+    crate::auth::workspace::bounded_lock_wait(&mut tx).await?;
+    sqlx::query("SET LOCAL statement_timeout='10s'")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("SET LOCAL idle_in_transaction_session_timeout='15s'")
+        .execute(&mut *tx)
+        .await?;
+    store::require_admin(&mut tx, ctx).await?;
+    sqlx::query("SELECT id FROM organization WHERE id=$1 FOR SHARE")
+        .bind(ctx.organization_id.0)
+        .fetch_one(&mut *tx)
+        .await?;
+    let value = qualification(
+        &mut tx,
+        key,
         ctx.organization_id.0,
         query.admission_id,
         query.report_id,
@@ -349,7 +389,9 @@ pub async fn availability(
         false,
     )
     .await?
-    .response())
+    .response();
+    tx.commit().await?;
+    Ok(value)
 }
 
 pub async fn prepare(
@@ -367,6 +409,7 @@ pub async fn prepare(
     }
     let bindings = qualification(
         &mut tx,
+        key,
         ctx.organization_id.0,
         cmd.admission_id,
         cmd.report_id,

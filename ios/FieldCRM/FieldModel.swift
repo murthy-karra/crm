@@ -27,6 +27,7 @@ import Network
     #if MOBILE002_QA
     @Published var qaFixtureStage = "not requested"
     @Published var qaMigrationStage = "not inspected"
+    @Published var qaConflictStage = "no pending edit"
     #endif
     init(synthetic: Bool = false, startMonitor: Bool = true, restoreOnInit: Bool = true) {
         secure = SecureStorage(synthetic: synthetic); self.synthetic = secure.synthetic
@@ -132,6 +133,23 @@ import Network
     }
     private func byteDigest(_ bytes: Data) -> UInt64 {
         bytes.reduce(1469598103934665603) { ($0 ^ UInt64($1)) &* 1099511628211 }
+    }
+    func advanceQAPendingEditAsSecondActor() async {
+        guard let pending = queue.first(where: { $0.envelope.kind == "edit_note" && !["accepted", "superseded", "discarded", "unavailable"].contains($0.status) }),
+              let noteID = pending.targetID else {
+            qaConflictStage = "no pending note edit"; return
+        }
+        do {
+            let other = try client(base: qaBaseURL); try await other.login(email: "second@mobile.test", password: "Mobile-demo-only-123!")
+            let key = "mobile002.qa.second.installation"
+            let installation = appDefaults.string(forKey: key) ?? { let value = UUID().uuidString.lowercased(); appDefaults.set(value, forKey: key); return value }()
+            let boot: Bootstrap = try await other.call("/bootstrap", method: "POST", body: .object(["protocol": .s("mobile-v1"), "installation_id": .s(installation)]))
+            let expected = pending.envelope.payload["target"]["expected_revision"].text
+            guard !expected.isEmpty else { qaConflictStage = "pending edit has no baseline"; return }
+            let replacement = Envelope(context_id: boot.context_id, operation_id: UUID().uuidString.lowercased(), kind: "edit_note", device_recorded_at: stamp(), payload: .object(["person_id": .s(pending.envelope.person), "note_id": .s(noteID), "expected_revision": .s(expected), "body": .s("second actor current version")]))
+            let receipt = try await other.operation(try encode(replacement), context: boot.context_id)
+            qaConflictStage = "second actor accepted revision " + (receipt.committed_revision ?? "?")
+        } catch { qaConflictStage = "second actor error: " + error.localizedDescription }
     }
     private func qaFixturePersonID() -> String {
         let args = ProcessInfo.processInfo.arguments

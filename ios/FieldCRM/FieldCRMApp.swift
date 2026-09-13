@@ -85,6 +85,11 @@ struct WorkspaceView: View {
                             Text(model.qaMigrationStage).font(.caption2).accessibilityIdentifier("qaMigrationStage")
                             Button("Inspect protected migration") { model.inspectQAMigration() }.accessibilityIdentifier("inspectQAMigration")
                         }
+                        Section("QA conflict actor") {
+                            Text(model.qaConflictStage).font(.caption2).accessibilityIdentifier("qaConflictStage")
+                            Button("Advance pending note as second actor") { Task { await model.advanceQAPendingEditAsSecondActor() } }.accessibilityIdentifier("qaAdvanceConflict")
+                                .disabled(model.syncing)
+                        }
                         #endif
                         Section("Connection") {
                             Toggle("Work offline · pause sync", isOn: $model.paused).accessibilityIdentifier("offlineToggle")

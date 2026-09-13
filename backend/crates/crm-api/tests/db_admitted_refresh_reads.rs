@@ -376,3 +376,36 @@ async fn admitted_refresh_readiness_rejects_partial_identity_and_mapping_schema(
         .await
         .unwrap();
 }
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn member_denials_before_refresh_routes_are_not_cacheable(migrator: PgPool) {
+    let password = "synthetic refresh denial password";
+    common::create_org_with_stages_and_member(
+        &migrator,
+        "Refresh denial fixture",
+        "refresh-member@synthetic.test",
+        "Refresh member",
+        password,
+    )
+    .await;
+    let app = common::build_router(&migrator).await;
+    let cookie = common::login_cookie(&app, "refresh-member@synthetic.test", password).await;
+    let id = Uuid::new_v4();
+    let prefix = "/api/migrations/fub/admitted-people-refreshes";
+    for path in [
+        format!("{prefix}?admission_id={id}"),
+        format!("{prefix}/availability?admission_id={id}&report_id={id}"),
+        format!("{prefix}/{id}"),
+        format!("{prefix}/{id}/items"),
+        format!("{prefix}/{id}/results"),
+    ] {
+        let response = common::get_with_cookie(&app, &path, &cookie).await;
+        assert_eq!(response.status(), 403, "{path}");
+        assert_eq!(response.headers()["cache-control"], "no-store", "{path}");
+        assert_eq!(
+            common::body_json(response).await,
+            json!({"error":"forbidden"})
+        );
+    }
+}

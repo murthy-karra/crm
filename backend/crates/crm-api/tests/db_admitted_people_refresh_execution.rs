@@ -488,6 +488,22 @@ async fn completed_admitted_refresh_replays_preserves_bytes_and_advances_baselin
     assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM person_admitted_refresh_provenance WHERE refresh_id=$1 AND person_id=$2")
         .bind(run).bind(person).fetch_one(&f.pool).await.unwrap(), 1);
     let report_two = report(&f, parent, vec![json!({"id":104,"firstName":"Second","lastName":"One","stage":"Lead","assignedUserId":3,"emails":[{"value":"second@synthetic.test"}],"phones":[{"value":"4155550104"}]})]).await;
+    // The successor uses settled B and must never decrypt the obsolete
+    // original admission envelope.
+    sqlx::query("ALTER TABLE migration_people_admission_item DISABLE TRIGGER USER")
+        .execute(&migrator)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE migration_people_admission_item SET projection_ciphertext='\\x00'::bytea WHERE admission_id=$1 AND organization_id=$2 AND source_id='104'")
+        .bind(admission)
+        .bind(f.org)
+        .execute(&migrator)
+        .await
+        .unwrap();
+    sqlx::query("ALTER TABLE migration_people_admission_item ENABLE TRIGGER USER")
+        .execute(&migrator)
+        .await
+        .unwrap();
     let (second, second_detail) = prepare(&f, admission, report_two).await;
     let item_id = uuid(
         &refresh::items(&f.pool, &f.key, &f.ctx, second, refresh::Page::default())
@@ -1347,7 +1363,7 @@ async fn missing_execution_mapping_targets_settle_held_stale_without_native_writ
     confirm(&assignee, assignee_run, &confirmation(&assignee_detail)).await;
     sqlx::query("UPDATE organization_membership SET status='inactive' WHERE organization_id=$1 AND user_id=$2")
         .bind(assignee.org)
-        .bind(assignee.member)
+        .bind(assignee.actor)
         .execute(&migrator)
         .await
         .unwrap();

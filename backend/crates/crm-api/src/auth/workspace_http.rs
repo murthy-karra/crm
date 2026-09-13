@@ -28,6 +28,10 @@ pub async fn guard(State(state): State<AppState>, request: Request, next: Next) 
             .uri()
             .path()
             .starts_with("/api/migrations/fub/core-change-reports")
+        || request
+            .uri()
+            .path()
+            .starts_with("/api/migrations/fub/people-refreshes")
         || request.uri().path().starts_with("/api/people/")
             && request.uri().path().contains("/migration-review");
     // Include session extraction and workspace admission in the native request

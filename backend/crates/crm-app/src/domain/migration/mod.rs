@@ -259,3 +259,9 @@ pub mod core_change_reports;
 pub(crate) mod core_change_source;
 pub(crate) mod core_change_store;
 pub mod core_change_worker;
+
+pub mod people_refresh;
+pub(crate) mod people_refresh_queries;
+pub(crate) mod people_refresh_source;
+pub(crate) mod people_refresh_store;
+pub mod people_refresh_worker;

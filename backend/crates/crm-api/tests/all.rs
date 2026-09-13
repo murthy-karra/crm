@@ -348,3 +348,6 @@ mod db_history_timeline_compat;
 mod db_core_change_reports;
 #[path = "db_mobile.rs"]
 mod db_mobile;
+#[path = "db_people_refresh.rs"]
+mod db_people_refresh;
+mod db_people_refresh_execution;

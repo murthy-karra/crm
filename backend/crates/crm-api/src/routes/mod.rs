@@ -35,3 +35,5 @@ pub mod history_review;
 
 pub mod core_change_reports;
 pub mod mobile;
+
+pub mod people_refreshes;

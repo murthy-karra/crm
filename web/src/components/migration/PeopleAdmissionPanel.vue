@@ -1,2 +1,51 @@
-<template><Card class="mb-6"><h2 class="text-section font-semibold text-text">Admit newly observed People</h2><p class="mt-1 text-small text-text-muted">Core People only. Notes, tasks, tags, fields and source history remain deferred; the workspace stays under review.</p><div class="mt-3 flex gap-2"><input v-model="parent" class="input" placeholder="Completed original import ID"><input v-model="report" class="input" placeholder="Completed change report ID"><button class="btn" :disabled="busy||!report" @click="prepare">Prepare preview</button></div><p v-if="error" class="mt-2 text-small text-danger">{{ error }}</p><div v-if="current" class="mt-3 text-small"><p>Run {{ current.id }} · {{ current.state }}</p><p v-if="current.plan">Eligible: {{ current.plan.counts.eligible }} · held: {{ current.plan.counts.held }}</p><label v-if="current.actions?.confirm" class="mt-2 block"><input v-model="ack" type="checkbox"> I acknowledge core-only coverage, inherited mappings, distinct People with shared contacts, and the continuing review hold.</label><button v-if="current.actions?.confirm" class="btn mt-2" :disabled="!ack||busy" @click="confirm">Confirm admission</button></div></Card></template>
-<script setup lang="ts">import{ref}from'vue';import Card from'../Card.vue';import{preparePeopleAdmission,fetchPeopleAdmission,confirmPeopleAdmission,type PeopleAdmission}from'../../api/peopleAdmissions';const props=defineProps<{refreshWorkspace:()=>Promise<void>}>();defineEmits<{reviewSnapshot:[snapshotId:string]}>();const parent=ref(''),report=ref(''),current=ref<PeopleAdmission>(),busy=ref(false),ack=ref(false),error=ref('');const request=()=>crypto.randomUUID();async function prepare(){busy.value=true;error.value='';try{const r=await preparePeopleAdmission(report.value,request());current.value=await fetchPeopleAdmission(r.admission_id);await props.refreshWorkspace()}catch(e){error.value='Could not prepare the admission preview.'}finally{busy.value=false}}async function confirm(){if(!current.value?.plan)return;busy.value=true;try{await confirmPeopleAdmission(current.value.id,{request_id:request(),plan_id:current.value.plan.id,plan_revision:Number(current.value.plan.revision),plan_digest:current.value.plan.digest,eligible_count:Number(current.value.plan.counts.eligible),acknowledged_coverage:true,acknowledged_mappings:true,acknowledged_distinct_contacts:true,acknowledged_review_hold:true});current.value=await fetchPeopleAdmission(current.value.id)}catch(e){error.value='Could not confirm the admission.'}finally{busy.value=false}}</script>
+<template>
+  <Card class="mb-6">
+    <h2 class="text-section font-semibold text-text">
+      Admit newly observed People
+    </h2><p class="mt-1 text-small text-text-muted">
+      Core People only. Notes, tasks, tags, fields and source history remain deferred; the workspace stays under review.
+    </p><div class="mt-3 flex gap-2">
+      <input
+        v-model="parent"
+        class="input"
+        placeholder="Completed original import ID"
+      ><input
+        v-model="report"
+        class="input"
+        placeholder="Completed change report ID"
+      ><button
+        class="btn"
+        :disabled="busy||!report"
+        @click="prepare"
+      >
+        Prepare preview
+      </button>
+    </div><p
+      v-if="error"
+      class="mt-2 text-small text-danger"
+    >
+      {{ error }}
+    </p><div
+      v-if="current"
+      class="mt-3 text-small"
+    >
+      <p>Run {{ current.id }} · {{ current.state }}</p><p v-if="current.plan">
+        Eligible: {{ current.plan.counts.eligible }} · held: {{ current.plan.counts.held }}
+      </p><label
+        v-if="current.actions?.confirm"
+        class="mt-2 block"
+      ><input
+        v-model="ack"
+        type="checkbox"
+      > I acknowledge core-only coverage, inherited mappings, distinct People with shared contacts, and the continuing review hold.</label><button
+        v-if="current.actions?.confirm"
+        class="btn mt-2"
+        :disabled="!ack||busy"
+        @click="confirm"
+      >
+        Confirm admission
+      </button>
+    </div>
+  </Card>
+</template>
+<script setup lang="ts">import{ref}from'vue';import Card from'../Card.vue';import{preparePeopleAdmission,fetchPeopleAdmission,confirmPeopleAdmission,type PeopleAdmission}from'../../api/peopleAdmissions';const props=defineProps<{refreshWorkspace:()=>Promise<void>}>();defineEmits<{reviewSnapshot:[snapshotId:string]}>();const parent=ref(''),report=ref(''),current=ref<PeopleAdmission>(),busy=ref(false),ack=ref(false),error=ref('');const request=()=>crypto.randomUUID();async function prepare(){busy.value=true;error.value='';try{const r=await preparePeopleAdmission(report.value,request());current.value=await fetchPeopleAdmission(r.admission_id);await props.refreshWorkspace()}catch{error.value='Could not prepare the admission preview.'}finally{busy.value=false}}async function confirm(){if(!current.value?.plan)return;busy.value=true;try{await confirmPeopleAdmission(current.value.id,{request_id:request(),plan_id:current.value.plan.id,plan_revision:Number(current.value.plan.revision),plan_digest:current.value.plan.digest,eligible_count:Number(current.value.plan.counts.eligible),acknowledged_coverage:true,acknowledged_mappings:true,acknowledged_distinct_contacts:true,acknowledged_review_hold:true});current.value=await fetchPeopleAdmission(current.value.id)}catch{error.value='Could not confirm the admission.'}finally{busy.value=false}}</script>

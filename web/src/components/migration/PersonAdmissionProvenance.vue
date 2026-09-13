@@ -1,1 +1,12 @@
-<template><Card class="mt-4"><h3 class="font-semibold">Admission provenance</h3><p class="text-small text-text-muted">This Person was admitted from retained migration evidence. Child families remain deferred.</p><pre v-if="data" class="mt-2 overflow-auto text-xs">{{ data }}</pre></Card></template><script setup lang="ts">import{useQuery}from'@tanstack/vue-query';import Card from'../Card.vue';import{fetchAdmissionProvenance}from'../../api/peopleAdmissions';const props=defineProps<{personId:string}>();const{data}=useQuery({queryKey:['admission-provenance',props.personId],queryFn:()=>fetchAdmissionProvenance(props.personId),retry:false})</script>
+<template>
+  <Card class="mt-4">
+    <h3 class="font-semibold">
+      Admission provenance
+    </h3><p class="text-small text-text-muted">
+      This Person was admitted from retained migration evidence. Child families remain deferred.
+    </p><pre
+      v-if="data"
+      class="mt-2 overflow-auto text-xs"
+    >{{ data }}</pre>
+  </Card>
+</template><script setup lang="ts">import{useQuery}from'@tanstack/vue-query';import Card from'../Card.vue';import{fetchAdmissionProvenance}from'../../api/peopleAdmissions';const props=defineProps<{personId:string}>();const{data}=useQuery({queryKey:['admission-provenance',props.personId],queryFn:()=>fetchAdmissionProvenance(props.personId),retry:false})</script>

@@ -139,7 +139,7 @@ END $$;
 
 CREATE FUNCTION crm_metadata_identity_guard() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
- IF current_user='crm_app' AND NOT crm_metadata_insert_allowed(NEW.organization_id,'migration_metadata_identity',to_jsonb(NEW)) THEN RAISE EXCEPTION USING ERRCODE='P010C',MESSAGE='metadata_identity_permit_required'; END IF;
+ IF current_user='crm_app' AND EXISTS(SELECT 1 FROM migration_metadata_catalog_readiness WHERE organization_id=NEW.organization_id AND state='ready') AND NOT crm_metadata_insert_allowed(NEW.organization_id,'migration_metadata_identity',to_jsonb(NEW)) THEN RAISE EXCEPTION USING ERRCODE='P010C',MESSAGE='metadata_identity_permit_required'; END IF;
  RETURN NEW;
 END $$;
 CREATE TRIGGER migration_metadata_identity_claim_guard BEFORE INSERT ON migration_metadata_identity FOR EACH ROW EXECUTE FUNCTION crm_metadata_identity_guard();

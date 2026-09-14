@@ -57,6 +57,23 @@ describe('invalidationsFor', () => {
     ])
   })
 
+  it('refreshes all profile-dependent surfaces for details_changed through the broad fallback', () => {
+    const expected = [
+      queryKeys.person(ORG_ID, PERSON_ID),
+      queryKeys.people(ORG_ID),
+      queryKeys.today(ORG_ID),
+      queryKeys.savedListCounts(ORG_ID),
+    ]
+    expect(invalidationsFor(personChanged('details_changed'), ORG_ID)).toEqual(expected)
+    // Older clients also accept a newly introduced change through this fallback.
+    expect(
+      invalidationsFor(
+        { ...personChanged('details_changed'), data: { person_id: PERSON_ID, change: 'future_change' } },
+        ORG_ID,
+      ),
+    ).toEqual(expected)
+  })
+
   // SLICE_011e §5, §7: `tags_changed` is additive on the existing
   // `person.changed` event — no new case needed, since this handler already
   // invalidates person/people/today/saved-list counts for every change value.

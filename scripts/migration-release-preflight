@@ -77,9 +77,11 @@ CORE_CHANGE_CAPABILITY = "fub-core-change-v1"
 PEOPLE_REFRESH_CAPABILITY = "fub-people-refresh-v1"
 PEOPLE_ADMISSION_CAPABILITY = "fub-people-admission-v1"
 ADMITTED_PEOPLE_REFRESH_CAPABILITY = "fub-admitted-people-refresh-v1"
+ADMITTED_METADATA_CAPABILITY = "fub-admitted-metadata-v1"
 CAPABILITIES = frozenset({METADATA_CAPABILITY, ACTIVITY_CAPABILITY, HISTORY_CAPABILITY,
                         TIMELINE_CAPABILITY, CORE_CHANGE_CAPABILITY, PEOPLE_REFRESH_CAPABILITY,
-                        PEOPLE_ADMISSION_CAPABILITY, ADMITTED_PEOPLE_REFRESH_CAPABILITY})
+                        PEOPLE_ADMISSION_CAPABILITY, ADMITTED_PEOPLE_REFRESH_CAPABILITY,
+                        ADMITTED_METADATA_CAPABILITY})
 MAX_JSON_BYTES = 1024 * 1024
 MAX_ENTRIES = 4096
 MAX_AGE_SECONDS = 300
@@ -191,6 +193,10 @@ def validate_state(state):
                              "admitted_people_refresh_unsupported_count"}
     if admitted_people_refresh_fields.intersection(state):
         fields |= admitted_people_refresh_fields
+    admitted_metadata_fields = {"admitted_metadata_binding_count", "admitted_metadata_schema_present",
+                                "admitted_metadata_unsupported_count"}
+    if admitted_metadata_fields.intersection(state):
+        fields |= admitted_metadata_fields
     object_fields(state, fields)
     if (type(state.get("activity_schema_present", False)) is not bool
             or not isinstance(state.get("activity_binding_count", "0"), str)
@@ -253,6 +259,16 @@ def validate_state(state):
             or int(admitted_people_refresh_unsupported) > int(admitted_people_refresh_count)
             or (not state.get("admitted_people_refresh_schema_present", False)
                 and int(admitted_people_refresh_count) != 0)):
+        fail("database_evidence_invalid")
+    admitted_metadata_count = state.get("admitted_metadata_binding_count", "0")
+    admitted_metadata_unsupported = state.get("admitted_metadata_unsupported_count", "0")
+    if (type(state.get("admitted_metadata_schema_present", False)) is not bool
+            or any(not isinstance(value, str)
+                   or re.fullmatch(r"0|[1-9][0-9]{0,19}", value) is None
+                   for value in [admitted_metadata_count, admitted_metadata_unsupported])
+            or int(admitted_metadata_unsupported) > int(admitted_metadata_count)
+            or (not state.get("admitted_metadata_schema_present", False)
+                and int(admitted_metadata_count) != 0)):
         fail("database_evidence_invalid")
     count = state["binding_count"]
     if (type(state["schema_present"]) is not bool
@@ -403,6 +419,13 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
         reasons.add("admitted_people_refresh_binding_requires_compatible_artifacts")
     if int(state.get("admitted_people_refresh_unsupported_count", "0")) > 0:
         reasons.add("admitted_people_refresh_engine_unsupported")
+    admitted_metadata_missing = any(item["role"] in {"api", "worker"}
+                                 and ADMITTED_METADATA_CAPABILITY not in item["capabilities"]
+                                 for item in selected + processes)
+    if int(state.get("admitted_metadata_binding_count", "0")) > 0 and admitted_metadata_missing:
+        reasons.add("admitted_metadata_binding_requires_compatible_artifacts")
+    if int(state.get("admitted_metadata_unsupported_count", "0")) > 0:
+        reasons.add("admitted_metadata_engine_unsupported")
     launch_allowed = not reasons
     confirmation_reasons = set(reasons)
     if not state["schema_present"]:
@@ -465,6 +488,13 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
         admitted_people_refresh_reasons.add("admitted_people_refresh_candidate_missing")
     if not state.get("admitted_people_refresh_schema_present", False):
         admitted_people_refresh_reasons.add("admitted_people_refresh_schema_missing")
+    admitted_metadata_reasons = set(confirmation_reasons)
+    if admitted_metadata_missing:
+        admitted_metadata_reasons.add("admitted_metadata_capability_missing")
+    if not any(item["role"] in {"api", "worker"} for item in selected):
+        admitted_metadata_reasons.add("admitted_metadata_candidate_missing")
+    if not state.get("admitted_metadata_schema_present", False):
+        admitted_metadata_reasons.add("admitted_metadata_schema_missing")
     return {
         "version": 1,
         "gate_version": GATE,
@@ -507,6 +537,10 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
         "admitted_people_refresh_schema_present": state.get("admitted_people_refresh_schema_present", False),
         "admitted_people_refresh_binding_count": state.get("admitted_people_refresh_binding_count", "0"),
         "admitted_people_refresh_unsupported_count": state.get("admitted_people_refresh_unsupported_count", "0"),
+        "admitted_metadata_confirmation_ready": not admitted_metadata_reasons,
+        "admitted_metadata_schema_present": state.get("admitted_metadata_schema_present", False),
+        "admitted_metadata_binding_count": state.get("admitted_metadata_binding_count", "0"),
+        "admitted_metadata_unsupported_count": state.get("admitted_metadata_unsupported_count", "0"),
         "launch_reasons": sorted(reasons),
         "confirmation_reasons": sorted(confirmation_reasons),
         "metadata_confirmation_reasons": sorted(metadata_reasons),
@@ -516,6 +550,7 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
         "core_change_confirmation_reasons": sorted(core_change_reasons),
         "people_refresh_confirmation_reasons": sorted(people_refresh_reasons),
         "people_admission_confirmation_reasons": sorted(people_admission_reasons),
+        "admitted_metadata_confirmation_reasons": sorted(admitted_metadata_reasons),
         "admitted_people_refresh_confirmation_reasons": sorted(admitted_people_refresh_reasons),
     }
 
@@ -700,6 +735,22 @@ def database_state():
         object_fields(observed, {"count", "unsupported_count"})
         state["admitted_people_refresh_binding_count"] = observed["count"]
         state["admitted_people_refresh_unsupported_count"] = observed["unsupported_count"]
+    # Ready handovers count even after preparation cancellation and before any
+    # confirmed child. Missing tables/guards cannot hide this durable boundary.
+    admitted_metadata = sql_json("SELECT json_build_object('present',(SELECT (SELECT bool_or(to_regclass('public.'||name) IS NOT NULL) FROM (VALUES ('migration_metadata_catalog_readiness'),('migration_metadata_catalog_claim'),('migration_admitted_metadata_import'),('migration_admitted_metadata_plan'),('migration_admitted_metadata_manifest'),('migration_admitted_metadata_source'),('migration_admitted_metadata_reservation'),('migration_admitted_metadata_issue'),('migration_admitted_metadata_mapping'),('migration_admitted_metadata_operation'),('migration_admitted_metadata_result'),('migration_admitted_metadata_receipt')) required(name)) OR to_regprocedure('public.crm_admitted_metadata_insert_allowed(uuid,text,jsonb)') IS NOT NULL OR to_regprocedure('public.crm_metadata_identity_guard()') IS NOT NULL),'compatible',(SELECT (SELECT bool_and(to_regclass('public.'||name) IS NOT NULL) FROM (VALUES ('migration_metadata_catalog_readiness'),('migration_metadata_catalog_claim'),('migration_admitted_metadata_import'),('migration_admitted_metadata_plan'),('migration_admitted_metadata_manifest'),('migration_admitted_metadata_source'),('migration_admitted_metadata_reservation'),('migration_admitted_metadata_issue'),('migration_admitted_metadata_mapping'),('migration_admitted_metadata_operation'),('migration_admitted_metadata_result'),('migration_admitted_metadata_receipt')) required(name)) AND to_regprocedure('public.crm_admitted_metadata_insert_allowed(uuid,text,jsonb)') IS NOT NULL AND to_regprocedure('public.crm_metadata_identity_guard()') IS NOT NULL AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=to_regclass('public.migration_metadata_identity') AND tgname='migration_metadata_identity_claim_guard' AND tgenabled<>'D' AND tgfoid=to_regprocedure('public.crm_metadata_identity_guard()'))))")
+    object_fields(admitted_metadata, {"present", "compatible"})
+    if any(type(admitted_metadata[key]) is not bool for key in ["present", "compatible"]):
+        fail("database_evidence_invalid")
+    if admitted_metadata["present"] != admitted_metadata["compatible"]:
+        fail("admitted_metadata_schema_incomplete")
+    state["admitted_metadata_schema_present"] = admitted_metadata["present"]
+    state["admitted_metadata_binding_count"] = "0"
+    state["admitted_metadata_unsupported_count"] = "0"
+    if admitted_metadata["present"]:
+        observed = sql_json("SELECT json_build_object('count',((SELECT count(*) FROM public.migration_metadata_catalog_readiness WHERE state='ready')+(SELECT count(*) FROM public.migration_admitted_metadata_import))::text,'unsupported_count',((SELECT count(*) FROM public.migration_metadata_catalog_readiness WHERE state='ready' AND engine_version IS DISTINCT FROM 'fub-admitted-metadata-v1')+(SELECT count(*) FROM public.migration_admitted_metadata_import WHERE engine_version<>'fub-admitted-metadata-v1'))::text)")
+        object_fields(observed, {"count", "unsupported_count"})
+        state["admitted_metadata_binding_count"] = observed["count"]
+        state["admitted_metadata_unsupported_count"] = observed["unsupported_count"]
     return state
 
 
@@ -731,6 +782,7 @@ def main(argv=None):
                           "people_refresh_confirmation_ready": False,
                           "people_admission_confirmation_ready": False,
                           "admitted_people_refresh_confirmation_ready": False,
+                          "admitted_metadata_confirmation_ready": False,
                           "error": str(error)}, sort_keys=True))
         return 2
 

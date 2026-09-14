@@ -15,6 +15,9 @@ pub const HISTORY_TIMELINE_CAPABILITY: &str = "fub-history-timeline-v1";
 pub const CORE_CHANGE_CAPABILITY: &str = "fub-core-change-v1";
 pub const PEOPLE_REFRESH_CAPABILITY: &str = "fub-people-refresh-v1";
 pub const ADMITTED_PEOPLE_REFRESH_CAPABILITY: &str = "fub-admitted-people-refresh-v1";
+pub const ADMITTED_METADATA_CAPABILITY: &str = "fub-admitted-metadata-v1";
+const ADMITTED_METADATA_SCHEMA: &str = "SELECT (SELECT bool_and(to_regclass('public.'||name) IS NOT NULL) FROM (VALUES ('migration_metadata_catalog_readiness'),('migration_metadata_catalog_claim'),('migration_admitted_metadata_import'),('migration_admitted_metadata_plan'),('migration_admitted_metadata_manifest'),('migration_admitted_metadata_source'),('migration_admitted_metadata_reservation'),('migration_admitted_metadata_issue'),('migration_admitted_metadata_mapping'),('migration_admitted_metadata_operation'),('migration_admitted_metadata_result'),('migration_admitted_metadata_receipt')) required(name)) AND to_regprocedure('public.crm_admitted_metadata_insert_allowed(uuid,text,jsonb)') IS NOT NULL AND to_regprocedure('public.crm_metadata_identity_guard()') IS NOT NULL AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=to_regclass('public.migration_metadata_identity') AND tgname='migration_metadata_identity_claim_guard' AND tgenabled<>'D' AND tgfoid=to_regprocedure('public.crm_metadata_identity_guard()'))";
+const ADMITTED_METADATA_PRESENT: &str = "SELECT (SELECT bool_or(to_regclass('public.'||name) IS NOT NULL) FROM (VALUES ('migration_metadata_catalog_readiness'),('migration_metadata_catalog_claim'),('migration_admitted_metadata_import'),('migration_admitted_metadata_plan'),('migration_admitted_metadata_manifest'),('migration_admitted_metadata_source'),('migration_admitted_metadata_reservation'),('migration_admitted_metadata_issue'),('migration_admitted_metadata_mapping'),('migration_admitted_metadata_operation'),('migration_admitted_metadata_result'),('migration_admitted_metadata_receipt')) required(name)) OR to_regprocedure('public.crm_admitted_metadata_insert_allowed(uuid,text,jsonb)') IS NOT NULL OR to_regprocedure('public.crm_metadata_identity_guard()') IS NOT NULL";
 const ADMITTED_PEOPLE_REFRESH_SCHEMA: &str = "SELECT (SELECT bool_and(to_regclass('public.'||name) IS NOT NULL) FROM (VALUES ('migration_admitted_people_refresh'),('migration_admitted_people_refresh_plan'),('migration_admitted_people_refresh_item'),('migration_admitted_people_refresh_contact'),('migration_admitted_people_refresh_result'),('migration_admitted_people_refresh_baseline'),('migration_admitted_people_refresh_receipt'),('migration_admitted_people_refresh_reservation'),('person_admitted_refresh_provenance')) required(name)) AND to_regprocedure('public.crm_admitted_people_refresh_mutation_allowed(uuid,text,text,text,jsonb,jsonb)') IS NOT NULL AND EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=to_regclass('public.migration_admitted_people_refresh_item') AND attname='baseline_version' AND atttypid='bigint'::regtype AND attnotnull AND NOT attisdropped) AND (SELECT count(*)=3 FROM pg_attribute WHERE attrelid=to_regclass('public.migration_admitted_people_refresh_item') AND attname IN ('stage_mapping_id','assignee_mapping_id','baseline_result_id') AND atttypid='uuid'::regtype AND NOT attnotnull AND NOT attisdropped) AND EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=to_regclass('public.migration_admitted_people_refresh_item') AND attname='source_account_id' AND atttypid='bigint'::regtype AND NOT attnotnull AND NOT attisdropped) AND EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=to_regclass('public.migration_admitted_people_refresh_item') AND attname='source_semantic_hmac' AND atttypid='bytea'::regtype AND NOT attnotnull AND NOT attisdropped)";
 const ADMITTED_PEOPLE_REFRESH_PRESENT: &str = "SELECT (SELECT bool_or(to_regclass('public.'||name) IS NOT NULL) FROM (VALUES ('migration_admitted_people_refresh'),('migration_admitted_people_refresh_plan'),('migration_admitted_people_refresh_item'),('migration_admitted_people_refresh_contact'),('migration_admitted_people_refresh_result'),('migration_admitted_people_refresh_baseline'),('migration_admitted_people_refresh_receipt'),('migration_admitted_people_refresh_reservation'),('person_admitted_refresh_provenance')) required(name)) OR to_regprocedure('public.crm_admitted_people_refresh_mutation_allowed(uuid,text,text,text,jsonb,jsonb)') IS NOT NULL";
 pub const PEOPLE_ADMISSION_CAPABILITY: &str = "fub-people-admission-v1";
@@ -242,6 +245,7 @@ pub struct ReleaseReadiness {
     people_refresh: bool,
     people_admission: bool,
     admitted_people_refresh: bool,
+    admitted_metadata: bool,
 }
 impl ReleaseReadiness {
     pub async fn load_report(pool: &PgPool, path: &std::path::Path) -> Result<Self, sqlx::Error> {
@@ -282,6 +286,7 @@ impl ReleaseReadiness {
             people_refresh: people_refresh_report_ready(&report, &hash),
             people_admission: people_admission_report_ready(&report, &hash),
             admitted_people_refresh: admitted_people_refresh_report_ready(&report, &hash),
+            admitted_metadata: admitted_metadata_report_ready(&report, &hash),
             activity: report["activity_confirmation_ready"] == true
                 && report["candidates"].as_array().is_some_and(|items| {
                     items.iter().any(|v| {
@@ -352,6 +357,7 @@ impl ReleaseReadiness {
             people_refresh: true,
             people_admission: true,
             admitted_people_refresh: true,
+            admitted_metadata: true,
         }
     }
 
@@ -564,6 +570,45 @@ impl ReleaseReadiness {
         }
         Ok(())
     }
+    pub fn admitted_metadata_ready(&self) -> bool {
+        self.admitted_metadata
+            && (self.synthetic
+                || (self.expires_at > Utc::now()
+                    && self.checked_at <= Utc::now()
+                    && Utc::now() - self.checked_at <= chrono::Duration::minutes(5)))
+    }
+
+    pub async fn require_admitted_metadata(
+        &self,
+        conn: &mut PgConnection,
+    ) -> Result<(), sqlx::Error> {
+        self.require_current(conn).await?;
+        if !self.admitted_metadata_ready() {
+            return Err(sqlx::Error::Protocol(
+                "admitted metadata release not ready".into(),
+            ));
+        }
+        let schema: bool = sqlx::query_scalar(ADMITTED_METADATA_SCHEMA)
+            .fetch_one(&mut *conn)
+            .await?;
+        if !schema {
+            return Err(sqlx::Error::Protocol(
+                "admitted metadata schema unavailable".into(),
+            ));
+        }
+        let unsupported: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM migration_admitted_metadata_import WHERE engine_version<>$1) OR EXISTS(SELECT 1 FROM migration_metadata_catalog_readiness WHERE state='ready' AND engine_version IS DISTINCT FROM $1)",
+        )
+        .bind(ADMITTED_METADATA_CAPABILITY)
+        .fetch_one(conn)
+        .await?;
+        if unsupported {
+            return Err(sqlx::Error::Protocol(
+                "admitted metadata engine incompatible".into(),
+            ));
+        }
+        Ok(())
+    }
 }
 
 fn history_timeline_report_ready(report: &serde_json::Value, hash: &str) -> bool {
@@ -635,6 +680,21 @@ fn admitted_people_refresh_report_ready(report: &serde_json::Value, hash: &str) 
                         capabilities
                             .iter()
                             .any(|v| v == ADMITTED_PEOPLE_REFRESH_CAPABILITY)
+                    })
+            })
+        })
+}
+fn admitted_metadata_report_ready(report: &serde_json::Value, hash: &str) -> bool {
+    report["admitted_metadata_confirmation_ready"] == true
+        && report["candidates"].as_array().is_some_and(|items| {
+            items.iter().any(|item| {
+                item["sha256"] == hash
+                    && item["gate_version"] == GATE_VERSION
+                    && matches!(item["role"].as_str(), Some("api" | "worker"))
+                    && item["capabilities"].as_array().is_some_and(|capabilities| {
+                        capabilities
+                            .iter()
+                            .any(|v| v == ADMITTED_METADATA_CAPABILITY)
                     })
             })
         })
@@ -766,6 +826,31 @@ pub async fn startup_compatible(conn: &mut PgConnection) -> Result<(), sqlx::Err
             ));
         }
     }
+    // Partial admitted-metadata schemas cannot hide retained identities or provenance.
+    let admitted_metadata_exists: bool = sqlx::query_scalar(ADMITTED_METADATA_PRESENT)
+        .fetch_one(&mut *conn)
+        .await?;
+    if admitted_metadata_exists {
+        let compatible: bool = sqlx::query_scalar(ADMITTED_METADATA_SCHEMA)
+            .fetch_one(&mut *conn)
+            .await?;
+        if !compatible {
+            return Err(sqlx::Error::Protocol(
+                "admitted metadata schema incompatible".into(),
+            ));
+        }
+        let unsupported: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM migration_admitted_metadata_import WHERE engine_version<>$1) OR EXISTS(SELECT 1 FROM migration_metadata_catalog_readiness WHERE state='ready' AND engine_version IS DISTINCT FROM $1)",
+        )
+        .bind(ADMITTED_METADATA_CAPABILITY)
+        .fetch_one(&mut *conn)
+        .await?;
+        if unsupported {
+            return Err(sqlx::Error::Protocol(
+                "admitted metadata artifact incompatible".into(),
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -891,6 +976,32 @@ mod history_capture_readiness_tests {
     }
 
     #[test]
+    fn admitted_metadata_cannot_borrow_other_readiness_or_artifact_identity() {
+        let mut report = json!({
+            "people_refresh_confirmation_ready": true,
+            "admitted_metadata_confirmation_ready": true,
+            "candidates": [{"sha256":"verified", "gate_version":GATE_VERSION,
+                "role":"api", "capabilities":[ADMITTED_METADATA_CAPABILITY]}]
+        });
+        assert!(admitted_metadata_report_ready(&report, "verified"));
+        assert!(!admitted_metadata_report_ready(&report, "other"));
+        for (field, value) in [
+            ("role", json!("cli")),
+            ("gate_version", json!("pre-010c")),
+            ("capabilities", json!([PEOPLE_REFRESH_CAPABILITY])),
+        ] {
+            let mut changed = report.clone();
+            changed["candidates"][0][field] = value;
+            assert!(!admitted_metadata_report_ready(&changed, "verified"));
+        }
+        report
+            .as_object_mut()
+            .unwrap()
+            .remove("admitted_metadata_confirmation_ready");
+        assert!(!admitted_metadata_report_ready(&report, "verified"));
+    }
+
+    #[test]
     fn core_change_cannot_borrow_other_readiness_or_artifact_identity() {
         let mut report = json!({
             "history_timeline_confirmation_ready": true,
@@ -983,6 +1094,7 @@ mod history_capture_readiness_tests {
             people_refresh: true,
             people_admission: true,
             admitted_people_refresh: true,
+            admitted_metadata: true,
         };
         assert!(ready.history_capture_ready());
         assert!(ready.history_timeline_ready());

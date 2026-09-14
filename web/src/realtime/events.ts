@@ -26,6 +26,8 @@ import { queryKeys } from '../api/queries'
 // option write (rename/archive/restore publish nothing, the tag-rename
 // precedent). Slice 019b makes values part of People, saved-list count, and
 // Today membership, so this has its own broad filter-dependent invalidation.
+// Mobile005 adds details_changed for committed Person name/contact edits.
+// The broad fallback refreshes the Person and all name/contact-dependent reads.
 export type PersonChange =
   | 'inquiry_received'
   | 'assignment_changed'
@@ -36,6 +38,7 @@ export type PersonChange =
   | 'note_changed'
   | 'task_changed'
   | 'custom_field_changed'
+  | 'details_changed'
 
 interface RealtimeEnvelopeBase {
   v: 1

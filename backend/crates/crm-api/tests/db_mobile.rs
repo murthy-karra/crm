@@ -33,6 +33,91 @@ struct Fixture {
     install: Uuid,
     bootstrap: Value,
 }
+
+#[sqlx::test]
+#[ignore]
+async fn mobile005_details_receipt_replay_and_revision_scope(pool: PgPool) {
+    let f = fixture(&pool).await;
+    assert!(f.bootstrap["capabilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|v| v == "update_person_details"));
+    let revision: i64 = sqlx::query_scalar("SELECT details_revision FROM person WHERE id=$1")
+        .bind(f.person)
+        .fetch_one(&f.app)
+        .await
+        .unwrap();
+    let operation = f.operation("update_person_details", json!({
+        "person_id":f.person,"expected_details_revision":revision.to_string(),"last_name":"  Example  ",
+        "contact_operations":[
+            {"op":"add","kind":"email","value":" details@example.test "},
+            {"op":"add","kind":"phone","value":"(555) 555-0100"}
+        ]
+    }));
+    let (status, accepted) = f.post("/api/mobile/v1/operations", operation.clone()).await;
+    assert_eq!(status, StatusCode::OK, "accepted: {accepted}");
+    assert_eq!(accepted["resource_type"], "person_details");
+    assert_eq!(accepted["committed_revision"], (revision + 3).to_string());
+    assert_eq!(accepted["added_contact_ids"][0]["ordinal"], 0);
+    assert_eq!(accepted["added_contact_ids"][1]["ordinal"], 1);
+    let (_, replay) = f.post("/api/mobile/v1/operations", operation).await;
+    assert_eq!(replay["replayed"], true);
+    assert_eq!(replay["added_contact_ids"], accepted["added_contact_ids"]);
+    let details_url = format!("/api/mobile/v1/people/{}/details", f.person);
+    let (details_status, details) = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &details_url,
+        json!(null),
+    )
+    .await;
+    assert_eq!(details_status, StatusCode::OK, "details: {details}");
+    assert_eq!(details["last_name"], "Example");
+    assert_eq!(details["items"].as_array().unwrap().len(), 2);
+    let email_id = id(&accepted["added_contact_ids"][0], "id");
+    let phone_id = id(&accepted["added_contact_ids"][1], "id");
+    let edit_remove = f.operation("update_person_details", json!({
+        "person_id":f.person,"expected_details_revision":(revision + 3).to_string(),"contact_operations":[
+            {"op":"edit","id":email_id,"value":"updated@example.test"},
+            {"op":"remove","id":phone_id}
+        ]
+    }));
+    let (edit_status, edited) = f.post("/api/mobile/v1/operations", edit_remove).await;
+    assert_eq!(edit_status, StatusCode::OK, "edited: {edited}");
+    assert_eq!(edited["committed_revision"], (revision + 5).to_string());
+    // Stage-only changes do not advance the details aggregate.
+    let stage: Uuid = sqlx::query_scalar(
+        "SELECT id FROM stage WHERE organization_id=$1 ORDER BY position LIMIT 1",
+    )
+    .bind(f.org)
+    .fetch_one(&f.app)
+    .await
+    .unwrap();
+    sqlx::query("UPDATE person SET stage_id=$3 WHERE id=$1 AND organization_id=$2")
+        .bind(f.person)
+        .bind(f.org)
+        .bind(stage)
+        .execute(&f.app)
+        .await
+        .unwrap();
+    let after: i64 = sqlx::query_scalar("SELECT details_revision FROM person WHERE id=$1")
+        .bind(f.person)
+        .fetch_one(&f.app)
+        .await
+        .unwrap();
+    assert_eq!(after, revision + 5);
+    // Parent erasure remains legal when the contact trigger runs from the
+    // ON DELETE CASCADE path; no surviving parent is required.
+    sqlx::query("DELETE FROM person WHERE id=$1 AND organization_id=$2")
+        .bind(f.person)
+        .bind(f.org)
+        .execute(&pool)
+        .await
+        .unwrap();
+}
 fn record(name: &str, value: &Value) {
     if let Ok(directory) = std::env::var("MOBILE_FIXTURE_DIR") {
         let path = std::path::Path::new(&directory);

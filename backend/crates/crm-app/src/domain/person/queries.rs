@@ -21,6 +21,9 @@ pub struct LockedPerson {
     pub stage_id: StageId,
     pub stage_revision: i64,
     pub assigned_user_id: Option<UserId>,
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
+    pub details_revision: i64,
 }
 
 /// `SELECT … FOR UPDATE` scoped to the Organization — used both by intake's
@@ -46,7 +49,7 @@ pub async fn lock_person(
     organization_id: OrganizationId,
 ) -> Result<Option<LockedPerson>, sqlx::Error> {
     let row = sqlx::query(
-        "SELECT id, stage_id, stage_revision, assigned_user_id \
+        "SELECT id, stage_id, stage_revision, assigned_user_id, first_name, last_name, details_revision \
          FROM person WHERE id = $1 AND organization_id = $2 FOR UPDATE",
     )
     .bind(person_id.0)
@@ -60,6 +63,9 @@ pub async fn lock_person(
         assigned_user_id: r
             .get::<Option<Uuid>, _>("assigned_user_id")
             .map(UserId::new),
+        first_name: r.get("first_name"),
+        last_name: r.get("last_name"),
+        details_revision: r.get("details_revision"),
     }))
 }
 

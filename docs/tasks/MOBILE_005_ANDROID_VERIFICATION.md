@@ -31,38 +31,76 @@ Android Studio bundled JBR.  Gradle outputs and command logs are isolated under
   manual replacement controls. It never changes an outbound destination before
   acceptance.
 
-## Completed checks
+## Auditable acceptance (implementation review round 1)
 
-| Check | Result | Evidence |
+The authoritative artifact directory is
+`/private/tmp/crm-mobile005-010f3/android`. Commands retain stdout/stderr, exit
+status, source commit, working-diff hash and Android source-tree hash. Direct
+instrumentation retains installed QA state; no connected-test uninstall, data
+clear, or downgrade was used for retained-store proofs. D-050 review round 2 is
+owned by the coordinator; this corrective verification does not reset the count.
+
+| Check | Result | Artifact |
 |---|---|---|
-| `:compileDemoDebugKotlin` | passed | `compile-third.log` |
-| `:compileMobile005qaDebugKotlin :compileMobile005qaDebugAndroidTestKotlin` | passed | `final-compile.log` |
-| Emulator `Mobile005StorageTest` (7 tests) | passed | `mobile005-storage-final.log`; schema-5 upgrade, CAS/immutable outbox, exact no-add receipt array, stale same-revision qualification, legacy over-limit preservation, incomplete-current rejection, and replacement flow |
-| Actual installed Mobile004 → Mobile005 upgrade | passed | schema-5 seed and schema-6 probe below |
-| Native API offline save → force stop/relaunch → exact replay | passed | `mobile005-live-relaunch-final.log` |
-| Native API accepted replay, competing writer conflict, and manual replacement draft | passed | `mobile005-live-replay-conflict-final-source.log` |
-| Native Compose invalid proposal retained then explicitly discarded | evidence incomplete | The cited `mobile005-ui-discard-2.log` is zero bytes; the screenshot remains but does not prove the runner result. This must be recaptured before final acceptance. |
-| Native Compose offline multi-field profile → force-stop/restart → exact replay/cover | partial/failed attempt retained | `mobile005-ui-prepare-unique.log` staged `5794b1dc-e110-4dda-9a7e-5d7e5aba008b` SHA-256 `f0553c751e9ed128f8442d9059567d86e81062ce8cdf154279817b5983a583c9`; `mobile005-ui-relaunch-unique-final.log` ends in a failure at `Mobile005UiProofTest.kt:122`. A separate later conflict/replacement pass does not convert that full restart attempt into a pass. |
-| Native Compose retained conflict/current/replacement and accepted follow-up | passed | `mobile005-ui-conflict-replacement-complete4.log` (60.768 s); conflict and replacement screenshots |
-| `Mobile005StorageTest` (11 tests) | passed | `mobile005-storage-final-round1.log`, direct QA instrumentation, 72.271 s; includes old-wire traversal, discard cleanup, ordering, strict receipts and protected selection removal |
-| Historical `StorageTest` broad regression (8 tests) | passed after repair | `mobile005-storage-regressions-final-round1-retry.log`, direct QA instrumentation, 72.05 s |
-| `Mobile004StorageTest` regression (7 tests) | prior direct result lacks retained stdout | Needs an auditable recapture before final acceptance; not counted as a current passing artifact. |
-| `:lintMobile005qaDebug :compileDemoDebugKotlin :compileMobile005qaDebugAndroidTestKotlin` | passed | `mobile005-final-platform-final.log` |
+| Unit, lint, demo compile and QA assembly | pass | `final-platform-capture-corrected.log`; 2 JVM tests; lint 0 errors, 6 version warnings |
+| Full storage suites | pass, 26 tests / 32.091 s | `final-storage-26-recovered.log`: Mobile005 11, historical Storage 8, Mobile004 7 |
+| Repository boundaries | pass, 8 tests / 11.495 s | `final-repository-8.log`; includes failing retry persistence, capability refresh/withdrawal and bounded current-profile traversal |
+| Compose regression suite | pass, 3 tests / 7.612 s | `final-compose-regressions-recovered.log`; per-kind primary warnings, capability-disabled editor and one typed profile card |
+| Actual installed Mobile004 → Mobile005 upgrade | pass, 1 test / 51.199 s | `review-upgrade-installed-before.log`, `review-upgrade-installed-complete.log` |
+| Real API lost-response replay and competing writer | pass, reused unchanged behavior | `mobile005-live-relaunch-final.log` (1 / 4.663 s), `mobile005-live-replay-conflict-final-source.log` (1 / 5.701 s) |
 
-The installed upgrade used the historical Mobile004 source archive at the requested
-revision, built under `org.crm.field.mobile005upgradeqa` with the same
-`vaultfield.mobile005upgradeqa` namespace. No uninstall, data clear, or key
-replacement occurred between seed and `adb install -r` of the current app.
+Round-1 finding coverage:
 
-| Artifact | SHA-256 before | SHA-256 after |
-|---|---|---|
-| Wrapped database key | `15c63e97bb5becc5bc1ffddffd7b762690a63c765e1eb264ccd7d3f993d9d1d7` | same |
-| Queued envelope (`…0051`) | `43d80d9b0f7dfb5c84584dde3c1dc34391c66c3c19141e64326eaaa6b9dd7a04` | same |
-| Old accepted receipt (`…0052`) | `616585d782748fd611477d7e61a649a9232b3cb0c16db2426c93033b41fa4f39` | same |
-| Legacy draft payload | `83e1b6fd2be7d45749e25c8d135d9a2eba3388cc98039684aad8936f7dc804ce` | same |
+| Review ID | Correction and verification |
+|---|---|
+| 1 | Download and promotion require details qualification even at unchanged broad revision. The installed schema-5 upgrade test drives a modern repository traversal at revision 7 and proves qualification becomes true. Successful bootstrap now replaces the active binding, allowing newly advertised capabilities to take effect. |
+| 2 | Old UUID/kind/value contact pages remain readable but unqualified. `oldCapabilityContactPagesPromoteReadableButNeverBecomeEditableDetailsBaseline` passes. |
+| 7 | Primary warnings use the first server-ordered contact per kind, including the removed row when identifying the old primary. Compose verifies both successor addresses. |
+| 8 | Current-profile reads reject 101 rows, 524289 bytes and repeated cursors before recording a comparison. The repository regression passes all three cases. |
+| 9 | Canonical positive signed-i64 revision parsing rejects overflow and noncanonical strings. `LeaseTest` passes. |
+| 10 | Pending and selection-removal accounting includes profile drafts/contexts. Storage removal and repository pending-count tests pass. |
+| 11 | Editing requires current binding capabilities; refreshed capabilities replace the active store binding. Repository withdrawal preserves pending work, and Compose verifies the disabled editor and explanatory copy. |
+| 12 | Profile operations render only in their typed card. Compose asserts one Profile details card and no Complete task card. |
+| 13 | Explicit discard atomically removes linked draft/context and covers the original operation. Storage verifies the immutable operation remains and protected proposal records are absent. Native discard/use-current results are recorded below. |
 
-The post-upgrade probe also confirmed `details_qualified=false` and empty new
-profile tables, requiring a complete modern traversal before editing.
+## Installed schema-5 upgrade
+
+The earlier `org.crm.field.mobile005upgradeqa` hash claim had no recoverable runner
+output and is **not counted**. That app and store remain preserved. The replacement
+proof uses the fresh, isolated identity `org.crm.field.mobile005reviewupgradeqa`
+and namespace `vaultfield.mobile005reviewupgradeqa`.
+
+`git archive fcc05b3 android mobile/contracts` supplied actual historical Mobile004
+code in `review-upgrade-source`. The historical database, store and vault files were
+byte-compared with that Git revision (`review-upgrade-source-integrity.json` and
+`review-upgrade-source-manifest.json`). Only QA identity/build paths and the seed
+fixture were added. The reproducible seed is
+`android/qa/mobile005-upgrade/Mobile005InstalledSeedTest.kt`; it refuses to seed an
+existing database. It created schema 5, an encrypted cache, queued envelope, old
+accepted receipt, generic draft and contact draft, and captured their inventory.
+Current code was then installed in place with `adb install -r`.
+
+`Mobile005InstalledUpgradeTest` waits for the production application restore before
+opening the database. It compares every protected value before synthetic
+reauthorization, confirms schema 6 with unqualified details and empty new profile
+tables, then drives the repository's full modern download at unchanged broad
+revision **7**. The resulting inventory reports `details_qualified=true` and one
+summary page fetched. The queue and receipt remain byte-identical after that sync.
+The deterministic old fixture lease is explicitly reauthorized only after the
+preservation comparison; it cannot be treated as a valid real-clock boot lease.
+
+The before/after logs retain all inventory hashes. Selected identical hashes:
+
+| Protected artifact | SHA-256 before and after |
+|---|---|
+| Unwrapped key hash | `87d186fe916f2f5d341f244f02208ac1020c75789c1b1307bb725866dad90113` |
+| Wrapped key bytes | `5279ffddfed4e4765f59ed44debfd45c06cdb5b45bb3aa2892bc072d45b6cb46` |
+| Exact queued envelope | `135a2cf3affa8ec2c86ca1188d335648e9527522e4690790546b91869398c2d2` |
+| Old accepted receipt | `8d510e06620b7af9624b805e7f7bb7608214ab8cd6b6f13ab4fcf89f96e62604` |
+| Generic draft | `af5e6b97fe27598b60dd4b1936a994371d8ce438ca6f11426f9d742a1b7c84d2` |
+| Contact draft | `41a3e1cc46c0fbcbca6aa166850b5129046b071f49127d6ab8e5dd522c4e42e6` |
+| Cached summary | `8e5a4e5698cc5e8f7bce24af2496dd3345cbde2e0bd4786a6b20c59ac3c6a5dc` |
+| Cached contacts | `9dad0cc488e5db3d563ff782b5d629f3d4ea1081feb86a5372b19ad6c5448b80` |
 
 ## Repaired receipt replay
 
@@ -78,26 +116,86 @@ and created its explicit replacement against the completed current traversal.
 
 ## Native UI harness and acceptance
 
-The initial Compose-rule package carried the coroutine exception-handler service entry
-without its `ExceptionCollectorAsService` implementation, so the rule failed before any
-gesture. A debug-only direct dependency on the already lockfile-pinned
-`kotlinx-coroutines-test:1.9.0` now packages both provider and service entry in the QA
-debug APK. The final proof drove the real editor through add-email/add-phone, encrypted
-CAS autosave, explicit submit, force-stop/relaunch, exact immutable replay, server-created
-revision conflict, visible completed-current comparison, and manual replacement. Test-only
-screenshots are under
-`/private/tmp/crm-mobile005-010f3/android/mobile005-ui-screenshots-accepted/files`.
+The UI proofs use real Compose gestures for profile edits, submissions and conflict
+choices against the isolated API. A second synthetic actor creates the competing
+write through the shared typed API. Test screenshots temporarily clear
+`FLAG_SECURE` in the test activity only; production flags and release dependencies
+remain unchanged. The debug-only, already-pinned coroutine-test dependency supplies
+the Compose exception service implementation.
 
-The first staged UI phone (`555-555-0105`) was already present after normalization on the
-isolated fixture, so its stored operation `0b59f227-3ab3-456a-88e1-abfcb26190e9` correctly
-remained without a server receipt. The proof read that durable condition and used the visible
-Discard proposal control; the successful retry selects a number absent from the sealed baseline.
-Two earlier harness-only failures are retained as `mobile005-ui-relaunch-unique.log`
-(API-37 startup exceeded the previous 20-second bound) and
-`mobile005-ui-relaunch-unique-retry.log` (a second sync tap raced the first posted busy state).
-The harness now reports restore diagnostics, uses the established 60-second native startup
-bound, and waits for durable sync transitions and visible controls. Production `FLAG_SECURE`
-and release dependencies are unchanged.
+All four native phases passed with full runner output. The initial combined run is
+`final-ui-prepare-retained-history.log` (49.644 s, followed by actual force-stop)
+and `final-ui-relaunch.log` (43.843 s). It recorded operation
+`b2a8f722-da5e-4a84-b83e-b0ef4f65021d`, SHA-256
+`ce6f32786e4f0244adce3266da34d90532219c4330a770a7e6d31a844964c77d`, unchanged
+before/after process restart and replay, with a covered receipt. The same relaunch
+run completed full current-profile conflict review and accepted manual replacement.
+
+`final-ui-discard.log` passed (38.151 s), explicitly discarding rejected operation
+`40f2bd24-ee1e-4270-90d6-6d41f3a9df81`. `final-ui-use-current.log` passed
+(46.308 s), explicitly choosing current for conflicting operation
+`30558a7d-a6ff-49c6-9e1a-78ddc4bc7ef2`. Both assert the original operation is
+covered, the linked profile draft and comparison are absent, and the draft card is
+absent from the Compose view. Existing unrelated superseded comparison history
+remains preserved.
+
+The first offline-dialog screenshot was black because its secure flag was inherited
+before the QA helper cleared the parent window. That image is not counted as visual
+evidence. The helper now clears the flag within the test before opening a dialog,
+with no production flag change; the recaptured combined journey also asserts both
+name fields and exactly email/phone additions in the stored envelope. Its final
+capture passes are `final-ui-prepare-capture-corrected.log` and
+`final-ui-relaunch-capture-corrected.log`. They retain operation
+`0a154b74-6f1a-481e-a8a6-9e9f0f1cb08f`, unchanged envelope SHA-256
+`845a33ccc5e6de23757063a5cfc44768ba115b335194f1d5028fe38cd5ea843f`, an actual
+force-stop, covered receipt and completed manual replacement. The eight captured
+images are in `final-native-screenshots-capture-corrected`; the offline editor,
+queued/restarted state, conflict, replacement and discard/current images were
+visually inspected. Unrelated retained comparison cards visible in the latter
+images are not the operation explicitly discarded by that phase.
+
+`android-acceptance-final.json` seals passing command artifacts, their source/diff
+hashes, source-file hashes, screenshots and the inventory of retained logs. Final
+Android source-tree SHA-256 is
+`9e2b940b798edab1b5822c5e5662e4e458668042a9b8d95ae576f9782fb98735`.
+The storage/repository/Compose/installed-upgrade test bodies and production code
+were unchanged by subsequent UI harness/capture corrections, so their complete
+passing evidence is reused. `final-checkpoint.json` binds the clean local commit
+to the sealed manifest. No Android acceptance check remains pending; coordinator
+integration gates and independent review round 2 remain separate requirements.
+
+## Retained failures and recovery
+
+No missing, empty, failed or interrupted artifact is counted as a pass:
+
+- `mobile005-ui-relaunch-unique-final.log` failed at line 122. Its early replay
+  assertions and the later standalone conflict pass did not prove the combined
+  journey. `mobile005-ui-discard-2.log` is empty. Historical claimed Mobile005 8/8
+  and Mobile004 7/7 runs without stdout were unverified.
+- The original `final-round1-regressions.log` stopped during the retry-checkpoint
+  repository test. The unchanged focused reproduction passed, as did a complete
+  seven-test reproduction (`retry-checkpoint-diagnose.log`,
+  `repository-boundaries-final.log`). The current eight-test full suite above
+  includes that case and the new capability regression.
+- `final-storage-26.log` reached test 12 after the 11 Mobile005 cases, then timed
+  out; it is incomplete. `final-compose-regressions-3.log` was interrupted during
+  the same guest degradation. The current complete 26/8/3 results above supersede
+  those attempts without hiding them.
+- Guest service/window/SQLCipher stalls were captured in the runtime diagnostics.
+  An ordinary emulator stop/relaunch with its original AVD, userdata and flags
+  restored progress (`emulator-cold-start-recovery.log`). No app data or Keystore
+  was wiped. Upgrade-app backups succeeded; the normal QA tar capture timed out
+  and is explicitly retained as a partial backup, not a verified backup.
+- `review-upgrade-installed-after.log` exposed a test-inspector race with the
+  application's schema migration. Awaiting application readiness corrected the
+  harness. The retry showed the deterministic old lease correctly locked against
+  the emulator clock; explicit fixture reauthorization after preservation checks
+  corrected that setup. The final installed-upgrade pass used the same retained
+  store, without reseeding or downgrading it.
+- `final-ui-prepare.log` and `ui-fixture-diagnostic-prepare.log` failed a fixture
+  assumption: retained superseded comparison history was mistaken for unresolved
+  work. The harness now checks actual unresolved operation states and selects
+  controls by the current proposal's immutable ID. The old history remains intact.
 
 ## Historical broad-storage disposition
 

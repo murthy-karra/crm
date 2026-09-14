@@ -38,14 +38,15 @@ class Mobile005UiProofTest {
         repository.select(PERSON)
         compose.waitUntil(20_000) { repository.ui.value.person?.id == PERSON }
         val contacts = JSONArray(requireNotNull(repository.ui.value.person).contacts).length()
+        compose.onNodeWithTag("person-details-list").performScrollToNode(hasTestTag("edit-profile"))
         compose.onNodeWithTag("edit-profile").performClick()
         compose.onNodeWithTag("profile-first-name").performTextReplacement("UI offline")
         compose.onNodeWithTag("profile-last-name").performTextReplacement("proposal")
-        compose.onNodeWithText("Add email").performClick()
+        compose.onNodeWithText("Add email").performScrollTo().performClick()
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("profile-contact-$contacts").fetchSemanticsNodes().isNotEmpty() }
         // Add both blank rows before typing: typing triggers the editor's CAS autosave and
         // temporarily disables mutation controls until that encrypted save settles.
-        compose.onNodeWithText("Add phone").performClick()
+        compose.onNodeWithText("Add phone").performScrollTo().performClick()
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("profile-contact-${contacts + 1}").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("profile-contact-$contacts").performTextInput("ui-offline-${UUID.randomUUID()}@example.test")
         compose.onNodeWithTag("profile-contact-${contacts + 1}").performTextInput(uniquePhone(requireNotNull(repository.ui.value.person).contacts))
@@ -62,7 +63,12 @@ class Mobile005UiProofTest {
         compose.waitUntil { compose.onAllNodesWithText("Profile details").fetchSemanticsNodes().isNotEmpty() }
         screenshot("mobile005-ui-queued-profile")
         val operation = requireNotNull(profileOperation())
+        val payload = JSONObject(operation.envelope).getJSONObject("payload")
+        assertEquals("UI offline", payload.getString("first_name"))
+        assertEquals("proposal", payload.getString("last_name"))
+        assertEquals(listOf("email", "phone"), payload.getJSONArray("contact_operations").objects().map { it.getString("kind") })
         stage().writeText(json("operation" to operation.id, "sha" to sha(operation.envelope)).toString())
+        writeProof("MOBILE005_UI_OFFLINE operation=${operation.id} sha256=${sha(operation.envelope)} names=both contact_operations=${payload.getJSONArray("contact_operations").length()} contact_kinds=email,phone paused=${repository.ui.value.paused}")
     }
 
     @Test fun restartedProfileQueueSyncsThenConflictIsReviewedAndReplacedInCompose(): Unit = runBlocking<Unit> {
@@ -94,6 +100,8 @@ class Mobile005UiProofTest {
         // control to obtain the later seal that is allowed to cover the accepted proposal.
         if (active().store.dao.operation(staged.getString("operation"))?.status != "covered") syncThroughVisibleControl(replayed)
         compose.waitUntil(90_000) { active().store.dao.operation(staged.getString("operation"))?.status == "covered" }
+        assertEquals(staged.getString("sha"), sha(requireNotNull(active().store.dao.operation(replayed)).envelope))
+        writeProof("MOBILE005_UI_RESTART_REPLAY operation=$replayed sha256=${staged.getString("sha")} status=covered receipt_present=${active().store.dao.operation(replayed)?.receipt != null}")
         screenshot("mobile005-ui-profile-synced")
 
         // Build the next proposal through the editor, then change the current profile as the
@@ -102,6 +110,7 @@ class Mobile005UiProofTest {
         compose.waitUntil(20_000) { repository.ui.value.person?.id == PERSON }
         compose.onNodeWithText("Pause sync").performClick()
         compose.waitUntil { repository.ui.value.paused }
+        compose.onNodeWithTag("person-details-list").performScrollToNode(hasTestTag("edit-profile"))
         compose.onNodeWithTag("edit-profile").performClick()
         compose.onNodeWithTag("profile-last-name").performTextReplacement("UI stale")
         compose.waitUntil(15_000) {
@@ -119,14 +128,15 @@ class Mobile005UiProofTest {
                 repository.ui.value.profileContexts.any { it.operation == stale.id && it.current.isNotEmpty() }
         }
         compose.onNodeWithTag("nav-Saved work").performClick()
-        compose.waitUntil(15_000) { compose.onAllNodesWithText("Current profile").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("Current profile").assertExists()
-        compose.onNodeWithText("Review and replace").assertIsEnabled()
+        val staleCard = profileCard(stale.id)
+        compose.onNodeWithTag("saved-work-list").performScrollToNode(hasText("Current profile") and hasAnyAncestor(staleCard))
+        compose.onNode(hasText("Current profile") and hasAnyAncestor(staleCard)).assertExists()
+        compose.onNode(hasText("Review and replace") and hasAnyAncestor(staleCard)).assertIsEnabled()
         screenshot("mobile005-ui-profile-conflict")
 
         compose.onNodeWithText("Pause sync").performClick()
         compose.waitUntil { repository.ui.value.paused }
-        compose.onNodeWithText("Review and replace").performScrollTo().assertHasClickAction().performClick()
+        compose.onNode(hasText("Review and replace") and hasAnyAncestor(staleCard)).performScrollTo().assertHasClickAction().performClick()
         compose.waitUntil(15_000) { compose.onAllNodesWithTag("profile-first-name").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("profile-first-name").performTextReplacement("UI replacement")
         compose.waitUntil(15_000) {
@@ -136,8 +146,10 @@ class Mobile005UiProofTest {
         compose.waitUntil(15_000) { runCatching { compose.onNodeWithTag("profile-save").assertIsEnabled() }.isSuccess }
         compose.onNodeWithTag("profile-save").assertIsEnabled().performClick()
         compose.waitUntil(15_000) { profileOperation()?.id != stale.id && profileOperation()?.status == "queued" }
+        val replacementId = requireNotNull(profileOperation()).id
         compose.onNodeWithText("Resume sync").performClick()
-        compose.waitUntil(90_000) { profileOperation()?.status in setOf("accepted", "covered") }
+        compose.waitUntil(90_000) { active().store.dao.operation(replacementId)?.status in setOf("accepted", "covered") }
+        writeProof("MOBILE005_UI_CONFLICT_REPLACEMENT completed=true")
         stage().delete()
     }
 
@@ -154,6 +166,7 @@ class Mobile005UiProofTest {
             assertNotNull("expected the retained revision-conflict proposal", stale)
             val conflict = requireNotNull(stale)
             assertTrue(active().store.dao.profileContext(conflict.id)?.current?.isNotEmpty() == true)
+            compose.onNodeWithTag("saved-work-list").performScrollToNode(hasText("Current profile"))
             compose.waitUntil(15_000) { compose.onAllNodesWithText("Current profile").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithText("Review and replace").assertIsEnabled()
             screenshot("mobile005-ui-profile-conflict")
@@ -184,16 +197,63 @@ class Mobile005UiProofTest {
         assumeTrue(InstrumentationRegistry.getArguments().getString("uiMobile005Profile") == "discard")
         waitReady()
         signInIfNeeded()
+        preparePerson()
+        if (!repository.ui.value.paused) compose.onNodeWithText("Pause sync").performClick()
+        compose.waitUntil { repository.ui.value.paused }
+        val baseline = requireNotNull(repository.ui.value.person)
+        val methods = JSONArray(baseline.contacts)
+        val duplicate = (0 until methods.length()).map { methods.getJSONObject(it) }.first { it.getString("kind") == "email" }.getString("value")
+        compose.onNodeWithTag("person-details-list").performScrollToNode(hasTestTag("edit-profile"))
+        compose.onNodeWithTag("edit-profile").performClick()
+        compose.onNodeWithText("Add email").performScrollTo().performClick()
+        compose.onNodeWithTag("profile-contact-${methods.length()}").performTextInput(duplicate)
+        compose.waitUntil(15_000) { runCatching { compose.onNodeWithTag("profile-save").assertIsEnabled() }.isSuccess }
+        compose.onNodeWithTag("profile-save").performClick()
+        compose.waitUntil(15_000) { profileOperation()?.status == "queued" }
+        val rejected = requireNotNull(profileOperation())
+        val draftId = active().store.dao.profileDrafts().single { it.operation == rejected.id }.id
+        syncThroughVisibleControl(rejected.id)
+        compose.waitUntil(90_000) { active().store.dao.operation(rejected.id)?.status == "attention" }
+        assertTrue(requireNotNull(active().store.dao.operation(rejected.id)).lastError.isNotEmpty())
         compose.onNodeWithTag("nav-Saved work").performClick()
-        val rejected = active().store.dao.operations().lastOrNull {
-            it.person == PERSON && it.kind == "update_person_details" && it.status == "attention" && it.lastError != "revision_conflict"
-        }
-        assertNotNull("expected the diagnosed rejected profile proposal", rejected)
-        assertTrue("rejected proposal must retain its failure", requireNotNull(rejected).lastError.isNotEmpty())
+        compose.onNodeWithTag("saved-work-list").performScrollToNode(hasText("Discard proposal"))
         compose.onNodeWithText("Discard proposal").assertIsEnabled().performClick()
         compose.waitUntil(15_000) { active().store.dao.operation(rejected.id)?.status == "covered" }
         assertEquals("", active().store.dao.operation(rejected.id)?.lastError)
+        assertTrue(active().store.dao.profileDrafts().none { it.operation == rejected.id })
+        assertNull(active().store.dao.profileContext(rejected.id))
+        compose.waitUntil(15_000) { repository.ui.value.profileDrafts.none { it.operation == rejected.id } }
+        compose.onNodeWithTag("profile-draft-$draftId").assertDoesNotExist()
+        writeProof("MOBILE005_UI_DISCARD operation=${rejected.id} covered=true linked_draft_absent=true comparison_absent=true card_absent=true")
         screenshot("mobile005-ui-discarded-rejected-profile")
+    }
+
+    @Test fun conflictedProposalUsesCurrentAndRemovesItsProtectedCard(): Unit = runBlocking<Unit> {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("uiMobile005Profile") == "use-current")
+        waitReady(); signInIfNeeded(); preparePerson()
+        if (!repository.ui.value.paused) compose.onNodeWithText("Pause sync").performClick()
+        compose.waitUntil { repository.ui.value.paused }
+        compose.onNodeWithTag("person-details-list").performScrollToNode(hasTestTag("edit-profile"))
+        compose.onNodeWithTag("edit-profile").performClick()
+        compose.onNodeWithTag("profile-last-name").performTextReplacement("Retained local ${UUID.randomUUID()}")
+        compose.waitUntil(15_000) { runCatching { compose.onNodeWithTag("profile-save").assertIsEnabled() }.isSuccess }
+        compose.onNodeWithTag("profile-save").performClick()
+        compose.waitUntil(15_000) { profileOperation()?.status == "queued" }
+        val conflict = requireNotNull(profileOperation())
+        val draft = active().store.dao.profileDrafts().single { it.operation == conflict.id }
+        writeCompetingProfile()
+        syncThroughVisibleControl(conflict.id)
+        compose.waitUntil(90_000) { active().store.dao.profileContext(conflict.id)?.current?.isNotEmpty() == true }
+        compose.onNodeWithTag("nav-Saved work").performClick()
+        val currentControl = hasText("Use current") and hasAnyAncestor(profileCard(conflict.id))
+        compose.onNodeWithTag("saved-work-list").performScrollToNode(currentControl)
+        compose.onNode(currentControl).assertIsEnabled().performClick()
+        compose.waitUntil(15_000) { active().store.dao.operation(conflict.id)?.status == "covered" && repository.ui.value.profileDrafts.none { it.id == draft.id } }
+        assertNull(active().store.dao.profileDraft(draft.id))
+        assertNull(active().store.dao.profileContext(conflict.id))
+        compose.onNodeWithTag("profile-draft-${draft.id}").assertDoesNotExist()
+        writeProof("MOBILE005_UI_USE_CURRENT operation=${conflict.id} covered=true linked_draft_absent=true comparison_absent=true card_absent=true")
+        screenshot("mobile005-ui-use-current")
     }
 
     private suspend fun waitReady() {
@@ -202,6 +262,9 @@ class Mobile005UiProofTest {
             // The API-37 emulator can spend more than 20 seconds recreating the test activity
             // after a forced process stop; NativeUiProof uses the same 60-second startup bound.
             compose.waitUntil(60_000) { !application.ready.isActive }
+            // Clear only in the QA test before opening dialogs; clearing the parent after a
+            // dialog is shown leaves that dialog's inherited secure surface black in captures.
+            compose.runOnUiThread { compose.activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
         } catch (error: Throwable) {
             val state = repository.ui.value
             throw AssertionError(
@@ -245,15 +308,18 @@ class Mobile005UiProofTest {
         // beginning this independent UI scenario; pause is restored by the caller before edits.
         if (repository.ui.value.paused) repository.pause(false)
         repository.pin(PERSON, true)
-        repeat(8) {
+        for (attempt in 0 until 8) {
             repository.sync(true)
             val active = active()
-            if (active.store.dao.operations().none { it.person == PERSON && it.kind == "update_person_details" && it.status !in setOf("covered", "superseded") }) return@repeat
+            if (active.store.dao.operations().none { it.person == PERSON && it.kind == "update_person_details" && it.status !in setOf("covered", "superseded") }) break
             delay(1_000)
         }
         repository.select(PERSON)
         compose.waitUntil(60_000) { repository.ui.value.person?.detailsRevisionsQualified == true }
-        assertTrue(repository.ui.value.profileDrafts.none { it.person == PERSON && it.operation.isNotEmpty() })
+        val unresolved = active().store.dao.operations().filter {
+            it.person == PERSON && it.kind == "update_person_details" && it.status !in setOf("covered", "superseded")
+        }
+        assertTrue("unresolved profiles=${unresolved.map { "${it.id}:${it.status}:${it.lastError}" }}", unresolved.isEmpty())
     }
 
     private suspend fun writeCompetingProfile() {
@@ -268,10 +334,14 @@ class Mobile005UiProofTest {
             "operation_id" to UUID.randomUUID().toString(),
             "kind" to "update_person_details",
             "device_recorded_at" to "2026-09-14T19:00:00Z",
-            "payload" to json("person_id" to PERSON, "expected_details_revision" to details, "first_name" to "Other actor", "contact_operations" to JSONArray()),
+            "payload" to json("person_id" to PERSON, "expected_details_revision" to details, "first_name" to "Other actor ${UUID.randomUUID()}", "contact_operations" to JSONArray()),
         ).toString()
         assertEquals("accepted", other.call("POST", "/api/mobile/v1/operations", second.context, envelope).getString("outcome"))
     }
+
+    private fun profileCard(operation: String): SemanticsMatcher = hasTestTag(
+        "profile-draft-${active().store.dao.profileDrafts().single { it.operation == operation }.id}",
+    )
 
     private fun profileOperation(): OperationRow? = active().store.dao.operations().lastOrNull {
         it.person == PERSON && it.kind == "update_person_details" && it.status !in setOf("covered", "superseded")
@@ -287,6 +357,10 @@ class Mobile005UiProofTest {
         compose.waitForIdle()
         val file = File(compose.activity.getExternalFilesDir(null), "$name.png")
         compose.onRoot().captureToImage().asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, file.outputStream())
+    }
+
+    private fun writeProof(message: String) {
+        File(compose.activity.filesDir, "mobile005-ui-evidence.txt").appendText("${java.time.Instant.now()} $message\n")
     }
 
     private fun sha(value: String) = java.security.MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).joinToString("") { "%02x".format(it) }

@@ -162,12 +162,32 @@ async fn approve_all(f: &Fixture, root: Uuid, _plan: Uuid) -> Uuid {
     admitted_metadata::confirm(
         &f.pool,
         &f.key,
+        Some(&ReleaseReadiness::for_tests()),
         &f.ctx,
         root,
         admitted_metadata::Confirm {
             request_id: Uuid::new_v4(),
             plan_id: plan,
-            plan_revision: 2,
+            plan_revision: "2".into(),
+            confirmation_digest: admitted_metadata::get(&f.pool, &f.ctx, root).await.unwrap()
+                ["latest_plan"]["confirmation_digest"]
+                .as_str()
+                .unwrap()
+                .to_owned(),
+            workspace_revision: admitted_metadata::get(&f.pool, &f.ctx, root).await.unwrap()
+                ["workspace_revision"]
+                .as_str()
+                .unwrap()
+                .to_owned(),
+            acknowledgments: crm_api::domain::migration::metadata::Acknowledgments {
+                held_count: admitted_metadata::get(&f.pool, &f.ctx, root).await.unwrap()
+                    ["latest_plan"]["counts"]["held_count"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned(),
+                review_only: true,
+                remaining_data: true,
+            },
         },
     )
     .await
@@ -410,12 +430,32 @@ async fn admitted_metadata_frozen_native_baselines_hold_changes_without_adoption
     admitted_metadata::confirm(
         &f.pool,
         &f.key,
+        Some(&ReleaseReadiness::for_tests()),
         &f.ctx,
         root,
         admitted_metadata::Confirm {
             request_id: Uuid::new_v4(),
             plan_id: plan,
-            plan_revision: 2,
+            plan_revision: "2".into(),
+            confirmation_digest: admitted_metadata::get(&f.pool, &f.ctx, root).await.unwrap()
+                ["latest_plan"]["confirmation_digest"]
+                .as_str()
+                .unwrap()
+                .to_owned(),
+            workspace_revision: admitted_metadata::get(&f.pool, &f.ctx, root).await.unwrap()
+                ["workspace_revision"]
+                .as_str()
+                .unwrap()
+                .to_owned(),
+            acknowledgments: crm_api::domain::migration::metadata::Acknowledgments {
+                held_count: admitted_metadata::get(&f.pool, &f.ctx, root).await.unwrap()
+                    ["latest_plan"]["counts"]["held_count"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned(),
+                review_only: true,
+                remaining_data: true,
+            },
         },
     )
     .await
@@ -867,12 +907,32 @@ async fn admitted_metadata_reuses_original_claims_after_ready_handover(migrator:
     admitted_metadata::confirm(
         &f.pool,
         &f.key,
+        Some(&ReleaseReadiness::for_tests()),
         &f.ctx,
         root,
         admitted_metadata::Confirm {
             request_id: Uuid::new_v4(),
             plan_id: plan,
-            plan_revision: 2,
+            plan_revision: "2".into(),
+            confirmation_digest: admitted_metadata::get(&f.pool, &f.ctx, root).await.unwrap()
+                ["latest_plan"]["confirmation_digest"]
+                .as_str()
+                .unwrap()
+                .to_owned(),
+            workspace_revision: admitted_metadata::get(&f.pool, &f.ctx, root).await.unwrap()
+                ["workspace_revision"]
+                .as_str()
+                .unwrap()
+                .to_owned(),
+            acknowledgments: crm_api::domain::migration::metadata::Acknowledgments {
+                held_count: admitted_metadata::get(&f.pool, &f.ctx, root).await.unwrap()
+                    ["latest_plan"]["counts"]["held_count"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned(),
+                review_only: true,
+                remaining_data: true,
+            },
         },
     )
     .await
@@ -1069,6 +1129,12 @@ async fn admitted_metadata_preparation_preserves_missing_native_cohort_target(mi
     .unwrap();
     let root = Uuid::parse_str(prepared["import"]["id"].as_str().unwrap()).unwrap();
     drain_preparation(&f, root).await;
+    let header = admitted_metadata::get(&f.pool, &f.ctx, root).await.unwrap();
+    let plan = Uuid::parse_str(header["latest_plan"]["id"].as_str().unwrap()).unwrap();
+    let issues = admitted_metadata::issues(&f.pool, &f.key, &f.ctx, root, plan, Default::default())
+        .await
+        .unwrap();
+    assert!(!issues["items"].as_array().unwrap().is_empty());
     let manifest=sqlx::query("SELECT expected_person_id,person_id,disposition FROM migration_admitted_metadata_manifest WHERE import_id=$1").bind(root).fetch_one(&f.pool).await.unwrap();
     assert_eq!(
         manifest.get::<Option<Uuid>, _>("expected_person_id"),
@@ -1324,12 +1390,13 @@ async fn admitted_metadata_typed_reads_require_current_tenant_admin(migrator: Pg
         Err(MigrationError::Forbidden)
     ));
     assert!(matches!(
-        admitted_metadata::list(&f.pool, &member, admitted_metadata::Page::default()).await,
+        admitted_metadata::list(&f.pool, &f.key, &member, admitted_metadata::Page::default()).await,
         Err(MigrationError::Forbidden)
     ));
     assert!(matches!(
         admitted_metadata::mappings(
             &f.pool,
+            &f.key,
             &member,
             root,
             plan,
@@ -1341,6 +1408,7 @@ async fn admitted_metadata_typed_reads_require_current_tenant_admin(migrator: Pg
     assert!(matches!(
         admitted_metadata::records(
             &f.pool,
+            &f.key,
             &member,
             root,
             plan,
@@ -1350,7 +1418,7 @@ async fn admitted_metadata_typed_reads_require_current_tenant_admin(migrator: Pg
         Err(MigrationError::Forbidden)
     ));
     assert!(matches!(
-        admitted_metadata::issues(&f.pool, &member, root, plan).await,
+        admitted_metadata::issues(&f.pool, &f.key, &member, root, plan, Default::default()).await,
         Err(MigrationError::Forbidden)
     ));
     let other = Uuid::new_v4();
@@ -1369,6 +1437,7 @@ async fn admitted_metadata_typed_reads_require_current_tenant_admin(migrator: Pg
     assert!(matches!(
         admitted_metadata::mappings(
             &f.pool,
+            &f.key,
             &outsider,
             root,
             plan,
@@ -1380,6 +1449,7 @@ async fn admitted_metadata_typed_reads_require_current_tenant_admin(migrator: Pg
     assert!(matches!(
         admitted_metadata::records(
             &f.pool,
+            &f.key,
             &outsider,
             root,
             plan,
@@ -1389,7 +1459,7 @@ async fn admitted_metadata_typed_reads_require_current_tenant_admin(migrator: Pg
         Err(MigrationError::NotFound)
     ));
     assert!(matches!(
-        admitted_metadata::issues(&f.pool, &outsider, root, plan).await,
+        admitted_metadata::issues(&f.pool, &f.key, &outsider, root, plan, Default::default()).await,
         Err(MigrationError::NotFound)
     ));
 }
@@ -1451,7 +1521,8 @@ async fn admitted_metadata_replans_preserve_evidence_inherit_choices_and_replay_
     )
     .await
     .unwrap();
-    let second = Uuid::parse_str(response["plan_id"].as_str().unwrap()).unwrap();
+    let second =
+        Uuid::parse_str(response["import"]["latest_plan"]["id"].as_str().unwrap()).unwrap();
     assert_ne!(first, second);
     assert_eq!(
         sqlx::query_scalar::<_, i64>(
@@ -1497,7 +1568,8 @@ async fn admitted_metadata_replans_preserve_evidence_inherit_choices_and_replay_
     )
     .await
     .unwrap();
-    let third = Uuid::parse_str(inherited["plan_id"].as_str().unwrap()).unwrap();
+    let third =
+        Uuid::parse_str(inherited["import"]["latest_plan"]["id"].as_str().unwrap()).unwrap();
     drain_preparation(&f, root).await;
     assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_admitted_metadata_mapping WHERE plan_id=$1 AND disposition='create_matching'").bind(third).fetch_one(&f.pool).await.unwrap(),1);
     let parent: Uuid = sqlx::query_scalar(
@@ -1522,7 +1594,7 @@ async fn admitted_metadata_replans_preserve_evidence_inherit_choices_and_replay_
     )
     .await
     .unwrap();
-    let fourth = Uuid::parse_str(changed["plan_id"].as_str().unwrap()).unwrap();
+    let fourth = Uuid::parse_str(changed["import"]["latest_plan"]["id"].as_str().unwrap()).unwrap();
     drain_preparation(&f, root).await;
     assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_admitted_metadata_mapping WHERE plan_id=$1 AND disposition<>'held'").bind(fourth).fetch_one(&f.pool).await.unwrap(),0,"a different source invalidates all dependent choices");
     assert!(sqlx::query_scalar::<_,bool>("SELECT a.snapshot_id<>b.snapshot_id FROM migration_admitted_metadata_plan a,migration_admitted_metadata_plan b WHERE a.id=$1 AND b.id=$2").bind(first).bind(fourth).fetch_one(&f.pool).await.unwrap());
@@ -1612,4 +1684,216 @@ async fn admitted_metadata_cancel_spends_protected_capacity_and_replays_at_full_
         receipt
     );
     assert_eq!(ledger(&f, root).await, after);
+}
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn admitted_metadata_prepare_replays_after_cancel_and_allows_fresh_unconfirmed_root(
+    migrator: PgPool,
+) {
+    let (f, root, _, _) = prepared_typed(&migrator).await;
+    let r = sqlx::query(
+        "SELECT admission_id,source_report_id FROM migration_admitted_metadata_import WHERE id=$1",
+    )
+    .bind(root)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    let request = Uuid::new_v4();
+    let make = || admitted_metadata::Prepare {
+        request_id: request,
+        admission_id: r.get("admission_id"),
+        source_report_id: r.get("source_report_id"),
+    };
+    let receipt = admitted_metadata::prepare(
+        &f.pool,
+        &f.key,
+        &ReleaseReadiness::for_tests(),
+        &f.ctx,
+        make(),
+    )
+    .await
+    .unwrap();
+    let before = ledger(&f, root).await;
+    assert_eq!(
+        admitted_metadata::prepare(
+            &f.pool,
+            &f.key,
+            &ReleaseReadiness::for_tests(),
+            &f.ctx,
+            make()
+        )
+        .await
+        .unwrap(),
+        receipt
+    );
+    assert_eq!(ledger(&f, root).await, before);
+    let mut mismatch = make();
+    mismatch.source_report_id = Uuid::new_v4();
+    assert!(matches!(
+        admitted_metadata::prepare(
+            &f.pool,
+            &f.key,
+            &ReleaseReadiness::for_tests(),
+            &f.ctx,
+            mismatch
+        )
+        .await,
+        Err(crm_api::domain::migration::MigrationError::Conflict)
+    ));
+    admitted_metadata::cancel(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        root,
+        admitted_metadata::Request {
+            request_id: Uuid::new_v4(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        admitted_metadata::replay_prepare(&f.pool, &f.key, &f.ctx, &make())
+            .await
+            .unwrap()
+            .unwrap(),
+        receipt
+    );
+    let mut next = make();
+    next.request_id = Uuid::new_v4();
+    let new = admitted_metadata::prepare(
+        &f.pool,
+        &f.key,
+        &ReleaseReadiness::for_tests(),
+        &f.ctx,
+        next,
+    )
+    .await
+    .unwrap();
+    let new_root = Uuid::parse_str(new["import"]["id"].as_str().unwrap()).unwrap();
+    assert_ne!(new_root, root);
+    drain_preparation(&f, new_root).await;
+    assert_eq!(
+        admitted_metadata::get(&f.pool, &f.ctx, root).await.unwrap()["state"],
+        "cancelled"
+    );
+    assert_eq!(
+        admitted_metadata::replay_prepare(&f.pool, &f.key, &f.ctx, &make())
+            .await
+            .unwrap()
+            .unwrap(),
+        receipt
+    );
+}
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn admitted_metadata_readers_bind_pages_and_lossless_segments_to_frozen_evidence(
+    migrator: PgPool,
+) {
+    use crm_api::domain::migration::MigrationError;
+    let (f, root, plan, person) = prepared_typed(&migrator).await;
+    let q = || admitted_metadata::PlanPage {
+        limit: Some(1),
+        ..Default::default()
+    };
+    let first = admitted_metadata::mappings(&f.pool, &f.key, &f.ctx, root, plan, q())
+        .await
+        .unwrap();
+    assert_eq!(first["items"].as_array().unwrap().len(), 1);
+    let token = first["next_cursor"].as_str().unwrap().to_owned();
+    let mut next = q();
+    next.cursor = Some(token.clone());
+    let second = admitted_metadata::mappings(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        root,
+        plan,
+        admitted_metadata::PlanPage {
+            cursor: Some(token.clone()),
+            ..q()
+        },
+    )
+    .await
+    .unwrap();
+    assert_ne!(first["items"][0]["id"], second["items"][0]["id"]);
+    assert!(matches!(
+        admitted_metadata::records(
+            &f.pool,
+            &f.key,
+            &f.ctx,
+            root,
+            plan,
+            admitted_metadata::PlanPage {
+                cursor: Some(token.clone()),
+                ..q()
+            }
+        )
+        .await,
+        Err(MigrationError::InvalidInput)
+    ));
+    next.kind = Some("field".into());
+    assert!(matches!(
+        admitted_metadata::mappings(&f.pool, &f.key, &f.ctx, root, plan, next).await,
+        Err(MigrationError::InvalidInput)
+    ));
+    let record =
+        admitted_metadata::records(&f.pool, &f.key, &f.ctx, root, plan, Default::default())
+            .await
+            .unwrap();
+    let record = Uuid::parse_str(record["items"][0]["id"].as_str().unwrap()).unwrap();
+    let mut parts = String::new();
+    let mut cursor = None;
+    for _ in 0..500 {
+        let part = admitted_metadata::field(
+            &f.pool,
+            &f.key,
+            &f.ctx,
+            admitted_metadata::FieldOwner::Record {
+                root,
+                plan,
+                id: record,
+            },
+            "source.all",
+            admitted_metadata::FieldQuery {
+                cursor,
+                limit: Some(13),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(part["offset_bytes"], parts.len().to_string());
+        parts.push_str(part["text"].as_str().unwrap());
+        cursor = part["next_cursor"].as_str().map(str::to_owned);
+        if cursor.is_none() {
+            assert_eq!(part["full_utf8_bytes"], parts.len().to_string());
+            break;
+        }
+    }
+    assert!(cursor.is_none());
+    assert!(parts.contains("Exact retained text"));
+    let confirmed = approve_all(&f, root, plan).await;
+    let mut stale = q();
+    stale.cursor = Some(token);
+    assert!(matches!(
+        admitted_metadata::mappings(&f.pool, &f.key, &f.ctx, root, plan, stale).await,
+        Err(MigrationError::InvalidInput)
+    ));
+    finish(&f, root).await;
+    let provenance =
+        admitted_metadata::provenance(&f.pool, &f.key, &f.ctx, person, Default::default())
+            .await
+            .unwrap();
+    assert_eq!(provenance["items"].as_array().unwrap().len(), 1);
+    assert_eq!(provenance["items"][0]["plan_id"], confirmed.to_string());
+    assert_eq!(
+        provenance["items"][0]["admitted_metadata_import_id"],
+        root.to_string()
+    );
+    let detail = admitted_metadata::get(&f.pool, &f.ctx, root).await.unwrap();
+    assert_eq!(detail["counts"]["people"]["settled"], "1");
+    assert_eq!(detail["counts"]["values"]["pending"], "0");
+    assert_eq!(detail["counts"]["values"]["applied"], "4");
+    assert_eq!(detail["cohort_counts"]["remaining_people"], "0");
 }

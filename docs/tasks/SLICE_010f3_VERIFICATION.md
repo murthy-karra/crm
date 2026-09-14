@@ -2,7 +2,7 @@
 
 Implementation remains in progress on `codex/migration-010f3`. The bounded admitted
 execution milestone is implemented and tested; staged preparation now has focused
-DB and plan-shape evidence. Complete transport/lifecycle/remainder, Web/browser acceptance, independent implementation
+DB and plan-shape evidence. Frozen transport and durable lifecycle receipts have focused functional evidence. Exact remainder, Web/browser acceptance, independent implementation
 review and final integrated gates remain required. No review round has been used.
 
 ## Implemented execution checkpoint
@@ -119,20 +119,21 @@ change was needed for the fixture corrections. The db5 command used
 `--include-ignored` and skipped both EXPLAIN fixtures; db7 selected only the
 current-tenant-admin reader test.
 
-Still implement the frozen concrete transport contract in
-`SLICE_010f3_CONTRACT.md`: complete source/mapping/record/result/issue/segment and
-provenance reads, counted subset confirmation, complete lifecycle response receipts,
-retry/cancel and exact remainder. The remaining simpler response DTOs are not the final Web contract. Full bounded reader/request payload
-limits, retained fan-out for the new observation inventory, and final
-cross-checks remain part of that work.
+The frozen transport is now implemented for headers, sources, mappings, aliases,
+records, results, issues, segments and Person provenance; confirmation checks the
+counted revision/digest/acknowledgments. Durable preparation, replan, confirm,
+retry and cancel receipts retain full response envelopes. Exact remainder is the
+remaining transport/lifecycle implementation. New reader hot-query plans and
+final integrated payload/retention checks remain required.
 
 Required remaining tests include failed handover rollback and rerun accounting,
 old already-running writer rejection, multi-cohort collisions/tombstones/archival,
 source variants/incomplete evidence, budget/key/expiry failures, full-tag-set
 limits, HTTP no-store and source-free reader negatives, desktop/390px browser
 workflow and preservation reconciliation. Final `scripts/check`,
-`scripts/sqlx-prepare`, `scripts/check-db`, paired Person/Today performance and
-cross-slice upgrade checks remain coordinator-owned and sequential.
+`scripts/sqlx-prepare`, `scripts/check-db`, cross-slice upgrade checks remain coordinator-owned and sequential. The coordinator
+completed the single required same-build Today pair and eleven Mobile statements
+at `83f4fc8`; see `MOBILE_005_010f3_PERFORMANCE.md`.
 
 
 ## Immutable replacement plans and cancellation capacity checkpoint
@@ -180,3 +181,46 @@ its `migration/` directory. The tested code is the immutable-replanning commit
 containing this verification update. Full frozen response/readers, counted
 confirmation and exact remainder are still in progress; no final integration or
 browser completion is claimed by this checkpoint.
+
+## Frozen headers, readers and lifecycle receipts checkpoint
+
+`20261002000006` adds bounded polling counters and source-spelling alias
+references. Preparation now records the confirmed admission plan and complete
+settled cohort count, uses the selected capture's actual start time for later
+report qualification, and persists an actor/request-bound encrypted response.
+Cancelled unconfirmed roots release the unique active cohort slot while their
+plans and receipts remain unchanged. Confirmed roots retain uniqueness.
+
+HTTP preparation returns `201`; plan replacement, confirm, retry and cancel
+return `202`. Header/result/record/mapping/source/alias/issue/segment/provenance
+DTOs follow the frozen contract. Pages use authenticated Organization/owner/
+plan-generation/filter/endpoint cursors, at most fifty items, 128 KiB per item
+and 512 KiB envelopes. Segments preserve UTF-8 boundaries. Confirm binds revision,
+digest, workspace and counted acknowledgments; receipts include their own exact
+three-ledger byte charge and replay before fresh capacity/readiness checks.
+Configured policy ceilings reach both HTTP operations and the production worker.
+
+`admitted-transport-db1.log` passed thirteen existing functional/recorded-plan
+checks after the full header/counter/receipt implementation. On the expanded
+transport tree, `admitted-transport-db2.log` passed all fifteen, including fresh
+preparation after unconfirmed cancellation and lossless source segments, distinct
+mapping pages, cross-endpoint/filter/stale-plan cursor rejection, provenance and
+terminal cached counts. Both skip the two unchanged D-050 fixtures. The API test
+check first found a fixture-only attempt to clone the non-Clone page DTO in
+`admitted-transport-check6.log`; constructing independent requests corrected it.
+Earlier `admitted-transport-check1.log` found the large JSON macro recursion
+limit; splitting the bounded header object resolved it. Check4 found an Arc
+reference type mismatch at the release argument, corrected with `as_deref`.
+`admitted-transport-clippy.log` passes app all-target Clippy with warnings denied.
+
+The final issue-counter addition retains cohort/mapping reasons, charges each
+new issue code once, and uses a column-limited count-update grant. A populated
+original handover INSERT's extra eleventh bind was removed; the coordinator owns
+its new real populated-handover failure/rollback/rerun and legacy lease proofs.
+The coordinator also owns outer HTTP/admin/no-store/body-size tests, readiness
+inventory, desktop/390px browser acceptance and final integrated gates. No full
+slice completion or independent review pass is claimed by this checkpoint.
+
+The final issue-counter/readiness transport tree compiles and its missing-native
+cohort proof passes in `admitted-transport-db3-issues.log` (one test, 5.19s).
+This explicitly checks a nonempty bounded issue response after the retained hold.

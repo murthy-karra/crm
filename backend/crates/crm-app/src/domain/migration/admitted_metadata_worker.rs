@@ -143,15 +143,6 @@ pub(crate) async fn claim_equal(
     }
 }
 
-/// Count only newly retained child evidence; UUID/enums/native rows are excluded.
-/// Existing admission/source evidence is referenced, never recharged.
-pub(crate) async fn retained(
-    c: &mut PgConnection,
-    org: OrganizationId,
-    root: Uuid,
-) -> Result<i64, MigrationError> {
-    Ok(sqlx::query_scalar("SELECT (COALESCE((SELECT sum(octet_length(inputs_nonce)+octet_length(inputs_ciphertext)+COALESCE(octet_length(digest),0)+octet_length(counts::text)) FROM migration_admitted_metadata_plan WHERE import_id=$1 AND organization_id=$2),0)+COALESCE((SELECT sum(octet_length(source_person_id)+octet_length(baseline_nonce)+octet_length(baseline_ciphertext)) FROM migration_admitted_metadata_manifest WHERE import_id=$1 AND organization_id=$2),0)+COALESCE((SELECT sum(octet_length(source_key)+octet_length(source_id)+octet_length(nonce)+octet_length(ciphertext)) FROM migration_admitted_metadata_mapping WHERE import_id=$1 AND organization_id=$2),0)+COALESCE((SELECT sum(octet_length(source_id)+octet_length(semantic_hmac)+octet_length(nonce)+octet_length(ciphertext)) FROM migration_admitted_metadata_source WHERE import_id=$1 AND organization_id=$2),0)+COALESCE((SELECT sum(octet_length(source_key)+octet_length(nonce)+octet_length(ciphertext)) FROM migration_admitted_metadata_operation WHERE import_id=$1 AND organization_id=$2),0)+COALESCE((SELECT sum(octet_length(nonce)+octet_length(ciphertext)) FROM migration_admitted_metadata_result WHERE import_id=$1 AND organization_id=$2),0)+COALESCE((SELECT sum(octet_length(semantic_hmac)) FROM migration_admitted_metadata_observation WHERE import_id=$1 AND organization_id=$2),0)+COALESCE((SELECT sum(octet_length(digest)+octet_length(nonce)+octet_length(ciphertext)) FROM migration_admitted_metadata_receipt WHERE import_id=$1 AND organization_id=$2),0)+COALESCE((SELECT sum(octet_length(source_key)+octet_length(evidence_nonce)+octet_length(evidence_ciphertext)) FROM migration_metadata_catalog_claim WHERE admitted_import_id=$1 AND organization_id=$2),0))::bigint").bind(root).bind(org.0).fetch_one(c).await?)
-}
 pub(crate) async fn reserve(
     c: &mut PgConnection,
     org: OrganizationId,
@@ -165,7 +156,7 @@ pub(crate) async fn reserve(
         return Err(MigrationError::StorageLimit);
     }
     let r=sqlx::query("SELECT s.run_byte_limit,s.retained_bytes,s.reserved_bytes,l.byte_limit,l.retained_bytes AS org_retained,l.reserved_bytes AS org_reserved FROM migration_snapshot s JOIN migration_snapshot_storage l ON l.organization_id=s.organization_id WHERE s.id=$1 AND s.organization_id=$2 FOR UPDATE OF s,l").bind(snapshot).bind(org.0).fetch_one(&mut *c).await?;
-    let policy = super::snapshot::SnapshotPolicy::default();
+    let policy = a::policy();
     if amount
         > r.get::<i64, _>("run_byte_limit")
             .min(policy.run_ceiling_bytes)
@@ -202,30 +193,6 @@ pub(crate) async fn settle(
     sqlx::query("UPDATE migration_snapshot SET reserved_bytes=reserved_bytes-$3,retained_bytes=retained_bytes+$4 WHERE id=$1 AND organization_id=$2").bind(snapshot).bind(org.0).bind(reserved).bind(actual).execute(&mut *c).await?;
     sqlx::query("UPDATE migration_snapshot_storage SET reserved_bytes=reserved_bytes-$2,retained_bytes=retained_bytes+$3 WHERE organization_id=$1").bind(org.0).bind(reserved).bind(actual).execute(&mut *c).await?;
     sqlx::query("UPDATE migration_admitted_metadata_import SET reserved_bytes=reserved_bytes-$3,retained_bytes=retained_bytes+$4 WHERE id=$1 AND organization_id=$2").bind(root).bind(org.0).bind(reserved).bind(actual).execute(c).await?;
-    Ok(())
-}
-pub(crate) async fn charge(
-    c: &mut PgConnection,
-    org: OrganizationId,
-    root: Uuid,
-) -> Result<(), MigrationError> {
-    let r=sqlx::query("SELECT snapshot_id,latest_plan_id,retained_bytes FROM migration_admitted_metadata_import WHERE id=$1 AND organization_id=$2").bind(root).bind(org.0).fetch_one(&mut *c).await?;
-    let amount = retained(c, org, root).await? - r.get::<i64, _>("retained_bytes");
-    if amount > 0 {
-        let t = reserve(
-            c,
-            org,
-            root,
-            r.get("latest_plan_id"),
-            r.get("snapshot_id"),
-            "prepare",
-            amount,
-        )
-        .await?;
-        settle(c, org, root, t, amount).await?;
-    } else if amount < 0 {
-        return Err(MigrationError::StorageLimit);
-    }
     Ok(())
 }
 pub(crate) async fn release(
@@ -300,7 +267,40 @@ impl Job {
     ) -> Result<i64, MigrationError> {
         let id = Uuid::new_v4();
         let sealed = a::seal(key, self.org, self.snapshot, self.plan, id, "result", &data)?;
-        let bytes = (sealed.nonce.len() + sealed.ciphertext.len()) as i64;
+        let mut bytes = (sealed.nonce.len() + sealed.ciphertext.len()) as i64;
+        let cached=sqlx::query("SELECT counts,octet_length(counts::text) AS bytes FROM migration_admitted_metadata_import WHERE id=$1 AND organization_id=$2").bind(self.root).bind(self.org.0).fetch_one(&mut *c).await?;
+        let mut counts = super::metadata_model::Counts::load(cached.get("counts"))?;
+        let mut eligible_person = false;
+        if kind == "people" {
+            counts.people.settled += 1;
+            eligible_person=sqlx::query_scalar("SELECT disposition='eligible' FROM migration_admitted_metadata_manifest WHERE id=$1 AND plan_id=$2 AND organization_id=$3").bind(unit).bind(self.plan).bind(self.org.0).fetch_one(&mut *c).await?;
+            for op in data["operations"]
+                .as_array()
+                .ok_or(MigrationError::Crypto)?
+            {
+                counts.settled(
+                    op["kind"].as_str().ok_or(MigrationError::Crypto)?,
+                    op["planned_disposition"]
+                        .as_str()
+                        .ok_or(MigrationError::Crypto)?,
+                    op["outcome"].as_str().ok_or(MigrationError::Crypto)?,
+                );
+            }
+        } else {
+            let old:String=sqlx::query_scalar("SELECT disposition FROM migration_admitted_metadata_mapping WHERE id=$1 AND plan_id=$2 AND organization_id=$3").bind(unit).bind(self.plan).bind(self.org.0).fetch_one(&mut *c).await?;
+            counts.settled(
+                kind,
+                if matches!(old.as_str(), "create_matching" | "map_existing") {
+                    "eligible"
+                } else {
+                    &old
+                },
+                outcome,
+            );
+        }
+        let next = serde_json::to_value(counts).map_err(|_| MigrationError::Crypto)?;
+        let after:i32=sqlx::query_scalar("UPDATE migration_admitted_metadata_import SET counts=$3,settled_eligible_people=settled_eligible_people+$4 WHERE id=$1 AND organization_id=$2 RETURNING octet_length(counts::text)").bind(self.root).bind(self.org.0).bind(next).bind(i64::from(eligible_person)).fetch_one(&mut *c).await?;
+        bytes += i64::from(after - cached.get::<i32, _>("bytes"));
         sqlx::query("INSERT INTO migration_admitted_metadata_result(id,import_id,plan_id,unit_id,manifest_id,organization_id,kind,disposition,person_id,nonce,ciphertext) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)").bind(id).bind(self.root).bind(self.plan).bind(unit).bind(if kind=="people"{Some(unit)}else{None}).bind(self.org.0).bind(kind).bind(outcome).bind(person).bind(sealed.nonce).bind(sealed.ciphertext).execute(c).await?;
         Ok(bytes)
     }
@@ -609,7 +609,7 @@ async fn people(
                 outcome = "held".into();
             }
         }
-        results.push(json!({"operation_id":o.get::<Uuid,_>("id"),"mapping_id":o.get::<Option<Uuid>,_>("mapping_id"),"kind":kind,"outcome":outcome,"reason":reason}));
+        results.push(json!({"operation_id":o.get::<Uuid,_>("id"),"mapping_id":o.get::<Option<Uuid>,_>("mapping_id"),"kind":kind,"planned_disposition":o.get::<String,_>("disposition"),"outcome":outcome,"reason":reason}));
     }
     let outcome = if results.iter().any(|r| r["outcome"] == "held") || !identity {
         "held"
@@ -751,7 +751,7 @@ async fn unit(
         settle(&mut tx, org, root, token, added).await?;
     } else {
         release(&mut tx, org, root).await?;
-        sqlx::query("UPDATE migration_admitted_metadata_import SET state='completed',phase='complete',lease_token=NULL,lease_expires_at=NULL,updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2").bind(root).bind(org.0).execute(&mut *tx).await?;
+        sqlx::query("UPDATE migration_admitted_metadata_import SET state='completed',phase='complete',completed_at=clock_timestamp(),lease_token=NULL,lease_expires_at=NULL,updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2").bind(root).bind(org.0).execute(&mut *tx).await?;
     }
     tx.commit().await?;
     Ok(true)

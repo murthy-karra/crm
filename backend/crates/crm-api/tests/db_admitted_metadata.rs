@@ -1238,6 +1238,35 @@ async fn admitted_metadata_preparation_hot_steps_at_d050(migrator: PgPool) {
             _ => false,
         }
     }
+    if std::env::var("CRM_ADMITTED_PREPARATION_PLAN").as_deref() == Ok("tag-index") {
+        assert!(
+            sqlx::query_scalar::<_, bool>(
+                "SELECT to_regclass('public.am_admission_tag_source') IS NULL"
+            )
+            .fetch_one(&mut *c)
+            .await
+            .unwrap(),
+            "additive migration removes only the redundant index"
+        );
+        let sql = statement("SELECT s.* FROM migration_admitted_metadata_source s JOIN LATERAL");
+        let p: Value = sqlx::query_scalar(&format!("EXPLAIN (ANALYZE,BUFFERS,FORMAT JSON) {sql}"))
+            .bind(plan)
+            .bind(f.org)
+            .bind(10250i64)
+            .bind(95i32)
+            .bind(Uuid::nil())
+            .bind(admission)
+            .fetch_one(&mut *c)
+            .await
+            .unwrap();
+        println!("TAG_INDEX_HOT {}", json!({"sql":sql,"plan":p}));
+        assert!(index(
+            &p,
+            "migration_people_admission_result_settled_cohort_source_page"
+        ));
+        assert_eq!(p[0]["Plan"]["Actual Rows"], 1);
+        return;
+    }
     if std::env::var("CRM_ADMITTED_PREPARATION_PLAN").as_deref() == Ok("owners") {
         admitted_owner_hot_proof(&mut c, root, plan, f.org, admission).await;
         return;
@@ -3292,7 +3321,7 @@ async fn admitted_owner_hot_proof(
     explain!(
         "whole_settled_cohort_tag",
         production("SELECT s.* FROM migration_admitted_metadata_source s JOIN LATERAL"),
-        "am_admission_tag_source",
+        "migration_people_admission_result_settled_cohort_source_page",
         plan,
         org,
         10250i64,

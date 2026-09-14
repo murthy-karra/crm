@@ -1589,6 +1589,70 @@ async fn insert_native(
     }
     Ok(0)
 }
+async fn shared_catalog_claim(
+    conn: &mut PgConnection,
+    key: &RawPayloadKey,
+    j: &Job,
+    r: &sqlx::postgres::PgRow,
+    data: &Mapping,
+    target: Uuid,
+) -> Result<i64, MigrationError> {
+    let ready:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM migration_metadata_catalog_readiness WHERE organization_id=$1 AND state='ready')").bind(j.org.0).fetch_one(&mut *conn).await?;
+    if !ready {
+        return Ok(0);
+    }
+    let kind: String = r.get("kind");
+    let source_key: Vec<u8> = r.get("source_key");
+    let claim =
+        super::admitted_metadata_worker::claim_state(conn, j.org, j.account, &kind, &source_key)
+            .await?;
+    if !claim.is_null() {
+        let source_id = if let Some(source) = r.get::<Option<Uuid>, _>("source_row_id") {
+            sqlx::query_scalar::<_,Option<String>>("SELECT source_id FROM migration_metadata_source WHERE id=$1 AND organization_id=$2").bind(source).bind(j.org.0).fetch_one(&mut *conn).await?.unwrap_or_default()
+        } else {
+            String::new()
+        };
+        let frozen = super::admitted_metadata::FrozenMapping {
+            source_id,
+            label: data.label.clone(),
+            machine_name: data.source_name.clone(),
+            field_type: data.field.as_ref().and_then(|f| f.field_type.clone()),
+            raw_choice: data.raw_choice.clone(),
+            definition: data.field.clone(),
+            target_baseline: serde_json::Value::Null,
+            claim_baseline: serde_json::Value::Null,
+            reasons: data.reasons.clone(),
+        };
+        if !super::admitted_metadata_worker::claim_equal(
+            conn,
+            key,
+            j.org,
+            j.account,
+            &kind,
+            &source_key,
+            &frozen,
+            target,
+        )
+        .await?
+        {
+            return Err(MigrationError::InvalidImportChoice);
+        }
+        return Ok(0);
+    }
+    let mapping: Uuid = r.get("id");
+    let sealed = crypto::seal_snapshot(
+        key,
+        j.org,
+        j.snapshot,
+        mapping,
+        "admitted-metadata-claim-v1",
+        &s::bytes(&json!({"original_mapping_id":mapping}))?,
+    )
+    .map_err(|_| MigrationError::Crypto)?;
+    let bytes = 32 + (sealed.nonce.len() + sealed.ciphertext.len()) as i64;
+    sqlx::query("INSERT INTO migration_metadata_catalog_claim(organization_id,source_account_id,kind,source_key,target_id,original_import_id,original_plan_id,original_mapping_id,evidence_nonce,evidence_ciphertext) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)").bind(j.org.0).bind(j.account).bind(kind).bind(source_key).bind(target).bind(j.id).bind(j.plan).bind(mapping).bind(sealed.nonce).bind(sealed.ciphertext).execute(conn).await?;
+    Ok(bytes)
+}
 async fn catalog_result(
     conn: &mut PgConnection,
     key: &RawPayloadKey,
@@ -1610,6 +1674,7 @@ async fn catalog_result(
             if !target_live(conn, j.org, t).await? {
                 return Err(MigrationError::InvalidImportChoice);
             }
+            added += shared_catalog_claim(conn, key, j, r, data, t.id).await?;
             permit(conn, j, r.get("id"), Some(t.id)).await?;
             added += write_identity(conn, j, r, t.id).await?;
             "already_present"
@@ -1619,6 +1684,7 @@ async fn catalog_result(
                 .target
                 .as_ref()
                 .ok_or(MigrationError::SourceNotEligible)?;
+            added += shared_catalog_claim(conn, key, j, r, data, t.id).await?;
             permit(conn, j, r.get("id"), Some(t.id)).await?;
             added += insert_native(conn, j, t).await?;
             added += write_identity(conn, j, r, t.id).await?;

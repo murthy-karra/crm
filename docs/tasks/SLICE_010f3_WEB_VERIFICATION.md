@@ -1,8 +1,8 @@
 # Slice 010f3 — Web and browser verification
 
 **BROWSER ACCEPTANCE PASSES.** Coordinator-owned Web implementation uses the
-literal transport checkpoint in `SLICE_010f3_CONTRACT.md`. Final migration fidelity/
-size-bound checks, combined repository gates and independent review remain required.
+literal transport checkpoint in `SLICE_010f3_CONTRACT.md`. Migration fidelity and size-bound checks also pass; combined repository gates
+and independent review remain required.
 
 ## Implemented Web scope
 
@@ -142,3 +142,20 @@ bytes respectively; these amounts are not physical disk measurements.
 
 Final source-fidelity/size-bound integration, shared gates and independent review
 remain separate. Deployment and release remain outside this implementation pass.
+
+## Final production-source retained reads
+
+The immutable API was rebuilt from `e0bb7e3213886d1ec62119b9e11a47eb90a5a8bf`
+with the complete008 schema/readiness checks, then restarted against the same
+`crm_010f3_qa` database without reseeding. `runtime-e0bb7e321388.json` records binary
+SHA-256 `ed13c93659c278839c4c2dfdcd18648fe08c83ad3e6e0aa3d913161fc6f80102`.
+`admitted-final-api-build1.log` passes; `browser-journey.cjs reconcile final008`
+passes with zero page errors in `final008-reconcile.log` and matching evidence JSON.
+Completed results, filtering/reload and full Person provenance remain available at
+desktop/390px. This reuses settled work rather than processing the cohort again.
+
+A fresh read-only comparison against the original preservation baseline passes in
+`preservation-final008.json`: all15 protected complete rowsets and both existing
+native cells unchanged,222 total values. The earlier baseline/after records remain
+untouched. The later `a52a1e6` integration changes only an equivalent test-helper
+borrow; production code and this browser artifact remain applicable.

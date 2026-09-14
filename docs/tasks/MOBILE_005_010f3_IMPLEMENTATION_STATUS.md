@@ -37,17 +37,14 @@ actual offline/restart/replay/conflict/discard/current journeys. The preserved
 store/key/envelope evidence and earlier failure dispositions are sealed in
 [MOBILE_005_ANDROID_VERIFICATION.md](MOBILE_005_ANDROID_VERIFICATION.md).
 
-Migration atomic execution and bounded staged preparation through `e8a0165` are
-integrated: all four field types, tags, local-value protection, claims and per-unit
-settlement. Staged preparation has11 functional/recorded-plan checks passing.
-Immutable replanning through `380bcfb` and frozen transport/readers through
-`6a2f866`, plus exact continuation through `fd016a1`, are integrated. Source-fidelity,
-actual per-Person size bounds and final query evidence remain with the migration
-writer. Runtime and preflight readiness now require the
-full staged schema, enabled guards and work indexes;51 preflight tests and the
-50-variant rollback-only DB readiness regression pass. Populated original-import
-handover rollback/accounting/replay, corrected legacy-session fencing and all204
-outer HTTP responses pass. See
+Migration backend fidelity and exact continuation are integrated through `1e9ed69`,
+with the test-only Clippy correction `839155a`. All21 final functional checks and
+the35,000-cell oversized native-baseline preservation test pass. All17 changed
+hot statements have retained plan evidence on25,000 People/50 members, with exact
+normalized logical bytes reported separately from physical relation sizes.
+Runtime/preflight readiness passes51 tests and61 rollback-only incomplete-schema
+variants. Populated original-import handover rollback/accounting/replay, legacy
+session fencing and all204 outer HTTP responses pass. See
 [SLICE_010f3_READINESS_VERIFICATION.md](SLICE_010f3_READINESS_VERIFICATION.md) and
 [SLICE_010f3_VERIFICATION.md](SLICE_010f3_VERIFICATION.md).
 
@@ -61,14 +58,21 @@ desktop/390px. All15 protected table sets and both native cells remain unchanged
 
 ## Remaining completion gates
 
-1. Finish migration source-fidelity, actual size bounds and query evidence; integrate tested commits.
-2. Reuse completed native/browser evidence where the final integration is unchanged.
-3. Run sequential final `scripts/check`, `scripts/sqlx-prepare`, `scripts/check-db`
-   with private outputs and serialized DB access.
-4. Finish migration changed-query evidence. The single D-050 Today pair and all11
-   Mobile hot plans pass; see [MOBILE_005_010f3_PERFORMANCE.md](MOBILE_005_010f3_PERFORMANCE.md).
-5. Complete independent implementation reviews, then verify protected resources.
+Native/browser/fidelity/performance acceptance is complete. The retained browser
+reconciliation and preservation check also passes on final production API source
+`e0bb7e3`. Final `scripts/check` passes on `a52a1e6`:992 ordinary Rust,5 doctests,
+1,264 Web,51 preflight and11 worker tests, plus lint/type/build checks.
+[Combined verification](MOBILE_005_010f3_FINAL_VERIFICATION.md) owns final gate
+commands, evidence and any failures. SQLx preparation and the full DB gate run
+sequentially with private outputs and serialized DB access.
 
-Mobile005 has consumed one of at most two implementation review/fix rounds;
-010f3 has consumed none. Round2 starts only after the Mobile005 corrections and
-required evidence are complete. Blocking gaps are never reported as a pass.
+Independent broad reviews returned **CHANGES REQUIRED**: Mobile005 round2 has six
+response-validation findings;010f3 round1 has three qualification/ownership/coverage
+findings. The handover-order correction `3755623` passes its new regression.
+[Mobile round2](MOBILE_005_IMPLEMENTATION_REVIEW_2.md) and
+[migration round1](SLICE_010f3_IMPLEMENTATION_REVIEW_1.md) own the finding records.
+Coordinator/iOS, Android and migration writers are completing the bounded fixes.
+Replacement final gates follow the corrected integrated source. Mobile005 is in
+its final second review/fix cycle;010f3 has one review remaining. No missing trust
+check or required evidence is a pass. Shared resources and stored work remain
+preserved; final preservation verification follows the corrections.

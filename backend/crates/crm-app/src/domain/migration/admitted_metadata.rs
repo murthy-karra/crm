@@ -100,20 +100,22 @@ struct FrozenSource {
 }
 
 #[derive(Serialize)]
-struct FrozenMapping {
-    source_id: String,
-    label: Option<String>,
-    machine_name: Option<String>,
-    raw_choice: Option<String>,
-    reasons: Vec<String>,
+pub(crate) struct FrozenMapping {
+    pub(crate) source_id: String,
+    pub(crate) label: Option<String>,
+    pub(crate) machine_name: Option<String>,
+    pub(crate) field_type: Option<String>,
+    pub(crate) raw_choice: Option<String>,
+    pub(crate) reasons: Vec<String>,
 }
 
 #[derive(Serialize)]
-struct FrozenOperation {
-    source_id: String,
-    source_field: Option<String>,
-    source_tag: Option<String>,
-    reasons: Vec<String>,
+pub(crate) struct FrozenOperation {
+    pub(crate) source_id: String,
+    pub(crate) source_field: Option<String>,
+    pub(crate) source_tag: Option<String>,
+    pub(crate) value: Option<metadata_source::NativeValue>,
+    pub(crate) reasons: Vec<String>,
 }
 
 fn seal<T: Serialize>(
@@ -560,6 +562,7 @@ async fn build_preparation(
     let fields = sqlx::query("SELECT source_id FROM migration_core_change_group WHERE report_id=$1 AND organization_id=$2 AND family='custom_fields' ORDER BY source_id")
         .bind(report).bind(org.0).fetch_all(&mut *conn).await?;
     let mut field_count = 0_i64;
+    let mut field_specs = Vec::new();
     for row in fields {
         let source_id: Option<String> = row.get("source_id");
         let Some(source_id) = source_id else {
@@ -587,6 +590,7 @@ async fn build_preparation(
             source_id: source_id.clone(),
             label: field.label.clone(),
             machine_name: field.name.clone(),
+            field_type: field.field_type.clone(),
             raw_choice: None,
             reasons: field.reasons.clone(),
         };
@@ -606,6 +610,7 @@ async fn build_preparation(
             frozen,
         )
         .await?;
+        field_specs.push((field.clone(), field_id, source_id.clone()));
         field_count += 1;
         for choice in field.choices {
             let Some(raw) = choice.raw else {
@@ -630,6 +635,7 @@ async fn build_preparation(
                     source_id: source_id.clone(),
                     label: choice.label,
                     machine_name: field.name.clone(),
+                    field_type: field.field_type.clone(),
                     raw_choice: Some(raw),
                     reasons: choice.reasons,
                 },
@@ -648,9 +654,11 @@ async fn build_preparation(
             conn, key, org, import, plan, snapshot, report, "people", &source_id,
         )
         .await?;
+        let person_record = source.as_ref().map(|source| source.record.clone());
         let manifest_id = Uuid::new_v4();
         let mut disposition = "held";
         let mut reasons = vec!["source_evidence_unavailable".to_owned()];
+        let mut tag_operations: Vec<(Uuid, String)> = Vec::new();
         if let Some(source) = source {
             if source.qualified && !source.conflict && source.record.reasons.is_empty() {
                 disposition = "eligible";
@@ -666,7 +674,7 @@ async fn build_preparation(
                         } else {
                             raw.as_bytes().to_vec()
                         };
-                        insert_mapping(
+                        let mapping_id = insert_mapping(
                             conn,
                             key,
                             org,
@@ -683,11 +691,13 @@ async fn build_preparation(
                                 source_id: source_id.clone(),
                                 label,
                                 machine_name: None,
-                                raw_choice: Some(raw),
+                                field_type: None,
+                                raw_choice: Some(raw.clone()),
                                 reasons: tag.reasons,
                             },
                         )
                         .await?;
+                        tag_operations.push((mapping_id, raw));
                         tag_count += 1;
                     }
                 } else {
@@ -708,19 +718,44 @@ async fn build_preparation(
         if disposition == "held" {
             held += 1;
         }
-        // The record stores why no value operation is executable until an
-        // explicit catalog choice is supplied; it is never an implicit target.
-        let op = FrozenOperation {
-            source_id: source_id.clone(),
-            source_field: None,
-            source_tag: None,
-            reasons,
-        };
-        let op_id = Uuid::new_v4();
-        let sealed = seal(key, org, snapshot, plan, op_id, "operation", &op)?;
-        let op_key = source_key(key, org, account, "person", source_id.as_bytes());
-        sqlx::query("INSERT INTO migration_admitted_metadata_operation(id,manifest_id,import_id,plan_id,organization_id,kind,source_key,disposition,nonce,ciphertext) VALUES($1,$2,$3,$4,$5,'tag_link',$6,'held',$7,$8)")
-            .bind(op_id).bind(manifest_id).bind(import).bind(plan).bind(org.0).bind(op_key).bind(sealed.nonce).bind(sealed.ciphertext).execute(&mut *conn).await?;
+        for (mapping_id, raw) in tag_operations {
+            let op_id = Uuid::new_v4();
+            let op = FrozenOperation {
+                source_id: source_id.clone(),
+                source_field: None,
+                source_tag: Some(raw),
+                value: None,
+                reasons: reasons.clone(),
+            };
+            let sealed = seal(key, org, snapshot, plan, op_id, "operation", &op)?;
+            let op_key: Vec<u8> = sqlx::query_scalar("SELECT source_key FROM migration_admitted_metadata_mapping WHERE id=$1 AND plan_id=$2 AND organization_id=$3")
+                .bind(mapping_id).bind(plan).bind(org.0).fetch_one(&mut *conn).await?;
+            sqlx::query("INSERT INTO migration_admitted_metadata_operation(id,manifest_id,import_id,plan_id,organization_id,kind,mapping_id,source_key,disposition,nonce,ciphertext) VALUES($1,$2,$3,$4,$5,'tag_link',$6,$7,$8,$9,$10)")
+                .bind(op_id).bind(manifest_id).bind(import).bind(plan).bind(org.0).bind(mapping_id).bind(op_key).bind(if disposition=="eligible" {"eligible"} else {"held"}).bind(sealed.nonce).bind(sealed.ciphertext).execute(&mut *conn).await?;
+        }
+        if let Some(record) = person_record {
+            for (field, mapping_id, field_source_id) in &field_specs {
+                let extracted = metadata_source::extract_value(&record, field);
+                let op_id = Uuid::new_v4();
+                let op = FrozenOperation {
+                    source_id: source_id.clone(),
+                    source_field: Some(field_source_id.clone()),
+                    source_tag: None,
+                    value: extracted.value.clone(),
+                    reasons: extracted.reasons.clone(),
+                };
+                let sealed = seal(key, org, snapshot, plan, op_id, "operation", &op)?;
+                let op_key: Vec<u8> = sqlx::query_scalar("SELECT source_key FROM migration_admitted_metadata_mapping WHERE id=$1 AND plan_id=$2 AND organization_id=$3")
+                    .bind(*mapping_id).bind(plan).bind(org.0).fetch_one(&mut *conn).await?;
+                let operation_disposition = if disposition == "eligible" {
+                    extracted.disposition
+                } else {
+                    "held".to_owned()
+                };
+                sqlx::query("INSERT INTO migration_admitted_metadata_operation(id,manifest_id,import_id,plan_id,organization_id,kind,mapping_id,source_key,disposition,nonce,ciphertext) VALUES($1,$2,$3,$4,$5,'value',$6,$7,$8,$9,$10)")
+                    .bind(op_id).bind(manifest_id).bind(import).bind(plan).bind(org.0).bind(*mapping_id).bind(op_key).bind(operation_disposition).bind(sealed.nonce).bind(sealed.ciphertext).execute(&mut *conn).await?;
+            }
+        }
         manifests += 1;
     }
     let counts = json!({"people":{"source":manifests.to_string(),"eligible":(manifests-held).to_string(),"held":held.to_string()},"catalog":{"fields":field_count.to_string(),"tags":tag_count.to_string()},"issues":{"mapping_held":(field_count+tag_count).to_string()}});
@@ -953,11 +988,18 @@ pub async fn apply_mappings(
         } else {
             choice.disposition.as_str()
         };
+        let target = if choice.disposition == "create_matching" {
+            Some(Uuid::new_v4())
+        } else {
+            choice.target_id
+        };
         let updated = sqlx::query("UPDATE migration_admitted_metadata_mapping SET disposition=$5,target_id=$6 WHERE id=$1 AND import_id=$2 AND plan_id=$3 AND organization_id=$4 AND disposition='held'")
-            .bind(choice.id).bind(import).bind(plan).bind(ctx.organization_id.0).bind(stored).bind(choice.target_id).execute(&mut *tx).await?;
+            .bind(choice.id).bind(import).bind(plan).bind(ctx.organization_id.0).bind(stored).bind(target).execute(&mut *tx).await?;
         if updated.rows_affected() != 1 {
             return Err(MigrationError::Conflict);
         }
+        sqlx::query("UPDATE migration_admitted_metadata_operation SET target_id=$4,disposition=CASE WHEN disposition='eligible' AND $5='held' THEN 'held' ELSE disposition END WHERE mapping_id=$1 AND import_id=$2 AND plan_id=$3 AND organization_id=$6")
+            .bind(choice.id).bind(import).bind(plan).bind(target).bind(stored).bind(ctx.organization_id.0).execute(&mut *tx).await?;
     }
     sqlx::query("UPDATE migration_admitted_metadata_plan SET state='ready',phase='catalog',expires_at=clock_timestamp()+interval '10 minutes' WHERE id=$1 AND import_id=$2 AND organization_id=$3")
         .bind(plan).bind(import).bind(ctx.organization_id.0).execute(&mut *tx).await?;

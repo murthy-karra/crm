@@ -407,13 +407,14 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
     });
     let _admitted_metadata_worker = state.db.as_ref().map(|pool| {
         let pool = pool.clone();
+        let key = state.raw_payload_key.clone();
         tokio::spawn(async move {
             let mut tick = tokio::time::interval(std::time::Duration::from_millis(200));
             tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
                 tick.tick().await;
                 for _ in 0..32 {
-                    match domain::migration::admitted_metadata_worker::run_once(&pool).await {
+                    match domain::migration::admitted_metadata_worker::run_once(&pool, &key).await {
                         Ok(true) => tokio::task::yield_now().await,
                         Ok(false) => break,
                         Err(error) => {

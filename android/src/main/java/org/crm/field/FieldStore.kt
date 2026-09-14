@@ -372,6 +372,25 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         }
     }
 
+    /**
+     * Page bytes remain verbatim reconciliation evidence. Once the complete contact traversal
+     * is sealed, the local read projection follows the server's declared visible order rather
+     * than an incidental UUID/page order. Old unqualified caches may omit these fields and
+     * deliberately retain their stored order until a modern traversal replaces them.
+     */
+    private fun orderedDetailContacts(contacts: JSONArray): JSONArray {
+        val values = contacts.objects()
+        if (values.any { !it.has("import_order") || !it.has("created_at") }) return JSONArray(values)
+        return JSONArray(
+            values.sortedWith(
+                compareBy<JSONObject> { item ->
+                    if (item.isNull("import_order")) Long.MAX_VALUE else item.getLong("import_order")
+                }.thenBy { item -> Instant.parse(item.getString("created_at")) }
+                    .thenBy { item -> item.getString("id") },
+            ),
+        )
+    }
+
     /** The proposal/outbox/context appear together or none do. Repeated submit returns its ID. */
     fun submitStageDraft(id: String, expectedRevision: Long): OperationRow = atomic {
         requireAccess()
@@ -658,7 +677,7 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         require(response.getString("context_id") == binding.context && response.getString("person_id") == operation.person)
         revision(response.getString("person_revision")); revision(response.getString("details_revision"))
         validateDetailContacts(response.getJSONArray("items")); require(response.getBoolean("complete")); require(response.isNull("next_cursor"))
-        val current = json("first_name" to if (response.isNull("first_name")) null else response.getString("first_name"), "last_name" to if (response.isNull("last_name")) null else response.getString("last_name"), "details_revision" to response.getString("details_revision"), "contacts" to response.getJSONArray("items"))
+        val current = json("first_name" to if (response.isNull("first_name")) null else response.getString("first_name"), "last_name" to if (response.isNull("last_name")) null else response.getString("last_name"), "details_revision" to response.getString("details_revision"), "contacts" to orderedDetailContacts(response.getJSONArray("items")))
         dao.currentProfileContext(operationId, current.toString(), context.editorRevision + 1)
     }
 
@@ -889,7 +908,7 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
                             item.person,
                             item.revision,
                             summary.first!!.toString(),
-                            summary.second.toString(),
+                            orderedDetailContacts(summary.second).toString(),
                             notes.toString(),
                             tasks.toString(),
                             id,

@@ -862,7 +862,7 @@ private fun SavedWork(
         }
         items(state.profileDrafts, key = { "profile-${it.id}" }) { draft ->
             val operation = draft.operation.takeIf { it.isNotEmpty() }?.let { id -> state.operations.firstOrNull { it.id == id } }
-            OutlinedCard(Modifier.fillMaxWidth().then(if (draft.operation.isEmpty()) Modifier.clickable { onProfileDraft(draft) } else Modifier)) {
+            OutlinedCard(Modifier.fillMaxWidth().then(if (draft.operation.isEmpty()) Modifier.clickable { onProfileDraft(draft) } else Modifier).testTag("profile-draft-${draft.id}")) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("Profile details", fontWeight = FontWeight.SemiBold)
                     if (operation == null) Text("Draft revision ${draft.revision} saved on device · Continue editing") else StatusBadge(operation)
@@ -877,6 +877,12 @@ private fun SavedWork(
                             TextButton(onClick = { onDiscardProfile(operation) }) { Text("Use current") }
                             TextButton(onClick = { onReviseProfile(operation) }, enabled = !comparison?.current.isNullOrEmpty()) { Text("Review and replace") }
                         }
+                    } else if (operation?.status == "attention") {
+                        // A validation or transport result can leave a protected proposal that
+                        // has no current-record comparison.  It remains durable until the user
+                        // explicitly discards it through the same profile proposal lifecycle.
+                        Text(operation.lastError.ifEmpty { "Profile proposal needs attention" }, style = MaterialTheme.typography.bodySmall)
+                        TextButton(onClick = { onDiscardProfile(operation) }) { Text("Discard proposal") }
                     }
                 }
             }
@@ -1312,10 +1318,24 @@ private fun ProfileComposer(
             OutlinedTextField(last, { last = it }, label = { Text("Last name") }, enabled = !saving, modifier = Modifier.fillMaxWidth().testTag("profile-last-name"))
             Text("Contact methods", fontWeight = FontWeight.SemiBold)
             contacts.forEachIndexed { index, contact ->
-                if (!contact.removed) Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                if (contact.id != null && !contact.removed) Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
                     OutlinedTextField(contact.value, { contacts[index] = contact.copy(value = it) }, label = { Text(contact.kind) }, enabled = !saving, modifier = Modifier.weight(1f).testTag("profile-contact-$index"))
                     TextButton(onClick = { contacts[index] = contact.copy(removed = true) }, enabled = !saving) { Text("Remove") }
-                } else Text("${contact.kind} will be removed. The next server-ordered method becomes the displayed method.", style = MaterialTheme.typography.bodySmall)
+                } else if (contact.id != null) {
+                    val primary = contacts.firstOrNull { it.id != null && !it.removed && it.kind == contact.kind }?.id == contact.id
+                    Text(
+                        if (primary) "Removing the primary ${contact.kind}; the next server-ordered ${contact.kind} becomes primary."
+                        else "${contact.kind} will be removed.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+            if (contacts.any { it.id == null && !it.removed }) Text("New contact methods (the server appends them after existing methods)", fontWeight = FontWeight.SemiBold)
+            contacts.forEachIndexed { index, contact ->
+                if (contact.id == null && !contact.removed) Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(contact.value, { contacts[index] = contact.copy(value = it) }, label = { Text(contact.kind) }, enabled = !saving, modifier = Modifier.weight(1f).testTag("profile-contact-$index"))
+                    TextButton(onClick = { contacts[index] = contact.copy(removed = true) }, enabled = !saving) { Text("Remove") }
+                }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 TextButton(onClick = { contacts += ProfileContact(null, "email", "") }, enabled = !saving) { Text("Add email") }

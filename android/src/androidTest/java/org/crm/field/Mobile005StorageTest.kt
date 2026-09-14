@@ -89,6 +89,23 @@ class Mobile005StorageTest {
         assertEquals("8", JSONObject(second.envelope).getJSONObject("payload").getString("expected_details_revision"))
     }
 
+    @Test fun currentProfileProjectionOrdersScrambledContactIdsByDeclaredServerOrder() {
+        val original = store.saveProfileDraft(UUID.randomUUID().toString(), person, proposal())
+        val op = store.submitProfileDraft(original.id, original.revision)
+        store.dao.operationState(op.id, "attention", 1, 0, "revision_conflict")
+        val nullImport = "20000000-0000-4000-8000-000000000001"
+        val laterImport = "10000000-0000-4000-8000-000000000999"
+        val firstImportLaterCreated = "f0000000-0000-4000-8000-000000000001"
+        val scrambled = JSONArray()
+            .put(json("id" to nullImport, "kind" to "phone", "value" to "555-555-0103", "import_order" to JSONObject.NULL, "created_at" to "2026-09-14T00:00:00Z"))
+            .put(json("id" to laterImport, "kind" to "email", "value" to "later@example.test", "import_order" to 2, "created_at" to "2026-09-14T00:00:00Z"))
+            .put(json("id" to firstImportLaterCreated, "kind" to "email", "value" to "first@example.test", "import_order" to 1, "created_at" to "2026-09-14T01:00:00Z"))
+            .put(json("id" to email, "kind" to "phone", "value" to "555-555-0102", "import_order" to 1, "created_at" to "2026-09-14T00:00:00Z"))
+        store.recordCurrentProfile(op.id, json("context_id" to store.binding.context, "person_id" to person, "person_revision" to "9", "details_revision" to "8", "first_name" to "Current", "last_name" to "Name", "items" to scrambled, "next_cursor" to null, "complete" to true))
+        val ordered = JSONObject(store.dao.profileContext(op.id)!!.current).getJSONArray("contacts")
+        assertEquals(listOf(email, firstImportLaterCreated, laterImport, nullImport), (0 until ordered.length()).map { ordered.getJSONObject(it).getString("id") })
+    }
+
     @Test fun incompleteCurrentProfileCannotEnableReplacement() {
         val draft = store.saveProfileDraft(UUID.randomUUID().toString(), person, proposal())
         val op = store.submitProfileDraft(draft.id, draft.revision)

@@ -22,6 +22,8 @@ data class PersonRow(
     @ColumnInfo(defaultValue = "0") val noteRevisionsQualified: Boolean = false,
     /** A v4 cache has no stage baseline even when its broad revision is unchanged. */
     @ColumnInfo(defaultValue = "0") val stageRevisionsQualified: Boolean = false,
+    /** A v5 cache has no complete contact/details baseline even at the same broad revision. */
+    @ColumnInfo(defaultValue = "0") val detailsRevisionsQualified: Boolean = false,
 )
 
 data class PersonCard(val id: String, val revision: String, val summary: String)
@@ -109,6 +111,31 @@ data class EditContextRow(
     val kind: String,
     val target: String,
     val baseline: String,
+    val current: String = "",
+    val editorRevision: Long = 0,
+)
+
+/** A protected CAS draft for an aggregate name/contact proposal. */
+@Entity(tableName = "profile_drafts")
+data class ProfileDraftRow(
+    @PrimaryKey val id: String,
+    val person: String,
+    val baseline: String,
+    val proposal: String,
+    val detailsRevision: String,
+    val revision: Long,
+    val operation: String = "",
+    val state: String = "draft",
+    @ColumnInfo(defaultValue = "''") val lastError: String = "",
+)
+
+/** A bounded current-profile traversal is editor comparison material, never cache data. */
+@Entity(tableName = "profile_context")
+data class ProfileContextRow(
+    @PrimaryKey val operation: String,
+    val person: String,
+    val baseline: String,
+    val proposal: String,
     val current: String = "",
     val editorRevision: Long = 0,
 )
@@ -233,6 +260,21 @@ interface FieldDao {
 
     @Query("DELETE FROM edit_context WHERE operation=:operation") fun removeEditContext(operation: String)
 
+    @Query("SELECT * FROM profile_drafts WHERE id=:id") fun profileDraft(id: String): ProfileDraftRow?
+    @Query("SELECT * FROM profile_drafts ORDER BY id") fun profileDrafts(): List<ProfileDraftRow>
+    @Insert(onConflict = OnConflictStrategy.ABORT) fun insertProfileDraft(row: ProfileDraftRow)
+    @Query("UPDATE profile_drafts SET proposal=:proposal,revision=:revision,state='draft',lastError='' WHERE id=:id AND revision=:expectedRevision AND operation='' ")
+    fun updateProfileDraft(id: String, proposal: String, revision: Long, expectedRevision: Long): Int
+    @Query("UPDATE profile_drafts SET operation=:operation,state='saved',lastError='' WHERE id=:id AND operation='' ")
+    fun saveProfileOperation(id: String, operation: String): Int
+    @Query("UPDATE profile_drafts SET state=:state,lastError=:error WHERE operation=:operation") fun profileState(operation: String, state: String, error: String)
+    @Query("DELETE FROM profile_drafts WHERE operation=:operation") fun removeProfileOperation(operation: String)
+    @Query("SELECT * FROM profile_context WHERE operation=:operation") fun profileContext(operation: String): ProfileContextRow?
+    @Query("SELECT * FROM profile_context ORDER BY operation") fun profileContexts(): List<ProfileContextRow>
+    @Insert(onConflict = OnConflictStrategy.ABORT) fun profileContext(row: ProfileContextRow)
+    @Query("UPDATE profile_context SET current=:current,editorRevision=:editorRevision WHERE operation=:operation") fun currentProfileContext(operation: String, current: String, editorRevision: Long)
+    @Query("DELETE FROM profile_context WHERE operation=:operation") fun removeProfileContext(operation: String)
+
     @Insert(onConflict = OnConflictStrategy.ABORT) fun operation(row: OperationRow)
 
     @Query("SELECT * FROM operations ORDER BY createdAt,id") fun operations(): List<OperationRow>
@@ -316,8 +358,10 @@ interface FieldDao {
             PageRow::class,
             PinRow::class,
             EditContextRow::class,
+            ProfileDraftRow::class,
+            ProfileContextRow::class,
         ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class FieldDatabase : RoomDatabase() {
@@ -377,6 +421,16 @@ abstract class FieldDatabase : RoomDatabase() {
                 }
             }
 
+        /** Mobile005 preserves every schema-5 row and only adds the new protected profile state. */
+        val UPGRADE_5_6 =
+            object : Migration(5, 6) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE people ADD COLUMN detailsRevisionsQualified INTEGER NOT NULL DEFAULT 0")
+                    db.execSQL("CREATE TABLE IF NOT EXISTS profile_drafts (id TEXT NOT NULL, person TEXT NOT NULL, baseline TEXT NOT NULL, proposal TEXT NOT NULL, detailsRevision TEXT NOT NULL, revision INTEGER NOT NULL, operation TEXT NOT NULL DEFAULT '', state TEXT NOT NULL DEFAULT 'draft', lastError TEXT NOT NULL DEFAULT '', PRIMARY KEY(id))")
+                    db.execSQL("CREATE TABLE IF NOT EXISTS profile_context (operation TEXT NOT NULL, person TEXT NOT NULL, baseline TEXT NOT NULL, proposal TEXT NOT NULL, current TEXT NOT NULL DEFAULT '', editorRevision INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(operation))")
+                }
+            }
+
         fun open(context: Context, directory: File, key: ByteArray): FieldDatabase {
             System.loadLibrary("sqlcipher")
             val db =
@@ -387,7 +441,7 @@ abstract class FieldDatabase : RoomDatabase() {
                     )
                     .openHelperFactory(SupportOpenHelperFactory(key, null, true))
                     .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                    .addMigrations(UPGRADE_1_2, UPGRADE_2_3, UPGRADE_3_4, UPGRADE_4_5)
+                    .addMigrations(UPGRADE_1_2, UPGRADE_2_3, UPGRADE_3_4, UPGRADE_4_5, UPGRADE_5_6)
                     .addCallback(
                         object : Callback() {
                             override fun onOpen(db: SupportSQLiteDatabase) {

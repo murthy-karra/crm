@@ -54,6 +54,10 @@ android {
             buildConfigField 'String', 'VAULT_NAMESPACE', '"field.mobile004qa"'
         }
         mobile004upgradeqa { dimension 'origin'; applicationId 'org.crm.field.mobile004upgradeqa'; buildConfigField 'String','API_BASE','"http://10.0.2.2:3102"'; buildConfigField 'String','VAULT_NAMESPACE','"field.mobile004upgradeqa"' }
+        // Mobile005 has isolated normal and in-place-upgrade identities. Neither reuses a prior
+        // verifier's encrypted store, package, API listener, or build output.
+        mobile005qa { dimension 'origin'; applicationId 'org.crm.field.mobile005qa'; testApplicationId 'org.crm.field.mobile005qa.test'; buildConfigField 'String','API_BASE','"http://10.0.2.2:3103"'; buildConfigField 'String','VAULT_NAMESPACE','"vaultfield.mobile005qa"' }
+        mobile005upgradeqa { dimension 'origin'; applicationId 'org.crm.field.mobile005upgradeqa'; testApplicationId 'org.crm.field.mobile005upgradeqa.test'; buildConfigField 'String','API_BASE','"http://10.0.2.2:3103"'; buildConfigField 'String','VAULT_NAMESPACE','"vaultfield.mobile005upgradeqa"' }
     }
     buildFeatures { compose = true; buildConfig = true }
     buildTypes {
@@ -66,7 +70,9 @@ android {
 }
 // QA verification must never replace the checkout's Gradle build products used by a running
 // demo.  This is intentionally opt-in so normal developer builds keep their existing path.
-if (providers.gradleProperty('CRM_MOBILE004_ANDROID_BUILD_DIR').isPresent()) {
+if (providers.gradleProperty('CRM_MOBILE005_ANDROID_BUILD_DIR').isPresent()) {
+    layout.buildDirectory.set(file(providers.gradleProperty('CRM_MOBILE005_ANDROID_BUILD_DIR').get()))
+} else if (providers.gradleProperty('CRM_MOBILE004_ANDROID_BUILD_DIR').isPresent()) {
     layout.buildDirectory.set(file(providers.gradleProperty('CRM_MOBILE004_ANDROID_BUILD_DIR').get()))
 } else if (providers.gradleProperty('CRM_MOBILE003_ANDROID_BUILD_DIR').isPresent()) {
     layout.buildDirectory.set(file(providers.gradleProperty('CRM_MOBILE003_ANDROID_BUILD_DIR').get()))

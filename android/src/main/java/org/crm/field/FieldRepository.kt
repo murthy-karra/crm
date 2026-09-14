@@ -33,6 +33,8 @@ class FieldUi(
     val stageChangesEnabled: Boolean = false,
     val editContexts: List<EditContextRow> = emptyList(),
     val stageContexts: List<StageContextRow> = emptyList(),
+    val profileDrafts: List<ProfileDraftRow> = emptyList(),
+    val profileContexts: List<ProfileContextRow> = emptyList(),
 )
 
 class ActiveAccount(
@@ -396,6 +398,39 @@ class FieldRepository(
 
     suspend fun stageChangesSupported(): Boolean = withContext(Dispatchers.IO) { active?.store?.binding?.supportsStageChanges() == true }
 
+    suspend fun profileDraft(id: String): ProfileDraftRow? = withContext(Dispatchers.IO) {
+        val account = active ?: throw AccessLocked(); check(account)
+        account.store.dao.profileDraft(id)?.also { if (account.store.dao.person(it.person) == null) throw AccessLocked() }
+    }
+
+    suspend fun saveProfileDraft(id: String, person: String, proposal: JSONObject, revision: Long = 0, baseline: JSONObject? = null): ProfileDraftRow = withContext(Dispatchers.IO) {
+        val account = active ?: throw AccessLocked(); check(account)
+        if (!account.store.binding.supportsPersonDetails()) throw ApiFailure(409, "person_details_unsupported")
+        try { account.store.saveProfileDraft(id, person, proposal, revision, baseline).also { refreshView("Profile draft saved on this device") } }
+        catch (error: Exception) { if (error is AccessLocked || error is ApiFailure) throw error; throw StorageFailure() }
+    }
+
+    suspend fun submitProfileDraft(id: String, revision: Long): OperationRow = withContext(Dispatchers.IO) {
+        val account = active ?: throw AccessLocked(); check(account)
+        if (!account.store.binding.supportsPersonDetails()) throw ApiFailure(409, "person_details_unsupported")
+        account.store.submitProfileDraft(id, revision).also { refreshView("Profile changes saved on this device. Waiting for server acceptance."); FieldSyncJob.schedule(context) }
+    }
+
+    suspend fun profileEditingSupported(): Boolean = withContext(Dispatchers.IO) {
+        val account = active ?: return@withContext false
+        check(account); account.store.binding.supportsPersonDetails() && account.store.dao.person(selected ?: return@withContext false)?.detailsRevisionsQualified == true
+    }
+
+    suspend fun reviseProfileConflict(operation: String): ProfileDraftRow = withContext(Dispatchers.IO) {
+        val account = active ?: throw AccessLocked(); check(account)
+        account.store.reviseProfileConflict(operation, java.util.UUID.randomUUID().toString()).also { refreshView("Review the new profile proposal") }
+    }
+
+    suspend fun discardProfileConflict(operation: String) = withContext(Dispatchers.IO) {
+        val account = active ?: throw AccessLocked(); check(account)
+        account.store.discardProfileConflict(operation); refreshView("Saved profile proposal discarded; current version remains unchanged")
+    }
+
     suspend fun reviseStageConflict(operation: String): StageDraftRow = withContext(Dispatchers.IO) {
         val account = active ?: throw AccessLocked(); check(account)
         account.store.reviseStageConflict(operation, java.util.UUID.randomUUID().toString()).also { refreshView("Review the new stage proposal") }
@@ -616,7 +651,7 @@ class FieldRepository(
                     check(account)
                     if (authorized.context != account.store.binding.context) throw ProtocolFailure()
                 }
-                if (error is ApiFailure && error.code == "revision_conflict" && row.kind in setOf("edit_note", "update_task", "change_person_stage")) {
+                if (error is ApiFailure && error.code == "revision_conflict" && row.kind in setOf("edit_note", "update_task", "change_person_stage", "update_person_details")) {
                     // The conflict response is deliberately content-free.  Fetching comparison
                     // data is a separate authorized, identity-fenced request; a failure leaves
                     // the immutable proposal in attention instead of inventing a new baseline.
@@ -628,9 +663,11 @@ class FieldRepository(
                                 account.api.currentNote(account.store.binding, row.person, payload.getString("note_id"))
                             else if (row.kind == "update_task")
                                 account.api.currentTask(account.store.binding, row.person, payload.getString("task_id"))
-                            else account.api.currentStage(account.store.binding, row.person)
+                            else if (row.kind == "change_person_stage") account.api.currentStage(account.store.binding, row.person)
+                            else currentProfile(account, row)
                         check(account)
                         if (row.kind == "change_person_stage") account.store.recordCurrentStage(row.id, current)
+                        else if (row.kind == "update_person_details") account.store.recordCurrentProfile(row.id, current)
                         else account.store.recordCurrent(row.id, current)
                     } catch (_: Exception) {
                         // The explicit conflict remains reviewable without a guessed current version.
@@ -659,6 +696,27 @@ class FieldRepository(
             }
         }
         refreshView("Saved actions checked. Downloading complete records…", true)
+    }
+
+    /** Traversal is context/operation fenced by the caller; it never becomes reconciliation data. */
+    private suspend fun currentProfile(account: ActiveAccount, row: OperationRow): JSONObject {
+        val path = "/api/mobile/v1/people/${uuid(row.person)}/details"
+        var page = account.api.page(path, account.store.binding, "")
+        val output = JSONObject(page.toString())
+        val all = JSONArray(page.getJSONArray("items").toString())
+        val details = revision(page.getString("details_revision"))
+        val personRevision = revision(page.getString("person_revision"))
+        var cursor = page.stringOrNull("next_cursor")
+        if (page.getBoolean("complete") != (cursor == null)) throw ProtocolFailure()
+        while (cursor != null) {
+            page = account.api.page(path, account.store.binding, cursor)
+            if (page.getString("context_id") != account.store.binding.context || page.getString("person_id") != row.person || page.getString("details_revision") != details || page.getString("person_revision") != personRevision) throw ProtocolFailure()
+            page.getJSONArray("items").objects().forEach { all.put(it) }
+            cursor = page.stringOrNull("next_cursor")
+            if (page.getBoolean("complete") != (cursor == null)) throw ProtocolFailure()
+        }
+        output.put("items", all).put("next_cursor", JSONObject.NULL).put("complete", true)
+        return output
     }
 
     private suspend fun download(account: ActiveAccount) {
@@ -772,6 +830,8 @@ class FieldRepository(
                         if (it.person in visibleIds) it else it.copy(baseline = "", current = "")
                     }
                 val stageContexts = dao.stageContexts().map { if (it.person in visibleIds) it else it.copy(baseline = "", proposal = "", current = "") }
+                val profiles = dao.profileDrafts().map { if (it.person in visibleIds) it else it.copy(baseline = "", proposal = "") }
+                val profileContexts = dao.profileContexts().map { if (it.person in visibleIds) it else it.copy(baseline = "", proposal = "", current = "") }
                 registry.put(
                     "pending",
                     ops.count { it.status != "accepted" } +
@@ -802,6 +862,8 @@ class FieldRepository(
                         account.store.binding.supportsStageChanges(),
                         contexts,
                         stageContexts,
+                        profiles,
+                        profileContexts,
                     )
                 if (active === account) mutable.value = result
             } catch (_: Exception) {

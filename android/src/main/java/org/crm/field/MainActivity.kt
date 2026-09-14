@@ -102,6 +102,7 @@ fun FieldApp(repository: FieldRepository) {
     var composer by remember { mutableStateOf<ComposerLaunch?>(null) }
     var contactComposer by remember { mutableStateOf<Pair<String, String>?>(null) }
     var stageComposer by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var profileComposer by remember { mutableStateOf<Pair<String, String>?>(null) }
     var signOut by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf("") }
     LaunchedEffect(state.locked) {
@@ -109,6 +110,7 @@ fun FieldApp(repository: FieldRepository) {
             composer = null
             contactComposer = null
             stageComposer = null
+            profileComposer = null
             signOut = false
             tab = "Today"
             notice = ""
@@ -202,6 +204,7 @@ fun FieldApp(repository: FieldRepository) {
                             onStage = {
                                 stageComposer = state.person!!.id to UUID.randomUUID().toString()
                             },
+                            onProfile = { profileComposer = state.person!!.id to UUID.randomUUID().toString() },
                             onError = { notice = it },
                         )
                     tab == "People" -> PeopleScreen(state, repository, onError = { notice = it })
@@ -257,6 +260,11 @@ fun FieldApp(repository: FieldRepository) {
                                 }
                             },
                             onDiscardStage = { row -> scope.launch { repository.discardStageConflict(row.id) } },
+                            onProfileDraft = { draft -> profileComposer = draft.person to draft.id },
+                            onReviseProfile = { row ->
+                                scope.launch { try { profileComposer = row.person to repository.reviseProfileConflict(row.id).id } catch (_: Exception) { notice = "The original profile proposal remains protected; a replacement could not be prepared." } }
+                            },
+                            onDiscardProfile = { row -> scope.launch { repository.discardProfileConflict(row.id) } },
                         )
                     else -> TodayScreen(state, repository)
                 }
@@ -290,6 +298,11 @@ fun FieldApp(repository: FieldRepository) {
     stageComposer?.let { (person, draft) ->
         StageComposer(repository, person, draft, onClose = { stageComposer = null }, onSubmitted = {
             stageComposer = null; repository.requestSync()
+        })
+    }
+    profileComposer?.let { (person, draft) ->
+        ProfileComposer(repository, person, draft, onClose = { profileComposer = null }, onSubmitted = {
+            profileComposer = null; repository.requestSync()
         })
     }
     if (signOut)
@@ -534,6 +547,7 @@ internal fun PersonScreen(
     onError: (String) -> Unit,
     onContact: () -> Unit = {},
     onStage: () -> Unit = {},
+    onProfile: () -> Unit = {},
 ) {
     val row = state.person ?: return
     val summary = JSONObject(row.summary)
@@ -559,6 +573,20 @@ internal fun PersonScreen(
         }
         items(JSONArray(row.contacts).objects()) { contact ->
             Text("${contact.optString("kind")}: ${contact.optString("value")}")
+        }
+        item {
+            val profileOp = local.firstOrNull { it.kind == "update_person_details" && it.status !in setOf("covered", "superseded") }
+            OutlinedCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Profile", fontWeight = FontWeight.SemiBold)
+                    Text("Names and methods are saved separately from the server record until accepted. They never change call or message destinations.", style = MaterialTheme.typography.bodySmall)
+                    if (profileOp != null) { Text("Pending profile proposal", color = MaterialTheme.colorScheme.primary); StatusBadge(profileOp) }
+                    Button(onClick = onProfile, enabled = row.detailsRevisionsQualified && state.profileDrafts.none { it.person == row.id && it.operation.isEmpty() && profileOp != null }, modifier = Modifier.testTag("edit-profile")) {
+                        Text(if (profileOp == null) "Edit names and contacts" else "Save follow-up profile")
+                    }
+                    if (!row.detailsRevisionsQualified) Text("Profile editing needs a complete current contact baseline.", style = MaterialTheme.typography.bodySmall)
+                }
+            }
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -764,6 +792,9 @@ private fun SavedWork(
     onStageDraft: (StageDraftRow) -> Unit,
     onReviseStage: (OperationRow) -> Unit,
     onDiscardStage: (OperationRow) -> Unit,
+    onProfileDraft: (ProfileDraftRow) -> Unit,
+    onReviseProfile: (OperationRow) -> Unit,
+    onDiscardProfile: (OperationRow) -> Unit,
 ) {
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -826,6 +857,27 @@ private fun SavedWork(
                             "Waiting for the previous stage change. This follow-up remains a draft until you resolve or review that proposal.",
                             style = MaterialTheme.typography.bodySmall,
                         )
+                }
+            }
+        }
+        items(state.profileDrafts, key = { "profile-${it.id}" }) { draft ->
+            val operation = draft.operation.takeIf { it.isNotEmpty() }?.let { id -> state.operations.firstOrNull { it.id == id } }
+            OutlinedCard(Modifier.fillMaxWidth().then(if (draft.operation.isEmpty()) Modifier.clickable { onProfileDraft(draft) } else Modifier)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Profile details", fontWeight = FontWeight.SemiBold)
+                    if (operation == null) Text("Draft revision ${draft.revision} saved on device · Continue editing") else StatusBadge(operation)
+                    if (operation?.lastError == "revision_conflict") {
+                        val comparison = state.profileContexts.firstOrNull { it.operation == operation.id }
+                        Text("Version you started from", fontWeight = FontWeight.SemiBold)
+                        Text(comparison?.baseline?.ifEmpty { "Protected baseline unavailable" } ?: "Protected baseline unavailable", style = MaterialTheme.typography.bodySmall)
+                        Text("Current profile", fontWeight = FontWeight.SemiBold)
+                        Text(comparison?.current?.ifEmpty { "Waiting for an authorized current-profile read" } ?: "Waiting for an authorized current-profile read", style = MaterialTheme.typography.bodySmall)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(onClick = { repository.requestSync(true) }) { Text("Keep for later") }
+                            TextButton(onClick = { onDiscardProfile(operation) }) { Text("Use current") }
+                            TextButton(onClick = { onReviseProfile(operation) }, enabled = !comparison?.current.isNullOrEmpty()) { Text("Review and replace") }
+                        }
+                    }
                 }
             }
         }
@@ -1161,6 +1213,132 @@ private fun Composer(
             },
             dismissButton = { TextButton(onClick = { discard = false }) { Text("Keep editing") } },
         )
+}
+
+private data class ProfileContact(val id: String?, val kind: String, val value: String, val removed: Boolean = false)
+
+/** The editor keeps an operation list, never a replace-all contact array or local normalization. */
+@Composable
+private fun ProfileComposer(
+    repository: FieldRepository,
+    person: String,
+    id: String,
+    onClose: () -> Unit,
+    onSubmitted: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    val commits = remember(id) { Mutex() }
+    val state by repository.ui.collectAsState()
+    var first by remember(id) { mutableStateOf("") }
+    var last by remember(id) { mutableStateOf("") }
+    var originalFirst by remember(id) { mutableStateOf<String?>(null) }
+    var originalLast by remember(id) { mutableStateOf<String?>(null) }
+    val contacts = remember(id) { mutableStateListOf<ProfileContact>() }
+    var revision by remember(id) { mutableLongStateOf(0) }
+    var committed by remember(id) { mutableStateOf("") }
+    var loaded by remember(id) { mutableStateOf(false) }
+    var saving by remember(id) { mutableStateOf(false) }
+    var status by remember(id) { mutableStateOf("Loading protected profile draft…") }
+    var retry by remember(id) { mutableIntStateOf(0) }
+    fun proposal(): JSONObject {
+        val ops = JSONArray()
+        contacts.forEach { contact ->
+            when {
+                contact.id == null && !contact.removed && contact.value.isNotBlank() -> ops.put(json("op" to "add", "kind" to contact.kind, "value" to contact.value))
+                contact.id != null && contact.removed -> ops.put(json("op" to "remove", "id" to contact.id))
+                contact.id != null -> {
+                    val base = state.person?.contacts?.let(::JSONArray)?.objects()?.firstOrNull { it.getString("id") == contact.id }?.getString("value")
+                    if (base != null && base != contact.value) ops.put(json("op" to "edit", "id" to contact.id, "value" to contact.value))
+                }
+            }
+        }
+        return json("contact_operations" to ops).apply {
+            if (first != originalFirst.orEmpty()) put("first_name", first.trim().ifBlank { JSONObject.NULL })
+            if (last != originalLast.orEmpty()) put("last_name", last.trim().ifBlank { JSONObject.NULL })
+        }
+    }
+    fun applySaved(baseline: JSONObject, saved: JSONObject) {
+        originalFirst = baseline.stringOrNull("first_name"); originalLast = baseline.stringOrNull("last_name")
+        first = originalFirst.orEmpty(); last = originalLast.orEmpty()
+        contacts.clear(); baseline.getJSONArray("contacts").objects().forEach { contacts += ProfileContact(it.getString("id"), it.getString("kind"), it.getString("value")) }
+        if (saved.has("first_name")) first = saved.stringOrNull("first_name").orEmpty()
+        if (saved.has("last_name")) last = saved.stringOrNull("last_name").orEmpty()
+        saved.getJSONArray("contact_operations").objects().forEach { op ->
+            when (op.getString("op")) {
+                "add" -> contacts += ProfileContact(null, op.getString("kind"), op.getString("value"))
+                "remove" -> contacts.indexOfFirst { it.id == op.getString("id") }.takeIf { it >= 0 }?.let { i -> contacts[i] = contacts[i].copy(removed = true) }
+                "edit" -> contacts.indexOfFirst { it.id == op.getString("id") }.takeIf { it >= 0 }?.let { i -> contacts[i] = contacts[i].copy(value = op.getString("value")) }
+            }
+        }
+    }
+    LaunchedEffect(id) {
+        try {
+            val saved = repository.profileDraft(id)
+            if (saved != null) { applySaved(JSONObject(saved.baseline), JSONObject(saved.proposal)); revision = saved.revision }
+            else {
+                val row = requireNotNull(state.person); val summary = JSONObject(row.summary)
+                val baseline = json("first_name" to summary.stringOrNull("first_name"), "last_name" to summary.stringOrNull("last_name"), "details_revision" to summary.getString("details_revision"), "contacts" to JSONArray(row.contacts))
+                applySaved(baseline, json("contact_operations" to JSONArray()))
+            }
+            committed = proposal().toString(); loaded = true
+            status = "Changes autosave encrypted on this device. Contact order stays server-defined."
+        } catch (_: Exception) { status = "Could not open this protected profile draft" }
+    }
+    val current = proposal().toString(); val dirty = loaded && current != committed
+    val hasProposalChanges = JSONObject(current).let { it.has("first_name") || it.has("last_name") || it.getJSONArray("contact_operations").length() > 0 }
+    LaunchedEffect(current, loaded, retry) {
+        if (loaded && dirty) {
+            delay(350); commits.withLock { withContext(NonCancellable) {
+                saving = true
+                try { val row = repository.saveProfileDraft(id, person, JSONObject(current), revision); revision = row.revision; committed = current; status = "Profile draft revision ${row.revision} saved on this device" }
+                catch (_: Exception) { status = "Not saved. Free storage and retry; the last committed draft remains protected." }
+                saving = false
+            } }
+        }
+    }
+    AlertDialog(
+        onDismissRequest = { if (!dirty && !saving) onClose() },
+        title = { Text("Edit profile") },
+        text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Changes require the complete saved contact baseline and will be reviewed if the profile changed elsewhere.", style = MaterialTheme.typography.bodySmall)
+            OutlinedTextField(first, { first = it }, label = { Text("First name") }, enabled = !saving, modifier = Modifier.fillMaxWidth().testTag("profile-first-name"))
+            OutlinedTextField(last, { last = it }, label = { Text("Last name") }, enabled = !saving, modifier = Modifier.fillMaxWidth().testTag("profile-last-name"))
+            Text("Contact methods", fontWeight = FontWeight.SemiBold)
+            contacts.forEachIndexed { index, contact ->
+                if (!contact.removed) Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(contact.value, { contacts[index] = contact.copy(value = it) }, label = { Text(contact.kind) }, enabled = !saving, modifier = Modifier.weight(1f).testTag("profile-contact-$index"))
+                    TextButton(onClick = { contacts[index] = contact.copy(removed = true) }, enabled = !saving) { Text("Remove") }
+                } else Text("${contact.kind} will be removed. The next server-ordered method becomes the displayed method.", style = MaterialTheme.typography.bodySmall)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                TextButton(onClick = { contacts += ProfileContact(null, "email", "") }, enabled = !saving) { Text("Add email") }
+                TextButton(onClick = { contacts += ProfileContact(null, "phone", "") }, enabled = !saving) { Text("Add phone") }
+            }
+            Text(status, style = MaterialTheme.typography.bodySmall)
+            if (dirty && !saving) TextButton(onClick = { retry++ }) { Text("Retry save") }
+        } },
+        confirmButton = {
+            Button(
+                onClick = {
+                    saving = true
+                    scope.launch {
+                        commits.withLock {
+                            try {
+                                repository.submitProfileDraft(id, revision)
+                                onSubmitted()
+                            } catch (_: Exception) {
+                                status = "Not submitted. Your committed profile proposal remains protected."
+                                saving = false
+                            }
+                        }
+                    }
+                },
+                enabled = loaded && !dirty && !saving && hasProposalChanges,
+                modifier = Modifier.testTag("profile-save"),
+            ) { Text("Save profile on device") }
+        },
+        dismissButton = { TextButton(onClick = onClose, enabled = loaded && !dirty && !saving) { Text("Close draft") } },
+    )
 }
 
 @Composable

@@ -28,3 +28,17 @@ schema-incompatibility error. The gate rejected the missing table correctly.
 The corrected assertion passes; that failure log remains retained.
 
 These focused checks do not replace the final combined gates or independent review.
+
+## Immutable plan/source bindings
+
+After integrating migration `380bcfb` at root `437e3d3`, the inventory additionally
+requires each plan's non-null snapshot/report/output revision/capture boundary,
+nullable previous-plan reference, preparation kind, receipt-owned snapshot, the
+unique selected-target index, choice keyset index and validated choices-phase
+constraint. Runtime and release preflight use the same checks.
+
+`preflight-plan-bindings.log`:51 passed. The same isolated DB command above with
+`--log admitted-plan-readiness-db1.log` passes1 test containing22 rollback-only
+incomplete variants,171.87s total /1.55s test. Complete readiness succeeds before
+and after. Tested tree is `437e3d3` plus the readiness change committed with this
+section. The initial12-variant proof is superseded by this expanded proof.

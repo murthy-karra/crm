@@ -287,4 +287,42 @@ class RepositoryBoundaryTest {
             repo.scope.cancel()
             DeviceVault(context, name).root.deleteRecursively()
         }
+
+    @Test
+    fun currentProfileRejectsOversizedAndCyclicPagesBeforeRecordingComparison() = runBlocking<Unit> {
+        val person = UUID.randomUUID().toString()
+        fun page(items: org.json.JSONArray, next: String?) = json(
+            "context_id" to fixture("reconciliation_bootstrap").getString("context_id"),
+            "person_id" to person,
+            "person_revision" to "2",
+            "details_revision" to "2",
+            "first_name" to "Current",
+            "last_name" to "Person",
+            "items" to items,
+            "next_cursor" to next,
+            "complete" to (next == null),
+        )
+        suspend fun rejects(name: String, detail: (String) -> JSONObject) {
+            val namespace = "profile-page-$name-${UUID.randomUUID()}"
+            val remote = Transport { origin, method, path, cookie, binding, body ->
+                if (path.contains("/details")) HttpResult(200, detail(path.substringAfterLast("cursor=", "")), null, 30)
+                else transport().request(origin, method, path, cookie, binding, body)
+            }
+            val repo = FieldRepository(context, namespace = namespace, transport = remote)
+            repo.login("synthetic", "synthetic")
+            val active = FieldRepository::class.java.getDeclaredField("active").apply { isAccessible = true }.get(repo) as ActiveAccount
+            val row = OperationRow(UUID.randomUUID().toString(), person, "update_person_details", json("payload" to json()).toString(), 1)
+            try {
+                repo.currentProfile(active, row)
+                fail("$name profile traversal was accepted")
+            } catch (_: ProtocolFailure) {
+                // The traversal was rejected before any FieldStore comparison write.
+            }
+            repo.lockLocal("Complete")
+            repo.scope.cancel()
+            DeviceVault(context, namespace).root.deleteRecursively()
+        }
+        rejects("oversized") { page(org.json.JSONArray().apply { repeat(101) { put(json("id" to UUID.randomUUID().toString())) } }, null) }
+        rejects("cyclic") { cursor -> page(org.json.JSONArray(), "again") }
+    }
 }

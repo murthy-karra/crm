@@ -1,6 +1,5 @@
 package org.crm.field
 
-import java.math.BigInteger
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
@@ -21,10 +20,15 @@ fun JSONArray.objects(): List<JSONObject> = (0 until length()).map { getJSONObje
 fun uuid(value: String): String =
     UUID.fromString(value).toString().also { require(it == value.lowercase()) }
 
-fun revision(value: String): String = value.also { require(it.matches(Regex("[1-9][0-9]*"))) }
+/** Canonical protocol revision: a positive signed 64-bit integer, rendered without leading zeroes. */
+fun revision(value: String): String =
+    value.also {
+        require(it.matches(Regex("[1-9][0-9]*")))
+        require(it.toLongOrNull() != null)
+    }
 
 fun revisionAtLeast(left: String, right: String) =
-    BigInteger(revision(left)) >= BigInteger(revision(right))
+    revision(left).toLong() >= revision(right).toLong()
 
 /**
  * Resolve a wall-clock choice without silently choosing a daylight-saving offset. An empty list

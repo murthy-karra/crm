@@ -23,6 +23,16 @@ async fn admitted_metadata_readiness_requires_complete_preparation_schema(pool: 
         "DROP INDEX migration_admitted_metadata_source_work",
         "DROP INDEX migration_admitted_metadata_source_order",
         "DROP INDEX migration_admitted_metadata_admission_work",
+        "ALTER TABLE migration_admitted_metadata_plan DROP COLUMN snapshot_id",
+        "ALTER TABLE migration_admitted_metadata_plan DROP COLUMN source_output_revision",
+        "ALTER TABLE migration_admitted_metadata_plan DROP COLUMN previous_plan_id",
+        "ALTER TABLE migration_admitted_metadata_plan ALTER COLUMN snapshot_id DROP NOT NULL",
+        "ALTER TABLE migration_admitted_metadata_plan ALTER COLUMN previous_plan_id SET NOT NULL",
+        "ALTER TABLE migration_admitted_metadata_receipt DROP COLUMN snapshot_id",
+        "ALTER TABLE migration_admitted_metadata_receipt ALTER COLUMN snapshot_id DROP NOT NULL",
+        "DROP INDEX migration_admitted_metadata_selected_target",
+        "DROP INDEX migration_admitted_metadata_mapping_prepare",
+        "ALTER TABLE migration_admitted_metadata_plan DROP CONSTRAINT migration_admitted_metadata_plan_preparation_phase_check",
     ] {
         let mut tx = pool.begin().await.unwrap();
         sqlx::query(mutation).execute(&mut *tx).await.unwrap();

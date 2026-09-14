@@ -40,10 +40,10 @@ obtain a pass. See [MOBILE_005_ANDROID_VERIFICATION.md](MOBILE_005_ANDROID_VERIF
 Migration atomic execution and bounded staged preparation through `e8a0165` are
 integrated: all four field types, tags, local-value protection, claims and per-unit
 settlement. Staged preparation has11 functional/recorded-plan checks passing.
-Immutable replanning, frozen transport/readers and recovery/remainder completion
-remain with the migration writer. Runtime and preflight readiness now require the
+Immutable replanning through `380bcfb` is also integrated. Frozen transport/readers
+and recovery/remainder completion remain with the migration writer. Runtime and preflight readiness now require the
 full staged schema, enabled guards and work indexes;51 preflight tests and the
-12-variant rollback-only DB readiness regression pass. See
+22-variant rollback-only DB readiness regression pass. See
 [SLICE_010f3_READINESS_VERIFICATION.md](SLICE_010f3_READINESS_VERIFICATION.md) and
 [SLICE_010f3_VERIFICATION.md](SLICE_010f3_VERIFICATION.md).
 
@@ -59,7 +59,8 @@ migration transport; see [SLICE_010f3_WEB_VERIFICATION.md](SLICE_010f3_WEB_VERIF
 2. Complete the real synthetic metadata browser journey.
 3. Run sequential final `scripts/check`, `scripts/sqlx-prepare`, `scripts/check-db`
    with private outputs and serialized DB access.
-4. Complete the single D-050 paired Today pass and required changed-query evidence.
+4. Finish migration changed-query evidence. The single D-050 Today pair and all11
+   Mobile hot plans pass; see [MOBILE_005_010f3_PERFORMANCE.md](MOBILE_005_010f3_PERFORMANCE.md).
 5. Complete independent implementation reviews, then verify protected resources.
 
 Mobile005 has consumed one of at most two implementation review/fix rounds;

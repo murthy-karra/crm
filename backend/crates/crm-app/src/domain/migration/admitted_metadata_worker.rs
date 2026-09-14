@@ -89,7 +89,7 @@ pub(crate) async fn claim_equal(
         return Ok(false);
     }
     if let Some(id) = r.get::<Option<Uuid>, _>("admitted_mapping_id") {
-        let owner=sqlx::query("SELECT i.snapshot_id,m.plan_id FROM migration_admitted_metadata_mapping m JOIN migration_admitted_metadata_import i ON i.id=m.import_id AND i.organization_id=m.organization_id WHERE m.id=$1 AND m.organization_id=$2").bind(id).bind(org.0).fetch_one(&mut *c).await?;
+        let owner=sqlx::query("SELECT i.snapshot_id,m.plan_id FROM migration_admitted_metadata_mapping m JOIN migration_admitted_metadata_plan i ON i.id=m.plan_id AND i.organization_id=m.organization_id WHERE m.id=$1 AND m.organization_id=$2").bind(id).bind(org.0).fetch_one(&mut *c).await?;
         let prior: FrozenMapping = open(
             key,
             org,

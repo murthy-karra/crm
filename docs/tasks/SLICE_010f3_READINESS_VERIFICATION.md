@@ -99,3 +99,15 @@ Every response is no-store; denials make no source calls, imports, plans, receip
 or registry handover. Both initial failure logs remain retained.
 
 Final combined gates and independent review remain pending.
+
+## Final evidence-limit schema
+
+After tested fidelity checkpoint `1e9ed69`, runtime/preflight also require the
+non-null oversized-Person marker, nullable32-byte field-name key, its validated
+length constraint and partial lookup index, the extra-values preparation phase,
+and both insert/update sides of field-name byte accounting. The private focused
+readiness command above passes all61 rollback-only incomplete variants, with full
+readiness before/after: `admitted-fidelity-readiness-db1.log`,1 test,175.57s total /
+1.60s test. `preflight-fidelity-readiness.log` records51 passing preflight tests.
+Source is the integrated `1e9ed69` implementation plus the shared readiness change
+committed with this record. No new schema or wire contract was introduced here.

@@ -11,6 +11,17 @@ async fn admitted_metadata_readiness_requires_complete_preparation_schema(pool: 
         .await
         .unwrap();
     for mutation in [
+        "ALTER TABLE migration_admitted_metadata_manifest DROP COLUMN oversized",
+        "ALTER TABLE migration_admitted_metadata_manifest ALTER COLUMN oversized DROP NOT NULL",
+        "ALTER TABLE migration_admitted_metadata_mapping DROP COLUMN field_name_key",
+        "ALTER TABLE migration_admitted_metadata_mapping ALTER COLUMN field_name_key SET NOT NULL",
+        "ALTER TABLE migration_admitted_metadata_mapping DROP CONSTRAINT migration_admitted_metadata_mapping_field_name_key_check",
+        "ALTER TABLE migration_admitted_metadata_mapping DROP CONSTRAINT migration_admitted_metadata_mapping_field_name_key_check; ALTER TABLE migration_admitted_metadata_mapping ADD CONSTRAINT migration_admitted_metadata_mapping_field_name_key_check CHECK(field_name_key IS NULL OR octet_length(field_name_key)=31)",
+        "DROP INDEX migration_admitted_metadata_field_name",
+        "DROP INDEX migration_admitted_metadata_field_name; CREATE INDEX migration_admitted_metadata_field_name ON migration_admitted_metadata_mapping(plan_id,organization_id,field_name_key,id)",
+        "ALTER TABLE migration_admitted_metadata_plan DROP CONSTRAINT migration_admitted_metadata_plan_preparation_phase_check; ALTER TABLE migration_admitted_metadata_plan ADD CONSTRAINT migration_admitted_metadata_plan_preparation_phase_check CHECK(preparation_phase IN ('sources','fields','options','tags','choices','cohort','values','seal','complete','remainder_mappings','remainder_people','remainder_operations'))",
+        "DO $test$ DECLARE definition TEXT; BEGIN SELECT pg_get_functiondef('crm_admitted_metadata_preparation_bytes()'::regprocedure) INTO definition; EXECUTE replace(definition,'+COALESCE(octet_length(NEW.field_name_key),0)',''); END $test$;",
+        "DO $test$ DECLARE definition TEXT; BEGIN SELECT pg_get_functiondef('crm_admitted_metadata_preparation_bytes()'::regprocedure) INTO definition; EXECUTE replace(definition,'+COALESCE(octet_length(OLD.field_name_key),0)',''); END $test$;",
         "DROP INDEX migration_admitted_metadata_mapping_parent",
         "DROP INDEX migration_admitted_metadata_plan_building",
         "DROP TABLE migration_admitted_metadata_observation",

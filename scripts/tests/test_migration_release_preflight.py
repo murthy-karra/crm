@@ -108,6 +108,12 @@ class PreflightTests(unittest.TestCase):
                          "migration_admitted_metadata_manifest_predecessor", "'remainder_plan_id','uuid',false",
                          "'evidence_plan_id','uuid',false", "'execute_unit','boolean',true",
                          "'held_settled_people','bigint',true", "LIKE '%remainder_operations%'",
+                         "'oversized','boolean',true", "'field_name_key','bytea',false",
+                         "migration_admitted_metadata_mapping_field_name_key_check",
+                         "octet_length(field_name_key) = 32", "migration_admitted_metadata_field_name",
+                         "(field_name_key IS NOT NULL)", "LIKE '%extra_values%'",
+                         "COALESCE(octet_length(NEW.field_name_key),0)",
+                         "COALESCE(octet_length(OLD.field_name_key),0)",
                          "migration_admitted_metadata_result_unit", "indisunique AND indisvalid"]:
                 self.assertIn(name, schema)
             observed = queries[-1]

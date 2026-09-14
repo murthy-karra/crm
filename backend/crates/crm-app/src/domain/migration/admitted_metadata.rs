@@ -1051,6 +1051,10 @@ pub async fn apply_mappings(
         sqlx::query("UPDATE migration_admitted_metadata_operation SET target_id=$4,disposition=CASE WHEN disposition='eligible' AND $5='held' THEN 'held' ELSE disposition END WHERE mapping_id=$1 AND import_id=$2 AND plan_id=$3 AND organization_id=$6")
             .bind(choice.id).bind(import).bind(plan).bind(target).bind(stored).bind(ctx.organization_id.0).execute(&mut *tx).await?;
     }
+    let duplicate:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM migration_admitted_metadata_mapping WHERE import_id=$1 AND plan_id=$2 AND organization_id=$3 AND kind IN ('field','option') AND target_id IS NOT NULL GROUP BY kind,target_id HAVING count(*)>1)").bind(import).bind(plan).bind(ctx.organization_id.0).fetch_one(&mut *tx).await?;
+    if duplicate {
+        return Err(MigrationError::InvalidImportChoice);
+    }
     // Resolve parent option destinations after the complete explicit patch, so
     // client patch order cannot accidentally select a different choice field.
     sqlx::query("UPDATE migration_admitted_metadata_mapping o SET target_field_id=f.target_id FROM migration_admitted_metadata_mapping f WHERE o.parent_mapping_id=f.id AND o.plan_id=$1 AND o.organization_id=$2 AND f.plan_id=o.plan_id AND f.organization_id=o.organization_id")

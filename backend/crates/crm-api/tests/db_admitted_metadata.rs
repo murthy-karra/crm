@@ -189,6 +189,7 @@ async fn admitted_metadata_typed_units_preserve_types_and_settle_together(migrat
     assert_eq!(values["customNumber"]["number"], "123456.1250");
     assert_eq!(values["customDate"]["date"], "2024-02-29");
     assert_eq!(values["customChoice"]["choice"], "North");
+    assert_eq!(sqlx::query_scalar::<_,Value>("SELECT jsonb_agg(label ORDER BY position) FROM custom_field_option WHERE organization_id=$1").bind(f.org).fetch_one(&f.pool).await.unwrap(),json!(["North","South"]));
     assert_eq!(
         sqlx::query_scalar::<_, i64>("SELECT count(*) FROM person_tag WHERE person_id=$1")
             .bind(person)
@@ -532,7 +533,7 @@ async fn finish_catalog(f: &Fixture, root: Uuid) {
 #[cfg(feature = "perf-harness")]
 #[sqlx::test]
 #[ignore = "requires isolated PostgreSQL migrator"]
-async fn admitted_metadata_hot_units_seek_past_24999_settled_people(migrator: PgPool) {
+async fn admitted_metadata_hot_units_seek_past_settled_people_at_d050(migrator: PgPool) {
     let (f, root, plan, person) = prepared_typed(&migrator).await;
     approve_all(&f, root, plan).await;
     finish(&f, root).await;
@@ -598,7 +599,9 @@ async fn admitted_metadata_hot_units_seek_past_24999_settled_people(migrator: Pg
     fn indexed(plan: &Value, table: &str) -> bool {
         match plan {
             Value::Object(o) => {
-                o.get("Relation Name").is_some_and(|n| n == table) && o.get("Index Name").is_some()
+                o.get("Index Name")
+                    .and_then(Value::as_str)
+                    .is_some_and(|name| name.starts_with(table))
                     || o.values().any(|v| indexed(v, table))
             }
             Value::Array(a) => a.iter().any(|v| indexed(v, table)),

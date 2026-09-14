@@ -17,6 +17,7 @@ struct Scope {
     snapshot: Uuid,
     revision: i64,
     generation: Uuid,
+    evidence_plan: Uuid,
 }
 async fn scope(
     c: &mut PgConnection,
@@ -35,6 +36,7 @@ async fn scope(
         snapshot: p.get("snapshot_id"),
         revision: p.get("revision"),
         generation: p.get("latest_plan_id"),
+        evidence_plan: p.get::<Option<Uuid>, _>("evidence_plan_id").unwrap_or(plan),
     })
 }
 fn open<T: DeserializeOwned>(
@@ -150,9 +152,17 @@ async fn source(
     family: &str,
     id: &str,
 ) -> Result<BTreeMap<String, String>, MigrationError> {
-    let r=sqlx::query("SELECT * FROM migration_admitted_metadata_source WHERE plan_id=$1 AND organization_id=$2 AND family=$3 AND source_id=$4").bind(s.plan).bind(s.org.0).bind(family).bind(id).fetch_optional(c).await?;
+    let r=sqlx::query("SELECT * FROM migration_admitted_metadata_source WHERE plan_id=$1 AND organization_id=$2 AND family=$3 AND source_id=$4").bind(s.evidence_plan).bind(s.org.0).bind(family).bind(id).fetch_optional(c).await?;
     if let Some(r) = r {
-        let f: FrozenSource = open(key, s, &r, "source")?;
+        let f: FrozenSource = open(
+            key,
+            Scope {
+                plan: s.evidence_plan,
+                ..s
+            },
+            &r,
+            "source",
+        )?;
         Ok(f.record.provenance)
     } else {
         Ok(BTreeMap::from([("source_id".into(), id.to_owned())]))
@@ -211,7 +221,7 @@ async fn mapping_view(
             .as_ref()
             .is_some_and(|v| !v.creation_reasons.is_empty());
     Ok(
-        json!({"id":id,"kind":kind,"parent_mapping_id":r.get::<Option<Uuid>,_>("parent_mapping_id"),"source_id":r.get::<String,_>("source_id"),"disposition":disposition,"qualified":qualified,"create_matching_available":available,"choice":choice,"target_id":target_id,"field_id":r.get::<Option<Uuid>,_>("target_field_id"),"reasons":f.reasons,"suggestions":[],"dependent_count":dependent.to_string(),"source":model::summary("source",&source),"added_byte_bound":(r.get::<Vec<u8>,_>("nonce").len()+r.get::<Vec<u8>,_>("ciphertext").len()+4096).to_string(),"alias_count":aliases.to_string(),"target":target_id.map(|id|target(&kind,id,r.get("target_field_id"),&f.target_baseline))}),
+        json!({"id":id,"kind":kind,"parent_mapping_id":r.get::<Option<Uuid>,_>("parent_mapping_id"),"dependency_result_id":r.get::<Option<Uuid>,_>("dependency_result_id"),"execute_unit":r.get::<bool,_>("execute_unit"),"source_id":r.get::<String,_>("source_id"),"disposition":disposition,"qualified":qualified,"create_matching_available":available,"choice":choice,"target_id":target_id,"field_id":r.get::<Option<Uuid>,_>("target_field_id"),"reasons":f.reasons,"suggestions":[],"dependent_count":dependent.to_string(),"source":model::summary("source",&source),"added_byte_bound":(r.get::<Vec<u8>,_>("nonce").len()+r.get::<Vec<u8>,_>("ciphertext").len()+4096).to_string(),"alias_count":aliases.to_string(),"target":target_id.map(|id|target(&kind,id,r.get("target_field_id"),&f.target_baseline))}),
     )
 }
 pub async fn mappings(
@@ -278,15 +288,26 @@ pub async fn aliases(
     let mut tx = lifecycle_tx(pool, ctx).await?;
     let n = limit(&q, &[], &[], false)?;
     let s = scope(&mut tx, ctx.organization_id, root, plan).await?;
-    mapping_row(&mut tx, s, mapping).await?;
+    let m = mapping_row(&mut tx, s, mapping).await?;
+    let original_mapping = m
+        .get::<Option<Uuid>, _>("source_mapping_id")
+        .unwrap_or(mapping);
     let p = purpose("aliases", s, &q, Some(mapping), None)?;
     let after: Uuid = cursor(key, s, &p, q.cursor.as_deref())?.unwrap_or(Uuid::nil());
-    let rows=sqlx::query("SELECT id,source_row_id,ordinal FROM migration_admitted_metadata_alias WHERE plan_id=$1 AND organization_id=$2 AND mapping_id=$3 AND id>$4 ORDER BY id LIMIT $5").bind(plan).bind(s.org.0).bind(mapping).bind(after).bind(n+1).fetch_all(&mut *tx).await?;
+    let rows=sqlx::query("SELECT id,source_row_id,ordinal FROM migration_admitted_metadata_alias WHERE plan_id=$1 AND organization_id=$2 AND mapping_id=$3 AND id>$4 ORDER BY id LIMIT $5").bind(s.evidence_plan).bind(s.org.0).bind(original_mapping).bind(after).bind(n+1).fetch_all(&mut *tx).await?;
     let mut page = Page::new();
     let mut last = None;
     for r in rows.iter().take(n as usize) {
-        let raw=sqlx::query("SELECT * FROM migration_admitted_metadata_source WHERE id=$1 AND plan_id=$2 AND organization_id=$3").bind(r.get::<Uuid,_>("source_row_id")).bind(plan).bind(s.org.0).fetch_one(&mut *tx).await?;
-        let f: FrozenSource = open(key, s, &raw, "source")?;
+        let raw=sqlx::query("SELECT * FROM migration_admitted_metadata_source WHERE id=$1 AND plan_id=$2 AND organization_id=$3").bind(r.get::<Uuid,_>("source_row_id")).bind(s.evidence_plan).bind(s.org.0).fetch_one(&mut *tx).await?;
+        let f: FrozenSource = open(
+            key,
+            Scope {
+                plan: s.evidence_plan,
+                ..s
+            },
+            &raw,
+            "source",
+        )?;
         let ordinal: i32 = r.get("ordinal");
         let Entity::Person(person) = f.record.entity else {
             return Err(MigrationError::Crypto);
@@ -594,6 +615,7 @@ pub async fn provenance(
         snapshot: Uuid::nil(),
         revision: 0,
         generation: Uuid::nil(),
+        evidence_plan: Uuid::nil(),
     };
     let p = purpose("provenance", envelope, &q, Some(id), None)?;
     let after: Uuid = cursor(key, envelope, &p, q.cursor.as_deref())?.unwrap_or(Uuid::nil());

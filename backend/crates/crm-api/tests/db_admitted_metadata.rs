@@ -1897,3 +1897,236 @@ async fn admitted_metadata_readers_bind_pages_and_lossless_segments_to_frozen_ev
     assert_eq!(detail["counts"]["values"]["applied"], "4");
     assert_eq!(detail["cohort_counts"]["remaining_people"], "0");
 }
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn admitted_metadata_remainder_references_catalog_and_keeps_original_native_baseline(
+    migrator: PgPool,
+) {
+    let (f, root, plan, person) = prepared_typed(&migrator).await;
+    approve_all(&f, root, plan).await;
+    for _ in 0..20 {
+        let count:i64=sqlx::query_scalar("SELECT count(*) FROM migration_admitted_metadata_mapping m WHERE m.plan_id=(SELECT confirmed_plan_id FROM migration_admitted_metadata_import WHERE id=$1) AND NOT EXISTS(SELECT 1 FROM migration_admitted_metadata_result r WHERE r.import_id=$1 AND r.unit_id=m.id)").bind(root).fetch_one(&f.pool).await.unwrap();
+        if count == 0 {
+            break;
+        }
+        assert!(admitted_metadata_worker::run_once(&f.pool, &f.key)
+            .await
+            .unwrap());
+    }
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_admitted_metadata_result WHERE import_id=$1 AND kind='people'").bind(root).fetch_one(&f.pool).await.unwrap(),0);
+    admitted_metadata::cancel(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        root,
+        admitted_metadata::Request {
+            request_id: Uuid::new_v4(),
+        },
+    )
+    .await
+    .unwrap();
+    let prior:Value=sqlx::query_scalar("SELECT jsonb_agg(to_jsonb(r) ORDER BY id) FROM migration_admitted_metadata_result r WHERE import_id=$1").bind(root).fetch_one(&f.pool).await.unwrap();
+    let claims: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM migration_metadata_catalog_claim WHERE organization_id=$1",
+    )
+    .bind(f.org)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    // A value appears after the accepted preview. A successor must preserve
+    // the earlier absence comparison and hold this cell, including equal text.
+    sqlx::query("INSERT INTO person_custom_field_value(organization_id,person_id,field_id,field_type,text_value,updated_by_user_id,origin,correlation_id) SELECT $1,$2,id,'text','Exact retained text',$3,'web_session',$4 FROM custom_field WHERE organization_id=$1 AND label='Text'").bind(f.org).bind(person).bind(f.actor).bind(Uuid::new_v4()).execute(&migrator).await.unwrap();
+    let request = Uuid::new_v4();
+    let value = admitted_metadata::create_remainder(
+        &f.pool,
+        &f.key,
+        Some(&ReleaseReadiness::for_tests()),
+        &f.ctx,
+        root,
+        admitted_metadata::Request {
+            request_id: request,
+        },
+    )
+    .await
+    .unwrap();
+    let successor = Uuid::parse_str(value["import"]["id"].as_str().unwrap()).unwrap();
+    let ledger_before = ledger(&f, successor).await;
+    assert_eq!(
+        admitted_metadata::create_remainder(
+            &f.pool,
+            &f.key,
+            None,
+            &f.ctx,
+            root,
+            admitted_metadata::Request {
+                request_id: request
+            }
+        )
+        .await
+        .unwrap(),
+        value
+    );
+    assert_eq!(ledger(&f, successor).await, ledger_before);
+    finish(&f, successor).await;
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_metadata_catalog_claim WHERE organization_id=$1"
+        )
+        .bind(f.org)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap(),
+        claims
+    );
+    assert_eq!(sqlx::query_scalar::<_,Value>("SELECT jsonb_agg(to_jsonb(r) ORDER BY id) FROM migration_admitted_metadata_result r WHERE import_id=$1").bind(root).fetch_one(&f.pool).await.unwrap(),prior);
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_admitted_metadata_result WHERE import_id=$1"
+        )
+        .bind(successor)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap(),
+        1
+    );
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_admitted_metadata_mapping WHERE import_id=$1 AND dependency_result_id IS NOT NULL AND NOT execute_unit").bind(successor).fetch_one(&f.pool).await.unwrap(),claims);
+    let header = admitted_metadata::get(&f.pool, &f.ctx, successor)
+        .await
+        .unwrap();
+    assert_eq!(header["counts"]["values"]["held"], "1");
+    assert_eq!(header["counts"]["values"]["applied"], "3");
+    assert_eq!(header["remainder"]["remaining_people"], "0");
+    let rows = admitted_metadata::results(&f.pool, &f.key, &f.ctx, successor, Default::default())
+        .await
+        .unwrap();
+    assert_eq!(
+        rows["items"][0]["admitted_metadata_import_id"],
+        successor.to_string()
+    );
+    assert!(rows["items"][0]["source"]["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|v| v["text"]
+            .as_str()
+            .is_some_and(|v| v.contains("Exact retained text"))));
+}
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn admitted_metadata_remainder_partial_cancel_and_cancelled_successor_keep_exact_never_settled_people(
+    migrator: PgPool,
+) {
+    let people=(104..107).map(|id|json!({"id":id,"firstName":"Remainder","lastName":"Person","stage":"Lead","assignedUserId":3,"tags":["Shared"]})).collect::<Vec<_>>();
+    let (f, parent, admission) = fixture_with_admission(&migrator, people.clone()).await;
+    let selected = report(&f, parent, people).await;
+    let prepared = admitted_metadata::prepare(
+        &f.pool,
+        &f.key,
+        &ReleaseReadiness::for_tests(),
+        &f.ctx,
+        admitted_metadata::Prepare {
+            request_id: Uuid::new_v4(),
+            admission_id: admission,
+            source_report_id: selected,
+        },
+    )
+    .await
+    .unwrap();
+    let root = Uuid::parse_str(prepared["import"]["id"].as_str().unwrap()).unwrap();
+    drain_preparation(&f, root).await;
+    let plan: Uuid = sqlx::query_scalar(
+        "SELECT latest_plan_id FROM migration_admitted_metadata_import WHERE id=$1",
+    )
+    .bind(root)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    approve_all(&f, root, plan).await;
+    assert!(admitted_metadata_worker::run_once(&f.pool, &f.key)
+        .await
+        .unwrap()); // catalog
+    assert!(admitted_metadata_worker::run_once(&f.pool, &f.key)
+        .await
+        .unwrap()); // first Person
+    admitted_metadata::cancel(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        root,
+        admitted_metadata::Request {
+            request_id: Uuid::new_v4(),
+        },
+    )
+    .await
+    .unwrap();
+    let header = admitted_metadata::get(&f.pool, &f.ctx, root).await.unwrap();
+    assert_eq!(header["remainder"]["remaining_people"], "2");
+    assert_eq!(header["remainder"]["excluded_settled_people"], "1");
+    let make = |request| admitted_metadata::Request {
+        request_id: request,
+    };
+    let second = admitted_metadata::create_remainder(
+        &f.pool,
+        &f.key,
+        Some(&ReleaseReadiness::for_tests()),
+        &f.ctx,
+        root,
+        make(Uuid::new_v4()),
+    )
+    .await
+    .unwrap();
+    let second = Uuid::parse_str(second["import"]["id"].as_str().unwrap()).unwrap();
+    // Cancellation before the copy completes still has the exact original
+    // confirmed scope; its successor must not use the partially copied set.
+    assert!(admitted_metadata_worker::run_once(&f.pool, &f.key)
+        .await
+        .unwrap());
+    admitted_metadata::cancel(&f.pool, &f.key, &f.ctx, second, make(Uuid::new_v4()))
+        .await
+        .unwrap();
+    let third = admitted_metadata::create_remainder(
+        &f.pool,
+        &f.key,
+        Some(&ReleaseReadiness::for_tests()),
+        &f.ctx,
+        second,
+        make(Uuid::new_v4()),
+    )
+    .await
+    .unwrap();
+    let third = Uuid::parse_str(third["import"]["id"].as_str().unwrap()).unwrap();
+    finish(&f, third).await;
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_admitted_metadata_result WHERE import_id=$1 AND kind='people'").bind(root).fetch_one(&f.pool).await.unwrap(),1);
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_admitted_metadata_result WHERE import_id=$1"
+        )
+        .bind(second)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap(),
+        0
+    );
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_admitted_metadata_result WHERE import_id=$1 AND kind='people'").bind(third).fetch_one(&f.pool).await.unwrap(),2);
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(DISTINCT person_id) FROM migration_admitted_metadata_result WHERE organization_id=$1 AND kind='people'").bind(f.org).fetch_one(&f.pool).await.unwrap(),3);
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM person_tag WHERE organization_id=$1")
+            .bind(f.org)
+            .fetch_one(&f.pool)
+            .await
+            .unwrap(),
+        3
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_metadata_catalog_claim WHERE organization_id=$1"
+        )
+        .bind(f.org)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap(),
+        1
+    );
+}

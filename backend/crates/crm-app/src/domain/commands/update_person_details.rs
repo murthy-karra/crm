@@ -81,7 +81,8 @@ pub async fn update_person_details_in_transaction(
     // return so migration-review mode cannot be bypassed through a path that
     // happens not to issue DML.
     crate::auth::workspace::ordinary(conn, ctx.organization_id).await?;
-    if cmd.contact_operations.len() > 50
+    if cmd.expected_details_revision <= 0
+        || cmd.contact_operations.len() > 50
         || cmd.contact_operations.is_empty() && cmd.first_name.is_none() && cmd.last_name.is_none()
     {
         return Err(CommandError::InvalidPersonDetails);
@@ -105,6 +106,12 @@ pub async fn update_person_details_in_transaction(
             return Err(CommandError::InvalidPersonDetails);
         }
     }
+    // The adapter acquires this before its common Person lock. Reassert it for
+    // direct typed callers before this core takes a Person lock as well.
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended('intake:' || $1::text,0))")
+        .bind(ctx.organization_id.to_string())
+        .execute(&mut *conn)
+        .await?;
     let person = queries::lock_person(conn, cmd.person_id, ctx.organization_id)
         .await?
         .ok_or(CommandError::PersonNotFound)?;
@@ -195,7 +202,14 @@ pub async fn update_person_details_in_transaction(
     }
     let first = cmd.first_name.unwrap_or_else(|| person.first_name.clone());
     let last = cmd.last_name.unwrap_or_else(|| person.last_name.clone());
-    if first.is_none() && last.is_none() && contacts.is_empty() {
+    if !first
+        .as_deref()
+        .is_some_and(|value| !value.trim().is_empty())
+        && !last
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty())
+        && contacts.is_empty()
+    {
         return Err(CommandError::InvalidPersonDetails);
     }
     let mut unique = HashSet::new();
@@ -217,30 +231,47 @@ pub async fn update_person_details_in_transaction(
         sqlx::query("UPDATE person SET first_name=$3,last_name=$4,updated_at=statement_timestamp() WHERE id=$1 AND organization_id=$2")
             .bind(cmd.person_id.0).bind(ctx.organization_id.0).bind(first).bind(last).execute(&mut *conn).await?;
     }
-    // Delete before add so a valid replacement does not trip the existing
-    // non-deferrable per-Person uniqueness index. A normalized-value swap on
-    // two stable IDs needs a temporary value (and would advance a derived
-    // revision extra times), which is deliberately not part of this first
-    // command contract: reject it as invalid rather than leaking 23505.
-    for (op, id, _, _, normalized) in &mutations {
-        if op == "edit" {
-            if let Some((kind, existing_normalized)) =
-                initial_contacts.iter().find_map(|(existing_id, identity)| {
-                    (existing_id != id && identity.1 == normalized.as_deref().unwrap_or_default())
-                        .then(|| identity.clone())
-                })
-            {
-                if mutations.iter().any(|(other_op, other_id, _, _, _)| {
-                    other_op == "edit"
-                        && *other_id != *id
-                        && initial_contacts.get(other_id).is_some_and(|identity| {
-                            identity.0 == kind && identity.1 == existing_normalized
-                        })
-                }) {
-                    return Err(CommandError::InvalidPersonDetails);
-                }
-            }
+    // Vacate only edited normalized values needed by another edit. This keeps
+    // stable contact UUIDs/creation/order and handles swaps against the existing
+    // immediate unique index. Temporary values are transaction-local: rollback
+    // restores them, and commit exposes only the validated final contacts.
+    // The opaque aggregate revision also covers these derived intermediate writes.
+    for (operation, contact_id, _, _, _) in &mutations {
+        if operation != "edit" {
+            continue;
         }
+        let original = &initial_contacts[contact_id];
+        let needed_by_edit = mutations
+            .iter()
+            .any(|(other_op, other_id, _, _, normalized)| {
+                other_op == "edit"
+                    && other_id != contact_id
+                    && normalized.as_deref() == Some(original.1.as_str())
+                    && initial_contacts[other_id].0 == original.0
+            });
+        if !needed_by_edit {
+            continue;
+        }
+        let temporary = loop {
+            let candidate = format!("crm-details-temp:{}", Uuid::new_v4());
+            if !initial_contacts
+                .values()
+                .any(|(_, value)| value == &candidate)
+                && !contacts
+                    .iter()
+                    .any(|contact| contact.normalized == candidate)
+            {
+                break candidate;
+            }
+        };
+        sqlx::query(
+            "UPDATE contact_method SET normalized_value=$3 WHERE id=$1 AND organization_id=$2",
+        )
+        .bind(contact_id)
+        .bind(ctx.organization_id.0)
+        .bind(temporary)
+        .execute(&mut *conn)
+        .await?;
     }
     mutations.sort_by_key(|(operation, ..)| match operation.as_str() {
         "remove" => 0_u8,

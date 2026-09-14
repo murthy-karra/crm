@@ -203,6 +203,5 @@ receipt audit fields or realtime; encrypted local/source content stays erasable.
   preserve old API/Operator/intake DTOs and unrelated ranking/history behavior.
 
 Run lane checks and combined final gates in the paired plan. Maximum two review/
-fix rounds; unresolved blocking findings are not a pass. Input limits, aggregate
-conflict behavior, add/remove semantics and declared contracts remain proposals
-for user review, not silently accepted policy.
+fix rounds; unresolved blocking findings are not a pass. D-082 accepts the input limits, aggregate conflict behavior, add/remove semantics
+and declared contracts; new policy changes still require an accepted decision.

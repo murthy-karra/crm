@@ -2746,3 +2746,194 @@ async fn mobile004_catalog_rollback_seal_and_current_authority(pool: PgPool) {
         "workspace_in_migration_review"
     );
 }
+
+async fn mobile005_profile_snapshot(f: &Fixture) -> Value {
+    sqlx::query_scalar("SELECT jsonb_build_object('person',(SELECT to_jsonb(p) FROM person p WHERE p.id=$1),'contacts',COALESCE((SELECT jsonb_agg(to_jsonb(c) ORDER BY c.id) FROM contact_method c WHERE c.person_id=$1),'[]'::jsonb),'receipts',(SELECT count(*) FROM mobile_operation_receipt WHERE person_id=$1))")
+        .bind(f.person).fetch_one(&f.app).await.unwrap()
+}
+
+#[sqlx::test]
+#[ignore]
+async fn mobile005_profile_validation_swaps_and_primary_order_are_atomic(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let contacts: Vec<Uuid> = sqlx::query_scalar("INSERT INTO contact_method(organization_id,person_id,kind,value,normalized_value,import_order,created_at) SELECT $1,$2,'email',v,v,n,now()-interval '2 days' FROM (VALUES('a@example.test',1),('b@example.test',2)) x(v,n) RETURNING id")
+        .bind(f.org).bind(f.person).fetch_all(&f.app).await.unwrap();
+    let a = contacts[0];
+    let b = contacts[1];
+    let initial = mobile005_profile_snapshot(&f).await;
+    let revision = initial["person"]["details_revision"].as_i64().unwrap();
+    let invalid = vec![
+        json!({"first_name":"x".repeat(201)}),
+        json!({"first_name":"bad\u{0}name"}),
+        json!({"contact_operations":[{"op":"add","kind":"email","value":"x".repeat(1025)}]}),
+        json!({"contact_operations":[{"op":"add","kind":"email","value":"bad\n@example.test"}]}),
+        json!({"contact_operations":[{"op":"add","kind":"email","value":"A@EXAMPLE.TEST"}]}),
+        json!({"contact_operations":[{"op":"edit","id":Uuid::new_v4(),"value":"x@example.test"}]}),
+        json!({"contact_operations":[{"op":"edit","id":a,"value":"x@example.test"},{"op":"remove","id":a}]}),
+        json!({"contact_operations":[{"op":"add","kind":"phone","value":"not a phone"}]}),
+        json!({"first_name":null,"last_name":null,"contact_operations":[{"op":"remove","id":a},{"op":"remove","id":b}]}),
+        json!({"first_name":"  ","last_name":"","contact_operations":[{"op":"remove","id":a},{"op":"remove","id":b}]}),
+        json!({"contact_operations":vec![json!({"op":"remove","id":a});51]}),
+    ];
+    for (case, patch) in invalid.into_iter().enumerate() {
+        let mut payload = json!({"person_id":f.person,"expected_details_revision":revision.to_string(),"first_name":"Must roll back","contact_operations":[]});
+        payload
+            .as_object_mut()
+            .unwrap()
+            .extend(patch.as_object().unwrap().clone());
+        let (status, error) = f
+            .post(
+                "/api/mobile/v1/operations",
+                f.operation("update_person_details", payload),
+            )
+            .await;
+        assert!(
+            matches!(
+                status,
+                StatusCode::BAD_REQUEST | StatusCode::UNPROCESSABLE_ENTITY
+            ),
+            "case {case}: {status} {error}"
+        );
+        assert_eq!(
+            mobile005_profile_snapshot(&f).await,
+            initial,
+            "case {case} changed persistent state"
+        );
+    }
+    // Both stable IDs exchange normalized values. A phone add in slot2 must
+    // retain that original request-array index in its receipt mapping.
+    let swap = f.operation("update_person_details",json!({"person_id":f.person,"expected_details_revision":revision.to_string(),"contact_operations":[
+        {"op":"edit","id":a,"value":"b@example.test"},{"op":"edit","id":b,"value":"a@example.test"},
+        {"op":"add","kind":"phone","value":"(555) 555-0101"}]}));
+    let (status, receipt) = f.post("/api/mobile/v1/operations", swap).await;
+    assert_eq!(status, StatusCode::OK, "{receipt}");
+    assert_eq!(receipt["added_contact_ids"][0]["ordinal"], 2);
+    let after = mobile005_profile_snapshot(&f).await;
+    for old in initial["contacts"].as_array().unwrap() {
+        let current = after["contacts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["id"] == old["id"])
+            .unwrap();
+        for field in ["id", "kind", "created_at", "import_order"] {
+            assert_eq!(current[field], old[field]);
+        }
+    }
+    // Add-before-remove is valid; the new native contact does not become the
+    // primary ahead of the remaining imported contact.
+    let replacement = f.operation("update_person_details",json!({"person_id":f.person,"expected_details_revision":receipt["committed_revision"],"contact_operations":[
+        {"op":"add","kind":"email","value":"b@example.test"},{"op":"remove","id":a}]}));
+    let (status, replaced) = f.post("/api/mobile/v1/operations", replacement).await;
+    assert_eq!(status, StatusCode::OK, "{replaced}");
+    let primary:Uuid=sqlx::query_scalar("SELECT id FROM contact_method WHERE person_id=$1 AND kind='email' ORDER BY import_order NULLS LAST,created_at,id LIMIT 1")
+        .bind(f.person).fetch_one(&f.app).await.unwrap();
+    assert_eq!(primary, b);
+    let residue:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM contact_method WHERE person_id=$1 AND normalized_value LIKE 'crm-details-temp:%')")
+        .bind(f.person).fetch_one(&f.app).await.unwrap();
+    assert!(!residue);
+}
+
+#[sqlx::test]
+#[ignore]
+async fn mobile005_details_receipts_publish_only_atomic_commits_and_hold_typed_noops(pool: PgPool) {
+    use crm_api::domain::commands::{update_person_details_in_transaction, UpdatePersonDetails};
+    let mut f = fixture(&pool).await;
+    let publisher = Publisher::recording();
+    f.router = crate::common::build_router_with_publisher(&pool, publisher.clone()).await;
+    let operation=f.operation("update_person_details",json!({"person_id":f.person,"expected_details_revision":"1","first_name":"Accepted","contact_operations":[]}));
+    let initial = mobile005_profile_snapshot(&f).await;
+    sqlx::raw_sql("CREATE FUNCTION mobile005_receipt_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic profile receipt failure'; END $$; CREATE TRIGGER mobile005_receipt_failure BEFORE INSERT ON mobile_operation_receipt FOR EACH ROW EXECUTE FUNCTION mobile005_receipt_failure();")
+        .execute(&pool).await.unwrap();
+    let (status, error) = f.post("/api/mobile/v1/operations", operation.clone()).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{error}");
+    assert_eq!(mobile005_profile_snapshot(&f).await, initial);
+    let Publisher::Recording(events, _) = &publisher else {
+        unreachable!()
+    };
+    assert!(events.lock().await.is_empty());
+    sqlx::query("DROP TRIGGER mobile005_receipt_failure ON mobile_operation_receipt")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let (left, right) = tokio::join!(
+        f.post("/api/mobile/v1/operations", operation.clone()),
+        f.post("/api/mobile/v1/operations", operation.clone())
+    );
+    assert_eq!(left.0, StatusCode::OK, "{}", left.1);
+    assert_eq!(right.0, StatusCode::OK, "{}", right.1);
+    assert_ne!(left.1["replayed"], right.1["replayed"]);
+    let publications = events.lock().await;
+    assert_eq!(publications.len(), 1);
+    assert_eq!(
+        publications[0].1["data"],
+        json!({"person_id":f.person,"change":"details_changed"})
+    );
+    drop(publications);
+    let noop=f.operation("update_person_details",json!({"person_id":f.person,"expected_details_revision":"2","first_name":"Accepted","contact_operations":[]}));
+    let (status, unchanged) = f.post("/api/mobile/v1/operations", noop.clone()).await;
+    assert_eq!(status, StatusCode::OK, "{unchanged}");
+    assert_eq!(unchanged["changed"], false);
+    assert_eq!(unchanged["committed_revision"], "2");
+    assert_eq!(events.lock().await.len(), 1);
+    sqlx::query("UPDATE person SET first_name='Other' WHERE id=$1")
+        .bind(f.person)
+        .execute(&f.app)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE person SET first_name='Accepted' WHERE id=$1")
+        .bind(f.person)
+        .execute(&f.app)
+        .await
+        .unwrap();
+    let mut stale = noop;
+    stale["operation_id"] = json!(Uuid::new_v4());
+    let (status, conflict) = f.post("/api/mobile/v1/operations", stale).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(conflict["error"], "revision_conflict");
+    let (status, replay) = f.post("/api/mobile/v1/operations", operation.clone()).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(replay["replayed"], true);
+    assert_eq!(replay["committed_revision"], "2");
+    let mut mismatch = operation;
+    mismatch["payload"]["first_name"] = json!("Different");
+    assert_eq!(
+        f.post("/api/mobile/v1/operations", mismatch).await.1["error"],
+        "operation_payload_mismatch"
+    );
+    assert_eq!(events.lock().await.len(), 1);
+    sqlx::query(
+        "UPDATE organization_membership SET role='admin' WHERE organization_id=$1 AND user_id=$2",
+    )
+    .bind(f.org)
+    .bind(f.actor)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query("UPDATE organization SET workspace_mode='migration_review',workspace_revision=workspace_revision+1 WHERE id=$1")
+        .bind(f.org).execute(&pool).await.unwrap();
+    let held=f.operation("update_person_details",json!({"person_id":f.person,"expected_details_revision":"4","first_name":"Accepted","contact_operations":[]}));
+    assert_eq!(
+        f.post("/api/mobile/v1/operations", held).await.1["error"],
+        "workspace_in_migration_review"
+    );
+    let mut tx = f.app.begin().await.unwrap();
+    let error = update_person_details_in_transaction(
+        &mut tx,
+        &CommandContext::from_auth(&f.auth()),
+        UpdatePersonDetails {
+            person_id: PersonId(f.person),
+            expected_details_revision: 4,
+            first_name: Some(Some("Accepted".into())),
+            last_name: None,
+            contact_operations: Vec::new(),
+        },
+    )
+    .await
+    .err()
+    .expect("direct typed no-op must retain the review hold");
+    assert!(
+        matches!(error,crm_api::domain::commands::CommandError::Database(ref e) if crm_api::auth::workspace::is_review_error(e))
+    );
+    tx.rollback().await.unwrap();
+}

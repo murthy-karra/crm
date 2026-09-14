@@ -15,7 +15,7 @@ serialized Mobile helper and isolated `crm_mobile005_gate` environment.
 - `cargo test -p crm-app realtime::events --lib` — 7 passed, including snake
   case serialization of the additive IDs-only `details_changed` variant.
 - `python3 /private/tmp/crm-mobile005-010f3/run-db-check.py --lane mobile --log
-  /private/tmp/crm-mobile005-010f3/mobile/db_mobile004.log -- cargo test -p
+  db_mobile004.log -- cargo test -p
   crm-api --test all db_mobile::mobile004_stage_receipts_catalog_and_review_hold
   -- --ignored --test-threads=1` — passed (1 test) against the additive schema.
 - The same helper with `db_mobile005-final.log` and filter

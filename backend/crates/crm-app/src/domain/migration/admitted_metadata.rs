@@ -1,7 +1,12 @@
 //! D-082 admitted-People metadata root.  This deliberately has no path through
 //! the original metadata child: its cohort is terminal admission results.
-use super::MigrationError;
-use crate::{domain::envelope::CommandContext, ids::OrganizationId};
+use super::{crypto, MigrationError};
+use crate::{
+    auth::workspace::{self, ReleaseReadiness},
+    config::RawPayloadKey,
+    domain::envelope::CommandContext,
+    ids::OrganizationId,
+};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sqlx::{PgPool, Row};
@@ -79,20 +84,101 @@ pub async fn list(pool: &PgPool, ctx: &CommandContext, q: Page) -> Result<Value,
 pub async fn get(pool: &PgPool, ctx: &CommandContext, id: Uuid) -> Result<Value, MigrationError> {
     Ok(detail(&find(pool, ctx.organization_id, id).await?))
 }
+/// One-way shared-claim handover.  It is intentionally performed before an
+/// admitted root exists: preview cancellation cannot re-enable an old writer.
+/// The exclusive workspace lock drains every original metadata unit that uses
+/// the shared lock, and the readiness row is committed only with all claims and
+/// the original owner's exact retained-byte charges.
+async fn handover(
+    conn: &mut sqlx::PgConnection,
+    key: &RawPayloadKey,
+    release: &ReleaseReadiness,
+    ctx: &CommandContext,
+) -> Result<(), MigrationError> {
+    workspace::bounded_lock_wait(conn).await?;
+    workspace::exclusive(conn, ctx.organization_id).await?;
+    release.require_admitted_metadata(conn).await?;
+    super::store::lock_org(conn, ctx.organization_id).await?;
+    let readiness = sqlx::query("SELECT state,engine_version FROM migration_metadata_catalog_readiness WHERE organization_id=$1 FOR UPDATE")
+        .bind(ctx.organization_id.0).fetch_optional(&mut *conn).await?;
+    if let Some(row) = readiness {
+        if row.get::<String, _>("state") == "ready" {
+            if row.get::<Option<String>, _>("engine_version").as_deref() != Some(ENGINE) {
+                return Err(MigrationError::ReleaseNotReady);
+            }
+            return Ok(());
+        }
+    }
+    // An old worker cannot retain a lease across the exclusive barrier.  An
+    // unexpected running row is a failed drain, not a reason to publish a
+    // partly populated registry.
+    let active: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM migration_metadata_import WHERE organization_id=$1 AND state='running')")
+        .bind(ctx.organization_id.0).fetch_one(&mut *conn).await?;
+    if active {
+        return Err(MigrationError::ImportBusy);
+    }
+    let rows = sqlx::query("SELECT x.organization_id,x.source_account_id,x.kind,x.source_key,x.target_id,x.import_id,x.plan_id,x.mapping_id,i.snapshot_id FROM migration_metadata_identity x JOIN migration_metadata_import i ON i.id=x.import_id AND i.organization_id=x.organization_id WHERE x.organization_id=$1 ORDER BY x.source_account_id,x.kind,x.source_key FOR UPDATE OF x,i")
+        .bind(ctx.organization_id.0).fetch_all(&mut *conn).await?;
+    for row in rows {
+        let mapping: Uuid = row.get("mapping_id");
+        let snapshot: Uuid = row.get("snapshot_id");
+        let reference = serde_json::to_vec(&json!({"original_mapping_id":mapping}))
+            .map_err(|_| MigrationError::Crypto)?;
+        let sealed = crypto::seal_snapshot(
+            key,
+            ctx.organization_id,
+            snapshot,
+            mapping,
+            "admitted-metadata-claim-v1",
+            &reference,
+        )
+        .map_err(|_| MigrationError::Crypto)?;
+        let bytes = (sealed.nonce.len() + sealed.ciphertext.len()) as i64;
+        let inserted = sqlx::query("INSERT INTO migration_metadata_catalog_claim(organization_id,source_account_id,kind,source_key,target_id,original_import_id,original_plan_id,original_mapping_id,evidence_nonce,evidence_ciphertext) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(organization_id,source_account_id,kind,source_key) DO NOTHING")
+            .bind(ctx.organization_id.0).bind(row.get::<i64,_>("source_account_id")).bind(row.get::<String,_>("kind")).bind(row.get::<Vec<u8>,_>("source_key")).bind(row.get::<Uuid,_>("target_id")).bind(row.get::<Uuid,_>("import_id")).bind(row.get::<Uuid,_>("plan_id")).bind(mapping).bind(sealed.nonce).bind(sealed.ciphertext).execute(&mut *conn).await?;
+        if inserted.rows_affected() == 0 {
+            let equal: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM migration_metadata_catalog_claim WHERE organization_id=$1 AND source_account_id=$2 AND kind=$3 AND source_key=$4 AND target_id=$5 AND original_mapping_id=$6)")
+                .bind(ctx.organization_id.0).bind(row.get::<i64,_>("source_account_id")).bind(row.get::<String,_>("kind")).bind(row.get::<Vec<u8>,_>("source_key")).bind(row.get::<Uuid,_>("target_id")).bind(mapping).fetch_one(&mut *conn).await?;
+            if !equal {
+                return Err(MigrationError::InvalidImportChoice);
+            }
+            continue;
+        }
+        let import: Uuid = row.get("import_id");
+        sqlx::query("UPDATE migration_metadata_import SET retained_bytes=retained_bytes+$3 WHERE id=$1 AND organization_id=$2")
+            .bind(import).bind(ctx.organization_id.0).bind(bytes).execute(&mut *conn).await?;
+        sqlx::query("UPDATE migration_snapshot SET retained_bytes=retained_bytes+$3 WHERE id=$1 AND organization_id=$2")
+            .bind(snapshot).bind(ctx.organization_id.0).bind(bytes).execute(&mut *conn).await?;
+        sqlx::query("UPDATE migration_snapshot_storage SET retained_bytes=retained_bytes+$2 WHERE organization_id=$1")
+            .bind(ctx.organization_id.0).bind(bytes).execute(&mut *conn).await?;
+    }
+    sqlx::query("INSERT INTO migration_metadata_catalog_readiness(organization_id,state,activated_at,activated_by_user_id,engine_version) VALUES($1,'ready',clock_timestamp(),$2,$3) ON CONFLICT(organization_id) DO UPDATE SET state='ready',activated_at=EXCLUDED.activated_at,activated_by_user_id=EXCLUDED.activated_by_user_id,engine_version=EXCLUDED.engine_version")
+        .bind(ctx.organization_id.0).bind(ctx.actor_user_id.0).bind(ENGINE).execute(&mut *conn).await?;
+    Ok(())
+}
 pub async fn prepare(
     pool: &PgPool,
+    key: &RawPayloadKey,
+    release: &ReleaseReadiness,
     ctx: &CommandContext,
     cmd: Prepare,
 ) -> Result<Value, MigrationError> {
     let mut tx = pool.begin().await?;
-    let a=sqlx::query("SELECT a.parent_import_id,a.parent_plan_id,a.source_account_id,a.newer_snapshot_id,a.newer_sequence,a.workspace_revision,a.state,r.newer_snapshot_id AS report_snapshot,r.newer_sequence AS report_sequence,r.state AS report_state FROM migration_people_admission a JOIN migration_core_change_report r ON r.id=$2 AND r.organization_id=a.organization_id WHERE a.id=$1 AND a.organization_id=$3 FOR UPDATE")
+    handover(&mut tx, key, release, ctx).await?;
+    let a=sqlx::query("SELECT a.parent_import_id,a.parent_plan_id,a.report_id AS admission_report_id,a.source_account_id,a.newer_snapshot_id,a.newer_sequence,a.newer_completed_at AS admission_completed_at,a.workspace_revision,a.state,r.parent_import_id AS report_parent_import_id,r.parent_plan_id AS report_parent_plan_id,r.source_account_id AS report_account,r.newer_snapshot_id AS report_snapshot,r.newer_sequence AS report_sequence,r.created_at AS report_started_at,r.state AS report_state,r.output_revision FROM migration_people_admission a JOIN migration_core_change_report r ON r.id=$2 AND r.organization_id=a.organization_id WHERE a.id=$1 AND a.organization_id=$3 FOR UPDATE")
  .bind(cmd.admission_id).bind(cmd.source_report_id).bind(ctx.organization_id.0).fetch_optional(&mut *tx).await?.ok_or(MigrationError::SourceNotEligible)?;
+    let same_boundary = a.get::<Uuid, _>("admission_report_id") == cmd.source_report_id;
     if !matches!(
         a.get::<String, _>("state").as_str(),
         "completed" | "cancelled"
     ) || a.get::<String, _>("report_state") != "completed"
-        || a.get::<Uuid, _>("report_snapshot") != a.get::<Uuid, _>("newer_snapshot_id")
-        || a.get::<i64, _>("report_sequence") != a.get::<i64, _>("newer_sequence")
+        || a.get::<Option<Uuid>, _>("output_revision").is_none()
+        || a.get::<Uuid, _>("report_parent_import_id") != a.get::<Uuid, _>("parent_import_id")
+        || a.get::<Uuid, _>("report_parent_plan_id") != a.get::<Uuid, _>("parent_plan_id")
+        || a.get::<i64, _>("report_account") != a.get::<i64, _>("source_account_id")
+        || (!same_boundary
+            && a.get::<chrono::DateTime<chrono::Utc>, _>("report_started_at")
+                <= a.get::<chrono::DateTime<chrono::Utc>, _>("admission_completed_at"))
     {
         return Err(MigrationError::SourceNotEligible);
     }

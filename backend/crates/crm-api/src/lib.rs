@@ -130,6 +130,7 @@ fn build_app_with_routers_inner(
             .merge(routes::people_refreshes::router())
             .merge(routes::people_admissions::router())
             .merge(routes::admitted_people_refreshes::router())
+            .merge(routes::admitted_metadata_imports::router())
             .merge(routes::migration_imports::router())
             .merge(routes::metadata_imports::router())
             .merge(routes::activity_imports::router())

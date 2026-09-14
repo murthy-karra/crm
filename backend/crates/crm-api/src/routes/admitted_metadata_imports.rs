@@ -46,7 +46,74 @@ pub fn router() -> Router<AppState> {
             "/api/migrations/fub/admitted-metadata-imports/{id}",
             get(detail),
         )
+        .route(
+            "/api/migrations/fub/admitted-metadata-imports/{id}/plans/{plan}/mappings",
+            get(mappings),
+        )
+        .route(
+            "/api/migrations/fub/admitted-metadata-imports/{id}/plans/{plan}/records",
+            get(records),
+        )
+        .route(
+            "/api/migrations/fub/admitted-metadata-imports/{id}/plans/{plan}/issues",
+            get(issues),
+        )
         .layer(DefaultBodyLimit::max(64 * 1024))
+}
+async fn mappings(
+    State(s): State<AppState>,
+    a: OrgAdminContext,
+    p: Result<Path<(Uuid, Uuid)>, PathRejection>,
+    q: Result<Query<i::PlanPage>, QueryRejection>,
+) -> Result<Response, ApiError> {
+    let (id, plan) = path(p)?;
+    Ok(response(
+        StatusCode::OK,
+        i::mappings(
+            s.db.as_ref().ok_or(ApiError::Unavailable)?,
+            &CommandContext::from_auth(&a.auth),
+            id,
+            plan,
+            query(q)?,
+        )
+        .await?,
+    ))
+}
+async fn records(
+    State(s): State<AppState>,
+    a: OrgAdminContext,
+    p: Result<Path<(Uuid, Uuid)>, PathRejection>,
+    q: Result<Query<i::PlanPage>, QueryRejection>,
+) -> Result<Response, ApiError> {
+    let (id, plan) = path(p)?;
+    Ok(response(
+        StatusCode::OK,
+        i::records(
+            s.db.as_ref().ok_or(ApiError::Unavailable)?,
+            &CommandContext::from_auth(&a.auth),
+            id,
+            plan,
+            query(q)?,
+        )
+        .await?,
+    ))
+}
+async fn issues(
+    State(s): State<AppState>,
+    a: OrgAdminContext,
+    p: Result<Path<(Uuid, Uuid)>, PathRejection>,
+) -> Result<Response, ApiError> {
+    let (id, plan) = path(p)?;
+    Ok(response(
+        StatusCode::OK,
+        i::issues(
+            s.db.as_ref().ok_or(ApiError::Unavailable)?,
+            &CommandContext::from_auth(&a.auth),
+            id,
+            plan,
+        )
+        .await?,
+    ))
 }
 async fn list(
     State(s): State<AppState>,

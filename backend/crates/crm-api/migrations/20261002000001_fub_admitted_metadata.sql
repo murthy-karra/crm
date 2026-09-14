@@ -63,9 +63,12 @@ CREATE TABLE migration_admitted_metadata_manifest (
 CREATE TABLE migration_admitted_metadata_mapping (
  id UUID PRIMARY KEY, import_id UUID NOT NULL, plan_id UUID NOT NULL, organization_id UUID NOT NULL,
  kind TEXT NOT NULL CHECK(kind IN ('tag','field','option')), source_key BYTEA NOT NULL CHECK(octet_length(source_key)=32),
- target_id UUID, disposition TEXT NOT NULL CHECK(disposition IN ('eligible','create_matching','map_existing','held')),
+ source_id TEXT NOT NULL, parent_mapping_id UUID, target_id UUID, target_field_id UUID,
+ disposition TEXT NOT NULL CHECK(disposition IN ('eligible','create_matching','map_existing','held')),
+ nonce BYTEA NOT NULL, ciphertext BYTEA NOT NULL,
  UNIQUE(plan_id,organization_id,kind,source_key), UNIQUE(id,plan_id,organization_id),
- FOREIGN KEY(plan_id,import_id,organization_id) REFERENCES migration_admitted_metadata_plan(id,import_id,organization_id)
+ FOREIGN KEY(plan_id,import_id,organization_id) REFERENCES migration_admitted_metadata_plan(id,import_id,organization_id),
+ FOREIGN KEY(parent_mapping_id,plan_id,organization_id) REFERENCES migration_admitted_metadata_mapping(id,plan_id,organization_id)
 );
 CREATE TABLE migration_admitted_metadata_source (
  id UUID PRIMARY KEY, import_id UUID NOT NULL, plan_id UUID NOT NULL, organization_id UUID NOT NULL,
@@ -76,10 +79,13 @@ CREATE TABLE migration_admitted_metadata_source (
 );
 CREATE TABLE migration_admitted_metadata_operation (
  id UUID PRIMARY KEY, manifest_id UUID NOT NULL, import_id UUID NOT NULL, plan_id UUID NOT NULL, organization_id UUID NOT NULL,
- kind TEXT NOT NULL CHECK(kind IN ('tag_link','value')), target_id UUID NOT NULL, disposition TEXT NOT NULL CHECK(disposition IN ('eligible','held','not_supplied','source_null')),
- UNIQUE(manifest_id,organization_id,kind,target_id),
+ kind TEXT NOT NULL CHECK(kind IN ('tag_link','value')), mapping_id UUID, source_key BYTEA NOT NULL CHECK(octet_length(source_key)=32), target_id UUID,
+ disposition TEXT NOT NULL CHECK(disposition IN ('eligible','held','not_supplied','source_null','already_present')),
+ nonce BYTEA NOT NULL, ciphertext BYTEA NOT NULL,
+ UNIQUE(manifest_id,organization_id,kind,source_key),
  FOREIGN KEY(manifest_id) REFERENCES migration_admitted_metadata_manifest(id),
- FOREIGN KEY(plan_id,import_id,organization_id) REFERENCES migration_admitted_metadata_plan(id,import_id,organization_id)
+ FOREIGN KEY(plan_id,import_id,organization_id) REFERENCES migration_admitted_metadata_plan(id,import_id,organization_id),
+ FOREIGN KEY(mapping_id,plan_id,organization_id) REFERENCES migration_admitted_metadata_mapping(id,plan_id,organization_id)
 );
 CREATE TABLE migration_admitted_metadata_result (
  id UUID PRIMARY KEY, import_id UUID NOT NULL, plan_id UUID NOT NULL, manifest_id UUID, organization_id UUID NOT NULL,
@@ -110,6 +116,9 @@ CREATE TABLE migration_admitted_metadata_issue (
 GRANT SELECT,INSERT,UPDATE ON migration_metadata_catalog_readiness,migration_metadata_catalog_claim,migration_admitted_metadata_import,migration_admitted_metadata_plan,migration_admitted_metadata_manifest TO crm_app;
 GRANT SELECT,INSERT ON migration_admitted_metadata_mapping,migration_admitted_metadata_source,migration_admitted_metadata_operation,migration_admitted_metadata_result,migration_admitted_metadata_receipt,migration_admitted_metadata_issue TO crm_app;
 GRANT SELECT,INSERT,DELETE ON migration_admitted_metadata_reservation TO crm_app;
+-- The handover reads immutable original identity evidence under the same
+-- namespace lock; it does not change its original-only FKs or grant writes.
+GRANT SELECT ON migration_metadata_identity TO crm_app;
 
 -- This replacement is the old-binary fence.  Existing metadata workers acquire
 -- `crm.metadata_token`, but cannot manufacture the v1 claim proof introduced by

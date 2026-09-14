@@ -9,14 +9,6 @@ use uuid::Uuid;
 #[sqlx::test]
 #[ignore = "requires isolated PostgreSQL migrator"]
 async fn admitted_metadata_preparation_freezes_terminal_people_cohort(migrator: PgPool) {
-    // The long-lived isolated gate may have applied the additive migration
-    // before this new grant was authored. Fresh migration installs receive it
-    // from 20261002000001; apply it here as the migration owner so this test
-    // can exercise the app-role handover path too.
-    sqlx::query("GRANT SELECT ON migration_metadata_identity TO PUBLIC")
-        .execute(&migrator)
-        .await
-        .unwrap();
     let people = vec![
         json!({"id":104,"firstName":"Admitted","lastName":"Person","stage":"Lead","assignedUserId":3,"tags":["Past Client"]}),
     ];
@@ -46,5 +38,5 @@ async fn admitted_metadata_preparation_freezes_terminal_people_cohort(migrator: 
     assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_admitted_metadata_manifest WHERE import_id=$1 AND plan_id=$2 AND disposition='eligible'").bind(root).bind(plan).fetch_one(&fixture.pool).await.unwrap(),1);
     assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_admitted_metadata_source WHERE import_id=$1 AND family='people'").bind(root).fetch_one(&fixture.pool).await.unwrap(),1);
     assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_admitted_metadata_mapping WHERE import_id=$1 AND kind='tag' AND disposition='held'").bind(root).fetch_one(&fixture.pool).await.unwrap(),1);
-    assert!(sqlx::query_scalar::<_,i64>("SELECT octet_length(baseline_nonce)+octet_length(baseline_ciphertext) FROM migration_admitted_metadata_manifest WHERE import_id=$1").bind(root).fetch_one(&fixture.pool).await.unwrap()>24);
+    assert!(sqlx::query_scalar::<_,i64>("SELECT (octet_length(baseline_nonce)+octet_length(baseline_ciphertext))::bigint FROM migration_admitted_metadata_manifest WHERE import_id=$1").bind(root).fetch_one(&fixture.pool).await.unwrap()>24);
 }

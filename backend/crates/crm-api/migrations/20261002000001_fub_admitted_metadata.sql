@@ -118,7 +118,6 @@ GRANT SELECT,INSERT ON migration_admitted_metadata_mapping,migration_admitted_me
 GRANT SELECT,INSERT,DELETE ON migration_admitted_metadata_reservation TO crm_app;
 -- The handover reads immutable original identity evidence under the same
 -- namespace lock; it does not change its original-only FKs or grant writes.
-GRANT SELECT ON migration_metadata_identity TO crm_app;
 
 -- This replacement is the old-binary fence.  Existing metadata workers acquire
 -- `crm.metadata_token`, but cannot manufacture the v1 claim proof introduced by

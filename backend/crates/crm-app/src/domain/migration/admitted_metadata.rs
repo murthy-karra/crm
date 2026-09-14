@@ -165,7 +165,7 @@ async fn frozen_source(
     source_id: &str,
     plan: Uuid,
 ) -> Result<Option<(Uuid, FrozenSource, crypto::Sealed)>, MigrationError> {
-    let group = sqlx::query("SELECT id,nonce,ciphertext FROM migration_core_change_group WHERE report_id=$1 AND organization_id=$2 AND family=$3 AND source_id=$4 FOR SHARE")
+    let group = sqlx::query("SELECT id,nonce,ciphertext FROM migration_core_change_group WHERE report_id=$1 AND organization_id=$2 AND family=$3 AND source_id=$4")
         .bind(report).bind(org.0).bind(family).bind(source_id).fetch_optional(&mut *conn).await?;
     let Some(group) = group else {
         return Ok(None);
@@ -188,7 +188,7 @@ async fn frozen_source(
     let Some(evidence) = evidence else {
         return Ok(None);
     };
-    let cap = sqlx::query("SELECT * FROM migration_snapshot_capture WHERE id=$1 AND snapshot_id=$2 AND organization_id=$3 FOR SHARE")
+    let cap = sqlx::query("SELECT * FROM migration_snapshot_capture WHERE id=$1 AND snapshot_id=$2 AND organization_id=$3")
         .bind(evidence.capture_id).bind(snapshot).bind(org.0).fetch_optional(&mut *conn).await?.ok_or(MigrationError::Crypto)?;
     let stream = Stream::parse(family).ok_or(MigrationError::SourceNotEligible)?;
     let raw = crypto::open_snapshot(
@@ -206,7 +206,7 @@ async fn frozen_source(
         .get(usize::try_from(evidence.ordinal).map_err(|_| MigrationError::Crypto)?)
         .cloned()
         .ok_or(MigrationError::Crypto)?;
-    let snapshot_row = sqlx::query("SELECT family,source_id,representation,semantic_hmac FROM migration_snapshot_record WHERE capture_id=$1 AND snapshot_id=$2 AND organization_id=$3 AND ordinal=$4 FOR SHARE")
+    let snapshot_row = sqlx::query("SELECT family,source_id,representation,semantic_hmac FROM migration_snapshot_record WHERE capture_id=$1 AND snapshot_id=$2 AND organization_id=$3 AND ordinal=$4")
         .bind(evidence.capture_id).bind(snapshot).bind(org.0).bind(evidence.ordinal).fetch_optional(&mut *conn).await?.ok_or(MigrationError::Crypto)?;
     let semantic = crypto::snapshot_hmac(
         key,
@@ -391,7 +391,11 @@ async fn handover(
     if active {
         return Err(MigrationError::ImportBusy);
     }
-    let rows = sqlx::query("SELECT x.organization_id,x.source_account_id,x.kind,x.source_key,x.target_id,x.import_id,x.plan_id,x.mapping_id,i.snapshot_id FROM migration_metadata_identity x JOIN migration_metadata_import i ON i.id=x.import_id AND i.organization_id=x.organization_id WHERE x.organization_id=$1 ORDER BY x.source_account_id,x.kind,x.source_key FOR UPDATE OF x,i")
+    // Identities are append-only original evidence.  The workspace-exclusive
+    // and Org namespace locks have already fenced their compatible writers;
+    // do not take a row UPDATE lock here, which would unnecessarily require a
+    // mutation privilege on that immutable table.
+    let rows = sqlx::query("SELECT x.organization_id,x.source_account_id,x.kind,x.source_key,x.target_id,x.import_id,x.plan_id,x.mapping_id,i.snapshot_id FROM migration_metadata_identity x JOIN migration_metadata_import i ON i.id=x.import_id AND i.organization_id=x.organization_id WHERE x.organization_id=$1 ORDER BY x.source_account_id,x.kind,x.source_key FOR UPDATE OF i")
         .bind(ctx.organization_id.0).fetch_all(&mut *conn).await?;
     for row in rows {
         let mapping: Uuid = row.get("mapping_id");
@@ -524,12 +528,12 @@ async fn build_preparation(
     // A bounded synchronous prepare is deliberately all-or-nothing.  Larger
     // cohorts are rejected for now rather than silently constructing a partial
     // plan; the worker slice can replace this with its same-keyset checkpoint.
-    let results = sqlx::query("SELECT ar.id,ar.item_id,ar.person_id,ar.source_id FROM migration_people_admission_result ar JOIN migration_people_admission_item ai ON ai.id=ar.item_id AND ai.admission_id=ar.admission_id AND ai.organization_id=ar.organization_id JOIN migration_import_identity mi ON mi.organization_id=ar.organization_id AND mi.family='people' AND mi.source_id=ar.source_id AND mi.target_id=ar.person_id AND mi.admission_id=ar.admission_id AND mi.admission_item_id=ar.item_id AND mi.admission_result_id=ar.id JOIN person p ON p.id=ar.person_id AND p.organization_id=ar.organization_id WHERE ar.organization_id=$1 AND ar.admission_id=$2 AND ar.disposition='settled' AND ar.person_id IS NOT NULL ORDER BY ar.id LIMIT 101 FOR SHARE")
+    let results = sqlx::query("SELECT ar.id,ar.item_id,ar.person_id,ar.source_id FROM migration_people_admission_result ar JOIN migration_people_admission_item ai ON ai.id=ar.item_id AND ai.admission_id=ar.admission_id AND ai.organization_id=ar.organization_id JOIN migration_import_identity mi ON mi.organization_id=ar.organization_id AND mi.family='people' AND mi.source_id=ar.source_id AND mi.target_id=ar.person_id AND mi.admission_id=ar.admission_id AND mi.admission_item_id=ar.item_id AND mi.admission_result_id=ar.id JOIN person p ON p.id=ar.person_id AND p.organization_id=ar.organization_id WHERE ar.organization_id=$1 AND ar.admission_id=$2 AND ar.disposition='settled' AND ar.person_id IS NOT NULL ORDER BY ar.id LIMIT 101")
         .bind(org.0).bind(admission).fetch_all(&mut *conn).await?;
     if results.is_empty() || results.len() > 100 {
         return Err(MigrationError::SourceNotEligible);
     }
-    let fields = sqlx::query("SELECT source_id FROM migration_core_change_group WHERE report_id=$1 AND organization_id=$2 AND family='custom_fields' ORDER BY source_id LIMIT 101 FOR SHARE")
+    let fields = sqlx::query("SELECT source_id FROM migration_core_change_group WHERE report_id=$1 AND organization_id=$2 AND family='custom_fields' ORDER BY source_id LIMIT 101")
         .bind(report).bind(org.0).fetch_all(&mut *conn).await?;
     if fields.len() > 100 {
         return Err(MigrationError::SourceNotEligible);

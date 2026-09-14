@@ -59,6 +59,8 @@ struct Contact {
     value: String,
     normalized: String,
 }
+// Validated operation, stable ID, and optional kind/display/normalized values.
+type ContactMutation = (String, Uuid, Option<String>, Option<String>, Option<String>);
 fn normalize(kind: &str, value: &str) -> Result<String, CommandError> {
     match kind {
         "email" => normalize_email(value).map(|value| value.as_str().to_owned()),
@@ -139,8 +141,7 @@ pub async fn update_person_details_in_transaction(
         })
         .collect::<std::collections::HashMap<_, _>>();
     let mut seen_ids = HashSet::new();
-    let mut mutations: Vec<(String, Uuid, Option<String>, Option<String>, Option<String>)> =
-        Vec::new();
+    let mut mutations: Vec<ContactMutation> = Vec::new();
     let mut added = Vec::new();
     for op in cmd.contact_operations {
         match op {

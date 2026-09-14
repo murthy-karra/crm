@@ -70,8 +70,15 @@ StorageTests/ModelTests filters passed40/40, zero failures/skips. Evidence:
 `ios/mobile005-review-order-tests1.log` and
 `ios/review005/Logs/Test/Test-FieldCRMMobile005QA-2026.09.14_13-02-18--0700.xcresult`.
 The subsequent fresh-add button adjustment appends entries within the distinct
-New section to preserve user insertion order; final native checks remain pending
-for that adjustment. This is round1 correction evidence, not review approval.
+New section to preserve user insertion order. Final correction verification at
+root `43d8302` passed42/42: both storage/model suites plus the actual multi-field
+offline/restart/sync and conflict/current/replacement UI journeys. Runner:
+private `integration/run-ios-review-check.py`, serialized native API lock,
+133.89s total. Evidence: `ios/mobile005-review-final-native1.log` and
+`ios/review005/Logs/Test/Test-FieldCRMMobile005QA-2026.09.14_13-12-02--0700.xcresult`.
+The native API remains the immutable `382aadc` fixture recorded below. The later
+server ordering/locking corrections have separate backend DB evidence. This is
+round1 correction evidence, not review approval.
 
 ```text
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -quiet \

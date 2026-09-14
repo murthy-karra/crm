@@ -51,9 +51,10 @@ binary on3103; it includes the required empty `added_contact_ids` array for
 name-only/edit/remove receipts, while old receipt kinds omit that field.
 iOS checkpoint `125d044` is integrated as `a19fc88`: populated-store upgrade,
 39 storage/model tests, real API replay, full multi-field offline/restart/sync
-and conflict/replacement UI proofs pass. Android retains its populated-store
-upgrade and repository/API proofs while finishing actual Compose restart,
-conflict/replacement acceptance and platform gates. The large-contact fixture
+and conflict/replacement UI proofs pass. Coordinator fixes then passed42/42
+iOS checks, including both actual native journeys. Android `9134a44` is integrated
+as `43d8302`: actual Compose restart, exact replay and conflict/replacement
+acceptance, Mobile004/005 storage checks and lint/compile pass. The large-contact fixture
 exposed action placement problems, now fixed in iOS and checked in Android.
 
 The literal010f3 Web contract is integrated, and Web implementation is checkpointed
@@ -67,8 +68,10 @@ integrated through `1d2d2b7`; new staged preparation remains in the migration la
 Mobile005 independent implementation review round1 is active. Four actionable
 backend/iOS findings cover current-profile concurrency, direct revision changes,
 native display/primary fallback order and same-transaction add order. Coordinator
-fixes are in progress, with four focused DB regressions and40 iOS storage/model
-tests already passing. Android is incorporating the corresponding display fix.
+fixes are committed at `63ccae4`, with five focused DB regressions and final
+iOS42-test verification passing. Android round1 then identified old-server
+summary staging rejection and an unreachable primary-removal warning. Its writer
+owns those corrections plus an explicit audit of earlier historical-suite failures.
 No implementation review has been declared READY. Each lane records concrete
 schema/DTO/lock/guard contracts and runs isolated focused checks. Coordinator owns shared integration and sequential
 final `scripts/check`, `scripts/sqlx-prepare`, `scripts/check-db`; database gates do

@@ -83,6 +83,7 @@ class PreflightTests(unittest.TestCase):
             for name in ["migration_metadata_catalog_claim", "migration_admitted_metadata_import",
                          "migration_admitted_metadata_manifest", "migration_admitted_metadata_operation",
                          "crm_admitted_metadata_insert_allowed(uuid,text,jsonb)",
+                         "crm_metadata_identity_key_matches(bytea,jsonb)",
                          "migration_metadata_identity_claim_guard", "tgenabled<>'D'",
                          "attname='unit_id'", "attname='checkpoint_id'", "attname='pause_reason'",
                          "migration_admitted_metadata_result_unit", "indisunique AND indisvalid"]:

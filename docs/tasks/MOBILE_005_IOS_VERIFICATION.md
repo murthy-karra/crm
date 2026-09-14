@@ -67,11 +67,45 @@ mixed phone/email primary fallback, and unchanged raw page data.
 `xcodebuild` with the same scheme/destination below, coordinator root checkout,
 `-derivedDataPath /private/tmp/crm-mobile005-010f3/ios/review005`, and both
 StorageTests/ModelTests filters passed40/40, zero failures/skips. Evidence:
-`ios/mobile005-review-order-tests1.log` and
-`ios/review005/Logs/Test/Test-FieldCRMMobile005QA-2026.09.14_13-02-18--0700.xcresult`.
+`ios/mobile005-review-order-tests1.log`. Xcode later rotated that first40-test
+bundle; the complete42-test superseding result below retains the same regression.
 The subsequent fresh-add button adjustment appends entries within the distinct
-New section to preserve user insertion order; final native checks remain pending
-for that adjustment. This is round1 correction evidence, not review approval.
+New section to preserve user insertion order. Final correction verification at
+root `43d8302` passed42/42: both storage/model suites plus the actual multi-field
+offline/restart/sync and conflict/current/replacement UI journeys. Runner:
+private `integration/run-ios-review-check.py`, serialized native API lock,
+133.89s total. Evidence: `ios/mobile005-review-final-native1.log` and
+`ios/review-native-42.xcresult` (copied outside Xcode's rotating log directory).
+The native API remains the immutable `382aadc` fixture recorded below. The later
+server ordering/locking corrections have separate backend DB evidence. This is
+round1 correction evidence, not review approval.
+
+Round1 finding8 subsequently adds actual-wire512-KiB and100-row bounds, complete
+page shape and metadata validation in the current-details API; a shared complete
+traversal rejects cursor cycles, empty continuations, duplicate contact IDs and
+changed profile bindings. Both explicit requalification and automatic conflict
+review use it. Unrelated broad-revision changes remain allowed while details
+revision/names stay pinned. The undocumented10,000-total-row rejection is removed;
+the accepted contract bounds pages without inventing a new collection limit.
+Invalid responses preserve exact queued bytes, baseline and proposal.
+
+Storage/model verification passed43/43, zero failures/skips, in
+`ios/mobile005-current-pages-tests1.log` and
+`ios/review-current-pages-43.xcresult`. Three new tests cover oversized rows/UTF-8
+bytes/cyclic cursors, valid multi-page reads with unrelated broad changes, and
+automatic conflict fallback retaining the immutable envelope and proposal.
+
+The final API guard also enforces the existing backend2048-byte UTF-8 cursor
+limit on input and output. At root `be15cb0` plus this cursor guard/test, the
+storage/model rerun passed43/43, zero failures/skips:
+`ios/mobile005-current-pages-tests2.log` and explicit result bundle
+`ios/current-pages-final-43.xcresult`. Both native UI journeys passed2/2 at
+`8b60354`, using valid cursors within that limit: serialized runner
+`integration/run-ios-current-pages-ui.py`,124.68s,
+`ios/mobile005-current-pages-native1.log`,
+`ios/current-pages-native-2.xcresult`. These explicit result bundles are outside
+Xcode's rotating Logs/Test directory. The later cursor-only guard is covered by
+the43-test rerun; it does not invalidate the successful valid-cursor UI journeys.
 
 ```text
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -quiet \

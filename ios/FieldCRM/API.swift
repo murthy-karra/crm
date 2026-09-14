@@ -94,8 +94,27 @@ private final class NoRedirect: NSObject, URLSessionTaskDelegate, @unchecked Sen
         try await call("/people/\(person)/stage", context: context)
     }
     func currentDetails(person: String, cursor: String? = nil, context: String) async throws -> CurrentDetailsResponse {
+        guard cursor.map({ !$0.isEmpty && $0.utf8.count <= 2048 }) ?? true else { throw LocalError.invalidProtocol }
         let suffix = cursor.map { "?cursor=" + API.cursor($0) } ?? ""
-        return try await call("/people/\(person)/details\(suffix)", context: context)
+        let (data, _) = try await raw("/api/mobile/v1/people/\(person)/details\(suffix)", method: "GET", context: context)
+        guard data.count <= 524288 else { throw LocalError.invalidProtocol }
+        let page = try decode(CurrentDetailsResponse.self, data)
+        guard page.items.count <= 100, page.complete == (page.next_cursor == nil),
+              page.complete || !page.items.isEmpty,
+              page.next_cursor.map({ !$0.isEmpty && $0.utf8.count <= 2048 }) ?? true else { throw LocalError.invalidProtocol }
+        for item in page.items {
+            guard case .object(let fields) = item, fields["import_order"] != nil,
+                  UUID(uuidString: item["id"].text) != nil,
+                  ["email", "phone"].contains(item["kind"].text), !item["value"].text.isEmpty,
+                  (try? date(item["created_at"].text)) != nil else { throw LocalError.invalidProtocol }
+            switch item["import_order"] {
+            case .null: break
+            case .number(let value):
+                guard value.isFinite, value.rounded() == value, value >= Double(Int32.min), value <= Double(Int32.max) else { throw LocalError.invalidProtocol }
+            default: throw LocalError.invalidProtocol
+            }
+        }
+        return page
     }
     func verifyAuthority(_ boot: Bootstrap) async throws {
         let (data, _) = try await raw("/api/me", method: "GET")

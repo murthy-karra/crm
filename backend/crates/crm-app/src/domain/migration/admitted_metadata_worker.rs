@@ -150,7 +150,7 @@ pub(crate) async fn retained(
     org: OrganizationId,
     root: Uuid,
 ) -> Result<i64, MigrationError> {
-    Ok(sqlx::query_scalar("SELECT (COALESCE((SELECT sum(octet_length(inputs_nonce)+octet_length(inputs_ciphertext)+COALESCE(octet_length(digest),0)+octet_length(counts::text)) FROM migration_admitted_metadata_plan WHERE import_id=$1 AND organization_id=$2),0)+COALESCE((SELECT sum(octet_length(source_person_id)+octet_length(baseline_nonce)+octet_length(baseline_ciphertext)) FROM migration_admitted_metadata_manifest WHERE import_id=$1 AND organization_id=$2),0)+COALESCE((SELECT sum(octet_length(source_key)+octet_length(source_id)+octet_length(nonce)+octet_length(ciphertext)) FROM migration_admitted_metadata_mapping WHERE import_id=$1 AND organization_id=$2),0)+COALESCE((SELECT sum(octet_length(source_id)+octet_length(semantic_hmac)+octet_length(nonce)+octet_length(ciphertext)) FROM migration_admitted_metadata_source WHERE import_id=$1 AND organization_id=$2),0)+COALESCE((SELECT sum(octet_length(source_key)+octet_length(nonce)+octet_length(ciphertext)) FROM migration_admitted_metadata_operation WHERE import_id=$1 AND organization_id=$2),0)+COALESCE((SELECT sum(octet_length(nonce)+octet_length(ciphertext)) FROM migration_admitted_metadata_result WHERE import_id=$1 AND organization_id=$2),0)+COALESCE((SELECT sum(octet_length(digest)+octet_length(nonce)+octet_length(ciphertext)) FROM migration_admitted_metadata_receipt WHERE import_id=$1 AND organization_id=$2),0)+COALESCE((SELECT sum(octet_length(source_key)+octet_length(evidence_nonce)+octet_length(evidence_ciphertext)) FROM migration_metadata_catalog_claim WHERE admitted_import_id=$1 AND organization_id=$2),0))::bigint").bind(root).bind(org.0).fetch_one(c).await?)
+    Ok(sqlx::query_scalar("SELECT (COALESCE((SELECT sum(octet_length(inputs_nonce)+octet_length(inputs_ciphertext)+COALESCE(octet_length(digest),0)+octet_length(counts::text)) FROM migration_admitted_metadata_plan WHERE import_id=$1 AND organization_id=$2),0)+COALESCE((SELECT sum(octet_length(source_person_id)+octet_length(baseline_nonce)+octet_length(baseline_ciphertext)) FROM migration_admitted_metadata_manifest WHERE import_id=$1 AND organization_id=$2),0)+COALESCE((SELECT sum(octet_length(source_key)+octet_length(source_id)+octet_length(nonce)+octet_length(ciphertext)) FROM migration_admitted_metadata_mapping WHERE import_id=$1 AND organization_id=$2),0)+COALESCE((SELECT sum(octet_length(source_id)+octet_length(semantic_hmac)+octet_length(nonce)+octet_length(ciphertext)) FROM migration_admitted_metadata_source WHERE import_id=$1 AND organization_id=$2),0)+COALESCE((SELECT sum(octet_length(source_key)+octet_length(nonce)+octet_length(ciphertext)) FROM migration_admitted_metadata_operation WHERE import_id=$1 AND organization_id=$2),0)+COALESCE((SELECT sum(octet_length(nonce)+octet_length(ciphertext)) FROM migration_admitted_metadata_result WHERE import_id=$1 AND organization_id=$2),0)+COALESCE((SELECT sum(octet_length(semantic_hmac)) FROM migration_admitted_metadata_observation WHERE import_id=$1 AND organization_id=$2),0)+COALESCE((SELECT sum(octet_length(digest)+octet_length(nonce)+octet_length(ciphertext)) FROM migration_admitted_metadata_receipt WHERE import_id=$1 AND organization_id=$2),0)+COALESCE((SELECT sum(octet_length(source_key)+octet_length(evidence_nonce)+octet_length(evidence_ciphertext)) FROM migration_metadata_catalog_claim WHERE admitted_import_id=$1 AND organization_id=$2),0))::bigint").bind(root).bind(org.0).fetch_one(c).await?)
 }
 pub(crate) async fn reserve(
     c: &mut PgConnection,
@@ -454,7 +454,11 @@ async fn people(
     m: &PgRow,
 ) -> Result<i64, MigrationError> {
     let unit: Uuid = m.get("id");
-    let person: Uuid = m.get("person_id");
+    let live_person: Option<Uuid> = m.get("person_id");
+    let person: Uuid = m
+        .get::<Option<Uuid>, _>("expected_person_id")
+        .or(live_person)
+        .unwrap_or(Uuid::nil());
     let baseline: Value = open(
         key,
         j.org,
@@ -618,7 +622,7 @@ async fn people(
     } else {
         "not_supplied"
     };
-    let bytes=j.result(c,key,unit,"people",outcome,Some(person),json!({"admission_result_id":m.get::<Uuid,_>("admission_result_id"),"source_person_id":m.get::<String,_>("source_person_id"),"operations":results,"outcome":outcome})).await?;
+    let bytes=j.result(c,key,unit,"people",outcome,live_person,json!({"admission_result_id":m.get::<Uuid,_>("admission_result_id"),"source_person_id":m.get::<String,_>("source_person_id"),"operations":results,"outcome":outcome})).await?;
     sqlx::query("UPDATE migration_admitted_metadata_manifest SET disposition='settled',settled_at=clock_timestamp() WHERE id=$1 AND import_id=$2 AND organization_id=$3").bind(unit).bind(j.root).bind(j.org.0).execute(c).await?;
     Ok(bytes)
 }
@@ -640,6 +644,9 @@ async fn unit(
     // All child writers serialize at the Org barrier before ledger/root locks.
     sqlx::query("SELECT s.id FROM migration_snapshot s JOIN migration_snapshot_storage l ON l.organization_id=s.organization_id WHERE s.id=$1 AND s.organization_id=$2 FOR UPDATE OF s,l").bind(candidate.get::<Uuid,_>("snapshot_id")).bind(org.0).fetch_one(&mut *tx).await?;
     let r=sqlx::query("SELECT * FROM migration_admitted_metadata_import WHERE id=$1 AND organization_id=$2 FOR UPDATE").bind(root).bind(org.0).fetch_one(&mut *tx).await?;
+    if r.get::<Uuid, _>("executor_user_id") != candidate.get::<Uuid, _>("executor_user_id") {
+        return Ok(false);
+    }
     let valid:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM migration_admitted_metadata_import i JOIN organization o ON o.id=i.organization_id AND o.workspace_revision=i.workspace_revision AND o.workspace_mode='migration_review' JOIN migration_workspace w ON w.organization_id=i.organization_id AND w.import_id=i.parent_import_id AND w.plan_id=i.parent_plan_id JOIN migration_import p ON p.id=i.parent_import_id AND p.organization_id=i.organization_id AND p.confirmed_plan_id=i.parent_plan_id AND p.state='completed' JOIN migration_people_admission a ON a.id=i.admission_id AND a.organization_id=i.organization_id AND a.parent_import_id=i.parent_import_id AND a.parent_plan_id=i.parent_plan_id AND a.state IN ('completed','cancelled') JOIN migration_metadata_catalog_readiness q ON q.organization_id=i.organization_id AND q.state='ready' WHERE i.id=$1 AND i.organization_id=$2 AND (i.state='queued' OR i.state='running' AND i.lease_expires_at<=clock_timestamp()))").bind(root).bind(org.0).fetch_one(&mut *tx).await?;
     if !valid {
         tx.commit().await?;
@@ -750,7 +757,10 @@ async fn unit(
     Ok(true)
 }
 pub async fn run_once(pool: &PgPool, key: &RawPayloadKey) -> Result<bool, MigrationError> {
-    let candidate=sqlx::query("SELECT id,organization_id,executor_user_id,snapshot_id FROM migration_admitted_metadata_import WHERE state='queued' OR (state='running' AND lease_expires_at<=clock_timestamp()) ORDER BY created_at,id LIMIT 1").fetch_optional(pool).await?;
+    if a::prepare_once(pool, key).await? {
+        return Ok(true);
+    }
+    let candidate=sqlx::query("SELECT id,organization_id,executor_user_id,snapshot_id,confirmed_plan_id FROM migration_admitted_metadata_import WHERE state='queued' OR (state='running' AND lease_expires_at<=clock_timestamp()) ORDER BY created_at,id LIMIT 1").fetch_optional(pool).await?;
     let Some(candidate) = candidate else {
         return Ok(false);
     };
@@ -765,7 +775,7 @@ pub async fn run_once(pool: &PgPool, key: &RawPayloadKey) -> Result<bool, Migrat
                 MigrationError::Forbidden => "authority",
                 _ => "unit_failed",
             };
-            sqlx::query("UPDATE migration_admitted_metadata_import SET state='paused',pause_reason=$3,lease_token=NULL,lease_expires_at=NULL WHERE id=$1 AND organization_id=$2 AND state IN ('queued','running')").bind(candidate.get::<Uuid,_>("id")).bind(candidate.get::<Uuid,_>("organization_id")).bind(reason).execute(pool).await?;
+            sqlx::query("UPDATE migration_admitted_metadata_import SET state='paused',pause_reason=$3,lease_token=NULL,lease_expires_at=NULL WHERE id=$1 AND organization_id=$2 AND state IN ('queued','running') AND executor_user_id=$4 AND confirmed_plan_id=$5").bind(candidate.get::<Uuid,_>("id")).bind(candidate.get::<Uuid,_>("organization_id")).bind(reason).bind(candidate.get::<Uuid,_>("executor_user_id")).bind(candidate.get::<Option<Uuid>,_>("confirmed_plan_id")).execute(pool).await?;
             Err(error)
         }
     }

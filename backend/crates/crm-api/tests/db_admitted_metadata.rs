@@ -28,6 +28,7 @@ async fn admitted_metadata_preparation_freezes_terminal_people_cohort(migrator: 
     .await
     .unwrap();
     let root = Uuid::parse_str(value["import"]["id"].as_str().unwrap()).unwrap();
+    drain_preparation(&fixture, root).await;
     let plan: Uuid = sqlx::query_scalar(
         "SELECT latest_plan_id FROM migration_admitted_metadata_import WHERE id=$1",
     )
@@ -36,7 +37,7 @@ async fn admitted_metadata_preparation_freezes_terminal_people_cohort(migrator: 
     .await
     .unwrap();
     assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_admitted_metadata_manifest WHERE import_id=$1 AND plan_id=$2 AND disposition='eligible'").bind(root).bind(plan).fetch_one(&fixture.pool).await.unwrap(),1);
-    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_admitted_metadata_source WHERE import_id=$1 AND family='people'").bind(root).fetch_one(&fixture.pool).await.unwrap(),1);
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_admitted_metadata_source WHERE import_id=$1 AND family='people' AND source_id='104'").bind(root).fetch_one(&fixture.pool).await.unwrap(),1);
     assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_admitted_metadata_mapping WHERE import_id=$1 AND kind='tag' AND disposition='held'").bind(root).fetch_one(&fixture.pool).await.unwrap(),1);
     assert!(sqlx::query_scalar::<_,i64>("SELECT (octet_length(baseline_nonce)+octet_length(baseline_ciphertext))::bigint FROM migration_admitted_metadata_manifest WHERE import_id=$1").bind(root).fetch_one(&fixture.pool).await.unwrap()>24);
 }
@@ -45,6 +46,18 @@ use crate::import_support::Fixture;
 use crm_api::domain::migration::{admitted_metadata_worker, snapshot_source::Stream};
 use serde_json::Value;
 
+async fn drain_preparation(f: &Fixture, root: Uuid) {
+    for _ in 0..1000 {
+        let ready:bool=sqlx::query_scalar("SELECT p.state='ready' FROM migration_admitted_metadata_plan p JOIN migration_admitted_metadata_import i ON i.latest_plan_id=p.id WHERE i.id=$1").bind(root).fetch_one(&f.pool).await.unwrap();
+        if ready {
+            return;
+        }
+        assert!(admitted_metadata_worker::run_once(&f.pool, &f.key)
+            .await
+            .unwrap());
+    }
+    panic!("preparation did not finish");
+}
 async fn prepared_typed(migrator: &PgPool) -> (Fixture, Uuid, Uuid, Uuid) {
     prepared_typed_native(migrator, false).await
 }
@@ -92,6 +105,7 @@ async fn prepared_typed_native(migrator: &PgPool, native: bool) -> (Fixture, Uui
     .await
     .unwrap();
     let root = Uuid::parse_str(v["import"]["id"].as_str().unwrap()).unwrap();
+    drain_preparation(&f, root).await;
     let plan: Uuid = sqlx::query_scalar(
         "SELECT latest_plan_id FROM migration_admitted_metadata_import WHERE id=$1",
     )
@@ -753,6 +767,7 @@ async fn admitted_metadata_reuses_original_claims_after_ready_handover(migrator:
     .await
     .unwrap();
     let root = Uuid::parse_str(prepared["import"]["id"].as_str().unwrap()).unwrap();
+    drain_preparation(&f, root).await;
     // Readiness is active before the original worker obtains its lease. It must
     // atomically create a shared claim instead of bypassing the new registry.
     metadata::confirm(&f.pool,&f.key,&f.ctx,original,serde_json::from_value(json!({"request_id":Uuid::new_v4(),"plan_id":original_ready["latest_plan"]["id"],"plan_revision":original_ready["latest_plan"]["revision"],"confirmation_digest":original_ready["latest_plan"]["confirmation_digest"],"workspace_revision":original_ready["workspace_revision"],"acknowledgments":{"held_count":original_ready["latest_plan"]["counts"]["held_count"],"review_only":true,"remaining_data":true}})).unwrap(),&ReleaseReadiness::for_tests(),&f.policy).await.unwrap();
@@ -842,4 +857,483 @@ async fn admitted_metadata_reuses_original_claims_after_ready_handover(migrator:
     );
     assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM person_custom_field_value WHERE organization_id=$1 AND text_value='admitted value'").bind(f.org).fetch_one(&f.pool).await.unwrap(),1);
     assert_eq!(sqlx::query_scalar::<_,Value>("SELECT jsonb_agg(to_jsonb(x) ORDER BY kind,source_key) FROM migration_metadata_identity x WHERE import_id=$1").bind(original).fetch_one(&f.pool).await.unwrap(),evidence);
+}
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn admitted_metadata_preparation_retains_all_observations_and_rolls_back_failed_steps(
+    migrator: PgPool,
+) {
+    let person = json!({"id":104,"firstName":"Source","lastName":"Observations","stage":"Lead","assignedUserId":3,"tags":["First spelling"]});
+    let (f, parent, admission) = fixture_with_admission(&migrator, vec![person.clone()]).await;
+    let mut repeated = vec![person; 17];
+    repeated[16]["tags"] = json!(["A later conflicting observation"]);
+    let selected = report(&f, parent, repeated).await;
+    let prepared = admitted_metadata::prepare(
+        &f.pool,
+        &f.key,
+        &ReleaseReadiness::for_tests(),
+        &f.ctx,
+        admitted_metadata::Prepare {
+            request_id: Uuid::new_v4(),
+            admission_id: admission,
+            source_report_id: selected,
+        },
+    )
+    .await
+    .unwrap();
+    let root = Uuid::parse_str(prepared["import"]["id"].as_str().unwrap()).unwrap();
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_admitted_metadata_manifest WHERE import_id=$1"
+        )
+        .bind(root)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap(),
+        0,
+        "HTTP preparation commits only bounded inputs"
+    );
+    sqlx::raw_sql("CREATE FUNCTION admitted_source_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic preparation failure'; END $$; CREATE TRIGGER admitted_source_fault BEFORE INSERT ON migration_admitted_metadata_observation FOR EACH ROW EXECUTE FUNCTION admitted_source_fault()").execute(&migrator).await.unwrap();
+    let mut failed = false;
+    for _ in 0..10 {
+        let before = ledger(&f, root).await;
+        let checkpoint: Value = sqlx::query_scalar(
+            "SELECT to_jsonb(p) FROM migration_admitted_metadata_plan p WHERE import_id=$1",
+        )
+        .bind(root)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap();
+        if admitted_metadata_worker::run_once(&f.pool, &f.key)
+            .await
+            .is_err()
+        {
+            failed = true;
+            assert_eq!(
+                ledger(&f, root).await,
+                before,
+                "source bytes and reservation settle atomically with checkpoint"
+            );
+            assert_eq!(
+                sqlx::query_scalar::<_, Value>(
+                    "SELECT to_jsonb(p) FROM migration_admitted_metadata_plan p WHERE import_id=$1"
+                )
+                .bind(root)
+                .fetch_one(&f.pool)
+                .await
+                .unwrap(),
+                checkpoint
+            );
+            break;
+        }
+    }
+    assert!(
+        failed,
+        "the first nonempty retained source step must hit the fault"
+    );
+    sqlx::query("DROP TRIGGER admitted_source_fault ON migration_admitted_metadata_observation")
+        .execute(&migrator)
+        .await
+        .unwrap();
+    assert!(!admitted_metadata_worker::run_once(&f.pool, &f.key)
+        .await
+        .unwrap());
+    admitted_metadata::retry(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        root,
+        admitted_metadata::Request {
+            request_id: Uuid::new_v4(),
+        },
+    )
+    .await
+    .unwrap();
+    let before_source = ledger(&f, root).await;
+    assert!(admitted_metadata_worker::run_once(&f.pool, &f.key)
+        .await
+        .unwrap());
+    let source_bytes:i64=sqlx::query_scalar("SELECT COALESCE((SELECT sum(octet_length(source_id)+octet_length(semantic_hmac)+octet_length(nonce)+octet_length(ciphertext)) FROM migration_admitted_metadata_source WHERE import_id=$1),0)+COALESCE((SELECT sum(octet_length(semantic_hmac)) FROM migration_admitted_metadata_observation WHERE import_id=$1),0)::bigint").bind(root).fetch_one(&f.pool).await.unwrap();
+    let after_source = ledger(&f, root).await;
+    for field in ["root_retained", "snapshot_retained", "org_retained"] {
+        assert_eq!(
+            after_source[field].as_i64().unwrap() - before_source[field].as_i64().unwrap(),
+            source_bytes,
+            "exact preparation inventory for {field}"
+        );
+    }
+    drain_preparation(&f, root).await;
+    let source=sqlx::query("SELECT id,observations,conflict,qualified FROM migration_admitted_metadata_source WHERE import_id=$1 AND family='people' AND source_id='104'").bind(root).fetch_one(&f.pool).await.unwrap();
+    assert_eq!(source.get::<i64, _>("observations"), 17);
+    assert!(source.get::<bool, _>("conflict"));
+    assert!(source.get::<bool, _>("qualified"));
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_admitted_metadata_observation WHERE source_row_id=$1"
+        )
+        .bind(source.get::<Uuid, _>("id"))
+        .fetch_one(&f.pool)
+        .await
+        .unwrap(),
+        17
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, String>(
+            "SELECT disposition FROM migration_admitted_metadata_manifest WHERE import_id=$1"
+        )
+        .bind(root)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap(),
+        "held",
+        "17th observation cannot be lost behind sampled report evidence"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT preparation_bytes FROM migration_admitted_metadata_plan WHERE import_id=$1"
+        )
+        .bind(root)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap(),
+        0
+    );
+    assert_eq!(ledger(&f, root).await["root_reserved"], 0);
+}
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn admitted_metadata_preparation_preserves_missing_native_cohort_target(migrator: PgPool) {
+    let person = json!({"id":104,"firstName":"Missing","lastName":"Target","stage":"Lead","assignedUserId":3,"tags":["Past Client"]});
+    let (f, parent, admission) = fixture_with_admission(&migrator, vec![person.clone()]).await;
+    let selected = report(&f, parent, vec![person]).await;
+    let expected:Uuid=sqlx::query_scalar("SELECT person_id FROM migration_people_admission_result WHERE admission_id=$1 AND disposition='settled'").bind(admission).fetch_one(&f.pool).await.unwrap();
+    // Simulate a missing native row in this disposable database. Upstream
+    // provenance FKs normally prevent physical deletion; retain the immutable
+    // evidence verbatim and remove only these test constraints to inject the
+    // corruption the metadata planner must hold. No production bypass changes.
+    sqlx::raw_sql("ALTER TABLE person_admission_provenance DROP CONSTRAINT person_admission_provenance_person_id_organization_id_fkey; ALTER TABLE person_admitted DROP CONSTRAINT person_admitted_person_id_organization_id_fkey").execute(&migrator).await.unwrap();
+    sqlx::query("DELETE FROM person WHERE id=$1 AND organization_id=$2")
+        .bind(expected)
+        .bind(f.org)
+        .execute(&migrator)
+        .await
+        .unwrap();
+    let prepared = admitted_metadata::prepare(
+        &f.pool,
+        &f.key,
+        &ReleaseReadiness::for_tests(),
+        &f.ctx,
+        admitted_metadata::Prepare {
+            request_id: Uuid::new_v4(),
+            admission_id: admission,
+            source_report_id: selected,
+        },
+    )
+    .await
+    .unwrap();
+    let root = Uuid::parse_str(prepared["import"]["id"].as_str().unwrap()).unwrap();
+    drain_preparation(&f, root).await;
+    let manifest=sqlx::query("SELECT expected_person_id,person_id,disposition FROM migration_admitted_metadata_manifest WHERE import_id=$1").bind(root).fetch_one(&f.pool).await.unwrap();
+    assert_eq!(
+        manifest.get::<Option<Uuid>, _>("expected_person_id"),
+        Some(expected)
+    );
+    assert_eq!(manifest.get::<Option<Uuid>, _>("person_id"), None);
+    assert_eq!(manifest.get::<String, _>("disposition"), "held");
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM person WHERE id=$1")
+            .bind(expected)
+            .fetch_one(&f.pool)
+            .await
+            .unwrap(),
+        0
+    );
+}
+
+#[cfg(feature = "perf-harness")]
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn admitted_metadata_preparation_hot_steps_at_d050(migrator: PgPool) {
+    let (f, root, plan, person) = prepared_typed(&migrator).await;
+    let rootrow=sqlx::query("SELECT snapshot_id,admission_id,source_account_id FROM migration_admitted_metadata_import WHERE id=$1").bind(root).fetch_one(&f.pool).await.unwrap();
+    let snapshot: Uuid = rootrow.get("snapshot_id");
+    let admission: Uuid = rootrow.get("admission_id");
+    let account: i64 = rootrow.get("source_account_id");
+    let mut c = migrator.acquire().await.unwrap();
+    let existing: i64 = sqlx::query_scalar("SELECT count(*) FROM person WHERE organization_id=$1")
+        .bind(f.org)
+        .fetch_one(&mut *c)
+        .await
+        .unwrap();
+    sqlx::query("CREATE TEMP TABLE staged_scale AS SELECT n,gen_random_uuid() AS person,gen_random_uuid() AS source,gen_random_uuid() AS record,gen_random_uuid() AS item,gen_random_uuid() AS result FROM generate_series(1,$1::bigint) n").bind(25000-existing).execute(&mut *c).await.unwrap();
+    sqlx::query("INSERT INTO person(id,organization_id,first_name,last_name,stage_id,assigned_user_id) SELECT person,$1,'Synthetic','Staged metadata '||n,$2,$3 FROM staged_scale").bind(f.org).bind(f.lead_stage).bind(f.actor).execute(&mut *c).await.unwrap();
+    // Cardinality-only copies retain valid relational scopes; encrypted envelopes
+    // deliberately keep their original AAD and are never used by a worker.
+    sqlx::query("CREATE TEMP TABLE staged_captures AS SELECT n,gen_random_uuid() AS id FROM generate_series(1,250) n").execute(&mut *c).await.unwrap();
+    sqlx::query("INSERT INTO migration_snapshot_capture SELECT (jsonb_populate_record(NULL::migration_snapshot_capture,to_jsonb(cap)||jsonb_build_object('id',x.id,'sequence',10000+x.n,'checkpoint',10000+x.n))).* FROM staged_captures x CROSS JOIN LATERAL(SELECT * FROM migration_snapshot_capture WHERE snapshot_id=$1 AND stream='people' ORDER BY sequence LIMIT 1) cap").bind(snapshot).execute(&mut *c).await.unwrap();
+    sqlx::query("INSERT INTO migration_snapshot_record SELECT (jsonb_populate_record(NULL::migration_snapshot_record,to_jsonb(r)||jsonb_build_object('id',x.record,'capture_id',cap.id,'capture_sequence',10000+cap.n,'ordinal',((x.n-1)%100)::integer,'source_id',(1000000+x.n)::text))).* FROM staged_scale x JOIN staged_captures cap ON cap.n=(x.n-1)/100+1 CROSS JOIN LATERAL(SELECT * FROM migration_snapshot_record WHERE snapshot_id=$1 AND family='people' AND source_id='104' LIMIT 1) r").bind(snapshot).execute(&mut *c).await.unwrap();
+    sqlx::query("INSERT INTO migration_admitted_metadata_source SELECT (jsonb_populate_record(NULL::migration_admitted_metadata_source,to_jsonb(s)||jsonb_build_object('id',x.source,'source_id',(1000000+x.n)::text,'capture_id',cap.id,'capture_sequence',10000+cap.n,'ordinal',((x.n-1)%100)::integer))).* FROM staged_scale x JOIN staged_captures cap ON cap.n=(x.n-1)/100+1 CROSS JOIN migration_admitted_metadata_source s WHERE s.plan_id=$1 AND s.family='people' AND s.source_id='104'").bind(plan).execute(&mut *c).await.unwrap();
+    sqlx::query("ALTER TABLE migration_people_admission_item DISABLE TRIGGER migration_people_admission_item_building").execute(&mut *c).await.unwrap();
+    sqlx::query("INSERT INTO migration_people_admission_item SELECT (jsonb_populate_record(NULL::migration_people_admission_item,to_jsonb(i)||jsonb_build_object('id',x.item,'source_id',(1000000+x.n)::text,'source_key','people:'||(1000000+x.n)::text,'prospective_person_id',x.person,'settled_result_id',x.result))).* FROM staged_scale x CROSS JOIN LATERAL(SELECT * FROM migration_people_admission_item WHERE admission_id=$1 AND source_id='104') i").bind(admission).execute(&mut *c).await.unwrap();
+    sqlx::query("ALTER TABLE migration_people_admission_item ENABLE TRIGGER migration_people_admission_item_building").execute(&mut *c).await.unwrap();
+    sqlx::query("INSERT INTO migration_people_admission_result SELECT (jsonb_populate_record(NULL::migration_people_admission_result,to_jsonb(r)||jsonb_build_object('id',x.result,'item_id',x.item,'person_id',x.person,'source_id',(1000000+x.n)::text))).* FROM staged_scale x CROSS JOIN LATERAL(SELECT * FROM migration_people_admission_result WHERE admission_id=$1 AND source_id='104') r").bind(admission).execute(&mut *c).await.unwrap();
+    sqlx::query("INSERT INTO migration_import_identity SELECT (jsonb_populate_record(NULL::migration_import_identity,to_jsonb(i)||jsonb_build_object('target_id',x.person,'source_id',(1000000+x.n)::text,'admission_item_id',x.item,'admission_result_id',x.result))).* FROM staged_scale x CROSS JOIN LATERAL(SELECT * FROM migration_import_identity WHERE admission_id=$1 AND target_id=$2 AND family='people') i").bind(admission).bind(person).execute(&mut *c).await.unwrap();
+    let members: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM organization_membership WHERE organization_id=$1")
+            .bind(f.org)
+            .fetch_one(&mut *c)
+            .await
+            .unwrap();
+    sqlx::query("CREATE TEMP TABLE staged_members AS SELECT n,gen_random_uuid() AS id FROM generate_series(1,$1::bigint) n").bind(50-members).execute(&mut *c).await.unwrap();
+    sqlx::query("INSERT INTO app_user(id,email,display_name) SELECT id,'staged-perf-'||n||'@synthetic.test','Synthetic preparation member' FROM staged_members").execute(&mut *c).await.unwrap();
+    sqlx::query("INSERT INTO organization_membership(organization_id,user_id,role,status) SELECT $1,id,'member','active' FROM staged_members").bind(f.org).execute(&mut *c).await.unwrap();
+    for table in [
+        "person",
+        "organization_membership",
+        "migration_snapshot_capture",
+        "migration_snapshot_record",
+        "migration_admitted_metadata_source",
+        "migration_people_admission_item",
+        "migration_people_admission_result",
+        "migration_import_identity",
+        "migration_admitted_metadata_mapping",
+    ] {
+        sqlx::query(&format!("ANALYZE {table}"))
+            .execute(&mut *c)
+            .await
+            .unwrap();
+    }
+    fn statement(prefix: &str) -> String {
+        let source =
+            include_str!("../../crm-app/src/domain/migration/admitted_metadata/preparation.rs");
+        let start = source
+            .find(&format!("\"{prefix}"))
+            .expect("production preparation statement");
+        serde_json::Deserializer::from_str(&source[start..])
+            .into_iter::<String>()
+            .next()
+            .unwrap()
+            .unwrap()
+    }
+    fn index(plan: &Value, name: &str) -> bool {
+        match plan {
+            Value::Object(o) => {
+                o.get("Index Name")
+                    .and_then(Value::as_str)
+                    .is_some_and(|v| v.contains(name))
+                    || o.values().any(|v| index(v, name))
+            }
+            Value::Array(v) => v.iter().any(|v| index(v, name)),
+            _ => false,
+        }
+    }
+    let only_cohort = std::env::var("CRM_ADMITTED_PREPARATION_PLAN").as_deref() == Ok("cohort");
+    if !only_cohort {
+        let query = format!(
+            "EXPLAIN (ANALYZE,BUFFERS,FORMAT JSON) {}",
+            statement("SELECT * FROM migration_snapshot_capture WHERE snapshot_id=$1")
+        );
+        let p: Value = sqlx::query_scalar(&query)
+            .bind(snapshot)
+            .bind(f.org)
+            .bind(10250i64)
+            .bind(10249i64)
+            .bind(99i32)
+            .fetch_one(&mut *c)
+            .await
+            .unwrap();
+        println!("PREP_CAPTURE={p}");
+        assert!(index(&p, "migration_snapshot_capture"));
+        let cap: Uuid =
+            sqlx::query_scalar("SELECT id FROM staged_captures ORDER BY n DESC LIMIT 1")
+                .fetch_one(&mut *c)
+                .await
+                .unwrap();
+        let query = format!(
+            "EXPLAIN (ANALYZE,BUFFERS,FORMAT JSON) {}",
+            statement("SELECT * FROM migration_snapshot_record WHERE capture_id=$1")
+        );
+        let p: Value = sqlx::query_scalar(&query)
+            .bind(cap)
+            .bind(snapshot)
+            .bind(f.org)
+            .bind(96i32)
+            .fetch_one(&mut *c)
+            .await
+            .unwrap();
+        println!("PREP_RECORD={p}");
+        assert!(index(&p, "migration_snapshot_record"));
+        let query = format!(
+            "EXPLAIN (ANALYZE,BUFFERS,FORMAT JSON) {}",
+            statement("SELECT s.* FROM migration_admitted_metadata_source s WHERE s.plan_id=$1")
+        );
+        let p: Value = sqlx::query_scalar(&query)
+            .bind(plan)
+            .bind(f.org)
+            .bind(10250i64)
+            .bind(95i32)
+            .bind(Uuid::nil())
+            .bind(admission)
+            .bind(account)
+            .fetch_one(&mut *c)
+            .await
+            .unwrap();
+        println!("PREP_TAG={p}");
+        assert!(index(&p, "migration_admitted_metadata_source_order"));
+    }
+    let after:Uuid=sqlx::query_scalar("SELECT id FROM migration_people_admission_result WHERE admission_id=$1 ORDER BY id DESC OFFSET 1 LIMIT 1").bind(admission).fetch_one(&mut *c).await.unwrap();
+    let query = format!(
+        "EXPLAIN (ANALYZE,BUFFERS,FORMAT JSON) {}",
+        statement("SELECT ar.id,ar.item_id,ar.person_id,ar.source_id,p.id AS live_person_id")
+    );
+    let p: Value = sqlx::query_scalar(&query)
+        .bind(f.org)
+        .bind(admission)
+        .bind(after)
+        .bind(account)
+        .fetch_one(&mut *c)
+        .await
+        .unwrap();
+    println!("PREP_COHORT={p}");
+    assert!(index(&p, "migration_admitted_metadata_admission_work"));
+    assert!(
+        exact_identity_lookup(&p),
+        "the per-unit identity check must not hash the complete identity namespace"
+    );
+    if !only_cohort {
+        for prefix in [
+            "SELECT id,source_id FROM migration_admitted_metadata_source WHERE plan_id=$1",
+            "SELECT * FROM migration_admitted_metadata_mapping WHERE plan_id=$1",
+        ] {
+            let query = format!(
+                "EXPLAIN (ANALYZE,BUFFERS,FORMAT JSON) {}",
+                statement(prefix)
+            );
+            let p: Value = sqlx::query_scalar(&query)
+                .bind(plan)
+                .bind(f.org)
+                .bind(Uuid::nil())
+                .fetch_one(&mut *c)
+                .await
+                .unwrap();
+            println!("PREP_FIELD={p}");
+        }
+    }
+}
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn admitted_metadata_typed_reads_require_current_tenant_admin(migrator: PgPool) {
+    use crm_api::{
+        domain::migration::MigrationError,
+        ids::{OrganizationId, UserId},
+    };
+    let (f, root, plan, _) = prepared_typed(&migrator).await;
+    let mut member = f.ctx.clone();
+    member.actor_user_id = UserId::new(f.member);
+    assert!(matches!(
+        admitted_metadata::get(&f.pool, &member, root).await,
+        Err(MigrationError::Forbidden)
+    ));
+    assert!(matches!(
+        admitted_metadata::list(&f.pool, &member, admitted_metadata::Page::default()).await,
+        Err(MigrationError::Forbidden)
+    ));
+    assert!(matches!(
+        admitted_metadata::mappings(
+            &f.pool,
+            &member,
+            root,
+            plan,
+            admitted_metadata::PlanPage::default()
+        )
+        .await,
+        Err(MigrationError::Forbidden)
+    ));
+    assert!(matches!(
+        admitted_metadata::records(
+            &f.pool,
+            &member,
+            root,
+            plan,
+            admitted_metadata::PlanPage::default()
+        )
+        .await,
+        Err(MigrationError::Forbidden)
+    ));
+    assert!(matches!(
+        admitted_metadata::issues(&f.pool, &member, root, plan).await,
+        Err(MigrationError::Forbidden)
+    ));
+    let other = Uuid::new_v4();
+    sqlx::query("INSERT INTO organization(id,name,intake_slug,intake_token) VALUES($1,'Synthetic isolation','am-'||replace($1::text,'-',''),'testonly')")
+        .bind(other)
+        .execute(&migrator)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO organization_membership(organization_id,user_id,role,status) VALUES($1,$2,'admin','active')").bind(other).bind(f.actor).execute(&migrator).await.unwrap();
+    let mut outsider = f.ctx.clone();
+    outsider.organization_id = OrganizationId::new(other);
+    assert!(matches!(
+        admitted_metadata::get(&f.pool, &outsider, root).await,
+        Err(MigrationError::NotFound)
+    ));
+    assert!(matches!(
+        admitted_metadata::mappings(
+            &f.pool,
+            &outsider,
+            root,
+            plan,
+            admitted_metadata::PlanPage::default()
+        )
+        .await,
+        Err(MigrationError::NotFound)
+    ));
+    assert!(matches!(
+        admitted_metadata::records(
+            &f.pool,
+            &outsider,
+            root,
+            plan,
+            admitted_metadata::PlanPage::default()
+        )
+        .await,
+        Err(MigrationError::NotFound)
+    ));
+    assert!(matches!(
+        admitted_metadata::issues(&f.pool, &outsider, root, plan).await,
+        Err(MigrationError::NotFound)
+    ));
+}
+
+#[cfg(feature = "perf-harness")]
+fn exact_identity_lookup(p: &Value) -> bool {
+    match p {
+        Value::Object(o) => {
+            if o.get("Relation Name").and_then(Value::as_str) == Some("migration_import_identity") {
+                return o.get("Node Type").and_then(Value::as_str) == Some("Index Scan")
+                    && o.get("Index Name")
+                        .and_then(Value::as_str)
+                        .is_some_and(|n| n.starts_with("migration_import_identity"))
+                    && o.get("Actual Rows")
+                        .and_then(Value::as_f64)
+                        .is_some_and(|n| n <= 1.0);
+            }
+            o.values().any(exact_identity_lookup)
+        }
+        Value::Array(a) => a.iter().any(exact_identity_lookup),
+        _ => false,
+    }
+}
+#[cfg(feature = "perf-harness")]
+#[test]
+fn admitted_metadata_recorded_cohort_plan_uses_a_bounded_identity_lookup() {
+    // Replay the actual db4 plan to correct the overly specific pkey assertion.
+    // This runs no new EXPLAIN and preserves D-050's measurement budget.
+    let plan: Value =
+        serde_json::from_str(include_str!("fixtures/admitted_metadata_cohort_plan.json")).unwrap();
+    assert!(exact_identity_lookup(&plan));
+    assert_eq!(plan[0]["Plan"]["Actual Rows"], 1.0);
 }

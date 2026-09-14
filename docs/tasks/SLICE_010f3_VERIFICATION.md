@@ -283,8 +283,8 @@ unchanged. The first pass also covers a deliberately unreadable oversized captur
 duplicate/undeclared keys, 120-option normalized evidence, typed execution,
 original claims, atomic rollback and exact remainder.
 
-Final cardinality/SQL evidence and the expiry/current-policy/key retry regression
-are still running. The first final D-050 fixture attempt failed a test-only
+The completed final cardinality/SQL evidence and expiry/current-policy/key retry
+regression are detailed below. The first final D-050 fixture attempt failed a test-only
 predecessor FK seed before any EXPLAIN; `admitted-fidelity-d050-final1.log` is
 retained. Cardinality envelopes are inert synthetic copies, never executed or
 reported as a billable migration run. The coordinator separately owns and has
@@ -308,8 +308,8 @@ native/operation bounds, filtered readers, provenance, alias and remainder use
 scoped indexes, with execution times 0.013–0.246ms. Its final assertion expected
 one particular operation-read index, but PostgreSQL correctly chose the existing
 manifest/Organization/kind/source unique index and sorted only five scoped rows
-(0.039ms); the assertion was widened to accept that valid plan. Tail-only evidence
-continues with the predecessor lookup, a nonempty late remainder-mapping probe,
+(0.039ms); the assertion was widened to accept that valid plan. The subsequent tail-only run
+adds the predecessor lookup, a nonempty late remainder-mapping probe,
 one-time seal bound and logical/physical inventory; the earlier unchanged plans
 are not repeated.
 

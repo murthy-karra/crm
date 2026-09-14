@@ -25,4 +25,4 @@ const query = (value: Record<string, string | number | undefined>) => {
 }
 export const fetchAdmittedMetadataImports = (admissionId?: string, cursor?: string, signal?: AbortSignal) => apiFetch<AdmittedMetadataPage>(`${root}${query({ admission_id: admissionId, cursor, limit: 50 })}`, { signal })
 export const fetchAdmittedMetadataImport = (id: string, signal?: AbortSignal) => apiFetch<AdmittedMetadataImport>(`${root}/${encodeURIComponent(id)}`, { signal })
-export const prepareAdmittedMetadataImport = (body: { request_id: string; admission_id: string; source_report_id: string }) => apiFetch<{ import: AdmittedMetadataImport; request_id: string }>(root, { method: 'POST', body })
+export const prepareAdmittedMetadataImport = (body: { request_id: string; admission_id: string; source_report_id: string }) => apiFetch<{ import: AdmittedMetadataImport; request_id: string }>(root, { method: 'POST', body: JSON.stringify(body) })

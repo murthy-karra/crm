@@ -365,3 +365,113 @@ After these checks, only the inactive migration lane's
 executables, SQL/DB evidence and shared running service artifacts were retained.
 The lane is idle for the coordinator's final integrated gates and independent
 review; additional implementation changes require a concrete review finding.
+
+## Independent review round 1: composite owners and whole-cohort tags
+
+The round-1 corrections are implemented at `02f8cdb`, based on the coordinator's
+prequalification correction `3755623` (cherry-picked as `88a46fd`). This is the
+first review's implementation response, not another independent review round.
+Migration `20261002000009` adds 73 named candidate-key/FK/CHECK constraints,
+fifteen owner columns (including the stored catalog-result mapping expression),
+six scoped owner-fill triggers and the settled admission tag-source index.
+Owner tuples enforce Organization, root, plan, admission result/item, expected
+Person, source snapshot/capture/record, original or admitted catalog claim and
+exact remainder/evidence/dependency lineage. The nullable live Person remains
+separate from the retained admission/expected-Person tuple. Candidate keys on
+original evidence are additive; no original rows, payloads or grants change.
+
+Tag enumeration now includes qualified source rows for every successfully
+settled admission source ID, including missing native People and invalid current
+identity bindings. Their unique tags retain catalog mappings, aliases and
+coverage while Person operations remain visibly held. Both dedicated regressions
+prove unchanged native People, tags and links after execution. Same-Organization
+wrong-owner and foreign-Organization direct app-role mutations reject forged
+source/alias/manifest/result/claim and lineage references, including expected
+Person and original claim owners; these tests require FK/CHECK failures rather
+than permission or duplicate-key masking.
+
+The new reservation FK exposed an existing source-replan bug: cancellation
+capacity carried the previous plan with the new snapshot. The command now
+inserts and references the replacement plan in the same transaction. The
+additive migration repairs only that prior cancellation owner combination,
+selecting an existing same-root/Organization/snapshot plan. Token, reserved
+capacity, ciphertext and ledger values are preserved. A rolled-back upgrade
+fixture restores the old combination, executes the actual migration repair
+twice, compares the complete reservation and three ledgers, and validates the
+new FK again.
+
+Private evidence is retained under
+`/private/tmp/crm-mobile005-010f3/migration/`:
+
+- `admitted-review1-owner-schema1.log`: typed atomic execution passed with the
+  new ownership schema.
+- `admitted-review1-owner-tags2.log`: both missing/mismatched native tag tests
+  passed; the owner test's test-only `SET ROLE crm_app` failed because the
+  migrator cannot assume that role. The helper now uses the actual app pool.
+- `admitted-review1-owner-tags3.log`: 22 passed, two failed. One was the same
+  obsolete role helper; the other was the source-replan reservation owner bug
+  described above. Both failures remain recorded.
+- `admitted-review1-owner-functional4.log`: all 24 focused functional and
+  recorded-plan checks passed (141.53s), including corrected source replan,
+  both remainder paths, original/admitted claims, atomic rollback, complete
+  typed fidelity, storage accounting, current policy/key retry and both held
+  native tag cases. This run preceded only the additive reservation upgrade
+  repair and its focused regression; all production hot SQL and constraints
+  match `02f8cdb`.
+- `admitted-review1-owner-hot1.log`: nine new/changed statements passed one
+  EXPLAIN each at 25,000 People and fifty members (47.91s fixture). Their
+  production queries match `02f8cdb`; unchanged earlier seventeen statements,
+  the paired Today benchmark and native stress evidence were reused.
+- `admitted-review1-owner-catalog.log`: host `psql` unavailable. Read-only
+  Docker PostgreSQL export succeeded in `admitted-review1-owner-catalog2.log`;
+  `review1-009-catalog.json` contains actual normalized definitions for all
+  73 constraints, six triggers, the stored expression and owner function body
+  MD5 `895daa97b355d16596b6ee1a16de19dd`. That retained database predates only
+  the tag index; the successful hot-query fixture explicitly proves the index.
+
+| New/changed statement | Execution time (ms) |
+|---|---:|
+| Whole settled-cohort tag source | 0.084 |
+| Root owner lookup | 0.018 |
+| Source/observation snapshot owner | 0.022 |
+| Manifest plan owner | 0.018 |
+| Mapping plan owner | 0.011 |
+| Admission result/item owner | 0.015 |
+| Dependency result owner | 0.014 |
+| Exact inherited mapping dependency | 0.025 |
+| Receipt snapshot owner | 0.047 |
+
+The tag query seeks the staged source keyset and probes the exact settled
+admission source index. Admission-result and dependency lookups use their scoped
+indexes; the inherited dependency resolves the exact predecessor mapping and
+unique result unit. Owner triggers fire only on inserts or changes to relevant
+owner columns, not normal progress or byte-counter updates. The one-time schema
+backfill is upgrade work, not repeated per-unit work.
+
+Reproduce the functional filter using the earlier complete command with log
+`admitted-review1-owner-functional4.log`. For only the changed tag and owner
+lookups, use:
+
+```sh
+CRM_ADMITTED_PREPARATION_PLAN=owners python3 /private/tmp/crm-mobile005-010f3/run-db-check.py --lane migration --log admitted-review1-owner-hot1.log -- cargo test -p crm-api --features perf-harness --test all admitted_metadata_preparation_hot_steps_at_d050 -- --ignored --test-threads=1 --nocapture
+```
+
+The final additive repair and source-replan proof passed at `02f8cdb` in
+`admitted-review1-owner-upgrade5.log` (1 test, 9.53s). This fresh database applies
+all nine migrations, including the settled tag-source index, and executes the
+actual cancellation owner-repair statement followed by FK validation. The macOS
+linker emitted its existing large DWARF unwind-table warning; the test passed.
+The first lint attempt, `admitted-review1-owner-clippy.log`, used all targets
+with `perf-harness` and selected the unrelated standalone
+`db_today_feeds_http_perf` target, whose frozen fixtures have 34 dead-code
+warnings. That failed check is retained; verification uses the application
+all-target check and the combined `--test all` performance-feature target below.
+
+Warnings-denied Clippy passes at `02f8cdb` for `crm-app --all-targets`
+(`admitted-review1-owner-app-clippy2.log`) and `crm-api --test all --features
+perf-harness` (`admitted-review1-owner-api-clippy3.log`). Both commands use
+`CARGO_TARGET_DIR=/private/tmp/crm-mobile005-010f3/migration/target`,
+`CARGO_BUILD_JOBS=2`, `SQLX_OFFLINE=true` and `-- -D warnings`. Formatting and
+`git diff --check` also pass. The coordinator owns the combined final gates,
+183-variant schema-readiness regression and subsequent independent review;
+those are not claimed by this lane.

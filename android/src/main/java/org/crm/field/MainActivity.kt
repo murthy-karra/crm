@@ -1215,7 +1215,15 @@ private fun Composer(
         )
 }
 
-private data class ProfileContact(val id: String?, val kind: String, val value: String, val removed: Boolean = false)
+private data class ProfileContact(
+    val id: String?,
+    val kind: String,
+    val value: String,
+    // The draft baseline is immutable. Never diff a reopened/replacement proposal against a
+    // newer sealed cache that happens to be visible while this editor is open.
+    val baselineValue: String? = value,
+    val removed: Boolean = false,
+)
 
 /** The editor keeps an operation list, never a replace-all contact array or local normalization. */
 @Composable
@@ -1247,8 +1255,7 @@ private fun ProfileComposer(
                 contact.id == null && !contact.removed && contact.value.isNotBlank() -> ops.put(json("op" to "add", "kind" to contact.kind, "value" to contact.value))
                 contact.id != null && contact.removed -> ops.put(json("op" to "remove", "id" to contact.id))
                 contact.id != null -> {
-                    val base = state.person?.contacts?.let(::JSONArray)?.objects()?.firstOrNull { it.getString("id") == contact.id }?.getString("value")
-                    if (base != null && base != contact.value) ops.put(json("op" to "edit", "id" to contact.id, "value" to contact.value))
+                    if (contact.baselineValue != contact.value) ops.put(json("op" to "edit", "id" to contact.id, "value" to contact.value))
                 }
             }
         }

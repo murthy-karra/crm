@@ -770,7 +770,9 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
             response.getJSONArray("items").objects().forEach { item ->
                 uuid(item.getString("id"))
                 require(item.getString("person_id") == person)
-                if (section == "tasks" || section == "notes") revision(item.getString("revision"))
+                // Older complete caches did not expose per-item revisions. They remain
+                // readable but cannot qualify an edit baseline until a modern traversal.
+                if ((section == "tasks" || section == "notes") && item.has("revision")) revision(item.getString("revision"))
             }
         val next = response.stringOrNull("next_cursor")
         if (
@@ -874,8 +876,13 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
                 val notes = component(id, item.person, "notes").second
                 val tasks = component(id, item.person, "tasks").second
                 require(summary.first?.getString("id") == item.person)
-                if (catalog != null) revision(summary.first!!.getString("stage_revision"))
-                revision(summary.first!!.getString("details_revision")); validateDetailContacts(summary.second)
+                val modernSummary = summary.first!!
+                val detailsQualified =
+                    modernSummary.has("details_revision") &&
+                        runCatching { revision(modernSummary.getString("details_revision")); validateDetailContacts(summary.second) }.isSuccess
+                val notesQualified = notes.objects().all { it.has("revision") }
+                val tasksQualified = tasks.objects().all { it.has("revision") }
+                if (catalog != null && modernSummary.has("stage_revision")) revision(modernSummary.getString("stage_revision"))
                 if (old == null || revisionAtLeast(item.revision, old.revision))
                     dao.person(
                         PersonRow(
@@ -887,9 +894,9 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
                             tasks.toString(),
                             id,
                             seal.getString("evaluated_at"),
-                            true,
-                            catalog != null,
-                            true,
+                            notesQualified,
+                            catalog != null && modernSummary.has("stage_revision"),
+                            detailsQualified,
                         )
                     )
             }

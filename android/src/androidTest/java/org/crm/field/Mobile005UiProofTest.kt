@@ -75,8 +75,23 @@ class Mobile005UiProofTest {
         assertEquals(staged.getString("sha"), sha(queued.envelope))
         compose.onNodeWithTag("nav-Saved work").performClick()
         screenshot("mobile005-ui-restarted-profile")
+        // The emulator recreates its connectivity callback after force-stop. Give that callback
+        // time to register, then drive the same visible controls a field user has.
+        delay(1_500)
         if (repository.ui.value.paused) compose.onNodeWithText("Resume sync").performClick() else compose.onNodeWithText("Sync now").performClick()
-        compose.waitUntil(90_000) { active().store.dao.operation(staged.getString("operation"))?.status in setOf("accepted", "covered") }
+        compose.waitUntil(20_000) { !repository.ui.value.busy }
+        if (active().store.dao.operation(staged.getString("operation"))?.status !in setOf("accepted", "covered"))
+            compose.onNodeWithText("Sync now").performClick()
+        val replayed = staged.getString("operation")
+        for (attempt in 0 until 90) {
+            if (active().store.dao.operation(replayed)?.status in setOf("accepted", "covered")) break
+            delay(1_000)
+        }
+        val replayState = requireNotNull(active().store.dao.operation(replayed))
+        assertTrue(
+            "replay status=${replayState.status} error=${replayState.lastError} attempts=${replayState.attempts} paused=${repository.ui.value.paused} coverage=${repository.ui.value.coverage} message=${repository.ui.value.message}",
+            replayState.status in setOf("accepted", "covered"),
+        )
         // The receipt may arrive after the in-flight sealed download. Use the visible manual
         // control to obtain the later seal that is allowed to cover the accepted proposal.
         if (active().store.dao.operation(staged.getString("operation"))?.status != "covered") compose.onNodeWithText("Sync now").performClick()
@@ -94,6 +109,7 @@ class Mobile005UiProofTest {
         compose.waitUntil(15_000) {
             repository.ui.value.profileDrafts.any { it.person == PERSON && it.operation.isEmpty() }
         }
+        compose.waitUntil(15_000) { runCatching { compose.onNodeWithTag("profile-save").assertIsEnabled() }.isSuccess }
         compose.onNodeWithTag("profile-save").assertIsEnabled().performClick()
         compose.waitUntil(15_000) { profileOperation()?.status == "queued" }
         val stale = requireNotNull(profileOperation())

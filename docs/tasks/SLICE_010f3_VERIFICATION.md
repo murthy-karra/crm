@@ -7,7 +7,7 @@ separates completed local evidence from the coordinator-owned integrated gates.
 |---|---|---|
 | `git diff --check` | passed | Local 010f3 owned files, before DB check. |
 | `cargo check -p crm-app` | pending completion | Isolated target `/private/tmp/crm-mobile005-010f3/migration/target`; the new domain module is compiled directly. |
-| isolated `db_metadata_import_gate` | failed (expected integration gap) | Invoked through `run-db-check.py --lane migration`; log `/private/tmp/crm-mobile005-010f3/migration/db-metadata-gate.log`. It compiled and applied the chain, then 2 tests passed and 4 failed because the existing original metadata worker does not yet set the required `crm.metadata_claim_v1` compatible per-unit proof after a durable readiness handover. The failures cover inventory/recovery, lease cancellation, private permit and rollback. This is a real blocker, not a pass. |
+| isolated `db_metadata_import_gate` | passed | First run exposed the pre-handover identity-guard regression (2 passed / 4 failed); `5e06b2c` scopes that guard to durable readiness. Rerun through `run-db-check.py --lane migration` passed all 6 focused tests. Logs: `/private/tmp/crm-mobile005-010f3/migration/db-metadata-gate.log` and `db-metadata-gate-rerun.log`. Post-handover claim-proof and admitted-child tests remain required. |
 | Web lint/type/unit | pending | New admitted API/panel await shared route/navigation registration and API fixtures. |
 | API/browser acceptance | pending | Requires integrated readiness/worker/router guard and synthetic terminal-admission capture; not claimed. |
 | final `scripts/check`, `scripts/sqlx-prepare`, `scripts/check-db` | coordinator-owned pending | Must run sequentially after Mobile005 and 010f3 integration. |

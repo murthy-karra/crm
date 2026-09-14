@@ -1481,12 +1481,26 @@ pub(crate) async fn validate_catalog(
     }
     Ok(())
 }
-async fn permit(conn: &mut PgConnection, j: &Job, unit: Uuid) -> Result<(), MigrationError> {
+async fn permit(
+    conn: &mut PgConnection,
+    j: &Job,
+    unit: Uuid,
+    target: Option<Uuid>,
+) -> Result<(), MigrationError> {
+    let proof = json!({
+        "organization_id": j.org.0.to_string(),
+        "root_id": j.id.to_string(),
+        "plan_id": j.plan.to_string(),
+        "lease": j.token.to_string(),
+        "unit_id": unit.to_string(),
+        "target_id": target.map(|id| id.to_string()),
+    });
     sqlx::query(
-        "SELECT set_config('crm.metadata_token',$1,true),set_config('crm.metadata_unit',$2,true)",
+        "SELECT set_config('crm.metadata_token',$1,true),set_config('crm.metadata_unit',$2,true),set_config('crm.metadata_claim_v1',$3,true)",
     )
     .bind(j.token.to_string())
     .bind(unit.to_string())
+    .bind(serde_json::to_string(&proof).map_err(|_| MigrationError::Crypto)?)
     .execute(conn)
     .await?;
     Ok(())
@@ -1596,6 +1610,7 @@ async fn catalog_result(
             if !target_live(conn, j.org, t).await? {
                 return Err(MigrationError::InvalidImportChoice);
             }
+            permit(conn, j, r.get("id"), Some(t.id)).await?;
             added += write_identity(conn, j, r, t.id).await?;
             "already_present"
         }
@@ -1604,6 +1619,7 @@ async fn catalog_result(
                 .target
                 .as_ref()
                 .ok_or(MigrationError::SourceNotEligible)?;
+            permit(conn, j, r.get("id"), Some(t.id)).await?;
             added += insert_native(conn, j, t).await?;
             added += write_identity(conn, j, r, t.id).await?;
             "created"
@@ -1707,7 +1723,6 @@ async fn execute(
             return Err(MigrationError::StorageLimit);
         }
         let token = admission(conn, j, bound.max(4096)).await?;
-        permit(conn, j, row.get("id")).await?;
         let mut counts = Counts::load(r.get("counts"))?;
         let mut added = catalog_result(conn, key, j, &row, &data, &mut counts).await?;
         for child in &children {
@@ -1729,7 +1744,6 @@ async fn execute(
     };
     let unit: Uuid = row.get("id");
     let token = admission(conn, j, row.get::<i64, _>("added_byte_bound").max(4096)).await?;
-    permit(conn, j, unit).await?;
     let mut manifest: Manifest = s::open(
         key,
         j.org,
@@ -1787,6 +1801,7 @@ async fn execute(
                     if n >= 20 {
                         return Err(MigrationError::InvalidImportChoice);
                     }
+                    permit(conn, j, unit, op.target_id).await?;
                     sqlx::query("INSERT INTO person_tag(organization_id,person_id,tag_id,added_by_user_id) VALUES($1,$2,$3,$4)").bind(j.org.0).bind(person).bind(op.target_id).bind(j.actor.0).execute(&mut *conn).await?;
                     op.disposition = "applied".into();
                 }
@@ -1818,6 +1833,7 @@ async fn execute(
                                 return Err(MigrationError::InvalidImportChoice);
                             }
                         }
+                        permit(conn, j, unit, op.target_id).await?;
                         sqlx::query("INSERT INTO person_custom_field_value(organization_id,person_id,field_id,field_type,text_value,number_value,date_value,option_id,updated_by_user_id,origin,correlation_id) VALUES($1,$2,$3,$4,$5,CAST($6::text AS numeric),$7,$8,$9,'migration',$10)").bind(j.org.0).bind(person).bind(op.target_id).bind(&t.field_type).bind(text).bind(number).bind(date).bind(option).bind(j.actor.0).bind(j.id).execute(&mut *conn).await?;
                         op.disposition = "applied".into();
                     }

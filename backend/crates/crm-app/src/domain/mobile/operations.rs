@@ -1,13 +1,14 @@
 use super::*;
 use crate::domain::{
     commands::{
-        self, change_person_stage_in_transaction, ChangePersonStage, ContactChannel,
-        ContactOutcome, LogContactAttemptInTransaction,
+        self, change_person_stage_in_transaction, update_person_details_in_transaction,
+        ChangePersonStage, ContactChannel, ContactDetailOperation, ContactOutcome,
+        DetailContactKind, LogContactAttemptInTransaction, UpdatePersonDetails,
     },
     envelope::{CommandContext, Origin},
     note, task,
 };
-use crate::ids::{PersonId, TaskId, UserId};
+use crate::ids::{ContactMethodId, PersonId, TaskId, UserId};
 use crate::realtime::{PersonChange, Publication, Publisher, RealtimeEvent};
 
 #[derive(Deserialize)]
@@ -103,6 +104,24 @@ struct ChangePersonStagePayload {
     stage_id: Uuid,
     expected_stage_revision: String,
 }
+#[derive(Serialize)]
+#[serde(deny_unknown_fields)]
+struct UpdatePersonDetailsPayload {
+    person_id: Uuid,
+    expected_details_revision: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    first_name: Option<Option<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    last_name: Option<Option<String>>,
+    contact_operations: Vec<ContactOperationWire>,
+}
+#[derive(Deserialize, Serialize)]
+#[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
+enum ContactOperationWire {
+    Add { kind: String, value: String },
+    Edit { id: Uuid, value: String },
+    Remove { id: Uuid },
+}
 enum Payload {
     Add(Add),
     Create(Create),
@@ -111,6 +130,7 @@ enum Payload {
     UpdateTask(UpdateTask),
     LogContactAttempt(LogContactAttempt),
     ChangePersonStage(ChangePersonStagePayload),
+    UpdatePersonDetails(UpdatePersonDetailsPayload),
 }
 impl Payload {
     fn parse(kind: &str, value: Value) -> Result<Self, MobileError> {
@@ -171,6 +191,7 @@ impl Payload {
                 revision(&v.expected_stage_revision)?;
                 Self::ChangePersonStage(v)
             }
+            "update_person_details" => Self::UpdatePersonDetails(parse_details(value)?),
             _ => return Err(invalid()),
         })
     }
@@ -183,6 +204,7 @@ impl Payload {
             Self::UpdateTask(v) => v.person_id,
             Self::LogContactAttempt(v) => v.person_id,
             Self::ChangePersonStage(v) => v.person_id,
+            Self::UpdatePersonDetails(v) => v.person_id,
         }
     }
     fn json(&self) -> Result<Value, MobileError> {
@@ -194,8 +216,80 @@ impl Payload {
             Self::UpdateTask(v) => serialize(v),
             Self::LogContactAttempt(v) => serialize(v),
             Self::ChangePersonStage(v) => serialize(v),
+            Self::UpdatePersonDetails(v) => serialize(v),
         }
     }
+}
+fn parse_details(value: Value) -> Result<UpdatePersonDetailsPayload, MobileError> {
+    let mut object = value.as_object().cloned().ok_or_else(invalid)?;
+    let first_name = optional_name(object.remove("first_name"))?;
+    let last_name = optional_name(object.remove("last_name"))?;
+    let person_id = serde_json::from_value(object.remove("person_id").ok_or_else(invalid)?)
+        .map_err(|_| invalid())?;
+    let expected_details_revision: String = serde_json::from_value(
+        object
+            .remove("expected_details_revision")
+            .ok_or_else(invalid)?,
+    )
+    .map_err(|_| invalid())?;
+    revision(&expected_details_revision)?;
+    let operations: Vec<ContactOperationWire> =
+        serde_json::from_value(object.remove("contact_operations").ok_or_else(invalid)?)
+            .map_err(|_| invalid())?;
+    if !object.is_empty()
+        || operations.is_empty() && first_name.is_none() && last_name.is_none()
+        || operations.len() > 50
+    {
+        return Err(invalid());
+    }
+    let contact_operations = operations
+        .into_iter()
+        .map(|operation| match operation {
+            ContactOperationWire::Add { kind, value } => Ok(ContactOperationWire::Add {
+                kind,
+                value: contact_value(value)?,
+            }),
+            ContactOperationWire::Edit { id, value } => Ok(ContactOperationWire::Edit {
+                id,
+                value: contact_value(value)?,
+            }),
+            ContactOperationWire::Remove { id } => Ok(ContactOperationWire::Remove { id }),
+        })
+        .collect::<Result<_, MobileError>>()?;
+    Ok(UpdatePersonDetailsPayload {
+        person_id,
+        expected_details_revision,
+        first_name,
+        last_name,
+        contact_operations,
+    })
+}
+fn optional_name(value: Option<Value>) -> Result<Option<Option<String>>, MobileError> {
+    value
+        .map(|value| {
+            if value.is_null() {
+                Ok(None)
+            } else {
+                serde_json::from_value::<String>(value)
+                    .map_err(|_| invalid())
+                    .and_then(|value| clean_name(value).map(Some))
+            }
+        })
+        .transpose()
+}
+fn clean_name(value: String) -> Result<String, MobileError> {
+    let value = value.trim().to_owned();
+    if value.chars().count() > 200 || value.chars().any(char::is_control) {
+        return Err(invalid());
+    }
+    Ok(value)
+}
+fn contact_value(value: String) -> Result<String, MobileError> {
+    let value = value.trim().to_owned();
+    if value.is_empty() || value.len() > 1024 || value.chars().any(char::is_control) {
+        return Err(invalid());
+    }
+    Ok(value)
 }
 fn normalize_contact_time(value: DateTime<Utc>) -> Result<DateTime<Utc>, MobileError> {
     use chrono::{Datelike, Timelike};
@@ -227,6 +321,13 @@ pub struct Receipt {
     pub changed: bool,
     pub accepted_at: DateTime<Utc>,
     pub replayed: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub added_contact_ids: Vec<AddedContactId>,
+}
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AddedContactId {
+    pub ordinal: usize,
+    pub id: Uuid,
 }
 struct Stored {
     receipt: Receipt,
@@ -250,6 +351,10 @@ fn stored(row: sqlx::postgres::PgRow) -> Stored {
             changed: row.get("changed"),
             accepted_at: row.get("accepted_at"),
             replayed: true,
+            added_contact_ids: row
+                .get::<Option<Value>, _>("added_contact_ids")
+                .and_then(|value| serde_json::from_value(value).ok())
+                .unwrap_or_default(),
         },
         person: row.get("person_id"),
         context: row.get("context_id"),
@@ -276,6 +381,7 @@ async fn visible(
         "task"=>"SELECT EXISTS(SELECT 1 FROM task n JOIN person p ON p.id=n.person_id AND p.organization_id=n.organization_id WHERE n.organization_id=$1 AND n.person_id=$2 AND n.id=$3 AND n.deleted_at IS NULL)",
         "contact_attempt"=>"SELECT EXISTS(SELECT 1 FROM contact_attempted c JOIN person p ON p.id=c.person_id AND p.organization_id=c.organization_id WHERE c.organization_id=$1 AND c.person_id=$2 AND c.id=$3)",
         "person_stage"=>"SELECT EXISTS(SELECT 1 FROM person p WHERE p.organization_id=$1 AND p.id=$2 AND p.id=$3)",
+        "person_details"=>"SELECT EXISTS(SELECT 1 FROM person p WHERE p.organization_id=$1 AND p.id=$2 AND p.id=$3)",
         _=>return Err(code(503,"unavailable")),
     };
     if !sqlx::query_scalar::<_, bool>(sql)
@@ -327,13 +433,24 @@ pub async fn execute(
         return Ok(prior.receipt);
     }
     let person = PersonId(payload.person());
+    if kind == "update_person_details" {
+        let acquired: bool = sqlx::query_scalar(
+            "SELECT pg_try_advisory_xact_lock(hashtextextended('intake:' || $1::text, 0))",
+        )
+        .bind(auth.active_organization_id.to_string())
+        .fetch_one(&mut *tx)
+        .await?;
+        if !acquired {
+            return Err(code(503, "intake_busy"));
+        }
+    }
     crate::domain::person::queries::lock_person(&mut tx, person, auth.active_organization_id)
         .await?
         .ok_or_else(missing)?;
     authority(&mut tx, auth, true).await?;
     let mut ctx = CommandContext::from_auth(auth);
     ctx.origin = Origin::MobileSession;
-    let (resource_type, resource_id, changed) = match payload {
+    let (resource_type, resource_id, changed, added_contact_ids) = match payload {
         Payload::Add(v) => {
             let n = note::add_note_in_transaction(
                 &mut tx,
@@ -344,7 +461,7 @@ pub async fn execute(
                 },
             )
             .await?;
-            ("note", n.id.0, true)
+            ("note", n.id.0, true, Vec::new())
         }
         Payload::Create(v) => {
             let t = task::create_task_in_transaction(
@@ -359,7 +476,7 @@ pub async fn execute(
                 },
             )
             .await?;
-            ("task", t.id.0, true)
+            ("task", t.id.0, true, Vec::new())
         }
         Payload::Complete(v) => {
             let (id, expected) = match v.target {
@@ -397,7 +514,7 @@ pub async fn execute(
             )
             .await?
             .ok_or(code(409, "revision_conflict"))?;
-            ("task", id, result.changed)
+            ("task", id, result.changed, Vec::new())
         }
         Payload::EditNote(v) => {
             let result = note::edit_note_in_transaction(
@@ -412,7 +529,7 @@ pub async fn execute(
             )
             .await?
             .ok_or(code(409, "revision_conflict"))?;
-            ("note", v.note_id, result.changed)
+            ("note", v.note_id, result.changed, Vec::new())
         }
         Payload::UpdateTask(v) => {
             let result = task::update_task_in_transaction(
@@ -433,7 +550,7 @@ pub async fn execute(
             )
             .await?
             .ok_or(code(409, "revision_conflict"))?;
-            ("task", v.task_id, result.changed)
+            ("task", v.task_id, result.changed, Vec::new())
         }
         Payload::LogContactAttempt(v) => {
             // D-078: this is the only mobile operation with a user-reported
@@ -463,7 +580,7 @@ pub async fn execute(
                 crate::domain::commands::CommandError::Corrupt => code(503, "unavailable"),
                 _ => code(503, "unavailable"),
             })?;
-            ("contact_attempt", attempt.attempt.id, true)
+            ("contact_attempt", attempt.attempt.id, true, Vec::new())
         }
         Payload::ChangePersonStage(v) => {
             let result = change_person_stage_in_transaction(
@@ -484,7 +601,67 @@ pub async fn execute(
                 _ => code(503, "unavailable"),
             })?
             .ok_or(code(409, "revision_conflict"))?;
-            ("person_stage", person.0, result.changed)
+            ("person_stage", person.0, result.changed, Vec::new())
+        }
+        Payload::UpdatePersonDetails(v) => {
+            let operations = v
+                .contact_operations
+                .into_iter()
+                .enumerate()
+                .map(|(ordinal, operation)| match operation {
+                    ContactOperationWire::Add { kind, value } => match kind.as_str() {
+                        "email" => Ok(ContactDetailOperation::Add {
+                            ordinal,
+                            kind: DetailContactKind::Email,
+                            value,
+                        }),
+                        "phone" => Ok(ContactDetailOperation::Add {
+                            ordinal,
+                            kind: DetailContactKind::Phone,
+                            value,
+                        }),
+                        _ => Err(invalid()),
+                    },
+                    ContactOperationWire::Edit { id, value } => Ok(ContactDetailOperation::Edit {
+                        id: ContactMethodId::new(id),
+                        value,
+                    }),
+                    ContactOperationWire::Remove { id } => Ok(ContactDetailOperation::Remove {
+                        id: ContactMethodId::new(id),
+                    }),
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let result = update_person_details_in_transaction(
+                &mut tx,
+                &ctx,
+                UpdatePersonDetails {
+                    person_id: person,
+                    expected_details_revision: revision(&v.expected_details_revision)?,
+                    first_name: v.first_name,
+                    last_name: v.last_name,
+                    contact_operations: operations,
+                },
+            )
+            .await
+            .map_err(|error| match error {
+                crate::domain::commands::CommandError::PersonNotFound => missing(),
+                crate::domain::commands::CommandError::InvalidPersonDetails => {
+                    code(422, "invalid_person_details")
+                }
+                crate::domain::commands::CommandError::Database(error) => error.into(),
+                _ => code(503, "unavailable"),
+            })?
+            .ok_or(code(409, "revision_conflict"))?;
+            (
+                "person_details",
+                person.0,
+                result.changed,
+                result
+                    .added_contact_ids
+                    .into_iter()
+                    .map(|(ordinal, id)| AddedContactId { ordinal, id: id.0 })
+                    .collect(),
+            )
         }
     };
     let resource_revision: Option<i64> = match kind.as_str() {
@@ -492,6 +669,15 @@ pub async fn execute(
         "change_person_stage" => Some(
             sqlx::query_scalar(
                 "SELECT stage_revision FROM person WHERE organization_id=$1 AND id=$2",
+            )
+            .bind(auth.active_organization_id.0)
+            .bind(person.0)
+            .fetch_one(&mut *tx)
+            .await?,
+        ),
+        "update_person_details" => Some(
+            sqlx::query_scalar(
+                "SELECT details_revision FROM person WHERE organization_id=$1 AND id=$2",
             )
             .bind(auth.active_organization_id.0)
             .bind(person.0)
@@ -521,8 +707,8 @@ pub async fn execute(
             .fetch_one(&mut *tx)
             .await?;
     let digest = keys.digest(keys.active(), b"crm-mobile-operation-v1\0", &canonical)?;
-    let accepted_at:DateTime<Utc>=sqlx::query_scalar("INSERT INTO mobile_operation_receipt(organization_id,actor_user_id,operation_id,context_id,digest_version,digest_key_id,payload_digest,kind,person_id,resource_type,resource_id,committed_revision,person_revision,changed,accepted_at) VALUES($1,$2,$3,$4,1,$5,$6,$7,$8,$9,$10,$11,$12,$13,statement_timestamp()) RETURNING accepted_at")
-        .bind(auth.active_organization_id.0).bind(auth.actor_user_id.0).bind(request.operation_id).bind(request.context_id).bind(keys.active()).bind(digest).bind(&kind).bind(person.0).bind(resource_type).bind(resource_id).bind(resource_revision).bind(person_revision).bind(changed).fetch_one(&mut *tx).await?;
+    let accepted_at:DateTime<Utc>=sqlx::query_scalar("INSERT INTO mobile_operation_receipt(organization_id,actor_user_id,operation_id,context_id,digest_version,digest_key_id,payload_digest,kind,person_id,resource_type,resource_id,committed_revision,person_revision,changed,added_contact_ids,accepted_at) VALUES($1,$2,$3,$4,1,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,statement_timestamp()) RETURNING accepted_at")
+        .bind(auth.active_organization_id.0).bind(auth.actor_user_id.0).bind(request.operation_id).bind(request.context_id).bind(keys.active()).bind(digest).bind(&kind).bind(person.0).bind(resource_type).bind(resource_id).bind(resource_revision).bind(person_revision).bind(changed).bind(serde_json::to_value(&added_contact_ids).map_err(|_| invalid())?).fetch_one(&mut *tx).await?;
     tx.commit().await?;
     if changed {
         publisher
@@ -536,6 +722,7 @@ pub async fn execute(
                     "task" => PersonChange::TaskChanged,
                     "contact_attempt" => PersonChange::ContactAttempted,
                     "person_stage" => PersonChange::StageChanged,
+                    "person_details" => PersonChange::DetailsChanged,
                     _ => return Err(code(503, "unavailable")),
                 },
             )))
@@ -551,6 +738,7 @@ pub async fn execute(
         changed,
         accepted_at,
         replayed: false,
+        added_contact_ids,
     })
 }
 pub async fn lookup_receipt(
@@ -569,4 +757,40 @@ pub async fn lookup_receipt(
     visible(&mut tx, auth, &prior).await?;
     tx.commit().await?;
     Ok(prior.receipt)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn details_payload_preserves_explicit_null_and_operation_array_ordinals() {
+        let payload = parse_details(serde_json::json!({
+            "person_id":"11111111-1111-1111-1111-111111111111",
+            "expected_details_revision":"7",
+            "first_name":null,
+            "contact_operations":[
+                {"op":"edit","id":"22222222-2222-2222-2222-222222222222","value":"(555) 555-0100"},
+                {"op":"add","kind":"email","value":" Ada@Example.TEST "}
+            ]
+        }))
+        .unwrap();
+        assert_eq!(payload.first_name, Some(None));
+        assert_eq!(payload.last_name, None);
+        assert_eq!(payload.contact_operations.len(), 2);
+        assert_eq!(
+            serde_json::to_value(payload).unwrap()["contact_operations"][1]["value"],
+            "Ada@Example.TEST"
+        );
+    }
+
+    #[test]
+    fn details_payload_rejects_empty_unknown_and_oversized_changes() {
+        let base = serde_json::json!({"person_id":"11111111-1111-1111-1111-111111111111","expected_details_revision":"1","contact_operations":[]});
+        assert!(parse_details(base).is_err());
+        assert!(parse_details(serde_json::json!({"person_id":"11111111-1111-1111-1111-111111111111","expected_details_revision":"01","last_name":"Ada","contact_operations":[]})).is_err());
+        assert!(parse_details(serde_json::json!({"person_id":"11111111-1111-1111-1111-111111111111","expected_details_revision":"1","last_name":"Ada","contact_operations":[],"extra":true})).is_err());
+        assert!(contact_value("x".repeat(1025)).is_err());
+        assert!(clean_name("x\u{0000}".into()).is_err());
+    }
 }

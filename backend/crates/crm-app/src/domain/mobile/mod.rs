@@ -343,7 +343,7 @@ pub async fn bootstrap(
     let expiry: DateTime<Utc> = row.get("offline_access_expires_at");
     tx.commit().await?;
     Ok(
-        json!({"protocol":PROTOCOL,"context_id":id,"installation_id":request.installation_id,"actor_user_id":auth.actor_user_id,"organization_id":auth.active_organization_id,"workspace_revision":revision.to_string(),"authorized_at":now,"offline_access_expires_at":expiry,"server_time":now,"capabilities":["add_note","create_task","complete_task","reconciliation","edit_note","update_task","note_revisions","log_contact_attempt","change_person_stage","stage_revisions","stage_catalog"],"bounds":{"selected_people":MAX_PEOPLE,"manifest_page":250,"component_rows":100,"component_bytes":PAGE_BYTES,"operation_bytes":131072,"concurrent_uploads":1,"concurrent_downloads":2,"generation_seconds":1800,"stage_catalog_page":100}}),
+        json!({"protocol":PROTOCOL,"context_id":id,"installation_id":request.installation_id,"actor_user_id":auth.actor_user_id,"organization_id":auth.active_organization_id,"workspace_revision":revision.to_string(),"authorized_at":now,"offline_access_expires_at":expiry,"server_time":now,"capabilities":["add_note","create_task","complete_task","reconciliation","edit_note","update_task","note_revisions","log_contact_attempt","change_person_stage","stage_revisions","stage_catalog","update_person_details","details_revisions"],"bounds":{"selected_people":MAX_PEOPLE,"manifest_page":250,"component_rows":100,"component_bytes":PAGE_BYTES,"operation_bytes":131072,"concurrent_uploads":1,"concurrent_downloads":2,"generation_seconds":1800,"stage_catalog_page":100}}),
     )
 }
 
@@ -464,6 +464,112 @@ pub async fn current_stage(
         "stage_revision":stage_revision.to_string(),
         "stage":{"id":stage_id,"name":stage_name},
     }))
+}
+
+/// Bounded current profile traversal for conflict review. This is deliberately
+/// separate from sealed reconciliation data and verifies the pinned details
+/// revision on every page.
+pub async fn current_details(
+    pool: &PgPool,
+    auth: &AuthContext,
+    context_id: Uuid,
+    person_id: Uuid,
+    cursor: Option<&str>,
+    keys: &ReceiptKeys,
+) -> Result<Value, MobileError> {
+    let mut tx = begin(pool, auth, true).await?;
+    context(&mut tx, auth, context_id, false).await?;
+    authority(&mut tx, auth, false).await?;
+    let row = sqlx::query("SELECT mobile_revision,details_revision,first_name,last_name FROM person WHERE organization_id=$1 AND id=$2")
+        .bind(auth.active_organization_id.0).bind(person_id).fetch_optional(&mut *tx).await?.ok_or_else(missing)?;
+    let current: i64 = row.get("details_revision");
+    let after_id = if let Some(cursor) = cursor {
+        let cursor = keys.decode_cursor(cursor)?;
+        if cursor.context != context_id
+            || cursor.person != Some(person_id)
+            || cursor.section != "details"
+            || cursor.revision != Some(current)
+        {
+            return Err(code(409, "revision_conflict"));
+        }
+        cursor.after
+    } else {
+        Uuid::nil()
+    };
+    let previous = if after_id == Uuid::nil() {
+        None
+    } else {
+        Some(sqlx::query("SELECT import_order,created_at,id FROM contact_method WHERE organization_id=$1 AND person_id=$2 AND id=$3")
+            .bind(auth.active_organization_id.0).bind(person_id).bind(after_id).fetch_optional(&mut *tx).await?
+            .map(|row| (row.get::<Option<i32>,_>("import_order"), row.get::<DateTime<Utc>,_>("created_at"), row.get::<Uuid,_>("id")))
+            .ok_or_else(|| code(409, "revision_conflict"))?)
+    };
+    let rows = match previous {
+        None => sqlx::query("SELECT id,kind,value,import_order,created_at FROM contact_method WHERE organization_id=$1 AND person_id=$2 ORDER BY import_order ASC NULLS LAST,created_at,id LIMIT 101").bind(auth.active_organization_id.0).bind(person_id).fetch_all(&mut *tx).await?,
+        Some((Some(order), created_at, id)) => sqlx::query("SELECT id,kind,value,import_order,created_at FROM contact_method WHERE organization_id=$1 AND person_id=$2 AND (import_order IS NULL OR (import_order IS NOT NULL AND (import_order,created_at,id)>($3,$4,$5))) ORDER BY import_order ASC NULLS LAST,created_at,id LIMIT 101").bind(auth.active_organization_id.0).bind(person_id).bind(order).bind(created_at).bind(id).fetch_all(&mut *tx).await?,
+        Some((None, created_at, id)) => sqlx::query("SELECT id,kind,value,import_order,created_at FROM contact_method WHERE organization_id=$1 AND person_id=$2 AND import_order IS NULL AND (created_at,id)>($3,$4) ORDER BY import_order ASC NULLS LAST,created_at,id LIMIT 101").bind(auth.active_organization_id.0).bind(person_id).bind(created_at).bind(id).fetch_all(&mut *tx).await?,
+    };
+    let mut items = Vec::new();
+    let mut last = Uuid::nil();
+    // Reserve framing/cursor space before accumulating exact row bytes. This
+    // keeps a collection with many individually valid imported contacts
+    // pageable instead of rejecting the entire current-profile traversal.
+    let mut bytes = serde_json::to_vec(&json!({
+        "context_id":context_id,"person_id":person_id,
+        "person_revision":row.get::<i64,_>("mobile_revision").to_string(),
+        "details_revision":current.to_string(),
+        "first_name":row.get::<Option<String>,_>("first_name"),
+        "last_name":row.get::<Option<String>,_>("last_name"),"items":[]
+    }))
+    .map_err(|_| invalid())?
+    .len()
+        + 4096;
+    for row in rows.iter() {
+        let value = json!({"id":row.get::<Uuid,_>("id"),"kind":row.get::<String,_>("kind"),"value":row.get::<String,_>("value"),"import_order":row.get::<Option<i32>,_>("import_order"),"created_at":row.get::<DateTime<Utc>,_>("created_at")});
+        let size = serde_json::to_vec(&value).map_err(|_| invalid())?.len() + 1;
+        if items.len() == 100 || bytes + size > PAGE_BYTES {
+            break;
+        }
+        if size > PAGE_BYTES {
+            return Err(code(422, "over_limit"));
+        }
+        bytes += size;
+        last = row.get("id");
+        items.push(value);
+    }
+    if !rows.is_empty() && items.is_empty() {
+        return Err(code(422, "over_limit"));
+    }
+    let complete = items.len() == rows.len();
+    let next_cursor = if complete {
+        None
+    } else {
+        Some(keys.cursor(&Cursor {
+            context: context_id,
+            generation: Uuid::nil(),
+            person: Some(person_id),
+            section: "details".into(),
+            revision: Some(current),
+            after_position: None,
+            after: last,
+        })?)
+    };
+    let fresh: i64 = sqlx::query_scalar(
+        "SELECT details_revision FROM person WHERE organization_id=$1 AND id=$2",
+    )
+    .bind(auth.active_organization_id.0)
+    .bind(person_id)
+    .fetch_one(&mut *tx)
+    .await?;
+    if fresh != current {
+        return Err(code(409, "revision_conflict"));
+    }
+    let output = json!({"context_id":context_id,"person_id":person_id,"person_revision":row.get::<i64,_>("mobile_revision").to_string(),"details_revision":current.to_string(),"first_name":row.get::<Option<String>,_>("first_name"),"last_name":row.get::<Option<String>,_>("last_name"),"items":items,"next_cursor":next_cursor,"complete":complete});
+    if serde_json::to_vec(&output).map_err(|_| invalid())?.len() > PAGE_BYTES {
+        return Err(code(422, "over_limit"));
+    }
+    tx.commit().await?;
+    Ok(output)
 }
 
 #[cfg(test)]

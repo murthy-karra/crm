@@ -371,6 +371,11 @@ impl From<CommandError> for ApiError {
             CommandError::Forbidden => ApiError::Forbidden,
             CommandError::InvalidAssignee => ApiError::InvalidAssignee,
             CommandError::InvalidStage => ApiError::InvalidStage,
+            // The only current caller is the Mobile005 adapter, which maps
+            // this typed validation error to its declared 422 code itself.
+            // Keep conventional routes fail-closed if a future route exposes
+            // the command without first declaring a dedicated API contract.
+            CommandError::InvalidPersonDetails => ApiError::MalformedRequest,
             CommandError::NoStagesConfigured | CommandError::Crypto | CommandError::Corrupt => {
                 ApiError::InternalError
             }

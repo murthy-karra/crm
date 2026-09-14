@@ -558,7 +558,7 @@ pub async fn component(
         None
     };
     let sql=match section {
-        "summary"=>"SELECT id,jsonb_build_object('id',id,'kind',kind,'value',value) AS data FROM contact_method WHERE organization_id=$1 AND person_id=$2 AND ($3::uuid IS NULL OR id>$3) ORDER BY id LIMIT 101",
+        "summary"=>"SELECT id,jsonb_build_object('id',id,'kind',kind,'value',value,'import_order',import_order,'created_at',created_at) AS data FROM contact_method WHERE organization_id=$1 AND person_id=$2 AND ($3::uuid IS NULL OR id>$3) ORDER BY id LIMIT 101",
         "notes"=>"SELECT n.id,jsonb_build_object('id',n.id,'person_id',n.person_id,'body',n.body,'author',CASE WHEN u.id IS NULL THEN NULL ELSE jsonb_build_object('id',u.id,'display_name',u.display_name) END,'created_at',n.created_at,'updated_at',n.updated_at,'edited',n.updated_at>n.created_at,'can_manage',COALESCE(($4='admin' OR n.author_user_id=$5),false),'revision',n.revision::text) AS data FROM note n LEFT JOIN app_user u ON u.id=n.author_user_id WHERE n.organization_id=$1 AND n.person_id=$2 AND ($3::uuid IS NULL OR n.id>$3) AND n.deleted_at IS NULL ORDER BY n.id LIMIT 101",
         _=>"SELECT t.id,jsonb_build_object('id',t.id,'person_id',t.person_id,'title',t.title,'kind',t.kind,'due_at',t.due_at,'assignee',CASE WHEN a.id IS NULL THEN NULL ELSE jsonb_build_object('id',a.id,'display_name',a.display_name) END,'created_by',CASE WHEN c.id IS NULL THEN NULL ELSE jsonb_build_object('id',c.id,'display_name',c.display_name) END,'completed_at',t.completed_at,'completed_by',CASE WHEN k.id IS NULL THEN NULL ELSE jsonb_build_object('id',k.id,'display_name',k.display_name) END,'created_at',t.created_at,'updated_at',t.updated_at,'can_manage',COALESCE(($4='admin' OR t.assignee_user_id=$5 OR t.created_by_user_id=$5),false),'revision',t.revision::text) AS data FROM task t LEFT JOIN app_user a ON a.id=t.assignee_user_id LEFT JOIN app_user c ON c.id=t.created_by_user_id LEFT JOIN app_user k ON k.id=t.completed_by_user_id WHERE t.organization_id=$1 AND t.person_id=$2 AND ($3::uuid IS NULL OR t.id>$3) AND t.deleted_at IS NULL ORDER BY t.id LIMIT 101",
     };
@@ -622,7 +622,7 @@ async fn summary(
     auth: &AuthContext,
     person: Uuid,
 ) -> Result<Value, MobileError> {
-    let row=sqlx::query("SELECT p.id,p.first_name,p.last_name,p.created_at,p.stage_revision,s.id AS stage_id,s.name AS stage_name,u.id AS user_id,u.display_name,(SELECT value FROM contact_method WHERE organization_id=p.organization_id AND person_id=p.id AND kind='email' ORDER BY import_order ASC NULLS LAST,created_at,id LIMIT 1) AS email,(SELECT value FROM contact_method WHERE organization_id=p.organization_id AND person_id=p.id AND kind='phone' ORDER BY import_order ASC NULLS LAST,created_at,id LIMIT 1) AS phone FROM person p JOIN stage s ON s.id=p.stage_id AND s.organization_id=p.organization_id LEFT JOIN app_user u ON u.id=p.assigned_user_id WHERE p.organization_id=$1 AND p.id=$2")
+    let row=sqlx::query("SELECT p.id,p.first_name,p.last_name,p.created_at,p.stage_revision,p.details_revision,s.id AS stage_id,s.name AS stage_name,u.id AS user_id,u.display_name,(SELECT value FROM contact_method WHERE organization_id=p.organization_id AND person_id=p.id AND kind='email' ORDER BY import_order ASC NULLS LAST,created_at,id LIMIT 1) AS email,(SELECT value FROM contact_method WHERE organization_id=p.organization_id AND person_id=p.id AND kind='phone' ORDER BY import_order ASC NULLS LAST,created_at,id LIMIT 1) AS phone FROM person p JOIN stage s ON s.id=p.stage_id AND s.organization_id=p.organization_id LEFT JOIN app_user u ON u.id=p.assigned_user_id WHERE p.organization_id=$1 AND p.id=$2")
         .bind(auth.active_organization_id.0).bind(person).fetch_optional(conn).await?.ok_or_else(missing)?;
     let first: Option<String> = row.get("first_name");
     let last: Option<String> = row.get("last_name");
@@ -637,6 +637,6 @@ async fn summary(
     let user: Option<Uuid> = row.get("user_id");
     let display: Option<String> = row.get("display_name");
     Ok(
-        json!({"id":person,"first_name":first,"last_name":last,"display_name":name,"stage":{"id":row.get::<Uuid,_>("stage_id"),"name":row.get::<String,_>("stage_name")},"stage_revision":row.get::<i64,_>("stage_revision").to_string(),"assigned_user":user.map(|id|json!({"id":id,"display_name":display})),"created_at":row.get::<DateTime<Utc>,_>("created_at")}),
+        json!({"id":person,"first_name":first,"last_name":last,"display_name":name,"stage":{"id":row.get::<Uuid,_>("stage_id"),"name":row.get::<String,_>("stage_name")},"stage_revision":row.get::<i64,_>("stage_revision").to_string(),"details_revision":row.get::<i64,_>("details_revision").to_string(),"assigned_user":user.map(|id|json!({"id":id,"display_name":display})),"created_at":row.get::<DateTime<Utc>,_>("created_at")}),
     )
 }

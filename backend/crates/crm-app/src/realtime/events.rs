@@ -56,6 +56,10 @@ pub enum PersonChange {
     /// precedent): the mutating client invalidates its own `customFields`
     /// query.
     CustomFieldChanged,
+    /// Mobile005 profile commit invalidation. The v1 envelope stays IDs-only:
+    /// names, contact IDs/values, revisions and receipt mappings never travel
+    /// over Centrifugo (D-023).
+    DetailsChanged,
 }
 
 #[derive(Debug, Clone, Serialize)]

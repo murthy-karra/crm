@@ -11,6 +11,7 @@ pub mod log_contact_attempt;
 pub mod receive_inquiry;
 pub mod start_call;
 pub mod update_intake_settings;
+pub mod update_person_details;
 
 pub use assign_person::{assign_person, AssignPerson};
 pub use change_person_stage::{
@@ -31,6 +32,10 @@ pub use receive_inquiry::{
     receive_inquiry, ReceiveInquiry, ReceiveInquiryOutcome, RoutingStrategy,
 };
 pub use start_call::{start_call, StartCall};
+pub use update_person_details::{
+    update_person_details_in_transaction, ContactDetailOperation, DetailContactKind,
+    UpdatePersonDetails, UpdatedPersonDetails,
+};
 
 use uuid::Uuid;
 
@@ -57,6 +62,7 @@ pub enum CommandError {
     /// `raw_payload` row is left exactly as Phase A wrote it (`pending`);
     /// a re-POST retries from scratch.
     IntakeBusy,
+    InvalidPersonDetails,
     Database(sqlx::Error),
 }
 
@@ -96,6 +102,7 @@ impl CommandError {
             CommandError::Crypto => "crypto",
             CommandError::Corrupt => "corrupt",
             CommandError::IntakeBusy => "intake_busy",
+            CommandError::InvalidPersonDetails => "invalid_person_details",
             CommandError::Database(_) => "database",
         }
     }
@@ -114,6 +121,7 @@ impl std::fmt::Display for CommandError {
             CommandError::IntakeBusy => {
                 write!(f, "timed out waiting for the organization's intake lock")
             }
+            CommandError::InvalidPersonDetails => write!(f, "invalid person details"),
             CommandError::Database(err) => write!(f, "database error: {err}"),
         }
     }

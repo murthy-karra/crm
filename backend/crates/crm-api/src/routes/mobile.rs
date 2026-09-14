@@ -38,6 +38,10 @@ pub fn router() -> Router<AppState> {
             "/api/mobile/v1/people/{person_id}/stage",
             get(current_stage).layer(DefaultBodyLimit::max(1024)),
         )
+        .route(
+            "/api/mobile/v1/people/{person_id}/details",
+            get(current_details).layer(DefaultBodyLimit::max(1024)),
+        )
         .route("/api/mobile/v1/reconciliations", post(reconcile))
         .route(
             "/api/mobile/v1/reconciliations/{id}/stages",
@@ -165,6 +169,30 @@ async fn current_stage(
     let (pool, _) = dependencies(&state)?;
     Ok(Json(
         mobile::current_stage(pool, &auth, context(&headers)?, person_id).await?,
+    ))
+}
+async fn current_details(
+    State(state): State<AppState>,
+    auth: AuthContext,
+    headers: HeaderMap,
+    path: Result<Path<Uuid>, PathRejection>,
+    query: Result<Query<CursorQuery>, QueryRejection>,
+    body: Result<axum::body::Bytes, BytesRejection>,
+) -> Result<Json<Value>, Error> {
+    let Path(person_id) = path.map_err(|_| Error(MobileError::Code(400, "malformed_request")))?;
+    let Query(query) = query.map_err(|_| Error(MobileError::Code(400, "malformed_request")))?;
+    empty_body(&body.map_err(|_| Error(MobileError::Code(400, "malformed_request")))?)?;
+    let (pool, keys) = dependencies(&state)?;
+    Ok(Json(
+        mobile::current_details(
+            pool,
+            &auth,
+            context(&headers)?,
+            person_id,
+            query.cursor.as_deref(),
+            keys,
+        )
+        .await?,
     ))
 }
 async fn current_note(

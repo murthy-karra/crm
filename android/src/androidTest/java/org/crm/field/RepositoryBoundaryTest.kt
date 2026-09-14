@@ -19,7 +19,7 @@ class RepositoryBoundaryTest {
     ) = Transport { _, _, path, _, _, body ->
         val binding = fixture("reconciliation_bootstrap")
         if (path == "/api/session") {
-            HttpResult(
+            testHttpResult(
                 200,
                 json(
                     "user" to
@@ -38,9 +38,9 @@ class RepositoryBoundaryTest {
             )
         } else if (path.endsWith("bootstrap")) {
             wait?.await()
-            if (deny()) HttpResult(403, json("error" to "forbidden"), null, 30)
+            if (deny()) testHttpResult(403, json("error" to "forbidden"), null, 30)
             else
-                HttpResult(
+                testHttpResult(
                     200,
                     binding.put("installation_id", JSONObject(body!!).getString("installation_id")),
                     null,
@@ -133,7 +133,7 @@ class RepositoryBoundaryTest {
                 when {
                     path.endsWith("/reconciliations") -> {
                         started++
-                        HttpResult(
+                        testHttpResult(
                             200,
                             fixture("reconciliation")
                                 .put("selected_count", 0)
@@ -150,7 +150,7 @@ class RepositoryBoundaryTest {
                         )
                     }
                     path.endsWith("/seal") ->
-                        HttpResult(404, json("error" to "not_found"), null, 30)
+                        testHttpResult(404, json("error" to "not_found"), null, 30)
                     else -> basic.request(origin, method, path, cookie, binding, body)
                 }
             }
@@ -206,7 +206,7 @@ class RepositoryBoundaryTest {
             val remote = Transport { origin, method, path, cookie, binding, body ->
                 if (deny && path.endsWith("bootstrap")) {
                     checks++
-                    HttpResult(429, json("error" to "mobile_capacity"), null, 120)
+                    testHttpResult(429, json("error" to "mobile_capacity"), null, 120)
                 } else basic.request(origin, method, path, cookie, binding, body)
             }
             val repo = FieldRepository(context, namespace = name, clock = clock, transport = remote)
@@ -275,8 +275,9 @@ class RepositoryBoundaryTest {
         val basic = transport()
         val remote = Transport { origin, method, path, cookie, binding, body ->
             val response = basic.request(origin, method, path, cookie, binding, body)
-            if (path.endsWith("bootstrap") && supported) response.body.put("capabilities", org.json.JSONArray(listOf("add_note", "create_task", "complete_task", "reconciliation", "update_person_details", "details_revisions")))
-            response
+            if (path.endsWith("bootstrap") && supported) testHttpResult(response.status,
+                response.body.put("capabilities", org.json.JSONArray(listOf("add_note", "create_task", "complete_task", "reconciliation", "update_person_details", "details_revisions"))), response.cookie, response.retryAfter)
+            else response
         }
         val repo = FieldRepository(context, namespace = namespace, transport = remote)
         repo.login("synthetic", "synthetic")
@@ -332,7 +333,7 @@ class RepositoryBoundaryTest {
         suspend fun rejects(name: String, detail: (String) -> JSONObject) {
             val namespace = "profile-page-$name-${UUID.randomUUID()}"
             val remote = Transport { origin, method, path, cookie, binding, body ->
-                if (path.contains("/details")) HttpResult(200, detail(path.substringAfterLast("cursor=", "")), null, 30)
+                if (path.contains("/details")) testHttpResult(200, detail(path.substringAfterLast("cursor=", "")), null, 30)
                 else transport().request(origin, method, path, cookie, binding, body)
             }
             val repo = FieldRepository(context, namespace = namespace, transport = remote)
@@ -353,4 +354,111 @@ class RepositoryBoundaryTest {
         rejects("cyclic") { page(org.json.JSONArray(), "again") }
         rejects("bytes") { page(org.json.JSONArray(), null).put("padding", "x".repeat(524_289)) }
     }
+    @Test fun currentProfileAllowsBroadRevisionChangesButFencesDetailsAndNames() = runBlocking<Unit> {
+        val person = UUID.randomUUID().toString()
+        val namespace = "profile-fences-${UUID.randomUUID()}"
+        var changed: Pair<String, Any>? = null
+        val remote = Transport { origin, method, path, cookie, binding, body ->
+            if (!path.contains("/details")) transport().request(origin, method, path, cookie, binding, body)
+            else {
+                val last = path.contains("cursor=")
+                val page = json("context_id" to binding, "person_id" to person, "person_revision" to if (last) "9" else "2", "details_revision" to "2", "first_name" to "First", "last_name" to JSONObject.NULL,
+                    "items" to org.json.JSONArray().put(json("id" to UUID.randomUUID().toString(), "kind" to "email", "value" to "current@example.test", "import_order" to JSONObject.NULL, "created_at" to "2026-09-14T00:00:00Z")), "next_cursor" to if (last) JSONObject.NULL else "next", "complete" to last)
+                if (last) changed?.let { page.put(it.first, it.second) }
+                testHttpResult(200, page, null, 30)
+            }
+        }
+        val repo = FieldRepository(context, namespace = namespace, transport = remote)
+        repo.login("synthetic", "synthetic")
+        val active = FieldRepository::class.java.getDeclaredField("active").apply { isAccessible = true }.get(repo) as ActiveAccount
+        val row = OperationRow(UUID.randomUUID().toString(), person, "update_person_details", "{}", 1)
+        val result = repo.currentProfile(active, row)
+        assertEquals("9", result.getString("person_revision"))
+        assertEquals("2", result.getString("details_revision"))
+        assertEquals(2, result.getJSONArray("items").length())
+        for (mutation in listOf("details_revision" to "3", "first_name" to "Changed", "last_name" to "Changed", "person_revision" to "0", "person_revision" to "9223372036854775808")) {
+            changed = mutation
+            assertTrue("accepted changed page: $mutation", runCatching { repo.currentProfile(active, row) }.isFailure)
+        }
+        repo.lockLocal("Complete"); repo.scope.cancel(); DeviceVault(context, namespace).root.deleteRecursively()
+    }
+
+    @Test fun currentDetailsRejectsWhitespacePaddedActualHttpResponse() = runBlocking<Unit> {
+        InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand("pm grant ${context.packageName} android.permission.ACCESS_LOCAL_NETWORK").close()
+        val binding = fixtureBinding()
+        for (size in listOf(524_288, 524_289, 600 * 1024)) {
+            val compact = json("items" to org.json.JSONArray()).toString()
+            val bytes = (compact + " ".repeat(size - compact.toByteArray().size)).toByteArray()
+            assertTrue(JSONObject(String(bytes)).toString().toByteArray().size < 524_288)
+            val server = java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))
+            val writer = async(Dispatchers.IO) {
+                server.accept().use { socket ->
+                    socket.soTimeout = 10_000
+                    val reader = socket.getInputStream().bufferedReader()
+                    while (!reader.readLine().isNullOrEmpty()) { }
+                    socket.getOutputStream().use { out ->
+                        out.write("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nCache-Control: no-store\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n".toByteArray())
+                        out.write(bytes); out.flush()
+                    }
+                }
+            }
+            try {
+                val api = FieldApi("http://127.0.0.1:${server.localPort}")
+                val response = runCatching { api.page("/api/mobile/v1/people/${UUID.randomUUID()}/details", binding, "", maximumBytes = 524_288) }
+                if (size == 524_288) assertTrue("exact-limit response failed: ${response.exceptionOrNull()}", response.isSuccess)
+                else assertTrue("padded response accepted: $size", response.exceptionOrNull() is ProtocolFailure)
+                withTimeout(15_000) { writer.await() }
+            } finally { server.close(); writer.cancel() }
+        }
+    }
+
+    @Test fun malformedPreviouslyQualifiedCacheRefetchesAtSameRevisionWithoutLosingWork() = runBlocking<Unit> {
+        val namespace = "profile-requalify-${UUID.randomUUID()}"
+        val person = UUID.randomUUID().toString()
+        val generation = UUID.randomUUID().toString()
+        var summaries = 0
+        val bootstrap = fixture("reconciliation_bootstrap").put("capabilities", org.json.JSONArray(listOf("add_note", "create_task", "complete_task", "reconciliation", "update_person_details", "details_revisions")))
+        val summary = json("id" to person, "display_name" to "Saved Person", "first_name" to "Saved", "last_name" to "Person", "details_revision" to "7")
+        val methods = org.json.JSONArray().put(json("id" to UUID.randomUUID().toString(), "kind" to "email", "value" to "saved@example.test", "import_order" to JSONObject.NULL, "created_at" to "2026-09-14T00:00:00Z"))
+        val remote = Transport { origin, method, path, cookie, binding, body ->
+            val result = when {
+                path == "/api/session" -> null
+                path.endsWith("bootstrap") -> bootstrap.put("installation_id", JSONObject(body!!).getString("installation_id"))
+                path.endsWith("/reconciliations") -> json("context_id" to bootstrap.getString("context_id"), "generation_id" to generation, "evaluated_at" to "2026-09-14T00:00:00Z", "expires_at" to "2099-01-01T00:00:00Z", "selected_count" to 1, "complete" to true,
+                    "manifest" to json("items" to org.json.JSONArray().put(json("person_id" to person, "revision" to "7")), "next_cursor" to null, "complete" to true))
+                path.endsWith("/seal") -> json("context_id" to bootstrap.getString("context_id"), "generation_id" to generation, "evaluated_at" to "2026-09-14T00:00:00Z", "sealed_at" to "2026-09-14T00:01:00Z", "selected_count" to 1, "today" to json("sources" to json("status" to "complete"), "items" to org.json.JSONArray()))
+                path.contains("/people/") -> {
+                    val section = path.substringAfterLast('/')
+                    if (section == "summary") summaries++
+                    json("generation_id" to generation, "person_id" to person, "revision" to "7", "section" to section, "summary" to if (section == "summary") summary else JSONObject.NULL,
+                        "items" to if (section == "summary") methods else org.json.JSONArray(), "next_cursor" to null, "complete" to true)
+                }
+                else -> error("Unexpected request $path")
+            }
+            if (result == null) transport().request(origin, method, path, cookie, binding, body) else testHttpResult(200, result, null, 30)
+        }
+        val repo = FieldRepository(context, namespace = namespace, transport = remote)
+        repo.login("synthetic", "synthetic")
+        val active = FieldRepository::class.java.getDeclaredField("active").apply { isAccessible = true }.get(repo) as ActiveAccount
+        val dao = active.store.dao
+        val invalid = org.json.JSONArray(methods.toString()).apply { getJSONObject(0).put("import_order", "1") }
+        dao.person(PersonRow(person, "7", summary.toString(), invalid.toString(), "[]", "[]", "old", "saved", true, true, true))
+        val draft = ProfileDraftRow(UUID.randomUUID().toString(), person, summary.toString(), json("last_name" to "Protected", "contact_operations" to org.json.JSONArray()).toString(), "7", 1)
+        dao.insertProfileDraft(draft)
+        val operation = OperationRow(UUID.randomUUID().toString(), person, "add_note", json("payload" to json("person_id" to person, "body" to "Protected note")).toString(), 1, retryAt = Long.MAX_VALUE)
+        dao.operation(operation)
+        repo.select(person)
+        repo.refreshView()
+        assertFalse(repo.ui.value.person!!.detailsRevisionsQualified)
+        assertFalse(repo.profileEditingSupported())
+        repo.sync(false)
+        assertEquals("7", dao.person(person)!!.revision)
+        assertEquals(1, summaries)
+        assertTrue(dao.person(person)!!.detailsRevisionsQualified)
+        assertTrue(repo.profileEditingSupported())
+        assertEquals(draft, dao.profileDraft(draft.id))
+        assertEquals(operation.envelope, dao.operation(operation.id)!!.envelope)
+        repo.lockLocal("Complete"); repo.scope.cancel(); DeviceVault(context, namespace).root.deleteRecursively()
+    }
+
 }

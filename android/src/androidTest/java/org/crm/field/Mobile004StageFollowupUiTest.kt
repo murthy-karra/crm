@@ -129,7 +129,7 @@ class Mobile004StageFollowupUiTest {
         )
         when {
             path == "/api/session" ->
-                HttpResult(
+                testHttpResult(
                     200,
                     json(
                         "user" to json("id" to bootstrap.getString("actor_user_id"), "display_name" to "Synthetic agent"),
@@ -139,7 +139,7 @@ class Mobile004StageFollowupUiTest {
                     30,
                 )
             path.endsWith("bootstrap") ->
-                HttpResult(
+                testHttpResult(
                     200,
                     bootstrap.put("installation_id", JSONObject(body!!).getString("installation_id")),
                     null,

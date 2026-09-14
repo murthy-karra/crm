@@ -218,6 +218,62 @@ class Mobile005StorageTest {
         assertTrue(store.dao.profileContexts().isEmpty())
     }
 
+    @Test fun malformedImportOrdersNeverQualifySummaryOrCurrentAndPreserveWork() {
+        val draft = store.saveProfileDraft(UUID.randomUUID().toString(), person, proposal())
+        val operation = store.submitProfileDraft(draft.id, draft.revision)
+        store.dao.operationState(operation.id, "attention", 1, 0, "revision_conflict")
+        val original = store.dao.person(person)!!
+        val invalid = listOf<Any?>(null, 1.5, "1", 2147483648L, -2147483649L)
+        invalid.forEach { order ->
+            val methods = contacts()
+            if (order == null) methods.getJSONObject(0).remove("import_order") else methods.getJSONObject(0).put("import_order", order)
+            store.dao.person(original.copy(contacts = methods.toString(), detailsRevisionsQualified = true))
+            assertFalse("pre-fix qualified cache: $order", store.detailsQualified(store.dao.person(person)!!))
+            assertThrows(Exception::class.java) { store.saveProfileDraft(UUID.randomUUID().toString(), person, proposal()) }
+            val current = json("context_id" to store.binding.context, "person_id" to person, "person_revision" to "8", "details_revision" to "8", "first_name" to "Current", "last_name" to "Name", "items" to methods, "next_cursor" to null, "complete" to true)
+            assertThrows(Exception::class.java) { store.recordCurrentProfile(operation.id, current) }
+            assertEquals("", store.dao.profileContext(operation.id)!!.current)
+            val generation = UUID.randomUUID().toString()
+            store.beginGeneration(json("context_id" to store.binding.context, "generation_id" to generation, "evaluated_at" to "2026-09-14T00:00:00Z", "expires_at" to "2099-01-01T00:00:00Z", "selected_count" to 1, "complete" to true,
+                "manifest" to json("items" to JSONArray().put(json("person_id" to person, "revision" to "7")), "next_cursor" to null, "complete" to true)))
+            for (section in listOf("summary", "notes", "tasks")) store.stagePage(generation, person, section, "", json("generation_id" to generation, "person_id" to person, "revision" to "7", "section" to section,
+                "summary" to if (section == "summary") summary() else JSONObject.NULL, "items" to if (section == "summary") methods else JSONArray(), "next_cursor" to null, "complete" to true))
+            store.promote(json("context_id" to store.binding.context, "generation_id" to generation, "evaluated_at" to "2026-09-14T00:00:00Z", "sealed_at" to "2026-09-14T00:01:00Z", "selected_count" to 1, "today" to json("sources" to json("status" to "complete"), "items" to JSONArray())))
+            assertFalse("malformed summary qualified: $order", store.dao.person(person)!!.detailsRevisionsQualified)
+            assertEquals(methods.toString(), store.dao.person(person)!!.contacts)
+            assertEquals(operation.envelope, store.dao.operation(operation.id)!!.envelope)
+            assertEquals(draft.proposal, store.dao.profileDraft(draft.id)!!.proposal)
+        }
+        for (order in listOf(JSONObject.NULL, Int.MIN_VALUE, Int.MAX_VALUE, 1.0)) {
+            val methods = contacts().apply { getJSONObject(0).put("import_order", order) }
+            validateDetailContacts(methods)
+        }
+        for ((field, value) in listOf("created_at" to "invalid", "id" to "invalid", "kind" to "fax", "value" to "")) {
+            val methods = contacts().apply { getJSONObject(0).put(field, value) }
+            assertThrows(Exception::class.java) { validateDetailContacts(methods) }
+        }
+    }
+
+    @Test fun malformedReceiptOrdinalsAndDuplicateIdsKeepExactProposalPending() {
+        val proposal = proposal().apply { getJSONArray("contact_operations").put(json("op" to "add", "kind" to "email", "value" to "second@example.test")) }
+        val draft = store.saveProfileDraft(UUID.randomUUID().toString(), person, proposal)
+        val op = store.submitProfileDraft(draft.id, draft.revision)
+        val firstId = UUID.randomUUID().toString()
+        val secondId = UUID.randomUUID().toString()
+        fun mapping(ordinal: Any, second: String = secondId) = JSONArray().put(json("ordinal" to ordinal, "id" to firstId)).put(json("ordinal" to 2, "id" to second))
+        for (bad in listOf(mapping(1.5), mapping("1"), mapping(-1), mapping(3), mapping(1, firstId))) {
+            assertThrows(Exception::class.java) { store.acknowledge(op.id, receipt(op).put("added_contact_ids", bad)) }
+            val retained = store.dao.operation(op.id)!!
+            assertEquals("queued", retained.status)
+            assertNull(retained.receipt)
+            assertEquals(op.envelope, retained.envelope)
+            assertEquals(draft.proposal, store.dao.profileDraft(draft.id)!!.proposal)
+            assertNotNull(store.dao.profileContext(op.id))
+        }
+        store.acknowledge(op.id, receipt(op).put("added_contact_ids", mapping(1)))
+        assertEquals("accepted", store.dao.operation(op.id)!!.status)
+    }
+
     private fun proposal() = json("first_name" to "Changed", "contact_operations" to JSONArray().put(json("op" to "edit", "id" to email, "value" to "changed@example.test")).put(json("op" to "add", "kind" to "phone", "value" to "555-555-0100")))
     private fun receipt(op: OperationRow, changed: Boolean = true) = json("operation_id" to op.id, "outcome" to "accepted", "resource_type" to "person_details", "resource_id" to person, "committed_revision" to "8", "person_revision" to "9", "changed" to changed, "accepted_at" to "2026-09-14T00:00:00Z", "replayed" to false, "added_contact_ids" to if (changed) JSONArray().put(json("ordinal" to 1, "id" to "40000000-0000-4000-8000-000000000061")) else JSONArray())
     private fun summary() = json("id" to person, "first_name" to "First", "last_name" to "Last", "display_name" to "First Last", "details_revision" to "7", "stage" to json("id" to "50000000-0000-4000-8000-000000000061", "name" to "Lead"), "stage_revision" to "1")

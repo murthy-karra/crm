@@ -107,7 +107,7 @@ export const metadataReaders: MetadataReaders = { namespace: 'metadata-imports',
 export function useMetadataAccess(readers: MetadataReaders = metadataReaders) { return useImportAccess(readers.namespace) }
 export function metadataActive(value?: MetadataImport) { return !!value && (['queued', 'running'].includes(value.state) || value.state === 'proposed' && value.latest_plan?.state === 'building') }
 export function metadataName(source: MetadataSummary, fallback = 'Source record') {
-  const field = ['label', 'tag', 'choice', 'name', 'firstName', 'raw'].map(label => source.fields.find(f => f.label === label)).find(Boolean)
+  const field = ['choice', 'label', 'tag', 'name', 'firstName', 'raw'].map(label => source.fields.find(f => f.label === label)).find(Boolean)
   if (!field) return fallback
   try { const parsed: unknown = JSON.parse(field.text); return typeof parsed === 'string' ? parsed : field.text }
   catch { return field.text }

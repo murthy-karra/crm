@@ -312,6 +312,26 @@ describe('MetadataMappingPanel', () => {
     expect(wrapper.emitted('apply')![1]).toEqual([[{ mapping_id: 'none-option', choice: { kind: 'map_existing', target_id: 'literal-none' } }]])
   })
 
+  it('labels option controls by the exact choice when the retained source also contains its parent label', async () => {
+    const { wrapper } = await setup(url => url.includes('/mappings?kind=option')
+      ? page(['North', 'South'].map(name => {
+          const source = summary('Choice')
+          source.fields.push(...summary(name, undefined, 'choice').fields)
+          source.total_fields = '2'
+          return row(name.toLowerCase(), 'option', { source, field_id: 'existing-field' })
+        }))
+      : undefined)
+    await button(wrapper, 'Choice options').trigger('click')
+    await flushPromises()
+    await wrapper.get('select[aria-label="Option choice for North"]').setValue('create_matching')
+    await wrapper.get('select[aria-label="Option choice for South"]').setValue('create_matching')
+    await button(wrapper, 'Apply 2 mapping changes').trigger('click')
+    expect(wrapper.emitted('apply')![0]).toEqual([[
+      { mapping_id: 'north', choice: { kind: 'create_matching' } },
+      { mapping_id: 'south', choice: { kind: 'create_matching' } },
+    ]])
+  })
+
   it('inspects an alias through its exact source record and clears inspection when occurrences change', async () => {
     const sourceId = '9'.repeat(128)
     const { wrapper } = await setup(url => {

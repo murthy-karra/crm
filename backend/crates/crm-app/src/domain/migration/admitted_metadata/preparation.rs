@@ -273,7 +273,7 @@ impl Prep {
         } = *self;
         let row=sqlx::query("SELECT s.* FROM migration_admitted_metadata_source s WHERE s.plan_id=$1 AND s.organization_id=$2 AND s.family='people' AND s.qualified AND NOT s.conflict AND (s.capture_sequence,s.ordinal,s.id)>($3,$4,$5) AND EXISTS(SELECT 1 FROM migration_people_admission_result r JOIN person p ON p.id=r.person_id AND p.organization_id=r.organization_id JOIN migration_import_identity mi ON mi.organization_id=r.organization_id AND mi.source_account_id=$7 AND mi.family='people' AND mi.source_id=r.source_id AND mi.target_id=r.person_id AND mi.admission_result_id=r.id AND mi.admission_item_id=r.item_id AND mi.admission_id=r.admission_id WHERE r.admission_id=$6 AND r.organization_id=s.organization_id AND r.source_id=s.source_id AND r.disposition='settled') ORDER BY s.capture_sequence,s.ordinal,s.id LIMIT 1").bind(plan).bind(org.0).bind(p.get::<i64,_>("preparation_sequence")).bind(p.get::<i32,_>("preparation_ordinal")).bind(p.get::<Option<Uuid>,_>("preparation_key").unwrap_or(Uuid::nil())).bind(admission).bind(account).fetch_optional(&mut *conn).await?;
         let Some(row) = row else {
-            return self.phase(conn, "cohort").await;
+            return self.phase(conn, "choices").await;
         };
         let source_id: String = row.get("source_id");
         let source = insert_source(
@@ -323,6 +323,106 @@ impl Prep {
             }
         }
         sqlx::query("UPDATE migration_admitted_metadata_plan SET preparation_sequence=$2,preparation_ordinal=$3,preparation_key=$4 WHERE id=$1").bind(plan).bind(row.get::<i64,_>("capture_sequence")).bind(row.get::<i32,_>("ordinal")).bind(row.get::<Uuid,_>("id")).execute(conn).await?;
+        Ok(())
+    }
+    async fn choices(
+        &self,
+        c: &mut PgConnection,
+        key: &RawPayloadKey,
+        p: &PgRow,
+    ) -> Result<(), MigrationError> {
+        use super::super::metadata::Choice;
+        let row=sqlx::query("SELECT * FROM migration_admitted_metadata_mapping WHERE plan_id=$1 AND organization_id=$2 AND (kind,id)>($3,$4) ORDER BY kind,id LIMIT 1").bind(self.plan).bind(self.org.0).bind(p.get::<String,_>("preparation_kind")).bind(p.get::<Option<Uuid>,_>("preparation_key").unwrap_or(Uuid::nil())).fetch_optional(&mut *c).await?;
+        let Some(m) = row else {
+            return self.phase(c, "cohort").await;
+        };
+        let id: Uuid = m.get("id");
+        let kind: String = m.get("kind");
+        let source_key: Vec<u8> = m.get("source_key");
+        let inputs: PlanChoices = w::open(
+            key,
+            self.org,
+            self.snapshot,
+            self.plan,
+            self.plan,
+            "inputs",
+            &p.get::<Vec<u8>, _>("inputs_nonce"),
+            &p.get::<Vec<u8>, _>("inputs_ciphertext"),
+        )?;
+        let explicit = inputs
+            .patches
+            .iter()
+            .find(|v| v.kind == kind && v.source_key == source_key);
+        let mut choice = Choice::Hold;
+        if let Some(patch) = explicit {
+            choice = patch.choice.clone();
+        } else if let Some(previous) = p.get::<Option<Uuid>, _>("previous_plan_id") {
+            let old=sqlx::query("SELECT disposition,target_id FROM migration_admitted_metadata_mapping WHERE plan_id=$1 AND organization_id=$2 AND kind=$3 AND source_key=$4").bind(previous).bind(self.org.0).bind(&kind).bind(&source_key).fetch_optional(&mut *c).await?;
+            if let Some(old) = old {
+                choice = match old.get::<String, _>("disposition").as_str() {
+                    "create_matching" => Choice::CreateMatching,
+                    "map_existing" => Choice::MapExisting {
+                        target_id: old
+                            .get::<Option<Uuid>, _>("target_id")
+                            .ok_or(MigrationError::Crypto)?,
+                    },
+                    _ => Choice::Hold,
+                };
+            }
+        }
+        let mut frozen: FrozenMapping = w::open(
+            key,
+            self.org,
+            self.snapshot,
+            self.plan,
+            id,
+            "mapping",
+            &m.get::<Vec<u8>, _>("nonce"),
+            &m.get::<Vec<u8>, _>("ciphertext"),
+        )?;
+        let parent = if let Some(parent) = m.get::<Option<Uuid>, _>("parent_mapping_id") {
+            sqlx::query_scalar::<_,Option<Uuid>>("SELECT target_id FROM migration_admitted_metadata_mapping WHERE id=$1 AND plan_id=$2 AND organization_id=$3 AND disposition IN ('create_matching','map_existing')").bind(parent).bind(self.plan).bind(self.org.0).fetch_optional(&mut *c).await?.flatten()
+        } else {
+            None
+        };
+        let (mut disposition, mut target) = match choice {
+            Choice::Hold => ("held", None),
+            Choice::CreateMatching => ("create_matching", Some(Uuid::new_v4())),
+            Choice::MapExisting { target_id } => ("map_existing", Some(target_id)),
+        };
+        if !frozen.reasons.is_empty() || kind == "option" && parent.is_none() {
+            disposition = "held";
+            target = None;
+        }
+        if let Some(target_id) = target {
+            frozen.target_baseline = w::target_state(c, self.org, &kind, target_id).await?;
+            frozen.claim_baseline =
+                w::claim_state(c, self.org, self.account, &kind, &source_key).await?;
+            let invalid = disposition == "map_existing"
+                && (frozen.target_baseline.is_null()
+                    || frozen.target_baseline["archived"] == true
+                    || kind == "field"
+                        && frozen.target_baseline["field_type"] != json!(frozen.field_type)
+                    || kind == "option" && frozen.target_baseline["field_id"] != json!(parent))
+                || disposition == "create_matching" && !frozen.target_baseline.is_null();
+            let duplicate:bool=kind!="tag" && sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM migration_admitted_metadata_mapping WHERE plan_id=$1 AND organization_id=$2 AND kind=$3 AND target_id=$4 AND id<>$5)").bind(self.plan).bind(self.org.0).bind(&kind).bind(target_id).bind(id).fetch_one(&mut *c).await?;
+            if invalid || kind != "tag" && duplicate {
+                disposition = "held";
+                target = None;
+                frozen.reasons.push("invalid_destination".into());
+            }
+        }
+        let encrypted = seal(
+            key,
+            self.org,
+            self.snapshot,
+            self.plan,
+            id,
+            "mapping",
+            &frozen,
+        )?;
+        sqlx::query("UPDATE migration_admitted_metadata_mapping SET disposition=$3,target_id=$4,target_field_id=$5,nonce=$6,ciphertext=$7 WHERE id=$1 AND organization_id=$2").bind(id).bind(self.org.0).bind(disposition).bind(target).bind(parent).bind(encrypted.nonce).bind(encrypted.ciphertext).execute(&mut *c).await?;
+        sqlx::query("UPDATE migration_admitted_metadata_plan SET preparation_kind=$2,preparation_key=$3 WHERE id=$1").bind(self.plan).bind(kind).bind(id).execute(c).await?;
         Ok(())
     }
     async fn cohort(
@@ -517,6 +617,7 @@ impl Prep {
                 }
             }
         }
+        sqlx::query("UPDATE migration_admitted_metadata_operation o SET target_id=m.target_id,disposition=CASE WHEN o.disposition='eligible' AND m.disposition='held' THEN 'held' ELSE o.disposition END FROM migration_admitted_metadata_mapping m WHERE o.manifest_id=$1 AND o.organization_id=$2 AND m.id=o.mapping_id AND m.plan_id=o.plan_id AND m.organization_id=o.organization_id").bind(manifest_id).bind(org.0).execute(&mut *conn).await?;
         sqlx::query("UPDATE migration_admitted_metadata_plan SET preparation_parent=$2,preparation_phase=CASE WHEN $3 THEN 'cohort' ELSE 'values' END WHERE id=$1").bind(plan).bind(last).bind(complete).execute(conn).await?;
         Ok(())
     }
@@ -555,7 +656,7 @@ async fn unit(
     if p.get::<String, _>("state") != "building" {
         return Ok(false);
     }
-    let valid:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM organization o JOIN migration_workspace w ON w.organization_id=o.id JOIN migration_import i ON i.id=w.import_id AND i.organization_id=o.id AND i.confirmed_plan_id=w.plan_id JOIN migration_people_admission a ON a.id=$4 AND a.organization_id=o.id JOIN migration_core_change_report cr ON cr.id=$5 AND cr.organization_id=o.id WHERE o.id=$1 AND o.workspace_mode='migration_review' AND o.workspace_revision=$2 AND w.import_id=$3 AND i.state='completed' AND a.state IN ('completed','cancelled') AND cr.state='completed')").bind(org.0).bind(r.get::<i64,_>("workspace_revision")).bind(r.get::<Uuid,_>("parent_import_id")).bind(r.get::<Uuid,_>("admission_id")).bind(r.get::<Uuid,_>("source_report_id")).fetch_one(&mut *tx).await?;
+    let valid:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM organization o JOIN migration_workspace w ON w.organization_id=o.id JOIN migration_import i ON i.id=w.import_id AND i.organization_id=o.id AND i.confirmed_plan_id=w.plan_id JOIN migration_people_admission a ON a.id=$4 AND a.organization_id=o.id JOIN migration_core_change_report cr ON cr.id=$5 AND cr.organization_id=o.id WHERE o.id=$1 AND o.workspace_mode='migration_review' AND o.workspace_revision=$2 AND w.import_id=$3 AND i.state='completed' AND a.state IN ('completed','cancelled') AND cr.state='completed' AND cr.output_revision=$6 AND cr.newer_snapshot_id=$7 AND cr.newer_sequence=$8)").bind(org.0).bind(r.get::<i64,_>("workspace_revision")).bind(r.get::<Uuid,_>("parent_import_id")).bind(r.get::<Uuid,_>("admission_id")).bind(r.get::<Uuid,_>("source_report_id")).bind(p.get::<Uuid,_>("source_output_revision")).bind(p.get::<Uuid,_>("snapshot_id")).bind(p.get::<i64,_>("capture_sequence")).fetch_one(&mut *tx).await?;
     if !valid {
         return Err(MigrationError::SourceNotEligible);
     }
@@ -586,6 +687,7 @@ async fn unit(
         "fields" => j.fields(&mut tx, key, &p).await?,
         "options" => j.options(&mut tx, key, &p).await?,
         "tags" => j.tags(&mut tx, key, &p).await?,
+        "choices" => j.choices(&mut tx, key, &p).await?,
         "cohort" => j.cohort(&mut tx, key, &p).await?,
         "values" => j.values(&mut tx, key, &p).await?,
         "seal" => j.finish(&mut tx).await?,

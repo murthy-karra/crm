@@ -121,10 +121,8 @@ current-tenant-admin reader test.
 
 Still implement the frozen concrete transport contract in
 `SLICE_010f3_CONTRACT.md`: complete source/mapping/record/result/issue/segment and
-provenance reads, immutable replacement plans (including selected-boundary
-replacement), counted subset confirmation, durable lifecycle response receipts,
-retry/cancel and exact remainder. The current simpler DTOs and one-time mapping
-transition are not the final Web contract. Full bounded reader/request payload
+provenance reads, counted subset confirmation, complete lifecycle response receipts,
+retry/cancel and exact remainder. The remaining simpler response DTOs are not the final Web contract. Full bounded reader/request payload
 limits, retained fan-out for the new observation inventory, and final
 cross-checks remain part of that work.
 
@@ -135,3 +133,50 @@ limits, HTTP no-store and source-free reader negatives, desktop/390px browser
 workflow and preservation reconciliation. Final `scripts/check`,
 `scripts/sqlx-prepare`, `scripts/check-db`, paired Person/Today performance and
 cross-slice upgrade checks remain coordinator-owned and sequential.
+
+
+## Immutable replacement plans and cancellation capacity checkpoint
+
+The canonical replan request now starts a distinct building plan, with at most
+50 explicit patches. A persisted `(kind,id)` choice step inherits prior choices
+by exact source key, freezes new destination/claim baselines, and precedes cohort
+baselines. Changing reports starts fresh choices. Plans own snapshot/report/output
+revision/capture bindings, and receipts retain their own snapshot for decryption
+after a later source change. Earlier mapping evidence is retained unchanged.
+Cancellation capacity is reserved at initial preparation, moved transactionally
+when selecting another snapshot, and spent directly by cancellation; cancellation
+does not need a new allowance at an exhausted Organization limit.
+
+`admitted-replan-check.log` and `admitted-replan-check2.log` passed. The first
+functional database run, `admitted-replan-db1.log`, passed all ten existing tests.
+The second run passed source-change/inheritance/replay, but exposed two fixture
+expectations: the immutable original snapshot allowance cannot be lowered, and
+preparation now retains 64 KiB cancellation capacity. Its broad feature filter
+also selected the separate UI server's opt-in guard, which correctly rejected
+running without its explicit harness setting before creating that fixture. Later
+runs use `db_admitted_metadata::` and exclude both unchanged performance tests.
+`admitted-replan-db3.log` verifies twelve tests; its cancellation proof found an
+actual SQL INT4-to-i64 decoding error in receipt byte measurement. Both query and
+proof now explicitly use BIGINT. The focused corrected cancellation result and
+new choice-query D-050 evidence are recorded with the final checkpoint below.
+
+`admitted-replan-db4-cancel.log` passes the corrected protected-capacity test;
+together with db3 it establishes all thirteen functional/recorded-plan checks.
+`admitted-replan-clippy.log` passes `cargo clippy -p crm-app --all-targets --
+-D warnings`. `admitted-replan-db5-plans.log` runs only the three new choices
+statements on the 25,000-Person/50-member fixture with about 25,000 mapping rows.
+The late mapping keyset uses `migration_admitted_metadata_mapping_prepare`, one
+row with 3 shared hits and 1 read. Exact inherited-source lookup and destination
+uniqueness each return one row with 4 shared hits. No settled-prefix scan occurs.
+The source/observation inventory contains 25,003 rows each: 18,501,713 source
+logical bytes plus 800,096 observation logical bytes, versus 40,984,576 physical
+relation bytes. These are explicitly inert cardinality copies, not billable
+execution or a production quota projection. Existing execution/cohort SQL proof
+is reused; no unchanged EXPLAIN or paired Today benchmark was repeated here.
+
+The focused runners use the migration target and serialized database helper in
+`/private/tmp/crm-mobile005-010f3/`; all successful and failed logs remain under
+its `migration/` directory. The tested code is the immutable-replanning commit
+containing this verification update. Full frozen response/readers, counted
+confirmation and exact remainder are still in progress; no final integration or
+browser completion is claimed by this checkpoint.

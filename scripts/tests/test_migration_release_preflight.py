@@ -84,7 +84,7 @@ class PreflightTests(unittest.TestCase):
                          "migration_admitted_metadata_manifest", "migration_admitted_metadata_operation",
                          "crm_admitted_metadata_insert_allowed(uuid,text,jsonb)",
                          "crm_metadata_identity_key_matches(bytea,jsonb)",
-                         "am_root_admission_fk", "am_operation_manifest_fk", "am_claim_original_mapping_fk", "am_claim_admitted_mapping_fk", "am_mapping_dependency_check", "crm_admitted_metadata_owner_keys()", "admitted_metadata_owner_keys", "am_admission_tag_source", "a.attgenerated='s'", "pg_get_constraintdef(c.oid)=r.definition",
+                         "am_root_admission_fk", "am_operation_manifest_fk", "am_claim_original_mapping_fk", "am_claim_admitted_mapping_fk", "am_mapping_dependency_check", "crm_admitted_metadata_owner_keys()", "admitted_metadata_owner_keys", "migration_people_admission_result_settled_cohort_source_page", "am_admission_tag_source", "a.attgenerated='s'", "pg_get_constraintdef(c.oid)=r.definition",
                          "migration_admitted_metadata_observation",
                          "crm_admitted_metadata_preparation_bytes()",
                          "'preparation_phase','text'", "'preparation_bytes','bigint'",

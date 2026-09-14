@@ -11,6 +11,7 @@ async fn admitted_metadata_readiness_requires_complete_preparation_schema(pool: 
         .await
         .unwrap();
     for mutation in [
+        "CREATE INDEX am_admission_tag_source ON migration_people_admission_result(admission_id,organization_id,source_id) WHERE disposition='settled'",
         "ALTER TABLE migration_people_admission DROP CONSTRAINT am_admission_root_key CASCADE",
         "ALTER TABLE migration_people_admission_result DROP CONSTRAINT am_admission_result_owner_key CASCADE",
         "ALTER TABLE migration_people_admission_result DROP CONSTRAINT am_admission_result_person_key CASCADE",
@@ -130,8 +131,8 @@ async fn admitted_metadata_readiness_requires_complete_preparation_schema(pool: 
         "ALTER TABLE migration_admitted_metadata_operation DROP CONSTRAINT am_operation_manifest_fk; ALTER TABLE migration_admitted_metadata_operation ADD CONSTRAINT am_operation_manifest_fk FOREIGN KEY(manifest_id) REFERENCES migration_admitted_metadata_manifest(id)",
         "ALTER TABLE migration_admitted_metadata_operation DROP CONSTRAINT am_operation_manifest_fk; ALTER TABLE migration_admitted_metadata_operation ADD CONSTRAINT am_operation_manifest_fk FOREIGN KEY(manifest_id,plan_id,import_id,organization_id) REFERENCES migration_admitted_metadata_manifest(id,plan_id,import_id,organization_id) NOT VALID",
         "ALTER TABLE migration_admitted_metadata_mapping DROP CONSTRAINT am_mapping_dependency_check; ALTER TABLE migration_admitted_metadata_mapping ADD CONSTRAINT am_mapping_dependency_check CHECK(true)",
-        "DROP INDEX am_admission_tag_source",
-        "DROP INDEX am_admission_tag_source; CREATE INDEX am_admission_tag_source ON migration_people_admission_result(admission_id,organization_id,source_id) WHERE disposition='held'",
+        "DROP INDEX migration_people_admission_result_settled_cohort_source_page",
+        "DROP INDEX migration_people_admission_result_settled_cohort_source_page; CREATE INDEX migration_people_admission_result_settled_cohort_source_page ON migration_people_admission_result(admission_id,organization_id,source_id) WHERE disposition='held'",
         "ALTER TABLE migration_admitted_metadata_result ALTER COLUMN mapping_id DROP EXPRESSION",
         "ALTER TABLE migration_admitted_metadata_manifest DROP COLUMN oversized CASCADE",
         "ALTER TABLE migration_admitted_metadata_manifest ALTER COLUMN oversized DROP NOT NULL",

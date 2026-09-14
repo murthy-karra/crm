@@ -52,15 +52,17 @@ outer HTTP responses pass. See
 [SLICE_010f3_VERIFICATION.md](SLICE_010f3_VERIFICATION.md).
 
 Web implementation follows the frozen contract and passes focused components/views,
-lint, typecheck and isolated production build. The synthetic browser journey passes
-login, original-import/admission selection and390px layout checks. Full preparation,
-confirmation, cancellation, remainder and provenance acceptance awaits the complete
-migration transport; see [SLICE_010f3_WEB_VERIFICATION.md](SLICE_010f3_WEB_VERIFICATION.md).
+lint, typecheck and isolated production builds. The complete phased synthetic
+browser journey passes preview/mappings, uncertain confirmation replay, partial
+cancellation, exact continuation, reconciliation/reload and Person provenance at
+desktop/390px. All15 protected table sets and both native cells remain unchanged;
+56 People settle once and completed catalog work is reused. See
+[SLICE_010f3_WEB_VERIFICATION.md](SLICE_010f3_WEB_VERIFICATION.md).
 
 ## Remaining completion gates
 
 1. Finish migration source-fidelity, actual size bounds and query evidence; integrate tested commits.
-2. Complete the real synthetic metadata browser journey.
+2. Reuse completed native/browser evidence where the final integration is unchanged.
 3. Run sequential final `scripts/check`, `scripts/sqlx-prepare`, `scripts/check-db`
    with private outputs and serialized DB access.
 4. Finish migration changed-query evidence. The single D-050 Today pair and all11

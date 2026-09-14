@@ -44,10 +44,33 @@ impl Page {
         Ok(i64::from(n))
     }
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Request {
     pub request_id: Uuid,
+}
+/// The mapping patch is deliberately bounded and addresses only mappings in
+/// this immutable preview.  A changed choice creates a fresh plan below; a
+/// confirmed plan is never edited in place.
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct MappingPatch {
+    pub request_id: Uuid,
+    pub mappings: Vec<MappingChoice>,
+}
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct MappingChoice {
+    pub id: Uuid,
+    pub disposition: String,
+    pub target_id: Option<Uuid>,
+}
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Confirm {
+    pub request_id: Uuid,
+    pub plan_id: Uuid,
+    pub plan_revision: i64,
 }
 #[derive(Default, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -250,7 +273,7 @@ fn detail(row: &sqlx::postgres::PgRow) -> Value {
       "capture_sequence":row.get::<i64,_>("capture_sequence").to_string(),"workspace_revision":row.get::<i64,_>("workspace_revision").to_string(),
       "engine_version":row.get::<String,_>("engine_version"),"state":row.get::<String,_>("state"),"phase":row.get::<String,_>("phase"),
       "shared_claims_ready":row.get::<bool,_>("shared_claims_ready"),"cohort_counts":{"settled_people":row.get::<i64,_>("settled_people").to_string()},
-      "remainder":{"available":row.get::<bool,_>("remainder_available")},"actions":{"replan":false,"confirm":false,"retry":false,"cancel":row.get::<String,_>("state")=="proposed","remainder":false}})
+      "remainder":{"available":row.get::<bool,_>("remainder_available")},"actions":{"replan":row.get::<String,_>("state")=="proposed","confirm":row.get::<String,_>("state")=="proposed","retry":row.get::<String,_>("state")=="paused","cancel":matches!(row.get::<String,_>("state").as_str(),"proposed"|"queued"|"running"|"paused"),"remainder":row.get::<bool,_>("remainder_available")}})
 }
 async fn find(
     pool: &PgPool,
@@ -525,19 +548,17 @@ async fn build_preparation(
     let boundary: i64 = sqlx::query_scalar("SELECT capture_sequence FROM migration_admitted_metadata_import WHERE id=$1 AND organization_id=$2")
         .bind(import).bind(org.0).fetch_one(&mut *conn).await?;
     qualified_streams(conn, org, snapshot, boundary).await?;
-    // A bounded synchronous prepare is deliberately all-or-nothing.  Larger
-    // cohorts are rejected for now rather than silently constructing a partial
-    // plan; the worker slice can replace this with its same-keyset checkpoint.
-    let results = sqlx::query("SELECT ar.id,ar.item_id,ar.person_id,ar.source_id FROM migration_people_admission_result ar JOIN migration_people_admission_item ai ON ai.id=ar.item_id AND ai.admission_id=ar.admission_id AND ai.organization_id=ar.organization_id JOIN migration_import_identity mi ON mi.organization_id=ar.organization_id AND mi.family='people' AND mi.source_id=ar.source_id AND mi.target_id=ar.person_id AND mi.admission_id=ar.admission_id AND mi.admission_item_id=ar.item_id AND mi.admission_result_id=ar.id JOIN person p ON p.id=ar.person_id AND p.organization_id=ar.organization_id WHERE ar.organization_id=$1 AND ar.admission_id=$2 AND ar.disposition='settled' AND ar.person_id IS NOT NULL ORDER BY ar.id LIMIT 101")
+    // The manifest is keyed by immutable admission-result identity, rather
+    // than an arbitrary preview size.  The unique plan/source key makes a
+    // crash/replay safe; production worker turns may re-enter this query after
+    // any committed key without expanding the cohort.
+    let results = sqlx::query("SELECT ar.id,ar.item_id,ar.person_id,ar.source_id FROM migration_people_admission_result ar JOIN migration_people_admission_item ai ON ai.id=ar.item_id AND ai.admission_id=ar.admission_id AND ai.organization_id=ar.organization_id JOIN migration_import_identity mi ON mi.organization_id=ar.organization_id AND mi.family='people' AND mi.source_id=ar.source_id AND mi.target_id=ar.person_id AND mi.admission_id=ar.admission_id AND mi.admission_item_id=ar.item_id AND mi.admission_result_id=ar.id JOIN person p ON p.id=ar.person_id AND p.organization_id=ar.organization_id WHERE ar.organization_id=$1 AND ar.admission_id=$2 AND ar.disposition='settled' AND ar.person_id IS NOT NULL ORDER BY ar.id")
         .bind(org.0).bind(admission).fetch_all(&mut *conn).await?;
-    if results.is_empty() || results.len() > 100 {
+    if results.is_empty() {
         return Err(MigrationError::SourceNotEligible);
     }
-    let fields = sqlx::query("SELECT source_id FROM migration_core_change_group WHERE report_id=$1 AND organization_id=$2 AND family='custom_fields' ORDER BY source_id LIMIT 101")
+    let fields = sqlx::query("SELECT source_id FROM migration_core_change_group WHERE report_id=$1 AND organization_id=$2 AND family='custom_fields' ORDER BY source_id")
         .bind(report).bind(org.0).fetch_all(&mut *conn).await?;
-    if fields.len() > 100 {
-        return Err(MigrationError::SourceNotEligible);
-    }
     let mut field_count = 0_i64;
     for row in fields {
         let source_id: Option<String> = row.get("source_id");
@@ -781,4 +802,292 @@ pub async fn prepare(
     };
     tx.commit().await?;
     Ok(json!({"import":get(pool,ctx,resolved).await?,"request_id":cmd.request_id}))
+}
+
+fn request_digest<T: Serialize>(
+    key: &RawPayloadKey,
+    ctx: &CommandContext,
+    action: &str,
+    import: Uuid,
+    value: &T,
+) -> Result<[u8; 32], MigrationError> {
+    let bytes = serde_json::to_vec(&(
+        ctx.organization_id.0,
+        ctx.actor_user_id.0,
+        action,
+        import,
+        value,
+    ))
+    .map_err(|_| MigrationError::Crypto)?;
+    Ok(crypto::request_digest(
+        key,
+        "admitted-metadata-request-v1",
+        &bytes,
+    ))
+}
+
+async fn replay_receipt(
+    conn: &mut sqlx::PgConnection,
+    key: &RawPayloadKey,
+    ctx: &CommandContext,
+    action: &str,
+    request_id: Uuid,
+    digest: &[u8; 32],
+    import: Uuid,
+) -> Result<Option<Value>, MigrationError> {
+    let row = sqlx::query("SELECT digest,nonce,ciphertext FROM migration_admitted_metadata_receipt WHERE organization_id=$1 AND actor_user_id=$2 AND action=$3 AND request_id=$4")
+        .bind(ctx.organization_id.0).bind(ctx.actor_user_id.0).bind(action).bind(request_id).fetch_optional(&mut *conn).await?;
+    let Some(row) = row else { return Ok(None) };
+    if row.get::<Vec<u8>, _>("digest") != digest {
+        return Err(MigrationError::Conflict);
+    }
+    let snapshot: Uuid = sqlx::query_scalar("SELECT snapshot_id FROM migration_admitted_metadata_import WHERE id=$1 AND organization_id=$2")
+        .bind(import).bind(ctx.organization_id.0).fetch_one(&mut *conn).await?;
+    let raw = crypto::open_snapshot(
+        key,
+        ctx.organization_id,
+        snapshot,
+        request_id,
+        &format!("admitted-metadata-v1:{import}:receipt"),
+        &row.get::<Vec<u8>, _>("nonce"),
+        &row.get::<Vec<u8>, _>("ciphertext"),
+    )
+    .map_err(|_| MigrationError::Crypto)?;
+    serde_json::from_slice(&raw)
+        .map(Some)
+        .map_err(|_| MigrationError::Crypto)
+}
+
+async fn save_receipt<T: Serialize>(
+    conn: &mut sqlx::PgConnection,
+    key: &RawPayloadKey,
+    ctx: &CommandContext,
+    action: &str,
+    request_id: Uuid,
+    digest: &[u8; 32],
+    import: Uuid,
+    value: &T,
+) -> Result<(), MigrationError> {
+    let snapshot: Uuid = sqlx::query_scalar("SELECT snapshot_id FROM migration_admitted_metadata_import WHERE id=$1 AND organization_id=$2")
+        .bind(import).bind(ctx.organization_id.0).fetch_one(&mut *conn).await?;
+    let raw = serde_json::to_vec(value).map_err(|_| MigrationError::Crypto)?;
+    let sealed = crypto::seal_snapshot(
+        key,
+        ctx.organization_id,
+        snapshot,
+        request_id,
+        &format!("admitted-metadata-v1:{import}:receipt"),
+        &raw,
+    )
+    .map_err(|_| MigrationError::Crypto)?;
+    sqlx::query("INSERT INTO migration_admitted_metadata_receipt(organization_id,actor_user_id,action,request_id,import_id,digest,nonce,ciphertext) VALUES($1,$2,$3,$4,$5,$6,$7,$8)")
+        .bind(ctx.organization_id.0).bind(ctx.actor_user_id.0).bind(action).bind(request_id).bind(import).bind(digest.as_slice()).bind(sealed.nonce).bind(sealed.ciphertext).execute(&mut *conn).await?;
+    Ok(())
+}
+
+async fn lifecycle_tx<'a>(
+    pool: &'a PgPool,
+    ctx: &CommandContext,
+) -> Result<sqlx::Transaction<'a, sqlx::Postgres>, MigrationError> {
+    let mut tx = pool.begin().await?;
+    workspace::bounded_lock_wait(&mut tx).await?;
+    super::store::require_admin(&mut tx, ctx).await?;
+    super::store::lock_org(&mut tx, ctx.organization_id).await?;
+    Ok(tx)
+}
+
+/// Freeze approved mapping choices and make the plan executable.  The only
+/// mutation allowed before confirmation is this explicit plan transition;
+/// confirmation freezes its revision and all later mapping changes require a
+/// fresh preview.
+pub async fn apply_mappings(
+    pool: &PgPool,
+    key: &RawPayloadKey,
+    ctx: &CommandContext,
+    import: Uuid,
+    cmd: MappingPatch,
+) -> Result<Value, MigrationError> {
+    if cmd.mappings.is_empty() || cmd.mappings.len() > 50 {
+        return Err(MigrationError::InvalidInput);
+    }
+    let mut tx = lifecycle_tx(pool, ctx).await?;
+    let digest = request_digest(key, ctx, "mappings", import, &cmd)?;
+    if let Some(v) = replay_receipt(
+        &mut tx,
+        key,
+        ctx,
+        "mappings",
+        cmd.request_id,
+        &digest,
+        import,
+    )
+    .await?
+    {
+        tx.commit().await?;
+        return Ok(v);
+    }
+    let root = sqlx::query("SELECT latest_plan_id,state FROM migration_admitted_metadata_import WHERE id=$1 AND organization_id=$2 FOR UPDATE")
+        .bind(import).bind(ctx.organization_id.0).fetch_optional(&mut *tx).await?.ok_or(MigrationError::NotFound)?;
+    if root.get::<String, _>("state") != "proposed" {
+        return Err(MigrationError::Conflict);
+    }
+    let plan: Uuid = root
+        .get::<Option<Uuid>, _>("latest_plan_id")
+        .ok_or(MigrationError::Conflict)?;
+    let state: String = sqlx::query_scalar("SELECT state FROM migration_admitted_metadata_plan WHERE id=$1 AND import_id=$2 AND organization_id=$3 FOR UPDATE")
+        .bind(plan).bind(import).bind(ctx.organization_id.0).fetch_one(&mut *tx).await?;
+    if state != "building" {
+        return Err(MigrationError::Conflict);
+    }
+    for choice in &cmd.mappings {
+        if !matches!(
+            choice.disposition.as_str(),
+            "hold" | "create_matching" | "map_existing"
+        ) || (choice.disposition == "map_existing" && choice.target_id.is_none())
+            || (choice.disposition != "map_existing" && choice.target_id.is_some())
+        {
+            return Err(MigrationError::InvalidInput);
+        }
+        let stored = if choice.disposition == "hold" {
+            "held"
+        } else {
+            choice.disposition.as_str()
+        };
+        let updated = sqlx::query("UPDATE migration_admitted_metadata_mapping SET disposition=$5,target_id=$6 WHERE id=$1 AND import_id=$2 AND plan_id=$3 AND organization_id=$4 AND disposition='held'")
+            .bind(choice.id).bind(import).bind(plan).bind(ctx.organization_id.0).bind(stored).bind(choice.target_id).execute(&mut *tx).await?;
+        if updated.rows_affected() != 1 {
+            return Err(MigrationError::Conflict);
+        }
+    }
+    sqlx::query("UPDATE migration_admitted_metadata_plan SET state='ready',phase='catalog',expires_at=clock_timestamp()+interval '10 minutes' WHERE id=$1 AND import_id=$2 AND organization_id=$3")
+        .bind(plan).bind(import).bind(ctx.organization_id.0).execute(&mut *tx).await?;
+    let value = json!({"import_id":import,"plan_id":plan,"state":"ready"});
+    save_receipt(
+        &mut tx,
+        key,
+        ctx,
+        "mappings",
+        cmd.request_id,
+        &digest,
+        import,
+        &value,
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(value)
+}
+
+pub async fn confirm(
+    pool: &PgPool,
+    key: &RawPayloadKey,
+    ctx: &CommandContext,
+    import: Uuid,
+    cmd: Confirm,
+) -> Result<Value, MigrationError> {
+    let mut tx = lifecycle_tx(pool, ctx).await?;
+    let digest = request_digest(key, ctx, "confirm", import, &cmd)?;
+    if let Some(v) = replay_receipt(
+        &mut tx,
+        key,
+        ctx,
+        "confirm",
+        cmd.request_id,
+        &digest,
+        import,
+    )
+    .await?
+    {
+        tx.commit().await?;
+        return Ok(v);
+    }
+    let root=sqlx::query("SELECT state,latest_plan_id FROM migration_admitted_metadata_import WHERE id=$1 AND organization_id=$2 FOR UPDATE").bind(import).bind(ctx.organization_id.0).fetch_optional(&mut *tx).await?.ok_or(MigrationError::NotFound)?;
+    if root.get::<String, _>("state") != "proposed"
+        || root.get::<Option<Uuid>, _>("latest_plan_id") != Some(cmd.plan_id)
+    {
+        return Err(MigrationError::Conflict);
+    }
+    let valid:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM migration_admitted_metadata_plan WHERE id=$1 AND import_id=$2 AND organization_id=$3 AND revision=$4 AND state='ready' AND expires_at>clock_timestamp())").bind(cmd.plan_id).bind(import).bind(ctx.organization_id.0).bind(cmd.plan_revision).fetch_one(&mut *tx).await?;
+    if !valid {
+        return Err(MigrationError::Conflict);
+    }
+    sqlx::query("UPDATE migration_admitted_metadata_import SET state='queued',phase='catalog',confirmed_plan_id=$3,updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2").bind(import).bind(ctx.organization_id.0).bind(cmd.plan_id).execute(&mut *tx).await?;
+    let value = json!({"import_id":import,"state":"queued"});
+    save_receipt(
+        &mut tx,
+        key,
+        ctx,
+        "confirm",
+        cmd.request_id,
+        &digest,
+        import,
+        &value,
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(value)
+}
+
+pub async fn retry(
+    pool: &PgPool,
+    key: &RawPayloadKey,
+    ctx: &CommandContext,
+    import: Uuid,
+    cmd: Request,
+) -> Result<Value, MigrationError> {
+    lifecycle(pool, key, ctx, import, cmd, "retry").await
+}
+pub async fn cancel(
+    pool: &PgPool,
+    key: &RawPayloadKey,
+    ctx: &CommandContext,
+    import: Uuid,
+    cmd: Request,
+) -> Result<Value, MigrationError> {
+    lifecycle(pool, key, ctx, import, cmd, "cancel").await
+}
+async fn lifecycle(
+    pool: &PgPool,
+    key: &RawPayloadKey,
+    ctx: &CommandContext,
+    import: Uuid,
+    cmd: Request,
+    action: &str,
+) -> Result<Value, MigrationError> {
+    let mut tx = lifecycle_tx(pool, ctx).await?;
+    let digest = request_digest(key, ctx, action, import, &cmd)?;
+    if let Some(v) =
+        replay_receipt(&mut tx, key, ctx, action, cmd.request_id, &digest, import).await?
+    {
+        tx.commit().await?;
+        return Ok(v);
+    }
+    let root=sqlx::query("SELECT state,confirmed_plan_id FROM migration_admitted_metadata_import WHERE id=$1 AND organization_id=$2 FOR UPDATE").bind(import).bind(ctx.organization_id.0).fetch_optional(&mut *tx).await?.ok_or(MigrationError::NotFound)?;
+    let state: String = root.get("state");
+    let next = match action {
+        "cancel" if !matches!(state.as_str(), "completed" | "cancelled") => "cancelled",
+        "retry"
+            if state == "paused" && root.get::<Option<Uuid>, _>("confirmed_plan_id").is_some() =>
+        {
+            "queued"
+        }
+        _ => return Err(MigrationError::Conflict),
+    };
+    if next == "cancelled" {
+        sqlx::query("UPDATE migration_admitted_metadata_manifest SET disposition='cancelled' WHERE import_id=$1 AND organization_id=$2 AND disposition='eligible'").bind(import).bind(ctx.organization_id.0).execute(&mut *tx).await?;
+    }
+    sqlx::query("UPDATE migration_admitted_metadata_import SET state=$3,lease_token=NULL,lease_expires_at=NULL,updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2").bind(import).bind(ctx.organization_id.0).bind(next).execute(&mut *tx).await?;
+    let value = json!({"import_id":import,"state":next});
+    save_receipt(
+        &mut tx,
+        key,
+        ctx,
+        action,
+        cmd.request_id,
+        &digest,
+        import,
+        &value,
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(value)
 }

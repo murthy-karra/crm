@@ -47,6 +47,22 @@ pub fn router() -> Router<AppState> {
             get(detail),
         )
         .route(
+            "/api/migrations/fub/admitted-metadata-imports/{id}/plans",
+            axum::routing::post(apply_mappings),
+        )
+        .route(
+            "/api/migrations/fub/admitted-metadata-imports/{id}/confirm",
+            axum::routing::post(confirm),
+        )
+        .route(
+            "/api/migrations/fub/admitted-metadata-imports/{id}/retry",
+            axum::routing::post(retry),
+        )
+        .route(
+            "/api/migrations/fub/admitted-metadata-imports/{id}/cancel",
+            axum::routing::post(cancel),
+        )
+        .route(
             "/api/migrations/fub/admitted-metadata-imports/{id}/plans/{plan}/mappings",
             get(mappings),
         )
@@ -59,6 +75,78 @@ pub fn router() -> Router<AppState> {
             get(issues),
         )
         .layer(DefaultBodyLimit::max(64 * 1024))
+}
+async fn apply_mappings(
+    State(s): State<AppState>,
+    a: OrgAdminContext,
+    p: Result<Path<Uuid>, PathRejection>,
+    b: Result<Json<i::MappingPatch>, JsonRejection>,
+) -> Result<Response, ApiError> {
+    Ok(response(
+        StatusCode::ACCEPTED,
+        i::apply_mappings(
+            s.db.as_ref().ok_or(ApiError::Unavailable)?,
+            &s.raw_payload_key,
+            &CommandContext::from_auth(&a.auth),
+            path(p)?,
+            body(b)?,
+        )
+        .await?,
+    ))
+}
+async fn confirm(
+    State(s): State<AppState>,
+    a: OrgAdminContext,
+    p: Result<Path<Uuid>, PathRejection>,
+    b: Result<Json<i::Confirm>, JsonRejection>,
+) -> Result<Response, ApiError> {
+    Ok(response(
+        StatusCode::ACCEPTED,
+        i::confirm(
+            s.db.as_ref().ok_or(ApiError::Unavailable)?,
+            &s.raw_payload_key,
+            &CommandContext::from_auth(&a.auth),
+            path(p)?,
+            body(b)?,
+        )
+        .await?,
+    ))
+}
+async fn retry(
+    State(s): State<AppState>,
+    a: OrgAdminContext,
+    p: Result<Path<Uuid>, PathRejection>,
+    b: Result<Json<i::Request>, JsonRejection>,
+) -> Result<Response, ApiError> {
+    Ok(response(
+        StatusCode::ACCEPTED,
+        i::retry(
+            s.db.as_ref().ok_or(ApiError::Unavailable)?,
+            &s.raw_payload_key,
+            &CommandContext::from_auth(&a.auth),
+            path(p)?,
+            body(b)?,
+        )
+        .await?,
+    ))
+}
+async fn cancel(
+    State(s): State<AppState>,
+    a: OrgAdminContext,
+    p: Result<Path<Uuid>, PathRejection>,
+    b: Result<Json<i::Request>, JsonRejection>,
+) -> Result<Response, ApiError> {
+    Ok(response(
+        StatusCode::ACCEPTED,
+        i::cancel(
+            s.db.as_ref().ok_or(ApiError::Unavailable)?,
+            &s.raw_payload_key,
+            &CommandContext::from_auth(&a.auth),
+            path(p)?,
+            body(b)?,
+        )
+        .await?,
+    ))
 }
 async fn mappings(
     State(s): State<AppState>,

@@ -12,6 +12,7 @@ pub(crate) mod activity_store;
 pub(crate) mod activity_time;
 pub mod activity_worker;
 pub mod admitted_metadata;
+pub mod admitted_metadata_worker;
 pub mod commands;
 pub mod crypto;
 pub mod history_capture;

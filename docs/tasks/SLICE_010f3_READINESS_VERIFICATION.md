@@ -111,3 +111,29 @@ readiness before/after: `admitted-fidelity-readiness-db1.log`,1 test,175.57s tot
 1.60s test. `preflight-fidelity-readiness.log` records51 passing preflight tests.
 Source is the integrated `1e9ed69` implementation plus the shared readiness change
 committed with this record. No new schema or wire contract was introduced here.
+
+## Composite ownership schema
+
+At integrated code `afe472586cccf284ef99f49b688a8745517a162c`, runtime and
+preflight require all 73 exact validated ownership/lineage constraint definitions,
+15 column types/nullability states, six enabled owner-trigger definitions, the
+owner-function body identity, stored catalog-result mapping expression and exact
+settled admission/tag lookup index. This closes partial or weakened ownership
+schemas before preparation or registry handover. The nullable erased-Person
+representation remains valid. Runtime and preflight SQL are byte-identical.
+
+`preflight-owner-readiness2.log`: **51 passed**. The first generation attempt
+failed Python parsing because a multiline catalog expression was not escaped;
+`preflight-owner-readiness1.log` is retained. Escaping the complete SQL literal
+corrected that tooling error. A read-only probe of an older retained verification
+schema correctly rejected its missing tag index; all other 39 clauses passed
+(`review1-owner-readiness-catalog-probe.json`). This was not final-schema evidence.
+
+The private focused readiness command with log `admitted-owner-readiness-db1.log`
+passes **183 rollback-only variants**, including missing/wrong/unvalidated owner
+FKs, missing constraints/columns, disabled or replica-only triggers, a no-op owner
+function, weakened result/dependency checks and an incorrect tag-index predicate.
+Complete fresh 009 readiness passes before and after. Result: **1 test passed**,
+185.38s total / 2.55s test. Existing dependent-column drops use CASCADE only inside
+rolled-back incomplete-schema transactions. `review1-owner-readiness-query.json`
+and `review1-owner-readiness-mutations.json` retain the exact query and new cases.

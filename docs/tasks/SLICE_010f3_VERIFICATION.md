@@ -224,3 +224,38 @@ slice completion or independent review pass is claimed by this checkpoint.
 The final issue-counter/readiness transport tree compiles and its missing-native
 cohort proof passes in `admitted-transport-db3-issues.log` (one test, 5.19s).
 This explicitly checks a nonempty bounded issue response after the retained hold.
+
+## Exact remainder and legacy permit checkpoint
+
+`20261002000007` and the remainder worker add an automatically queued, unique
+successor for a cancelled confirmed run. Mapping dependencies reference original
+committed result IDs; immutable source evidence remains with its original plan.
+Each remaining catalog mapping and never-settled Person baseline/operation is
+copied under a persisted keyset in bounded transactions, re-encrypted for the new
+owner without refreshing source, choices or native comparisons. Copying itself
+can be cancelled/retried; cancelling a partly copied successor retains the full
+original remaining scope for the next successor. Successful/held terminal People
+are excluded with cached exact counters. Source/result readers preserve original
+evidence provenance through these references.
+
+The final missing route, `POST /{id}/remainder`, now returns `202` and a durable
+actor-bound response receipt. Exact replay precedes fresh readiness/capacity.
+`admitted-remainder-check1.log` passes the API test compile. Both focused real-DB
+cases pass in `admitted-remainder-db1.log` (2 tests, 11.94s): partial Person cancel,
+cancel during copying, unique three-Person settlement across the chain, retained
+catalog dependency reuse with no new claims, unchanged predecessor results, and
+an equal Text cell appearing after the original confirmation held under the
+original baseline while the other three typed cells apply.
+
+The coordinator's unchanged legacy permit regression exposed SQL's unspecified
+boolean evaluation order when an empty JSON proof is present before readiness.
+The additive migration now parses only within an explicit ready branch, catches
+malformed JSON, and uses the parsed value for containment, preserving the 000003
+identity-key helper. The unchanged test passes in
+`admitted-remainder-db2-legacy.log` (1 test, 5.50s). This establishes actual valid
+pre-handover legacy behavior and rejection of its old proof after handover.
+
+Remaining implementation/verification: actual Person fan-out bounds and visible
+oversized evidence holds, explicit undeclared custom-key and duplicate machine-name
+outcomes, new reader/remainder SQL plans at D-050 size, full budget/key/expiry/source
+variant matrix, coordinator browser acceptance and final integrated review/gates.

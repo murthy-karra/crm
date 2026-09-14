@@ -299,7 +299,7 @@ impl Job {
             );
         }
         let next = serde_json::to_value(counts).map_err(|_| MigrationError::Crypto)?;
-        let after:i32=sqlx::query_scalar("UPDATE migration_admitted_metadata_import SET counts=$3,settled_eligible_people=settled_eligible_people+$4 WHERE id=$1 AND organization_id=$2 RETURNING octet_length(counts::text)").bind(self.root).bind(self.org.0).bind(next).bind(i64::from(eligible_person)).fetch_one(&mut *c).await?;
+        let after:i32=sqlx::query_scalar("UPDATE migration_admitted_metadata_import SET counts=$3,settled_eligible_people=settled_eligible_people+$4,held_settled_people=held_settled_people+$5 WHERE id=$1 AND organization_id=$2 RETURNING octet_length(counts::text)").bind(self.root).bind(self.org.0).bind(next).bind(i64::from(eligible_person)).bind(i64::from(kind=="people" && outcome=="held")).fetch_one(&mut *c).await?;
         bytes += i64::from(after - cached.get::<i32, _>("bytes"));
         sqlx::query("INSERT INTO migration_admitted_metadata_result(id,import_id,plan_id,unit_id,manifest_id,organization_id,kind,disposition,person_id,nonce,ciphertext) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)").bind(id).bind(self.root).bind(self.plan).bind(unit).bind(if kind=="people"{Some(unit)}else{None}).bind(self.org.0).bind(kind).bind(outcome).bind(person).bind(sealed.nonce).bind(sealed.ciphertext).execute(c).await?;
         Ok(bytes)
@@ -316,7 +316,13 @@ async fn mapping_ready(
         return Ok(false);
     };
     let kind: String = m.get("kind");
-    let result:Option<String>=sqlx::query_scalar("SELECT disposition FROM migration_admitted_metadata_result WHERE import_id=$1 AND organization_id=$2 AND unit_id=$3").bind(j.root).bind(j.org.0).bind(m.get::<Uuid,_>("id")).fetch_optional(&mut *c).await?;
+    let result: Option<String> = if let Some(dependency) =
+        m.get::<Option<Uuid>, _>("dependency_result_id")
+    {
+        sqlx::query_scalar("SELECT disposition FROM migration_admitted_metadata_result WHERE id=$1 AND organization_id=$2").bind(dependency).bind(j.org.0).fetch_optional(&mut *c).await?
+    } else {
+        sqlx::query_scalar("SELECT disposition FROM migration_admitted_metadata_result WHERE import_id=$1 AND organization_id=$2 AND unit_id=$3").bind(j.root).bind(j.org.0).bind(m.get::<Uuid,_>("id")).fetch_optional(&mut *c).await?
+    };
     if !matches!(result.as_deref(), Some("created" | "already_present")) {
         return Ok(false);
     }
@@ -611,7 +617,10 @@ async fn people(
         }
         results.push(json!({"operation_id":o.get::<Uuid,_>("id"),"mapping_id":o.get::<Option<Uuid>,_>("mapping_id"),"kind":kind,"planned_disposition":o.get::<String,_>("disposition"),"outcome":outcome,"reason":reason}));
     }
-    let outcome = if results.iter().any(|r| r["outcome"] == "held") || !identity {
+    let outcome = if results.iter().any(|r| r["outcome"] == "held")
+        || !identity
+        || m.get::<String, _>("disposition") == "held"
+    {
         "held"
     } else if results.iter().any(|r| r["outcome"] == "applied") {
         "applied"
@@ -670,7 +679,7 @@ async fn unit(
         .unwrap_or(Uuid::nil());
     let mapping = if phase == "catalog" {
         let previous:Option<String>=sqlx::query_scalar("SELECT kind FROM migration_admitted_metadata_mapping WHERE id=$1 AND import_id=$2 AND plan_id=$3 AND organization_id=$4").bind(checkpoint).bind(root).bind(j.plan).bind(org.0).fetch_optional(&mut *tx).await?;
-        sqlx::query("SELECT m.* FROM migration_admitted_metadata_mapping m WHERE m.import_id=$1 AND m.plan_id=$2 AND m.organization_id=$3 AND (m.kind,m.id)>($4,$5) AND NOT EXISTS(SELECT 1 FROM migration_admitted_metadata_result x WHERE x.import_id=$1 AND x.organization_id=$3 AND x.unit_id=m.id) ORDER BY m.kind,m.id LIMIT 1").bind(root).bind(j.plan).bind(org.0).bind(previous.unwrap_or_default()).bind(checkpoint).fetch_optional(&mut *tx).await?
+        sqlx::query("SELECT m.* FROM migration_admitted_metadata_mapping m WHERE m.import_id=$1 AND m.plan_id=$2 AND m.organization_id=$3 AND m.execute_unit AND (m.kind,m.id)>($4,$5) AND NOT EXISTS(SELECT 1 FROM migration_admitted_metadata_result x WHERE x.import_id=$1 AND x.organization_id=$3 AND x.unit_id=m.id) ORDER BY m.kind,m.id LIMIT 1").bind(root).bind(j.plan).bind(org.0).bind(previous.unwrap_or_default()).bind(checkpoint).fetch_optional(&mut *tx).await?
     } else {
         None
     };
@@ -685,7 +694,7 @@ async fn unit(
             && m.get::<String, _>("disposition") == "create_matching"
             && f.field_type.as_deref() == Some("choice")
         {
-            let children=sqlx::query("SELECT * FROM migration_admitted_metadata_mapping WHERE parent_mapping_id=$1 AND plan_id=$2 AND organization_id=$3 ORDER BY id LIMIT 51").bind(m.get::<Uuid,_>("id")).bind(j.plan).bind(org.0).fetch_all(&mut *tx).await?;
+            let children=sqlx::query("SELECT * FROM migration_admitted_metadata_mapping WHERE parent_mapping_id=$1 AND plan_id=$2 AND organization_id=$3 AND execute_unit ORDER BY id LIMIT 51").bind(m.get::<Uuid,_>("id")).bind(j.plan).bind(org.0).fetch_all(&mut *tx).await?;
             if children.len() > 50 {
                 return Err(MigrationError::StorageLimit);
             }

@@ -656,7 +656,7 @@ impl Prep {
         counts.people.source = people.get("source");
         counts.people.eligible = people.get("eligible");
         counts.people.excluded = people.get("excluded");
-        let groups=sqlx::query("SELECT kind,CASE WHEN disposition IN ('create_matching','map_existing') THEN 'eligible' ELSE disposition END AS disposition,count(*) AS n FROM migration_admitted_metadata_mapping WHERE plan_id=$1 AND organization_id=$2 GROUP BY kind,2 UNION ALL SELECT kind,disposition,count(*) AS n FROM migration_admitted_metadata_operation WHERE plan_id=$1 AND organization_id=$2 GROUP BY kind,disposition").bind(self.plan).bind(self.org.0).fetch_all(&mut *c).await?;
+        let groups=sqlx::query("SELECT kind,CASE WHEN disposition IN ('create_matching','map_existing') THEN 'eligible' ELSE disposition END AS disposition,count(*) AS n FROM migration_admitted_metadata_mapping WHERE plan_id=$1 AND organization_id=$2 AND execute_unit GROUP BY kind,2 UNION ALL SELECT kind,disposition,count(*) AS n FROM migration_admitted_metadata_operation WHERE plan_id=$1 AND organization_id=$2 GROUP BY kind,disposition").bind(self.plan).bind(self.org.0).fetch_all(&mut *c).await?;
         for row in groups {
             let kind: String = row.get("kind");
             let disposition: String = row.get("disposition");
@@ -703,9 +703,13 @@ async fn unit(
     let mut tx = lifecycle_tx(pool, &ctx).await?;
     sqlx::query("SELECT s.id FROM migration_snapshot s JOIN migration_snapshot_storage l ON l.organization_id=s.organization_id WHERE s.id=$1 AND s.organization_id=$2 FOR UPDATE OF s,l").bind(candidate.get::<Uuid,_>("snapshot_id")).bind(org.0).fetch_one(&mut *tx).await?;
     let r=sqlx::query("SELECT * FROM migration_admitted_metadata_import WHERE id=$1 AND organization_id=$2 FOR UPDATE").bind(import).bind(org.0).fetch_one(&mut *tx).await?;
-    if r.get::<String, _>("state") != "proposed"
+    let is_remainder = r.get::<Option<Uuid>, _>("predecessor_import_id").is_some()
+        && r.get::<String, _>("phase") == "preparation";
+    if (!is_remainder
+        && (r.get::<String, _>("state") != "proposed"
+            || r.get::<Option<Uuid>, _>("confirmed_plan_id").is_some()))
+        || (is_remainder && r.get::<String, _>("state") != "queued")
         || r.get::<Uuid, _>("executor_user_id") != ctx.actor_user_id.0
-        || r.get::<Option<Uuid>, _>("confirmed_plan_id").is_some()
     {
         return Ok(false);
     }
@@ -751,6 +755,9 @@ async fn unit(
         "cohort" => j.cohort(&mut tx, key, &p).await?,
         "values" => j.values(&mut tx, key, &p).await?,
         "seal" => j.finish(&mut tx, key).await?,
+        "remainder_mappings" | "remainder_people" | "remainder_operations" => {
+            super::remainder::step(&mut tx, key, org, import, plan, &p).await?
+        }
         _ => return Err(MigrationError::Conflict),
     }
     let actual: i64 = sqlx::query_scalar(
@@ -764,6 +771,9 @@ async fn unit(
         .execute(&mut *tx)
         .await?;
     w::settle(&mut tx, org, import, reservation, actual).await?;
+    if is_remainder && p.get::<String, _>("preparation_phase") == "seal" {
+        sqlx::query("UPDATE migration_admitted_metadata_import SET phase='catalog',checkpoint_id=NULL,settled_eligible_people=0,held_settled_people=0 WHERE id=$1 AND organization_id=$2").bind(import).bind(org.0).execute(&mut *tx).await?;
+    }
     let changed=sqlx::query("UPDATE migration_admitted_metadata_import SET lease_token=NULL,lease_expires_at=NULL,updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2 AND lease_token=$3 AND lease_expires_at>clock_timestamp()").bind(import).bind(org.0).bind(lease).execute(&mut *tx).await?.rows_affected();
     if changed != 1 {
         return Err(MigrationError::ImportBusy);
@@ -772,7 +782,7 @@ async fn unit(
     Ok(true)
 }
 pub(crate) async fn run_once(pool: &PgPool, key: &RawPayloadKey) -> Result<bool, MigrationError> {
-    let candidate=sqlx::query("SELECT i.* FROM migration_admitted_metadata_import i JOIN migration_admitted_metadata_plan p ON p.id=i.latest_plan_id AND p.organization_id=i.organization_id WHERE i.state='proposed' AND p.state='building' AND (i.lease_expires_at IS NULL OR i.lease_expires_at<=clock_timestamp()) ORDER BY i.created_at,i.id LIMIT 1").fetch_optional(pool).await?;
+    let candidate=sqlx::query("SELECT i.* FROM migration_admitted_metadata_import i JOIN migration_admitted_metadata_plan p ON p.id=i.latest_plan_id AND p.organization_id=i.organization_id WHERE (i.state='proposed' OR i.state='queued' AND p.remainder_plan_id IS NOT NULL) AND p.state='building' AND (i.lease_expires_at IS NULL OR i.lease_expires_at<=clock_timestamp()) ORDER BY i.created_at,i.id LIMIT 1").fetch_optional(pool).await?;
     let Some(candidate) = candidate else {
         return Ok(false);
     };
@@ -785,7 +795,7 @@ pub(crate) async fn run_once(pool: &PgPool, key: &RawPayloadKey) -> Result<bool,
                 MigrationError::Forbidden => "authority",
                 _ => "preparation_failed",
             };
-            sqlx::query("UPDATE migration_admitted_metadata_import SET state='paused',pause_reason=$3,lease_token=NULL,lease_expires_at=NULL WHERE id=$1 AND organization_id=$2 AND state='proposed' AND executor_user_id=$4 AND latest_plan_id=$5").bind(candidate.get::<Uuid,_>("id")).bind(candidate.get::<Uuid,_>("organization_id")).bind(reason).bind(candidate.get::<Uuid,_>("executor_user_id")).bind(candidate.get::<Option<Uuid>,_>("latest_plan_id")).execute(pool).await?;
+            sqlx::query("UPDATE migration_admitted_metadata_import SET state='paused',pause_reason=$3,lease_token=NULL,lease_expires_at=NULL WHERE id=$1 AND organization_id=$2 AND state IN ('proposed','queued') AND phase='preparation' AND executor_user_id=$4 AND latest_plan_id=$5").bind(candidate.get::<Uuid,_>("id")).bind(candidate.get::<Uuid,_>("organization_id")).bind(reason).bind(candidate.get::<Uuid,_>("executor_user_id")).bind(candidate.get::<Option<Uuid>,_>("latest_plan_id")).execute(pool).await?;
             Err(error)
         }
     }

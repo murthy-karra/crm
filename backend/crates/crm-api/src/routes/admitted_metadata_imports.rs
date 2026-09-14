@@ -80,7 +80,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/migrations/fub/admitted-metadata-imports/{id}/plans/{plan}/records/{record}/fields/{field}",get(record_field))
         .route("/api/migrations/fub/admitted-metadata-imports/{id}/results",get(results))
         .route("/api/migrations/fub/admitted-metadata-imports/{id}/results/{result}/fields/{field}",get(result_field))
-        .route("/api/migrations/fub/admitted-metadata-imports/{id}/remainder",get(remainder))
+        .route("/api/migrations/fub/admitted-metadata-imports/{id}/remainder",get(remainder).post(create_remainder))
         .route("/api/people/{person}/admitted-metadata-import-provenance",get(provenance))
         .route("/api/people/{person}/admitted-metadata-import-provenance/{result}/fields/{field}",get(provenance_field))
         .layer(DefaultBodyLimit::max(64 * 1024))
@@ -509,6 +509,30 @@ async fn field_response(
                 owner,
                 &field,
                 q,
+            ),
+        )
+        .await?,
+    ))
+}
+
+async fn create_remainder(
+    State(s): State<AppState>,
+    a: OrgAdminContext,
+    p: Result<Path<Uuid>, PathRejection>,
+    b: Result<Json<i::Request>, JsonRejection>,
+) -> Result<Response, ApiError> {
+    let release = s.current_import_release().await;
+    Ok(response(
+        StatusCode::ACCEPTED,
+        i::with_policy(
+            &s.snapshot_policy,
+            i::create_remainder(
+                s.db.as_ref().ok_or(ApiError::Unavailable)?,
+                &s.raw_payload_key,
+                release.as_deref(),
+                &CommandContext::from_auth(&a.auth),
+                path(p)?,
+                body(b)?,
             ),
         )
         .await?,

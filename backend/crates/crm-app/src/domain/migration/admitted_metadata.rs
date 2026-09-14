@@ -20,6 +20,8 @@ use uuid::Uuid;
 
 mod preparation;
 mod readers;
+mod remainder;
+pub use remainder::create as create_remainder;
 mod view;
 pub use super::metadata::{FieldQuery, MetadataPage as PlanPage};
 pub(crate) use preparation::run_once as prepare_once;
@@ -593,19 +595,23 @@ async fn replay_receipt(
     digest: &[u8; 32],
     import: Uuid,
 ) -> Result<Option<Value>, MigrationError> {
-    let row = sqlx::query("SELECT digest,nonce,ciphertext,snapshot_id FROM migration_admitted_metadata_receipt WHERE organization_id=$1 AND actor_user_id=$2 AND action=$3 AND request_id=$4")
+    let row = sqlx::query("SELECT digest,nonce,ciphertext,snapshot_id,import_id FROM migration_admitted_metadata_receipt WHERE organization_id=$1 AND actor_user_id=$2 AND action=$3 AND request_id=$4")
         .bind(ctx.organization_id.0).bind(ctx.actor_user_id.0).bind(action).bind(request_id).fetch_optional(&mut *conn).await?;
     let Some(row) = row else { return Ok(None) };
     if row.get::<Vec<u8>, _>("digest") != digest {
         return Err(MigrationError::Conflict);
     }
     let snapshot: Uuid = row.get("snapshot_id");
+    let receipt_import: Uuid = row.get("import_id");
+    if action != "remainder" && receipt_import != import {
+        return Err(MigrationError::Conflict);
+    }
     let raw = crypto::open_snapshot(
         key,
         ctx.organization_id,
         snapshot,
         request_id,
-        &format!("admitted-metadata-v1:{import}:receipt"),
+        &format!("admitted-metadata-v1:{receipt_import}:receipt"),
         &row.get::<Vec<u8>, _>("nonce"),
         &row.get::<Vec<u8>, _>("ciphertext"),
     )

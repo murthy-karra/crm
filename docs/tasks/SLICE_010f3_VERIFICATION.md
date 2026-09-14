@@ -475,3 +475,50 @@ perf-harness` (`admitted-review1-owner-api-clippy3.log`). Both commands use
 `git diff --check` also pass. The coordinator owns the combined final gates,
 183-variant schema-readiness regression and subsequent independent review;
 those are not claimed by this lane.
+
+## Independent review round 2: reuse the settled-cohort index
+
+The second review found that `am_admission_tag_source` from migration 009 is an
+exact duplicate of
+`migration_people_admission_result_settled_cohort_source_page`, installed by
+`20260930000005`. Correction `7a39345` preserves applied migration 009 verbatim
+and adds `20261002000010`, which drops only the redundant index. The hot-plan
+assertion now uses the established index; the coordinator owns the matching
+schema-readiness correction. This is a bounded correction in the second review cycle, not a third review.
+
+Inspection of `admitted-review1-owner-hot1.log` showed that the retained tag
+plan actually used the redundant index. Its tag-only plan must therefore be
+replaced; the other eight owner plans, earlier seventeen plans, paired Today
+measurement and functional evidence remain applicable. The `tag-index` fixture
+mode performs one EXPLAIN for the unchanged production tag statement at the
+same 25,000 People/fifty-member cardinality. It asserts that migration 010
+removed the redundant index, that the established index serves the exact
+settled-admission probe, and that the late source keyset returns one row.
+
+```sh
+CRM_ADMITTED_PREPARATION_PLAN=tag-index python3 /private/tmp/crm-mobile005-010f3/run-db-check.py --lane migration --log admitted-review2-tag-index1.log -- cargo test -p crm-api --features perf-harness --test all admitted_metadata_preparation_hot_steps_at_d050 -- --ignored --test-threads=1 --nocapture
+```
+
+At `7a39345`, migration 010 and the redundant-index absence check succeeded;
+the one actual tag EXPLAIN used
+`migration_people_admission_result_settled_cohort_source_page` with an index-only
+admission probe and the staged source keyset index, returning one late source
+row in 0.063ms. `admitted-review2-tag-index1.log` retains the full plan and the
+subsequent test-only failure: PostgreSQL's JSON `Actual Rows` was `1.0`, while
+the assertion compared it to integer `1`. Correction `c5227c9` reads the numeric
+value through `as_f64()` and uses the same assertion for both live and recorded
+plans. The actual synthetic plan is retained in
+`backend/crates/crm-api/tests/fixtures/admitted_metadata_tag_index_plan.json`;
+its dedicated unit replay avoids a second EXPLAIN of unchanged SQL.
+
+The recorded-plan validator passes at `c5227c9` in
+`admitted-review2-tag-index-replay2.log` (1 test, 0.00s). It runs no database
+query. The original SQL run remains recorded as FAIL due to its numeric
+assertion; its successful migration/absence assertion and captured 0.063ms plan,
+together with the passing shared validator, provide the corrected index proof.
+The unit command is `cargo test --manifest-path backend/Cargo.toml -p crm-api
+--features perf-harness --test all
+admitted_metadata_recorded_tag_plan_reuses_established_index -- --test-threads=1`
+with the migration target and offline environment stated above. Formatting and
+`git diff --check` pass. No functional matrix, other EXPLAIN or Today measurement
+was repeated for this index-only correction.

@@ -33,19 +33,25 @@ metadata gate tests and eight workspace-readiness unit tests passing; the earlie
 four guard failures remain recorded in its evidence. These focused passes do
 not verify the full admitted workflow.
 
-The mobile backend contract is frozen, compilation/parser checks pass, and its
-Mobile004 stage regression passes. Contact-trigger corrections, new details
-DB/API acceptance and coordinator capture-overlap tests remain in progress.
-The `bfac8b4` backend handoff is integrated and both native lanes are active. Each lane records concrete
+The mobile backend contract is frozen and integrated through `382aadc`. Eight
+focused DB/API checks pass, including capture/profile lock overlap, complete
+bounded traversal, tenant denial, atomic receipt/replay/no-op/conflict and
+publish-failure recovery. Legacy mobile and capture regressions also pass.
+The native API fixture is served by an immutable private copy of the `382aadc`
+binary on3103; it includes the required empty `added_contact_ids` array for
+name-only/edit/remove receipts, while old receipt kinds omit that field.
+Both native lanes remain active. Android has upgrade/storage and repository/API
+proof; actual Compose acceptance is in progress. Each lane records concrete
 schema/DTO/lock/guard contracts and runs isolated focused checks. Coordinator owns shared integration and sequential
 final `scripts/check`, `scripts/sqlx-prepare`, `scripts/check-db`; database gates do
 not overlap. Independent implementation review, real native/browser acceptance,
 populated-store upgrade and D-050 evidence remain required.
 
 Private evidence is under the listed root: `integration/preflight-inventory-tests-fixed.log`,
-`integration/web-realtime-tests.log`, `mobile/db_mobile004.log` and the migration
-lane's verification record. Xcode currently reports 26.6 (17F113); the iOS26.5
-simulators and Android37 emulator exist but were shut down at the current inventory.
+`integration/web-realtime-tests.log`, `integration/mobile005-integrated-tests3.log`,
+`integration/mobile005-legacy-and-capture-regression.log`, `mobile/db_mobile004.log`
+and the migration lane's verification record. Xcode reports26.6 (17F113);
+native QA uses the iOS26.5 simulator and Android37 emulator with isolated identities.
 The four protected API/Web listeners remain at their original PIDs and ports.
 Actual commands, failures and tested revisions will be linked as lanes complete.
 No check is passed merely because its requirements were reviewed. Two implementation

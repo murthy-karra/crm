@@ -118,7 +118,7 @@ pub async fn update_person_details_in_transaction(
     if person.details_revision != cmd.expected_details_revision {
         return Ok(None);
     }
-    let rows = sqlx::query("SELECT id,kind,value,normalized_value FROM contact_method WHERE organization_id=$1 AND person_id=$2 FOR UPDATE")
+    let rows = sqlx::query("SELECT id,kind,value,normalized_value FROM contact_method WHERE organization_id=$1 AND person_id=$2 ORDER BY id FOR UPDATE")
         .bind(ctx.organization_id.0).bind(cmd.person_id.0).fetch_all(&mut *conn).await?;
     let mut contacts: Vec<Contact> = rows
         .into_iter()

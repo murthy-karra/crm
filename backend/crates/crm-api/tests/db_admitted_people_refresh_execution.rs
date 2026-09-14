@@ -476,11 +476,24 @@ async fn completed_admitted_refresh_replays_preserves_bytes_and_advances_baselin
     let command = confirmation(&detail);
     let receipt = confirm(&f, run, &command).await;
     drain(&f, run).await;
-    assert_eq!(native(&f, person).await["person"]["first_name"], "Changed");
+    let changed = native(&f, person).await;
+    assert_eq!(changed["person"]["first_name"], "Changed");
+    assert!(original["person"]["details_revision"].as_i64().unwrap() > 1,
+        "admission contact inserts must advance the derived details revision through their narrow permit");
+    assert!(
+        changed["person"]["details_revision"].as_i64().unwrap()
+            > original["person"]["details_revision"].as_i64().unwrap(),
+        "admitted refresh names and contacts must advance the details revision"
+    );
     assert_eq!(
         confirm(&f, run, &command).await,
         receipt,
         "confirm replay receipt"
+    );
+    assert_eq!(
+        native(&f, person).await,
+        changed,
+        "confirmation replay preserves native data and all derived revisions"
     );
     let stored: i64 = sqlx::query_scalar(
         "SELECT retained_bytes FROM migration_admitted_people_refresh WHERE id=$1",
@@ -1269,7 +1282,7 @@ async fn qualified_later_stage_transition_is_once_and_failure_rolls_back_revisio
 ) {
     async fn stage_state(f: &Fixture, person: Uuid) -> Value {
         sqlx::query_scalar(
-            "SELECT jsonb_build_object('stage_id',stage_id,'stage_revision',stage_revision,'mobile_revision',mobile_revision) FROM person WHERE organization_id=$1 AND id=$2",
+            "SELECT jsonb_build_object('stage_id',stage_id,'stage_revision',stage_revision,'mobile_revision',mobile_revision,'details_revision',details_revision) FROM person WHERE organization_id=$1 AND id=$2",
         )
         .bind(f.org)
         .bind(person)
@@ -1311,6 +1324,10 @@ async fn qualified_later_stage_transition_is_once_and_failure_rolls_back_revisio
     drain(&f, run).await;
     let after = stage_state(&f, person).await;
     assert_eq!(after["stage_id"], qualified_stage.to_string());
+    assert_eq!(
+        after["details_revision"], before["details_revision"],
+        "a stage-only admitted refresh cannot conflict with a queued profile edit"
+    );
     assert_eq!(
         after["stage_revision"].as_i64().unwrap(),
         before["stage_revision"].as_i64().unwrap() + 1,

@@ -7,10 +7,10 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
-env_file="$repo_root/.env"
+env_file="${CRM_CHECK_ENV_FILE:-$repo_root/.env}"
 
 if [ ! -f "$env_file" ]; then
-  echo ".env not found at repo root. Copy .env.example to .env and fill in values first." >&2
+  echo "Check environment file not found. Copy .env.example and fill in the required values first." >&2
   exit 1
 fi
 
@@ -69,14 +69,15 @@ echo "==> applying migrations (CLI migrator; no compilation required)"
 cargo sqlx migrate run --source crates/crm-api/migrations --database-url "$prepare_url"
 
 echo "==> preparing offline query cache (backend/.sqlx/)"
-# Shares the main target dir (unlike scripts/check-db's isolated one) because
-# this only runs when queries actually changed, so the SQLX_OFFLINE=false
-# fingerprint clobber it causes forces a relink that was already justified.
+# By default this shares the main target dir because changed queries already
+# justify a relink. A coordinator can set CRM_SQLX_TARGET_DIR to reuse the
+# isolated online-schema target from check-db and preserve offline fingerprints.
 # `crm-api` consolidates integration coverage into `tests/all.rs` and this
 # slice freezes one pre-source Today query there for executable parity. Keep
 # every production *and test* macro statement in the checked offline cache;
 # otherwise a clean `SQLX_OFFLINE=true cargo test --test all` can fail after
 # this script reports success.
-DATABASE_URL="$prepare_url" SQLX_OFFLINE=false cargo sqlx prepare --workspace -- --all-targets
+CARGO_TARGET_DIR="${CRM_SQLX_TARGET_DIR:-${CARGO_TARGET_DIR:-$repo_root/backend/target}}" \
+  DATABASE_URL="$prepare_url" SQLX_OFFLINE=false cargo sqlx prepare --workspace -- --all-targets
 
 echo "==> sqlx-prepare complete"

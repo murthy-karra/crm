@@ -2759,6 +2759,69 @@ async fn mobile005_profile_snapshot(f: &Fixture) -> Value {
 
 #[sqlx::test]
 #[ignore]
+async fn mobile005_revision_overflow_rolls_back_contacts_but_allows_erasure(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let contact: Uuid = sqlx::query_scalar("INSERT INTO contact_method(organization_id,person_id,kind,value,normalized_value) VALUES($1,$2,'email','overflow@example.test','overflow@example.test') RETURNING id")
+        .bind(f.org).bind(f.person).fetch_one(&f.app).await.unwrap();
+    let mut setup = pool.begin().await.unwrap();
+    sqlx::query("ALTER TABLE person DISABLE TRIGGER mobile_details_revision")
+        .execute(&mut *setup)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE person SET details_revision=9223372036854775807 WHERE id=$1")
+        .bind(f.person)
+        .execute(&mut *setup)
+        .await
+        .unwrap();
+    sqlx::query("ALTER TABLE person ENABLE TRIGGER mobile_details_revision")
+        .execute(&mut *setup)
+        .await
+        .unwrap();
+    setup.commit().await.unwrap();
+    let before = mobile005_profile_snapshot(&f).await;
+    for patch in [
+        json!({"first_name":"Would overflow"}),
+        json!({"contact_operations":[{"op":"add","kind":"phone","value":"4155550111"}]}),
+        json!({"contact_operations":[{"op":"edit","id":contact,"value":"changed@example.test"}]}),
+        json!({"contact_operations":[{"op":"remove","id":contact}]}),
+    ] {
+        let mut payload = json!({"person_id":f.person,"expected_details_revision":i64::MAX.to_string(),"contact_operations":[]});
+        payload
+            .as_object_mut()
+            .unwrap()
+            .extend(patch.as_object().unwrap().clone());
+        let (status, error) = f
+            .post(
+                "/api/mobile/v1/operations",
+                f.operation("update_person_details", payload),
+            )
+            .await;
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{error}");
+        assert_eq!(
+            mobile005_profile_snapshot(&f).await,
+            before,
+            "revision overflow must roll back contacts and receipt together"
+        );
+    }
+    // Erasure must not require incrementing the already-absent parent token.
+    sqlx::query("DELETE FROM person WHERE id=$1 AND organization_id=$2")
+        .bind(f.person)
+        .bind(f.org)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM contact_method WHERE person_id=$1")
+            .bind(f.person)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        0
+    );
+}
+
+#[sqlx::test]
+#[ignore]
 async fn mobile005_profile_validation_swaps_and_primary_order_are_atomic(pool: PgPool) {
     let f = fixture(&pool).await;
     let contacts: Vec<Uuid> = sqlx::query_scalar("INSERT INTO contact_method(organization_id,person_id,kind,value,normalized_value,import_order,created_at) SELECT $1,$2,'email',v,v,n,now()-interval '2 days' FROM (VALUES('a@example.test',1),('b@example.test',2)) x(v,n) RETURNING id")

@@ -56,7 +56,20 @@ Only worker scheduling is controlled; real typed workers and commands apply data
 Private worker-unit grants allow a partial cancellation and exact remainder to be
 observed through the production Web/API. It does not use a live source reader.
 
-Required next evidence: actual desktop and 390px production-Web/API preview,
+At Web/API source `b90c416`, the private production build passed in
+`metadata-ui/web-build1.log`. The seeded immutable test binary serves API3104;
+private `runtime.json` records its PID, source and SHA-256. The first launcher
+checked the incorrect `/health` path and stopped only its own process; it resumed
+the existing seeded database using `/internal/ready` without reseeding.
+
+The first browser script waited for an incorrect login route and failed before
+the journey assertion. Correcting it to the actual `/api/session` produced a pass:
+`metadata-ui/browser-start2.log` verifies genuine login, completed parent and
+available admission cohort, zero page errors, and document/viewport width390px.
+Desktop and phone selector screenshots are retained and visually inspected.
+This is initial navigation evidence; it does not assert a completed import.
+
+Required next evidence: actual desktop and390px production-Web/API preview,
 mappings, confirmation, partial cancellation, exact remainder, reconciliation,
 source/field paging, reload and Person provenance; source/original/native/ledger
-preservation. This record makes no browser, deployment or release claim yet.
+preservation. Deployment and release remain outside this implementation pass.

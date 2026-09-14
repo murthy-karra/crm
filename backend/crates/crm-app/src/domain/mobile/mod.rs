@@ -477,10 +477,13 @@ pub async fn current_details(
     cursor: Option<&str>,
     keys: &ReceiptKeys,
 ) -> Result<Value, MobileError> {
-    let mut tx = begin(pool, auth, true).await?;
+    // Read the current committed profile after any in-flight parent writer,
+    // then prevent names/contacts changing until this bounded page is complete.
+    // REPEATABLE READ plus a second SELECT would only re-read the old snapshot.
+    let mut tx = begin(pool, auth, false).await?;
     context(&mut tx, auth, context_id, false).await?;
     authority(&mut tx, auth, false).await?;
-    let row = sqlx::query("SELECT mobile_revision,details_revision,first_name,last_name FROM person WHERE organization_id=$1 AND id=$2")
+    let row = sqlx::query("SELECT mobile_revision,details_revision,first_name,last_name FROM person WHERE organization_id=$1 AND id=$2 FOR SHARE")
         .bind(auth.active_organization_id.0).bind(person_id).fetch_optional(&mut *tx).await?.ok_or_else(missing)?;
     let current: i64 = row.get("details_revision");
     let after_id = if let Some(cursor) = cursor {

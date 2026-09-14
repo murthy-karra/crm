@@ -49,12 +49,27 @@ publish-failure recovery. Legacy mobile and capture regressions also pass.
 The native API fixture is served by an immutable private copy of the `382aadc`
 binary on3103; it includes the required empty `added_contact_ids` array for
 name-only/edit/remove receipts, while old receipt kinds omit that field.
-Both native lanes remain active. Android has upgrade/storage and repository/API
-proof; actual Compose editor submission passes and restart/conflict acceptance
-is in progress. iOS has populated-store upgrade, storage/model, real API and
-conflict/replacement proof; full multi-field offline/restart acceptance is in
-progress. The large-contact fixture exposed action placement problems in the
-native UI; fixes are being checked against the complete profile. Each lane records concrete
+iOS checkpoint `125d044` is integrated as `a19fc88`: populated-store upgrade,
+39 storage/model tests, real API replay, full multi-field offline/restart/sync
+and conflict/replacement UI proofs pass. Android retains its populated-store
+upgrade and repository/API proofs while finishing actual Compose restart,
+conflict/replacement acceptance and platform gates. The large-contact fixture
+exposed action placement problems, now fixed in iOS and checked in Android.
+
+The literal010f3 Web contract is integrated, and Web implementation is checkpointed
+at `b90c416`. Focused component/view checks, lint, typecheck and the isolated
+production build pass. The real synthetic API3104/browser5174 journey has passed
+login, completed-import/cohort selection and390px overflow/error checks; full
+preparation/execution/remainder acceptance awaits the migration transport and
+staged-preparation checkpoint. Original/admitted shared catalog compatibility is
+integrated through `1d2d2b7`; new staged preparation remains in the migration lane.
+
+Mobile005 independent implementation review round1 is active. Four actionable
+backend/iOS findings cover current-profile concurrency, direct revision changes,
+native display/primary fallback order and same-transaction add order. Coordinator
+fixes are in progress, with four focused DB regressions and40 iOS storage/model
+tests already passing. Android is incorporating the corresponding display fix.
+No implementation review has been declared READY. Each lane records concrete
 schema/DTO/lock/guard contracts and runs isolated focused checks. Coordinator owns shared integration and sequential
 final `scripts/check`, `scripts/sqlx-prepare`, `scripts/check-db`; database gates do
 not overlap. Independent implementation review, real native/browser acceptance,

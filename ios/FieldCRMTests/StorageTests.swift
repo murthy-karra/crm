@@ -136,6 +136,33 @@ final class StorageTests: XCTestCase {
         XCTAssertEqual(reopened.methods.map(\.value), ["555-0109", "saved@example.test"])
         XCTAssertEqual(DetailsEditorProjection.proposal(firstName: reopened.firstName, lastName: reopened.lastName, methods: reopened.methods, baseline: baseline), savedProposal, "Reopening a protected draft retains its sparse proposal and stable local add ID.")
     }
+    func testMobile005ContactDisplayUsesServerOrderAndPreviewsPrimaryPerKind() throws {
+        func contact(_ suffix: String, _ kind: String, _ order: JSON, _ created: String) -> JSON {
+            .object(["id": .s("00000000-0000-4000-8000-00000000000" + suffix), "kind": .s(kind), "value": .s(kind + suffix + "@synthetic.test"), "import_order": order, "created_at": .s(created)])
+        }
+        // UUID page order deliberately disagrees with imported/created order.
+        let native = contact("1", "email", .null, "2026-09-14T12:00:00Z")
+        let email = contact("2", "email", .number(1), "2026-09-14T12:00:00.002Z")
+        let phone = contact("3", "phone", .number(0), "2026-09-14T12:00:00Z")
+        let fallback = contact("4", "email", .number(1), "2026-09-14T12:00:00.003Z")
+        let tied = contact("5", "email", .number(1), "2026-09-14T12:00:00.003Z")
+        let raw = [native, email, phone, fallback, tied]
+        let bundle = Bundle(person: person, revision: "1", summary: .object([:]), contacts: raw, tasks: [], notes: [])
+        XCTAssertEqual(bundle.contacts, raw, "Wire page order remains unchanged.")
+        XCTAssertEqual(bundle.orderedContacts, [phone, email, fallback, tied, native])
+        let baseline: JSON = .object(["contacts": .array(raw)])
+        let proposal: JSON = .object(["contact_operations": .array([
+            .object(["op": .s("remove"), "id": email["id"]]),
+            .object(["op": .s("add"), "kind": .s("email"), "value": .s("new@synthetic.test")])])])
+        let draft = Draft(id: "ordered-draft", person: person, kind: "update_person_details", revision: 1, baseline: baseline, proposal: proposal)
+        var fields = DetailsEditorProjection.fields(for: draft)
+        XCTAssertEqual(fields.methods.filter { !$0.isNew }.map(\.id), bundle.orderedContacts.map { $0["id"].text })
+        XCTAssertEqual(DetailsEditorProjection.primaryRemovalPreviews(fields.methods), ["After sync, the first email will be email4@synthetic.test."])
+        fields.methods[fields.methods.firstIndex { $0.id == phone["id"].text }!].removed = true
+        XCTAssertEqual(DetailsEditorProjection.primaryRemovalPreviews(fields.methods), ["After sync, the first email will be email4@synthetic.test.", "After sync, this profile will have no phone contact method."])
+        XCTAssertEqual(ContactDisplayOrder.sorted([.object(["value": .s("legacy")])]), [.object(["value": .s("legacy")])])
+    }
+
     func testMobile005SchemaSevenInstalledUpgradePreservesOpaqueRowsAndRequiresCompleteDetails() throws {
         var old: LocalStore? = try open(version: 7)
         let oldGeneration = generation("1"); try stage(old!, oldGeneration); try old!.promote(seal(oldGeneration))

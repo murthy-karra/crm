@@ -55,6 +55,24 @@ Result: passed (1 test),
 
 ## Storage and model coverage
 
+### Independent review round1 correction
+
+Coordinator changes derive contact display/editor order from the complete
+`import_order NULLS LAST,created_at,id` projection while preserving stored page
+order and legacy readability. Primary-removal previews are calculated per kind
+and displayed before submission; new local methods remain a distinct section.
+A deliberately UUID-scrambled fixture covers null order, timestamp and UUID ties,
+mixed phone/email primary fallback, and unchanged raw page data.
+
+`xcodebuild` with the same scheme/destination below, coordinator root checkout,
+`-derivedDataPath /private/tmp/crm-mobile005-010f3/ios/review005`, and both
+StorageTests/ModelTests filters passed40/40, zero failures/skips. Evidence:
+`ios/mobile005-review-order-tests1.log` and
+`ios/review005/Logs/Test/Test-FieldCRMMobile005QA-2026.09.14_13-02-18--0700.xcresult`.
+The subsequent fresh-add button adjustment appends entries within the distinct
+New section to preserve user insertion order; final native checks remain pending
+for that adjustment. This is round1 correction evidence, not review approval.
+
 ```text
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -quiet \
   -project ios/FieldCRM.xcodeproj -scheme FieldCRMMobile005QA \

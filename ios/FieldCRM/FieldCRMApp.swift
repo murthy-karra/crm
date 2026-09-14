@@ -215,7 +215,7 @@ struct PersonView: View {
                 Section("Contact methods") {
                     // Keep imported/server ordering stable while placing action
                     // controls before a long contact history.
-                    ForEach(Array(bundle.contacts.enumerated()), id: \.offset) { _, contact in Text(contact["value"].text).textSelection(.enabled) }
+                    ForEach(Array(bundle.orderedContacts.enumerated()), id: \.offset) { _, contact in Text(contact["value"].text).textSelection(.enabled) }
                 }
                 if !overlays.isEmpty {
                     Section("Saved changes on this device") {
@@ -292,7 +292,7 @@ enum DetailsEditorProjection {
         let savedProposal = draft.proposal ?? .object([:])
         var firstName = baseline["first_name"].text
         var lastName = baseline["last_name"].text
-        var methods = baseline["contacts"].list.map {
+        var methods = ContactDisplayOrder.sorted(baseline["contacts"].list).map {
             DetailsEditorMethod(id: $0["id"].text, kind: $0["kind"].text, value: $0["value"].text, original: $0["value"].text, removed: false, isNew: false)
         }
         var added: [DetailsEditorMethod] = []
@@ -317,6 +317,20 @@ enum DetailsEditorProjection {
             lastName = last == .null ? "" : last.text
         }
         return (firstName, lastName, added + methods)
+    }
+
+    static func primaryRemovalPreviews(_ methods: [DetailsEditorMethod]) -> [String] {
+        ["email", "phone"].compactMap { kind in
+            let existing = methods.filter { !$0.isNew && $0.kind == kind }
+            guard existing.first?.removed == true else { return nil }
+            if let next = existing.first(where: { !$0.removed }) {
+                return "After sync, the first \(kind) will be \(next.value)."
+            }
+            if methods.contains(where: { $0.isNew && $0.kind == kind && !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+                return "After sync, a newly added \(kind) will become the first \(kind)."
+            }
+            return "After sync, this profile will have no \(kind) contact method."
+        }
     }
 
     static func proposal(firstName: String, lastName: String, methods: [DetailsEditorMethod], baseline: JSON) -> JSON {
@@ -391,11 +405,12 @@ struct DetailsComposerView: View {
                     Section("Name") {
                         TextField("First name", text: $firstName).onChange(of: firstName) { _, _ in autosave() }.accessibilityIdentifier("profileFirstName")
                         TextField("Last name", text: $lastName).onChange(of: lastName) { _, _ in autosave() }.accessibilityIdentifier("profileLastName")
-                        Button("Add email") { methods.insert(DetailsEditorMethod(id: UUID().uuidString, kind: "email", value: "", original: "", removed: false, isNew: true), at: 0) }.accessibilityIdentifier("profileAddEmail")
-                        Button("Add phone") { methods.insert(DetailsEditorMethod(id: UUID().uuidString, kind: "phone", value: "", original: "", removed: false, isNew: true), at: 0) }.accessibilityIdentifier("profileAddPhone")
+                        Button("Add email") { methods.append(DetailsEditorMethod(id: UUID().uuidString, kind: "email", value: "", original: "", removed: false, isNew: true)) }.accessibilityIdentifier("profileAddEmail")
+                        Button("Add phone") { methods.append(DetailsEditorMethod(id: UUID().uuidString, kind: "phone", value: "", original: "", removed: false, isNew: true)) }.accessibilityIdentifier("profileAddPhone")
                     }
                     if methods.contains(where: { $0.isNew }) {
                         Section("New contact methods") {
+                            Text("New methods appear after existing methods once accepted by the server.").font(.caption).foregroundStyle(.secondary)
                             ForEach($methods) { $method in
                                 if method.isNew {
                                     VStack(alignment: .leading) {
@@ -409,6 +424,9 @@ struct DetailsComposerView: View {
                     }
                     Section {
                         Text(status).font(.caption).foregroundStyle(failed ? .red : .secondary).accessibilityIdentifier("profileDraftStatus")
+                        ForEach(DetailsEditorProjection.primaryRemovalPreviews(methods), id: \.self) { preview in
+                            Text(preview).font(.caption).foregroundStyle(.orange)
+                        }
                         Button(draft.mode == "follow_up" ? "Save profile draft — waiting for previous change" : "Save profile change on device") { submit() }
                             .disabled(failed).accessibilityIdentifier("saveProfile")
                         if failed { Button("Retry saving profile draft") { autosave() } }
@@ -424,7 +442,6 @@ struct DetailsComposerView: View {
                                 }
                             }
                         }
-                        if methods.first?.removed == true { Text("Removing the first displayed method will reveal the next contact after sync.").font(.caption).foregroundStyle(.orange) }
                     }
                     Text("Saved profile changes stay separate from call and message destinations until the server accepts them.").font(.caption).foregroundStyle(.secondary)
                 }

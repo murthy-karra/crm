@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 
+use chrono::{DateTime, Duration, Utc};
 use sqlx::{PgConnection, Row};
 use uuid::Uuid;
 
@@ -120,8 +121,23 @@ pub async fn update_person_details_in_transaction(
     if person.details_revision != cmd.expected_details_revision {
         return Ok(None);
     }
-    let rows = sqlx::query("SELECT id,kind,value,normalized_value FROM contact_method WHERE organization_id=$1 AND person_id=$2 ORDER BY id FOR UPDATE")
+    let rows = sqlx::query("SELECT id,kind,value,normalized_value,import_order,created_at FROM contact_method WHERE organization_id=$1 AND person_id=$2 ORDER BY id FOR UPDATE")
         .bind(ctx.organization_id.0).bind(cmd.person_id.0).fetch_all(&mut *conn).await?;
+    // PostgreSQL now() is shared by every insertion in this transaction. Use
+    // strictly increasing server timestamps so native additions preserve their
+    // request order under the existing (import_order,created_at,id) display key.
+    // Also append after an existing native method if the server clock moved back.
+    let mut next_created_at = DateTime::<Utc>::from_timestamp_micros(Utc::now().timestamp_micros())
+        .ok_or(CommandError::Corrupt)?;
+    for row in &rows {
+        if row.get::<Option<i32>, _>("import_order").is_none() {
+            let after = row
+                .get::<DateTime<Utc>, _>("created_at")
+                .checked_add_signed(Duration::microseconds(1))
+                .ok_or(CommandError::Corrupt)?;
+            next_created_at = next_created_at.max(after);
+        }
+    }
     let mut contacts: Vec<Contact> = rows
         .into_iter()
         .map(|row| Contact {
@@ -283,7 +299,10 @@ pub async fn update_person_details_in_transaction(
     for (op, id, kind, value, normalized) in mutations {
         match op.as_str() {
             "add" => {
-                sqlx::query("INSERT INTO contact_method(id,organization_id,person_id,kind,value,normalized_value) VALUES($1,$2,$3,$4,$5,$6)").bind(id).bind(ctx.organization_id.0).bind(cmd.person_id.0).bind(kind).bind(value).bind(normalized).execute(&mut *conn).await?;
+                sqlx::query("INSERT INTO contact_method(id,organization_id,person_id,kind,value,normalized_value,created_at) VALUES($1,$2,$3,$4,$5,$6,$7)").bind(id).bind(ctx.organization_id.0).bind(cmd.person_id.0).bind(kind).bind(value).bind(normalized).bind(next_created_at).execute(&mut *conn).await?;
+                next_created_at = next_created_at
+                    .checked_add_signed(Duration::microseconds(1))
+                    .ok_or(CommandError::Corrupt)?;
             }
             "edit" => {
                 sqlx::query("UPDATE contact_method SET value=$3,normalized_value=$4 WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id.0).bind(value).bind(normalized).execute(&mut *conn).await?;

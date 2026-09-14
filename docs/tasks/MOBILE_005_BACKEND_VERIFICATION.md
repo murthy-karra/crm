@@ -59,6 +59,33 @@ corrected before the final8/8 pass.
 
 ## Remaining integrated coverage
 
+### Independent review round1 corrections
+
+The current-details read now takes the Person share lock under READ COMMITTED,
+then holds it through the bounded page and final validation. The prior repeated
+SELECT under REPEATABLE READ could not observe an overlapping committed writer.
+Additive migration `20261001000003` rejects caller-invented revision increments
+while preserving nested contact-trigger increments and derived name revisions.
+
+Four tests passed through the private integration helper/nextest in
+`integration/mobile005-review-fixes-db.log` (155.78s including build):
+`mobile005_current_final_page_waits_for_parent_writer`,
+`mobile005_details_revision_rejects_direct_increments`,
+`mobile005_profile_pages_bound_bytes_pin_revision_and_preserve_lease`, and
+`mobile005_revision_overflow_rolls_back_contacts_but_allows_erasure`.
+The controlled final-page test observes the reader blocked on the parent writer,
+commits a name change and verifies409 rather than a completed stale traversal.
+
+An additional round1 correction assigns strictly increasing server timestamps
+to native contact adds in original request order, after existing null-order
+methods. `mobile005_native_additions_keep_request_order_after_sync` passed
+through the private integration helper in `integration/mobile005-native-add-order-db.log`
+(76s build, 2.98s test). It covers two same-kind adds around an edit, original
+operation ordinals, clock-backward append behavior, strictly increasing timestamps,
+current display order, complete sealed component data and exact replay without
+reallocation.
+Final integrated gates and review approval remain pending.
+
 The coordinator subsequently added explicit details-revision assertions to the
 existing original/admitted refresh proofs. Four selected tests passed through
 `cargo nextest run -p crm-api --test all --run-ignored only --test-threads 1`:

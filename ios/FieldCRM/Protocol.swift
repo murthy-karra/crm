@@ -118,6 +118,34 @@ struct CurrentDetailsResponse: Codable, Sendable {
 struct Bundle: Codable, Sendable {
     let person: String, revision: String, summary: JSON, contacts: [JSON], tasks: [JSON]
     var notes: [JSON]
+    var orderedContacts: [JSON] { ContactDisplayOrder.sorted(contacts) }
+}
+
+/// Summary pages retain their UUID pagination order. Only the complete display
+/// projection uses the server's imported-first contact ordering. Old downloaded
+/// representations without ordering metadata retain their readable legacy order.
+enum ContactDisplayOrder {
+    static func sorted(_ contacts: [JSON]) -> [JSON] {
+        var keyed: [(value: JSON, order: Int?, created: Date, id: String)] = []
+        for contact in contacts {
+            guard let created = try? date(contact["created_at"].text),
+                  let id = UUID(uuidString: contact["id"].text) else { return contacts }
+            let order: Int?
+            switch contact["import_order"] {
+            case .null: order = nil
+            case .number(let value):
+                guard value.isFinite, value.rounded() == value, value >= Double(Int32.min), value <= Double(Int32.max) else { return contacts }
+                order = Int(value)
+            default: return contacts
+            }
+            keyed.append((contact, order, created, id.uuidString.lowercased()))
+        }
+        return keyed.sorted {
+            if $0.order != $1.order { return ($0.order ?? Int.max) < ($1.order ?? Int.max) }
+            if $0.created != $1.created { return $0.created < $1.created }
+            return $0.id < $1.id
+        }.map(\.value)
+    }
 }
 /// A draft is protected input, not a projection of the replaceable downloaded
 /// bundle.  `baseline` and `proposal` deliberately live in the encrypted store.

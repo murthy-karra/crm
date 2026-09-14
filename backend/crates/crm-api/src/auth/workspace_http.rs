@@ -113,8 +113,8 @@ async fn guard_inner(State(state): State<AppState>, request: Request, next: Next
                             | "/api/people/{id}/admission-provenance/fields/{field}"
                             | "/api/people/{id}/import-provenance"
                             | "/api/people/{id}/import-provenance/fields/{field}"
-                            | "/api/people/{id}/admitted-metadata-import-provenance"
-                            | "/api/people/{id}/admitted-metadata-import-provenance/{result}/fields/{field}"
+                            | "/api/people/{person}/admitted-metadata-import-provenance"
+                            | "/api/people/{person}/admitted-metadata-import-provenance/{result}/fields/{field}"
                             | "/api/people/{id}/metadata-import-provenance"
                             | "/api/people/{id}/metadata-import-provenance/{result}/fields/{field}"
                     )

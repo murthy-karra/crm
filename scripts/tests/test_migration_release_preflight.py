@@ -103,6 +103,11 @@ class PreflightTests(unittest.TestCase):
                          "'admission_plan_id','uuid',true", "'settled_eligible_people','bigint',true",
                          "'dependent_count','bigint',true", "'counts','jsonb',false",
                          "pg_get_expr(indpred,indrelid)", "confirmed_plan_id IS NOT NULL",
+                         "migration_admitted_metadata_mapping_parent", "migration_admitted_metadata_plan_building",
+                         "migration_admitted_metadata_mapping_predecessor", "migration_admitted_metadata_mapping_execute",
+                         "migration_admitted_metadata_manifest_predecessor", "'remainder_plan_id','uuid',false",
+                         "'evidence_plan_id','uuid',false", "'execute_unit','boolean',true",
+                         "'held_settled_people','bigint',true", "LIKE '%remainder_operations%'",
                          "migration_admitted_metadata_result_unit", "indisunique AND indisvalid"]:
                 self.assertIn(name, schema)
             observed = queries[-1]

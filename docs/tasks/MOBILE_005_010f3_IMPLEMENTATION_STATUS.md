@@ -41,12 +41,13 @@ Migration atomic execution and bounded staged preparation through `e8a0165` are
 integrated: all four field types, tags, local-value protection, claims and per-unit
 settlement. Staged preparation has11 functional/recorded-plan checks passing.
 Immutable replanning through `380bcfb` and frozen transport/readers through
-`6a2f866` are integrated. Exact remainder and final boundary/query evidence remain
-with the migration writer. Runtime and preflight readiness now require the
+`6a2f866`, plus exact continuation through `fd016a1`, are integrated. Source-fidelity,
+actual per-Person size bounds and final query evidence remain with the migration
+writer. Runtime and preflight readiness now require the
 full staged schema, enabled guards and work indexes;51 preflight tests and the
-36-variant rollback-only DB readiness regression pass. Populated original-import
-handover rollback/accounting/replay passes; the legacy-session regression exposed
-an empty-permit parsing defect that remains with the migration writer. See
+50-variant rollback-only DB readiness regression pass. Populated original-import
+handover rollback/accounting/replay, corrected legacy-session fencing and all204
+outer HTTP responses pass. See
 [SLICE_010f3_READINESS_VERIFICATION.md](SLICE_010f3_READINESS_VERIFICATION.md) and
 [SLICE_010f3_VERIFICATION.md](SLICE_010f3_VERIFICATION.md).
 
@@ -58,7 +59,7 @@ migration transport; see [SLICE_010f3_WEB_VERIFICATION.md](SLICE_010f3_WEB_VERIF
 
 ## Remaining completion gates
 
-1. Finish migration exact remainder and boundary/query evidence; integrate tested commits.
+1. Finish migration source-fidelity, actual size bounds and query evidence; integrate tested commits.
 2. Complete the real synthetic metadata browser journey.
 3. Run sequential final `scripts/check`, `scripts/sqlx-prepare`, `scripts/check-db`
    with private outputs and serialized DB access.

@@ -11,7 +11,21 @@ async fn admitted_metadata_readiness_requires_complete_preparation_schema(pool: 
         .await
         .unwrap();
     for mutation in [
+        "DROP INDEX migration_admitted_metadata_mapping_parent",
+        "DROP INDEX migration_admitted_metadata_plan_building",
         "DROP TABLE migration_admitted_metadata_observation",
+        "ALTER TABLE migration_admitted_metadata_plan DROP COLUMN remainder_plan_id",
+        "ALTER TABLE migration_admitted_metadata_plan DROP COLUMN evidence_plan_id",
+        "ALTER TABLE migration_admitted_metadata_plan ALTER COLUMN remainder_plan_id SET NOT NULL",
+        "ALTER TABLE migration_admitted_metadata_mapping DROP COLUMN execute_unit",
+        "ALTER TABLE migration_admitted_metadata_mapping ALTER COLUMN execute_unit DROP NOT NULL",
+        "ALTER TABLE migration_admitted_metadata_mapping DROP COLUMN dependency_result_id",
+        "ALTER TABLE migration_admitted_metadata_manifest DROP COLUMN predecessor_manifest_id",
+        "ALTER TABLE migration_admitted_metadata_import DROP COLUMN held_settled_people",
+        "DROP INDEX migration_admitted_metadata_mapping_predecessor",
+        "DROP INDEX migration_admitted_metadata_manifest_predecessor",
+        "DROP INDEX migration_admitted_metadata_mapping_execute",
+        "ALTER TABLE migration_admitted_metadata_plan DROP CONSTRAINT migration_admitted_metadata_plan_preparation_phase_check; ALTER TABLE migration_admitted_metadata_plan ADD CONSTRAINT migration_admitted_metadata_plan_preparation_phase_check CHECK(preparation_phase IN ('sources','fields','options','tags','choices','cohort','values','seal','complete'))",
         "DROP TABLE migration_admitted_metadata_alias",
         "ALTER TABLE migration_admitted_metadata_import DROP COLUMN admission_plan_id",
         "ALTER TABLE migration_admitted_metadata_import ALTER COLUMN admission_plan_id DROP NOT NULL",

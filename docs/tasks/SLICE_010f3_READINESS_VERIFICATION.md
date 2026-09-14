@@ -68,3 +68,34 @@ claims, readiness and owner ledgers. Its successful retry charges both claims
 exactly once, preserves original plans/results/identity evidence, and replays the
 same preparation receipt without another source call or charge. The remaining
 legacy-session proof and full outer HTTP boundary test remain completion gates.
+
+## Exact continuation and outer HTTP boundaries
+
+Migration checkpoint `fd016a1` adds the guarded proof parser; the unchanged
+legacy-session test passes in the migration lane's
+`admitted-remainder-db2-legacy.log` (1 test,5.50s). This supersedes the earlier
+parser failure without changing the regression or resetting the old session.
+
+Readiness now also requires exact-continuation ownership/reference columns,
+execute-unit and held-settled counters, five successor/work indexes and all three
+remainder preparation phases. The preflight suite passes51 tests in
+`preflight-remainder-readiness.log`. On root `a7a01c5` plus this readiness change,
+the focused private command from the previous section, with log
+`admitted-final-readiness-http1.log` and `--skip db_admitted_metadata_handover::`
+instead of the HTTP skip, runs two tests in119.79s. The readiness test passes
+all50 rollback-only variants. The outer HTTP test initially fails because the
+shared admin guard registered `{id}` instead of the route's `{person}` template,
+causing a member provenance read to return409 rather than403 in review mode.
+
+Correcting those two server-owned template strings preserves the normal admin
+denial. The unchanged HTTP test then passes in `admitted-http-boundary2.log`,
+44.71s total /3.96s test, using `cargo test -p crm-api --test all --features
+perf-harness --locked
+db_admitted_metadata_http_boundary::admitted_metadata_full_router_denials_are_source_free_and_not_cacheable
+-- --exact --ignored` through the same private helper. It checks204 responses:
+all admitted endpoints and provenance, operational/review modes, admin/member/
+anonymous identities, malformed/oversized bodies and unknown authority fields.
+Every response is no-store; denials make no source calls, imports, plans, receipts
+or registry handover. Both initial failure logs remain retained.
+
+Final combined gates and independent review remain pending.

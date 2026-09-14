@@ -1,19 +1,22 @@
 # Mobile005 / 010f3 — Implementation status
 
 **IN PROGRESS — D-082, 2026-09-14.** Implementation and isolated synthetic verification
-accepted after both planning review rounds returned READY. No implementation
-verification has completed yet. Source publication/deployment remains separate.
+accepted after both planning review rounds returned READY. Focused backend and
+shared-contract checks have begun; integrated/native acceptance remains pending.
+Source publication/deployment remains separate.
 
 ## Ownership and resources
 
 - Coordinator: root checkout on `codex/mobile005-010f3-integration`; shared modules,
   guards, SQLx, Web realtime and final integrated verification.
 - Mobile backend: `codex/mobile-005-backend`, worktree
-  `/Users/karrad/projects/crm-mobile005-backend`; new migrations use `20261001` prefix.
+  integrated as `bfac8b4`; its clean worktree is closed and its isolated target
+  moved to `integration/target` for serial reuse. New migrations use `20261001` prefix.
 - Migration: `codex/migration-010f3`, worktree
   `/Users/karrad/projects/crm-010f3`; new migrations use `20261002` prefix.
-- Native lanes start only after the mobile contract and backend integrate and
-  the backend worktree closes. At most three implementation worktrees.
+- Native lanes now own `crm-mobile005-ios` / `codex/mobile-005-ios` and
+  `crm-mobile005-android` / `codex/mobile-005-android`, both from `bfac8b4`.
+  Exactly three implementation worktrees including migration.
 - Private evidence/build root: `/private/tmp/crm-mobile005-010f3`, with separate
   `mobile`, `migration`, `integration`, `ios`, `android` directories. Free QA ports
   at launch: 3103/3104/5174/5175; assign before starting a service.
@@ -23,13 +26,33 @@ verification has completed yet. Source publication/deployment remains separate.
 
 ## Current work and gates
 
-Mobile backend and migration are starting from the same accepted source base.
-Each freezes concrete owned schema/DTO/lock/guard contracts, implements its brief
-and runs isolated focused checks. Coordinator owns shared integration and sequential
+Both implementation lanes began at accepted checkpoint `fcc05b3`. Shared readiness
+and realtime integration is checkpointed at `a565145`: 51 preflight tests and 20
+Web realtime tests pass. Migration checkpoint `deb444b` reports six original
+metadata gate tests and eight workspace-readiness unit tests passing; the earlier
+four guard failures remain recorded in its evidence. These focused passes do
+not verify the full admitted workflow.
+
+The mobile backend contract is frozen and integrated through `382aadc`. Eight
+focused DB/API checks pass, including capture/profile lock overlap, complete
+bounded traversal, tenant denial, atomic receipt/replay/no-op/conflict and
+publish-failure recovery. Legacy mobile and capture regressions also pass.
+The native API fixture is served by an immutable private copy of the `382aadc`
+binary on3103; it includes the required empty `added_contact_ids` array for
+name-only/edit/remove receipts, while old receipt kinds omit that field.
+Both native lanes remain active. Android has upgrade/storage and repository/API
+proof; actual Compose acceptance is in progress. Each lane records concrete
+schema/DTO/lock/guard contracts and runs isolated focused checks. Coordinator owns shared integration and sequential
 final `scripts/check`, `scripts/sqlx-prepare`, `scripts/check-db`; database gates do
 not overlap. Independent implementation review, real native/browser acceptance,
 populated-store upgrade and D-050 evidence remain required.
 
+Private evidence is under the listed root: `integration/preflight-inventory-tests-fixed.log`,
+`integration/web-realtime-tests.log`, `integration/mobile005-integrated-tests3.log`,
+`integration/mobile005-legacy-and-capture-regression.log`, `mobile/db_mobile004.log`
+and the migration lane's verification record. Xcode reports26.6 (17F113);
+native QA uses the iOS26.5 simulator and Android37 emulator with isolated identities.
+The four protected API/Web listeners remain at their original PIDs and ports.
 Actual commands, failures and tested revisions will be linked as lanes complete.
 No check is passed merely because its requirements were reviewed. Two implementation
 review/fix rounds per slice maximum; no third review authorized.

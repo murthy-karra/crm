@@ -321,8 +321,8 @@ pub struct Receipt {
     pub changed: bool,
     pub accepted_at: DateTime<Utc>,
     pub replayed: bool,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub added_contact_ids: Vec<AddedContactId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub added_contact_ids: Option<Vec<AddedContactId>>,
 }
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AddedContactId {
@@ -351,10 +351,13 @@ fn stored(row: sqlx::postgres::PgRow) -> Stored {
             changed: row.get("changed"),
             accepted_at: row.get("accepted_at"),
             replayed: true,
-            added_contact_ids: row
-                .get::<Option<Value>, _>("added_contact_ids")
-                .and_then(|value| serde_json::from_value(value).ok())
-                .unwrap_or_default(),
+            added_contact_ids: (row.get::<String, _>("kind") == "update_person_details").then(
+                || {
+                    row.get::<Option<Value>, _>("added_contact_ids")
+                        .and_then(|value| serde_json::from_value(value).ok())
+                        .unwrap_or_default()
+                },
+            ),
         },
         person: row.get("person_id"),
         context: row.get("context_id"),
@@ -738,7 +741,7 @@ pub async fn execute(
         changed,
         accepted_at,
         replayed: false,
-        added_contact_ids,
+        added_contact_ids: (kind == "update_person_details").then_some(added_contact_ids),
     })
 }
 pub async fn lookup_receipt(

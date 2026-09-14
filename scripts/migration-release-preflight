@@ -21,7 +21,8 @@ the complete inventory must be no older than five minutes. It covers active
 processes/workloads AND launch/admin paths, including in-process workers.
 Known optional capabilities: fub-metadata-import-v1, fub-activity-import-v1,
 fub-history-capture-v1, fub-history-timeline-v1, fub-core-change-v1,
-fub-people-refresh-v1, fub-people-admission-v1. Confirmed history captures require history-capable API/
+fub-people-refresh-v1, fub-people-admission-v1, fub-admitted-people-refresh-v1,
+fub-admitted-metadata-v1. Confirmed history captures require history-capable API/
 worker launch and recovery, including completed/cancelled runs. Unconfirmed
 proposals do not impose this requirement. Unsupported confirmed source/parser
 profiles fail closed. History confirmation readiness is reported separately.
@@ -47,6 +48,13 @@ on API/worker launch and recovery, including cancelled/completed runs. Its
 confirmation requires a capable API/worker candidate, the complete admission
 workflow/provenance/fact schema, source-identity origin columns and private
 admission guard. Partial schemas and unknown retained engines fail closed.
+
+Admitted metadata readiness requires the complete schema and compatible API/worker
+fleet before the first atomic catalog handover. A ready handover independently
+binds compatible recovery even before any admitted child is confirmed and after
+preview cancellation; all retained admitted roots also bind this capability.
+The report's admitted_metadata_confirmation_ready means the fleet/schema can
+begin that handover, not that the database registry has already become ready.
 
 Exit 0 means the requested purpose passes; 1 means policy blocked; 2 means
 invalid/unavailable evidence. JSON stdout contains no source/customer content.

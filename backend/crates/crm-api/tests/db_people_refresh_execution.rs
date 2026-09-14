@@ -459,6 +459,27 @@ async fn confirmed_refresh_applies_owned_contacts_clears_mappings_facts_and_repl
     drain(&f, run).await;
     let changed = native(&f, first).await;
     let cleared = native(&f, second).await;
+    assert!(
+        original_first["person"]["details_revision"]
+            .as_i64()
+            .unwrap()
+            > 1,
+        "original import contact inserts must advance details through the original review permit"
+    );
+    assert!(
+        changed["person"]["details_revision"].as_i64().unwrap()
+            > original_first["person"]["details_revision"]
+                .as_i64()
+                .unwrap(),
+        "original People refresh names, contact values and contact ordering advance details"
+    );
+    assert!(
+        cleared["person"]["details_revision"].as_i64().unwrap()
+            > original_second["person"]["details_revision"]
+                .as_i64()
+                .unwrap(),
+        "name/contact clearing also advances details"
+    );
     assert_eq!(changed["person"]["first_name"], "Updated");
     assert_eq!(changed["person"]["stage_id"], other_stage.to_string());
     assert_eq!(changed["person"]["assigned_user_id"], f.member.to_string());

@@ -321,8 +321,33 @@ async fn link_optionally_adds_the_counterparty_as_a_contact_method(migrator_pool
     let router = build_router(&migrator_pool, Publisher::recording()).await;
     let cookie = crate::common::login_cookie(&router, &f.alice_email, PW).await;
 
+    let before: i64 = sqlx::query_scalar("SELECT details_revision FROM person WHERE id=$1")
+        .bind(f.person_a)
+        .fetch_one(&migrator_pool)
+        .await
+        .unwrap();
     let resp = link(&router, &cookie, f.held_id, f.person_a, true).await;
     assert_eq!(resp.status(), StatusCode::OK);
+    let after: i64 = sqlx::query_scalar("SELECT details_revision FROM person WHERE id=$1")
+        .bind(f.person_a)
+        .fetch_one(&migrator_pool)
+        .await
+        .unwrap();
+    assert!(
+        after > before,
+        "capture contact insertion advances the profile baseline"
+    );
+    let resp = link(&router, &cookie, f.held_id, f.person_a, true).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let replay: i64 = sqlx::query_scalar("SELECT details_revision FROM person WHERE id=$1")
+        .bind(f.person_a)
+        .fetch_one(&migrator_pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        replay, after,
+        "idempotent correspondence link does not invalidate a profile draft"
+    );
 
     let (value, normalized): (String, String) = sqlx::query_as(
         "SELECT value, normalized_value FROM contact_method WHERE person_id = $1 AND kind = 'email'",
@@ -333,6 +358,142 @@ async fn link_optionally_adds_the_counterparty_as_a_contact_method(migrator_pool
     .unwrap();
     assert_eq!(value, f.counterparty_email);
     assert_eq!(normalized, f.counterparty_email.to_lowercase());
+}
+
+/// Existing contact matches must not invalidate an otherwise current profile
+/// proposal merely because a separate correspondence fact is recorded.
+#[sqlx::test]
+#[ignore]
+async fn mobile005_capture_existing_contact_preserves_details_revision(migrator_pool: PgPool) {
+    let f = held_fixture(&migrator_pool, "Mobile005 Capture Existing", "inbound").await;
+    sqlx::query("INSERT INTO contact_method (organization_id,person_id,kind,value,normalized_value) VALUES($1,$2,'email',$3,$4)")
+        .bind(f.org_id).bind(f.person_a).bind(&f.counterparty_email)
+        .bind(f.counterparty_email.to_lowercase()).execute(&migrator_pool).await.unwrap();
+    let before: i64 = sqlx::query_scalar("SELECT details_revision FROM person WHERE id=$1")
+        .bind(f.person_a)
+        .fetch_one(&migrator_pool)
+        .await
+        .unwrap();
+    let router = build_router(&migrator_pool, Publisher::recording()).await;
+    let cookie = crate::common::login_cookie(&router, &f.alice_email, PW).await;
+    let resp = link(&router, &cookie, f.held_id, f.person_a, true).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let after: i64 = sqlx::query_scalar("SELECT details_revision FROM person WHERE id=$1")
+        .bind(f.person_a)
+        .fetch_one(&migrator_pool)
+        .await
+        .unwrap();
+    assert_eq!(after, before);
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM contact_method WHERE person_id=$1")
+        .bind(f.person_a)
+        .fetch_one(&migrator_pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 1);
+    assert_eq!(status_of(&migrator_pool, f.held_id).await.0, "linked");
+}
+
+/// Hold the profile transaction open while the actual capture endpoint waits
+/// on its Person. Both writes must finish without a lock inversion, and the
+/// later capture insertion must invalidate the already-committed profile token.
+#[sqlx::test]
+#[ignore]
+async fn mobile005_profile_and_capture_overlap_preserves_both_writes(migrator_pool: PgPool) {
+    use crm_api::domain::commands::{update_person_details_in_transaction, UpdatePersonDetails};
+    use crm_api::domain::envelope::{CommandContext, Origin};
+    use crm_api::ids::{CorrelationId, PersonId, UserId};
+    use std::time::Duration;
+
+    let f = held_fixture(&migrator_pool, "Mobile005 Capture Overlap", "inbound").await;
+    let app = crate::common::connect_as_app(&migrator_pool).await;
+    let router = build_router(&migrator_pool, Publisher::recording()).await;
+    let cookie = crate::common::login_cookie(&router, &f.alice_email, PW).await;
+    let ctx = CommandContext {
+        organization_id: OrganizationId(f.org_id),
+        actor_user_id: UserId(f.alice_id),
+        origin: Origin::MobileSession,
+        correlation_id: CorrelationId(Uuid::new_v4()),
+    };
+    let mut tx = crm_api::auth::workspace::begin(&app, ctx.organization_id)
+        .await
+        .unwrap();
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended('intake:' || $1::text,0))")
+        .bind(f.org_id.to_string())
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let before: i64 = sqlx::query_scalar("SELECT details_revision FROM person WHERE id=$1")
+        .bind(f.person_a)
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+    let updated = update_person_details_in_transaction(
+        &mut tx,
+        &ctx,
+        UpdatePersonDetails {
+            person_id: PersonId(f.person_a),
+            expected_details_revision: before,
+            first_name: Some(Some("Capture overlap".into())),
+            last_name: None,
+            contact_operations: Vec::new(),
+        },
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert!(updated.changed);
+    let profile_pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+    let held = f.held_id;
+    let person = f.person_a;
+    let link_task = tokio::spawn(async move { link(&router, &cookie, held, person, true).await });
+    // Observe the real database wait before committing, rather than relying on
+    // an arbitrary sleep to claim overlap.
+    tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            let blocked: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND $1=ANY(pg_blocking_pids(pid)))")
+                .bind(profile_pid).fetch_one(&migrator_pool).await.unwrap();
+            if blocked { break; }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }).await.expect("capture reached the held Person lock");
+    tx.commit().await.unwrap();
+    let response = tokio::time::timeout(Duration::from_secs(3), link_task)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let (name, revision): (String, i64) =
+        sqlx::query_as("SELECT first_name,details_revision FROM person WHERE id=$1")
+            .bind(f.person_a)
+            .fetch_one(&migrator_pool)
+            .await
+            .unwrap();
+    assert_eq!(name, "Capture overlap");
+    assert!(revision > updated.details_revision);
+    let mut tx = crm_api::auth::workspace::begin(&app, ctx.organization_id)
+        .await
+        .unwrap();
+    let stale = update_person_details_in_transaction(
+        &mut tx,
+        &ctx,
+        UpdatePersonDetails {
+            person_id: PersonId(f.person_a),
+            expected_details_revision: updated.details_revision,
+            first_name: Some(Some("Capture overlap".into())),
+            last_name: None,
+            contact_operations: Vec::new(),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(
+        stale.is_none(),
+        "the new contact conflicts even with a name-only no-op proposal"
+    );
+    tx.rollback().await.unwrap();
 }
 
 // --- Transition matrix (spec §4.4/§8) --------------------------------------

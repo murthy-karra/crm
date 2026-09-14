@@ -48,3 +48,24 @@ inconclusive because simctl rejects the shutdown simulator and Android uses
 `no_backup`, not `files`; the corrected read-only inventory documents that limit.
 Actual store/key/receipt preservation is proved by the native verification records,
 not inferred from this presence check. Final protected-resource comparison remains.
+
+## Replacement gate attempts and runner correction
+
+At `bc4af33`, `final-check3.log` fails after992 Rust tests/five doctests because
+`pnpm` is absent from the runner PATH (237.72s,exit127). The already-cached pinned
+pnpm11.22.0 is exposed through a private shim; `pnpm-gate-toolchain.json` records
+its source/version/hash. No global installation or repository tool change occurs.
+
+`final-check4.log` then passes the complete check (29.24s), and
+`final-sqlx-prepare2.log` passes (97.9s; offline cache unchanged).
+`final-check-db1.log` fails at the historical activity upgrade fixture:28 tests
+pass, one fails,1047 are not run. The only before/after difference is the newly
+added `person.details_revision = 1`; all existing fields are identical.
+The fixture now explicitly verifies this new default alongside the other derived
+revisions before comparing every old field, while retaining complete upgraded-row
+equality after startup/API reads. The reviewer accepted this two-line test-only
+correction. `historical-upgrade-details-revision1.log` passes1 test,40.01s total /
+4.13s test. No production code changes.
+
+Both failed runs remain retained. Replacement final sequential gates after this
+focused correction remain required; no incomplete DB run is a pass.

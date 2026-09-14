@@ -159,3 +159,26 @@ A fresh read-only comparison against the original preservation baseline passes i
 native cells unchanged,222 total values. The earlier baseline/after records remain
 untouched. The later `a52a1e6` integration changes only an equivalent test-helper
 borrow; production code and this browser artifact remain applicable.
+
+## Final ownership/index upgrade and retained reconciliation
+
+The same retained `crm_010f3_qa` database upgraded through009 and010 without
+reseeding. Final immutable API source `c676f90c7a8c4c7a0c486ea7f6423381757edae2`,
+binary SHA-256 `b0e88a758e7cbae8e1869cd69b85615d47be0574ed16ba131d56c75a85f1cbca`,
+is recorded in `metadata-ui/runtime.json`. Its owned PID was40229 at verification.
+Build/restart evidence: `final010-ui-build1.log` (91.0s),
+`metadata-ui/final010-restart.log`, and immutable build/runtime manifests.
+
+`metadata-ui/final010-reconcile.log` and `final010-reconcile-evidence.json` pass
+retained result filtering/reload, Person provenance and source-field reads at
+desktop/390px: all listed reads200, no page errors.
+`preservation-final010.json` compares against the original pre-journey baseline:
+all15 protected table sets and both pre-existing native cells remain unchanged;
+222 final cells remain. `owner-upgrade-before.json` and `owner-upgrade-after.json`
+add exact count/SHA comparisons of complete import, snapshot and Organization
+storage rows across the009/010 upgrade; all three pairs are equal. Their private
+runner/logs are `owner-upgrade-preservation.py` and `owner-upgrade-*.log`.
+
+The final reviewer independently accepted these retained-data results. Later
+changes to the historical upgrade test's expected derived revision and evidence
+documents do not change production API/Web code or these runtime observations.

@@ -137,3 +137,16 @@ Complete fresh 009 readiness passes before and after. Result: **1 test passed**,
 185.38s total / 2.55s test. Existing dependent-column drops use CASCADE only inside
 rolled-back incomplete-schema transactions. `review1-owner-readiness-query.json`
 and `review1-owner-readiness-mutations.json` retain the exact query and new cases.
+
+## Established index reuse
+
+Final review found that 009's tag index duplicated the already-established
+`migration_people_admission_result_settled_cohort_source_page`. Additive010 drops
+only the duplicate, preserving the already-applied009 checksum. Runtime and
+preflight now require the established index's exact definition and duplicate
+absence. The extra rollback case recreates the duplicate.
+
+At `ac66d15`, `preflight-index-reuse.log` passes51 tests and
+`admitted-index-readiness-db2.log` passes all **184 rollback-only variants**:
+1 test,99.46s total /3.62s test. Complete fresh010 readiness passes before/after.
+`review2-index-readiness-query.json` retains this exact query.

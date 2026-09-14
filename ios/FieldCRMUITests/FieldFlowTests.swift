@@ -290,4 +290,101 @@ final class FieldFlowTests: XCTestCase {
     }
     #endif
 
+    #if MOBILE005_QA
+    @MainActor func testMobile005NativeOfflineProfileTerminateRelaunchAndSynchronize() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication(); app.launchArguments = ["--synthetic-keychain"]; app.launch()
+        XCTAssertTrue(app.staticTexts["syntheticBanner"].waitForExistence(timeout: 20))
+        if app.buttons["signIn"].exists {
+            app.textFields["email"].tap(); app.textFields["email"].typeText("agent@mobile.test")
+            app.secureTextFields["password"].tap(); app.secureTextFields["password"].typeText("Mobile-demo-only-123!")
+            app.buttons["signIn"].tap()
+        }
+        XCTAssertTrue(app.tabBars.buttons["Settings"].waitForExistence(timeout: 90))
+        app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: false); app.buttons["sync"].tap()
+        XCTAssertTrue(app.staticTexts["100 people available offline"].waitForExistence(timeout: 240))
+        expectation(for: NSPredicate(format: "label CONTAINS 'Synced. Complete downloaded workspace' OR label BEGINSWITH 'Download complete.'"), evaluatedWith: app.staticTexts["statusMessage"])
+        waitForExpectations(timeout: 180)
+        let profileCache = app.staticTexts["qaProfileConflictStage"]
+        app.buttons["qaInspectProfileCache"].tap()
+        XCTAssertTrue(profileCache.label.contains("qualified=yes editable=yes caps=yes"), profileCache.label)
+        app.tabBars.buttons["Saved work"].tap()
+        let queueCount = app.staticTexts["queueCount"]
+        let initialPending = Int(queueCount.label.split(separator: " ").first ?? "-1") ?? -1
+        XCTAssertGreaterThanOrEqual(initialPending, 0, queueCount.label)
+        app.tabBars.buttons["People"].tap()
+        let person = app.buttons["person_07cb08d0-56c3-43c1-a538-68573e5a24f0"]
+        XCTAssertTrue(person.waitForExistence(timeout: 20)); person.tap()
+        XCTAssertTrue(app.buttons["editProfile"].waitForExistence(timeout: 20))
+        app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: true); app.tabBars.buttons["People"].tap()
+        // Returning from Settings commonly restores the selected detail view;
+        // only tap the list row when navigation actually returned to the list.
+        if person.exists { person.tap() }
+        app.buttons["editProfile"].tap()
+        let name = app.textFields["profileFirstName"]; XCTAssertTrue(name.waitForExistence(timeout: 15)); name.tap(); name.typeText(" QA")
+        let editedEmail = app.textFields["Email"].firstMatch; XCTAssertTrue(editedEmail.waitForExistence(timeout: 10)); editedEmail.tap()
+        editedEmail.typeKey("a", modifierFlags: .command); editedEmail.typeText("ios.edited." + UUID().uuidString.lowercased() + "@example.test")
+        let addEmail = app.buttons["profileAddEmail"]
+        if !addEmail.exists { app.swipeDown() }
+        XCTAssertTrue(addEmail.waitForExistence(timeout: 10)); addEmail.tap()
+        let addedEmail = app.textFields["profileNewEmail"]
+        if !addedEmail.exists { app.swipeUp() }
+        XCTAssertTrue(addedEmail.waitForExistence(timeout: 10)); addedEmail.tap(); addedEmail.typeText("ios.added." + UUID().uuidString.lowercased() + "@example.test")
+        XCTAssertTrue(app.staticTexts["profileDraftStatus"].waitForExistence(timeout: 10))
+        let save = app.buttons["saveProfile"]
+        if !save.exists { app.swipeDown() }
+        XCTAssertTrue(save.waitForExistence(timeout: 10)); save.tap(); app.tabBars.buttons["Saved work"].tap()
+        expectation(for: NSPredicate(format: "label BEGINSWITH %@", "\(initialPending + 1) pending"), evaluatedWith: queueCount); waitForExpectations(timeout: 20)
+        app.tabBars.buttons["Settings"].tap(); let outbox = app.staticTexts["qaProfileConflictStage"]
+        app.buttons["qaInspectProfileOutbox"].tap(); XCTAssertTrue(outbox.label.hasPrefix("profile outbox ")); let savedFingerprint = outbox.label
+        let pending = XCTAttachment(screenshot: app.screenshot()); pending.name = "mobile005-profile-offline-pending"; pending.lifetime = .keepAlways; add(pending)
+        app.terminate(); app.launch(); XCTAssertTrue(app.tabBars.buttons["Saved work"].waitForExistence(timeout: 30)); app.tabBars.buttons["Saved work"].tap()
+        XCTAssertTrue(queueCount.label.hasPrefix("\(initialPending + 1) pending"), queueCount.label)
+        app.tabBars.buttons["Settings"].tap(); app.buttons["qaInspectProfileOutbox"].tap(); XCTAssertEqual(outbox.label, savedFingerprint, "The exact immutable profile envelope must survive process termination.")
+        setSwitch(app.switches["offlineToggle"], to: false); app.buttons["sync"].tap()
+        var verified = false
+        for _ in 0..<30 where !verified {
+            app.buttons["qaVerifyProfileReceipt"].tap()
+            let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label BEGINSWITH 'profile receipt verified'"), object: outbox)
+            verified = XCTWaiter.wait(for: [expectation], timeout: 2) == .completed
+        }
+        XCTAssertTrue(verified, outbox.label)
+        let accepted = XCTAttachment(screenshot: app.screenshot()); accepted.name = "mobile005-profile-synced"; accepted.lifetime = .keepAlways; add(accepted)
+        app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: true)
+    }
+    @MainActor func testMobile005NativeProfileConflictReviewCurrentAndManualReplacement() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication(); app.launchArguments = ["--synthetic-keychain"]; app.launch()
+        XCTAssertTrue(app.staticTexts["syntheticBanner"].waitForExistence(timeout: 20))
+        if app.buttons["signIn"].exists {
+            app.textFields["email"].tap(); app.textFields["email"].typeText("agent@mobile.test")
+            app.secureTextFields["password"].tap(); app.secureTextFields["password"].typeText("Mobile-demo-only-123!")
+            app.buttons["signIn"].tap()
+        }
+        XCTAssertTrue(app.tabBars.buttons["Settings"].waitForExistence(timeout: 90)); app.tabBars.buttons["Settings"].tap()
+        setSwitch(app.switches["offlineToggle"], to: true)
+        let stage = app.staticTexts["qaProfileConflictStage"]
+        XCTAssertTrue(stage.waitForExistence(timeout: 15)); app.buttons["qaPrepareProfileConflict"].tap()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label BEGINSWITH 'primary profile queued'"), object: stage)], timeout: 20), .completed, stage.label)
+        setSwitch(app.switches["offlineToggle"], to: false); app.buttons["qaAdvanceProfileConflict"].tap()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label BEGINSWITH 'second actor accepted profile'"), object: stage)], timeout: 45), .completed, stage.label)
+        app.buttons["qaDrainProfileConflict"].tap()
+        app.tabBars.buttons["Saved work"].tap(); let review = app.buttons["Review conflict"].firstMatch
+        for _ in 0..<6 where !review.exists { app.swipeUp() }
+        XCTAssertTrue(review.waitForExistence(timeout: 30)); review.tap()
+        XCTAssertTrue(app.staticTexts["Your saved proposal"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["Current profile"].waitForExistence(timeout: 15), "Replacement remains unavailable until the complete current profile has been read.")
+        let reviewed = XCTAttachment(screenshot: app.screenshot()); reviewed.name = "mobile005-profile-conflict-current"; reviewed.lifetime = .keepAlways; add(reviewed)
+        let replacement = app.buttons["prepareProfileReplacement"]
+        XCTAssertTrue(replacement.waitForExistence(timeout: 15)); replacement.tap()
+        let replacementStatus = app.staticTexts["profileDraftStatus"]
+        XCTAssertTrue(replacementStatus.waitForExistence(timeout: 10)); XCTAssertTrue(replacementStatus.label.contains("Replacement draft saved"))
+        let save = app.buttons["saveProfile"]
+        XCTAssertTrue(save.waitForExistence(timeout: 10)); save.tap(); app.tabBars.buttons["Settings"].tap(); app.buttons["qaDrainProfileConflict"].tap()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label BEGINSWITH 'profile accepted'"), object: stage)], timeout: 60), .completed, stage.label)
+        app.tabBars.buttons["Saved work"].tap(); let receipt = XCTAttachment(screenshot: app.screenshot()); receipt.name = "mobile005-profile-replacement-accepted"; receipt.lifetime = .keepAlways; add(receipt)
+        app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: true)
+    }
+    #endif
+
 }

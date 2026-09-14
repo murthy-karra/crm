@@ -101,6 +101,18 @@ struct WorkspaceView: View {
                             Button("Inspect Mobile003 protected migration") { model.inspectMobile003Migration() }.accessibilityIdentifier("inspectMobile003Migration")
                         }
                         #endif
+                        #if MOBILE005_QA
+                        Section("QA Mobile005 profile conflict") {
+                            Text(model.qaProfileConflictStage).font(.caption2).accessibilityIdentifier("qaProfileConflictStage")
+                            Button("Prepare pending profile conflict") { model.prepareQAProfileConflict() }.accessibilityIdentifier("qaPrepareProfileConflict")
+                            Button("Advance profile as second actor") { Task { await model.advanceQAProfileConflictAsSecondActor() } }.accessibilityIdentifier("qaAdvanceProfileConflict")
+                                .disabled(model.syncing)
+                            Button("Drain profile conflict") { Task { await model.drainQAProfileConflict() } }.accessibilityIdentifier("qaDrainProfileConflict")
+                            Button("Inspect profile outbox") { model.inspectQAProfileOutbox() }.accessibilityIdentifier("qaInspectProfileOutbox")
+                            Button("Inspect profile cache") { model.inspectQAProfileCache() }.accessibilityIdentifier("qaInspectProfileCache")
+                            Button("Verify profile receipt") { Task { await model.verifyQAProfileReceipt() } }.accessibilityIdentifier("qaVerifyProfileReceipt")
+                        }
+                        #endif
                         Section("Connection") {
                             Toggle("Work offline · pause sync", isOn: $model.paused).accessibilityIdentifier("offlineToggle")
                             Text("Last complete sync: \(model.lastSync)").font(.footnote)
@@ -179,6 +191,7 @@ struct PersonView: View {
     @State private var composer: Draft?
     @State private var contactComposer: Draft?
     @State private var stageProposal: StageProposal?
+    @State private var detailsComposer: Draft?
     var bundle: Bundle? { model.people.first { $0.person == personID } }
     var overlays: [Queued] { model.queue.filter { $0.envelope.person == personID && $0.overlay } }
     var body: some View {
@@ -188,14 +201,21 @@ struct PersonView: View {
                     Text(bundle.summary["display_name"].text).font(.title2.bold())
                     Label(model.displayedStageName(bundle), systemImage: "flag")
                     Text("Responsible: " + (bundle.summary["assigned_user"]["display_name"].text.isEmpty ? "Unassigned" : bundle.summary["assigned_user"]["display_name"].text)).font(.subheadline)
-                    ForEach(Array(bundle.contacts.enumerated()), id: \.offset) { _, contact in Text(contact["value"].text).textSelection(.enabled) }
                 }
                 Section {
                     Button("Add note") { composer = Draft(id: UUID().uuidString, person: personID, kind: "add_note", text: "", revision: 0) }.accessibilityIdentifier("addNote")
                     Button("Create task") { composer = Draft(id: UUID().uuidString, person: personID, kind: "create_task", text: "", revision: 0) }.accessibilityIdentifier("createTask")
                     Button("Log contact") { contactComposer = try? model.newContactDraft(person: personID) }.disabled(!model.canLogContact).accessibilityIdentifier("logContact")
                     Button("Change stage") { stageProposal = try? model.newStageProposal(person: personID) }.disabled(!model.canChangeStage).accessibilityIdentifier("changeStage")
+                    Button("Edit profile") { detailsComposer = try? model.startDetails(person: personID) }
+                        .disabled(!model.canEditDetails(person: personID))
+                        .accessibilityIdentifier("editProfile")
                     Text(model.canLogContact ? "For a manual interaction that already happened. Calls made through the CRM already have a contact record." : "Contact logging is unavailable for this account. Existing saved work is retained.").font(.caption).foregroundStyle(.secondary)
+                }
+                Section("Contact methods") {
+                    // Keep imported/server ordering stable while placing action
+                    // controls before a long contact history.
+                    ForEach(Array(bundle.contacts.enumerated()), id: \.offset) { _, contact in Text(contact["value"].text).textSelection(.enabled) }
                 }
                 if !overlays.isEmpty {
                     Section("Saved changes on this device") {
@@ -253,7 +273,185 @@ struct PersonView: View {
             .sheet(item: $composer) { draft in ComposerView(initial: draft).environmentObject(model) }
             .sheet(item: $contactComposer) { draft in ContactComposerView(initial: draft).environmentObject(model) }
             .sheet(item: $stageProposal) { proposal in StageProposalView(initial: proposal).environmentObject(model) }
+            .sheet(item: $detailsComposer) { draft in DetailsComposerView(initial: draft).environmentObject(model) }
     }
+}
+struct DetailsEditorMethod: Identifiable, Equatable {
+    var id: String, kind: String, value: String, original: String, removed: Bool, isNew: Bool
+    /// Existing sparse operations retain their original serialized ordinal when
+    /// a draft is reopened.  Fresh local edits append after that preserved set.
+    var operationOrdinal: Int? = nil
+}
+
+/// Keeps the editor's on-device draft faithful to the downloaded baseline.  The
+/// draft stores only a sparse proposal, so reopening it must apply that sparse
+/// proposal rather than treating the baseline as an edit.
+enum DetailsEditorProjection {
+    static func fields(for draft: Draft) -> (firstName: String, lastName: String, methods: [DetailsEditorMethod]) {
+        let baseline = draft.baseline ?? .object([:])
+        let savedProposal = draft.proposal ?? .object([:])
+        var firstName = baseline["first_name"].text
+        var lastName = baseline["last_name"].text
+        var methods = baseline["contacts"].list.map {
+            DetailsEditorMethod(id: $0["id"].text, kind: $0["kind"].text, value: $0["value"].text, original: $0["value"].text, removed: false, isNew: false)
+        }
+        var added: [DetailsEditorMethod] = []
+        for (ordinal, operation) in savedProposal["contact_operations"].list.enumerated() {
+            switch operation["op"].text {
+            case "edit":
+                if let index = methods.firstIndex(where: { $0.id == operation["id"].text }) { methods[index].value = operation["value"].text; methods[index].operationOrdinal = ordinal }
+            case "remove":
+                if let index = methods.firstIndex(where: { $0.id == operation["id"].text }) { methods[index].removed = true; methods[index].operationOrdinal = ordinal }
+            case "add":
+                // The server has no ID until acceptance.  Deriving the local ID
+                // from draft plus operation ordinal makes it stable across a
+                // relaunch while retaining the serialized add order.
+                added.append(DetailsEditorMethod(id: "draft:\(draft.id):add:\(ordinal)", kind: operation["kind"].text, value: operation["value"].text, original: "", removed: false, isNew: true, operationOrdinal: ordinal))
+            default: break
+            }
+        }
+        if case .object(let proposal) = savedProposal, let first = proposal["first_name"] {
+            firstName = first == .null ? "" : first.text
+        }
+        if case .object(let proposal) = savedProposal, let last = proposal["last_name"] {
+            lastName = last == .null ? "" : last.text
+        }
+        return (firstName, lastName, added + methods)
+    }
+
+    static func proposal(firstName: String, lastName: String, methods: [DetailsEditorMethod], baseline: JSON) -> JSON {
+        var out: [String: JSON] = [:]
+        // Compare the raw editor value first.  An untouched imported value may
+        // contain whitespace or exceed today's edit limits and must remain a
+        // readable baseline, not be silently normalized into this submission.
+        if firstName != baseline["first_name"].text {
+            let normalized = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
+            out["first_name"] = normalized.isEmpty ? .null : .s(normalized)
+        }
+        if lastName != baseline["last_name"].text {
+            let normalized = lastName.trimmingCharacters(in: .whitespacesAndNewlines)
+            out["last_name"] = normalized.isEmpty ? .null : .s(normalized)
+        }
+        var operations: [JSON] = []
+        let preserved = methods.enumerated().filter { $0.element.operationOrdinal != nil }.sorted {
+            ($0.element.operationOrdinal!, $0.offset) < ($1.element.operationOrdinal!, $1.offset)
+        }.map(\.element)
+        let fresh = methods.filter { $0.operationOrdinal == nil }
+        for method in preserved + fresh {
+            if method.isNew {
+                let normalized = method.value.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !normalized.isEmpty { operations.append(.object(["op": .s("add"), "kind": .s(method.kind), "value": .s(normalized)])) }
+            } else if method.removed {
+                operations.append(.object(["op": .s("remove"), "id": .s(method.id)]))
+            } else if method.value != method.original {
+                let normalized = method.value.trimmingCharacters(in: .whitespacesAndNewlines)
+                operations.append(.object(["op": .s("edit"), "id": .s(method.id), "value": .s(normalized)]))
+            }
+        }
+        if !operations.isEmpty { out["contact_operations"] = .array(operations) }
+        return .object(out)
+    }
+}
+
+struct DetailsComposerView: View {
+    @EnvironmentObject private var model: FieldModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var draft: Draft
+    @State private var firstName: String
+    @State private var lastName: String
+    @State private var methods: [DetailsEditorMethod]
+    @State private var status: String
+    @State private var failed = false
+    init(initial: Draft) {
+        _draft = State(initialValue: initial)
+        let fields = DetailsEditorProjection.fields(for: initial)
+        _firstName = State(initialValue: fields.firstName)
+        _lastName = State(initialValue: fields.lastName)
+        _methods = State(initialValue: fields.methods)
+        _status = State(initialValue: initial.mode == "conflict" ? "Review your saved profile proposal." : "Profile proposal is protected on this device.")
+    }
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Downloaded profile") {
+                    Text("Profile revision \(draft.expectedRevision ?? "?")").font(.caption).foregroundStyle(.secondary)
+                }
+                if draft.mode == "conflict" {
+                    Section("Your saved proposal") { Text(summary(draft.proposal)).textSelection(.enabled) }
+                    Section {
+                        Text(status).font(.caption).foregroundStyle(failed ? .red : .secondary).accessibilityIdentifier("profileDraftStatus")
+                        Button("Use current profile and discard my saved proposal", role: .destructive) { do { try model.resolveUsingCurrent(draft); dismiss() } catch { fail(error) } }
+                        Button("Prepare replacement from current profile") {
+                            do { draft = try model.revisedDetailsDraft(draft); applyDraft(); status = "Replacement draft saved on device."; failed = false } catch { fail(error) }
+                        }.disabled(draft.current == nil).accessibilityIdentifier("prepareProfileReplacement")
+                        if draft.current == nil { Button("Fetch current profile") { fetchCurrent() } }
+                    }
+                    Section("Current profile") { Text(summary(draft.current)).textSelection(.enabled) }
+                } else {
+                    Section("Name") {
+                        TextField("First name", text: $firstName).onChange(of: firstName) { _, _ in autosave() }.accessibilityIdentifier("profileFirstName")
+                        TextField("Last name", text: $lastName).onChange(of: lastName) { _, _ in autosave() }.accessibilityIdentifier("profileLastName")
+                        Button("Add email") { methods.insert(DetailsEditorMethod(id: UUID().uuidString, kind: "email", value: "", original: "", removed: false, isNew: true), at: 0) }.accessibilityIdentifier("profileAddEmail")
+                        Button("Add phone") { methods.insert(DetailsEditorMethod(id: UUID().uuidString, kind: "phone", value: "", original: "", removed: false, isNew: true), at: 0) }.accessibilityIdentifier("profileAddPhone")
+                    }
+                    if methods.contains(where: { $0.isNew }) {
+                        Section("New contact methods") {
+                            ForEach($methods) { $method in
+                                if method.isNew {
+                                    VStack(alignment: .leading) {
+                                        Text(method.kind.capitalized).font(.caption).foregroundStyle(.secondary)
+                                        TextField(method.kind == "email" ? "Email" : "Phone", text: $method.value).onChange(of: method.value) { _, _ in autosave() }
+                                            .accessibilityIdentifier("profileNew\(method.kind.capitalized)")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Section {
+                        Text(status).font(.caption).foregroundStyle(failed ? .red : .secondary).accessibilityIdentifier("profileDraftStatus")
+                        Button(draft.mode == "follow_up" ? "Save profile draft — waiting for previous change" : "Save profile change on device") { submit() }
+                            .disabled(failed).accessibilityIdentifier("saveProfile")
+                        if failed { Button("Retry saving profile draft") { autosave() } }
+                    }
+                    Section("Contact methods") {
+                        ForEach($methods) { $method in
+                            if !method.isNew {
+                                VStack(alignment: .leading) {
+                                    Text(method.kind.capitalized).font(.caption).foregroundStyle(.secondary)
+                                    TextField(method.kind == "email" ? "Email" : "Phone", text: $method.value).onChange(of: method.value) { _, _ in autosave() }
+                                        .accessibilityIdentifier("profileContact_\(method.id)")
+                                    Toggle("Remove this method", isOn: $method.removed).onChange(of: method.removed) { _, _ in autosave() }
+                                }
+                            }
+                        }
+                        if methods.first?.removed == true { Text("Removing the first displayed method will reveal the next contact after sync.").font(.caption).foregroundStyle(.orange) }
+                    }
+                    Text("Saved profile changes stay separate from call and message destinations until the server accepts them.").font(.caption).foregroundStyle(.secondary)
+                }
+            }.navigationTitle("Edit profile")
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() }.disabled(failed) } }
+                .interactiveDismissDisabled(failed)
+        }
+    }
+    private func proposal() -> JSON {
+        DetailsEditorProjection.proposal(firstName: firstName, lastName: lastName, methods: methods, baseline: draft.baseline ?? .object([:]))
+    }
+    private func autosave() {
+        do { draft.proposal = proposal(); draft = try model.save(draft); status = "Draft saved on device · revision \(draft.revision)"; failed = false }
+        catch { fail(error) }
+    }
+    private func submit() {
+        do { if draft.revision == 0 { autosave() }; guard !failed else { return }; try model.submit(draft); dismiss() }
+        catch LocalError.waitingPredecessor { status = LocalError.waitingPredecessor.localizedDescription; failed = false }
+        catch { fail(error) }
+    }
+    private func fetchCurrent() { Task { do { draft = try await model.requalifyDetails(draft); status = "Current profile fetched. Choose replacement or current."; failed = false } catch { fail(error) } } }
+    private func applyDraft() {
+        let fields = DetailsEditorProjection.fields(for: draft)
+        firstName = fields.firstName; lastName = fields.lastName; methods = fields.methods
+    }
+    private func summary(_ value: JSON?) -> String { guard let value else { return "Current profile could not be fetched; your saved proposal is protected." }; return [value["first_name"].text, value["last_name"].text, value["contacts"].list.map { $0["kind"].text + ": " + $0["value"].text }.joined(separator: "\n")].filter { !$0.isEmpty }.joined(separator: "\n") }
+    private func fail(_ error: Error) { status = error.localizedDescription; failed = true }
 }
 struct StageProposalView: View {
     @EnvironmentObject private var model: FieldModel
@@ -404,6 +602,7 @@ struct QueueView: View {
     @State private var composer: Draft?
     @State private var contactComposer: Draft?
     @State private var stageProposal: StageProposal?
+    @State private var detailsComposer: Draft?
     var body: some View {
         List {
             Section { Text("\(model.pendingCount) pending · \(model.drafts.count) saved drafts").accessibilityIdentifier("queueCount") }
@@ -412,6 +611,7 @@ struct QueueView: View {
                     Button(draft.kind == "log_contact_attempt" ? "Manual contact · " + [draft.contactChannel, draft.contactOutcome, draft.occurredAt].compactMap { $0 }.joined(separator: " · ") : (draft.kind == "change_person_stage" ? "Stage proposal · " + (draft.proposal?["name"].text ?? "") : (draft.text.isEmpty ? "Empty draft" : draft.text))) {
                         if draft.kind == "log_contact_attempt" { contactComposer = draft }
                         else if draft.kind == "change_person_stage" { stageProposal = try? model.revisedStageProposal(draft) }
+                        else if draft.kind == "update_person_details" { detailsComposer = draft }
                         else { composer = draft }
                     }.accessibilityIdentifier(draft.kind == "change_person_stage" && draft.mode == "follow_up" ? "stageFollowUp_" + draft.id : "draft_" + draft.id)
                     if draft.mode == "follow_up" { Text("Saved draft — waiting for the previous change").font(.caption).foregroundStyle(.orange) }
@@ -428,6 +628,7 @@ struct QueueView: View {
                         if op.status == "conflict", let draft = model.drafts.first(where: { $0.predecessor == op.id }) {
                             Button("Review conflict") {
                                 if op.isStage { stageProposal = try? model.revisedStageProposal(draft) }
+                                else if op.isDetails { detailsComposer = draft }
                                 else { composer = draft }
                             }
                         } else if op.status == "attention" && op.error == "contact_time_in_future" && op.isContact {
@@ -443,5 +644,6 @@ struct QueueView: View {
         }.navigationTitle("Saved work").sheet(item: $composer) { draft in ComposerView(initial: draft).environmentObject(model) }
             .sheet(item: $contactComposer) { draft in ContactComposerView(initial: draft).environmentObject(model) }
             .sheet(item: $stageProposal) { proposal in StageProposalView(initial: proposal).environmentObject(model) }
+            .sheet(item: $detailsComposer) { draft in DetailsComposerView(initial: draft).environmentObject(model) }
     }
 }

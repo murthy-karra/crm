@@ -3,7 +3,9 @@ import XCTest
 
 @MainActor final class LiveAPITests: XCTestCase {
     func connect(installation: String = UUID().uuidString.lowercased(), email: String = "agent@mobile.test") async throws -> (API, Bootstrap) {
-        #if MOBILE002_QA || MOBILE003_QA || MOBILE004_QA
+        #if MOBILE005_QA || MOBILE005_UPGRADE_QA
+        let api = try API(base: "http://127.0.0.1:3103")
+        #elseif MOBILE002_QA || MOBILE003_QA || MOBILE004_QA
         let api = try API(base: "http://127.0.0.1:3102")
         #else
         let api = try API(base: "http://127.0.0.1:3101")
@@ -12,6 +14,47 @@ import XCTest
         let boot: Bootstrap = try await api.call("/bootstrap", method: "POST", body: .object(["protocol": .s("mobile-v1"), "installation_id": .s(installation)]))
         return (api, boot)
     }
+    #if MOBILE005_QA
+    func testMobile005RealDetailsLostResponseReplayConflictAndCurrentTraversal() async throws {
+        let installation = "6c8637a4-99f7-45d6-9c11-201f5c4d447a"
+        let (api, boot): (API, Bootstrap)
+        do { (api, boot) = try await connect(installation: installation) }
+        catch { XCTFail("bootstrap failed: \(error)"); return }
+        XCTAssertTrue(boot.capabilities.contains("update_person_details")); XCTAssertTrue(boot.capabilities.contains("details_revisions"))
+        // The coordinator seeds Person001 only for this lane; the configured
+        // installation is stable so retries do not consume reconciliation capacity.
+        let person = "07cb08d0-56c3-43c1-a538-68573e5a24f0"
+        let current: CurrentDetailsResponse
+        do { current = try await api.currentDetails(person: person, context: boot.context_id) }
+        catch { XCTFail("current profile read failed: \(error)"); return }
+        XCTAssertTrue(current.complete); _ = try revision(current.details_revision)
+        let original = current.items.first
+        let operations: [JSON] = [
+            .object(["op": .s("add"), "kind": .s("email"), "value": .s("ios.mobile005." + UUID().uuidString.lowercased() + "@example.test")]),
+            .object(["op": .s("add"), "kind": .s("phone"), "value": .s("(555) 555-0109")])
+        ]
+        let envelope = Envelope(context_id: boot.context_id, operation_id: UUID().uuidString.lowercased(), kind: "update_person_details", device_recorded_at: stamp(), payload: .object(["person_id": .s(person), "expected_details_revision": .s(current.details_revision), "first_name": .s("iOS Mobile005"), "contact_operations": .array(operations)]))
+        let bytes = try encode(envelope)
+        api.dropNextOperationResponse = true
+        do { _ = try await api.operation(bytes, context: boot.context_id); XCTFail("accepted response must be deliberately lost") } catch LocalError.lostResponse { } catch { XCTFail("initial details submission failed: \(error)"); return }
+        let replay: Receipt
+        do { replay = try await api.operation(bytes, context: boot.context_id) } catch { XCTFail("exact replay failed: \(error)"); return }
+        XCTAssertTrue(replay.replayed); XCTAssertEqual(replay.resource_type, "person_details"); XCTAssertEqual(replay.added_contact_ids?.map(\.ordinal), [0, 1])
+        let after: CurrentDetailsResponse
+        do { after = try await api.currentDetails(person: person, context: boot.context_id) } catch { XCTFail("post-accept read failed: \(error)"); return }
+        XCTAssertEqual(after.details_revision, replay.committed_revision)
+        let other = try await connect(installation: "b9a38d7e-3f64-4b6a-8cdf-211a220d5be3", email: "second@mobile.test")
+        let competing = Envelope(context_id: other.1.context_id, operation_id: UUID().uuidString.lowercased(), kind: "update_person_details", device_recorded_at: stamp(), payload: .object(["person_id": .s(person), "expected_details_revision": .s(after.details_revision), "last_name": .s("Second Actor"), "contact_operations": .array([])]))
+        _ = try await other.0.operation(try encode(competing), context: other.1.context_id)
+        let stale = Envelope(context_id: boot.context_id, operation_id: UUID().uuidString.lowercased(), kind: "update_person_details", device_recorded_at: stamp(), payload: .object(["person_id": .s(person), "expected_details_revision": .s(after.details_revision), "last_name": .s("Must conflict"), "contact_operations": .array([])]))
+        do { _ = try await api.operation(try encode(stale), context: boot.context_id); XCTFail("stale profile revision must conflict") }
+        catch let error as APIError { XCTAssertEqual(error.code, "revision_conflict") }
+        if let original {
+            let final = try await api.currentDetails(person: person, context: boot.context_id)
+            XCTAssertTrue(final.items.contains { $0["id"].text == original["id"].text })
+        }
+    }
+    #endif
     func testRealAPILostAcknowledgement100DurableActionsDependencyConflictAndAccountIsolation() async throws {
         let (api, boot) = try await connect()
         let generation: Generation = try await api.call("/reconciliations", method: "POST", body: .object(["protocol": .s("mobile-v1"), "installation_id": .s(boot.installation_id), "pinned_person_ids": .array([])]), context: boot.context_id)

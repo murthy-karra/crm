@@ -19,7 +19,9 @@ import XCTest
     func setupModel() async throws -> (FieldModel, API, SecureStorage, Bootstrap, LocalStore) {
         let model = FieldModel(synthetic: true, startMonitor: false, restoreOnInit: false)
         let secure = SecureStorage(synthetic: true, testingNamespace: UUID().uuidString); secure.testDirectory = directory
-        #if MOBILE002_QA || MOBILE003_QA || MOBILE004_QA || MOBILE004_UPGRADE_QA
+        #if MOBILE005_QA || MOBILE005_UPGRADE_QA
+        let api = try API(base: "http://127.0.0.1:3103")
+        #elseif MOBILE002_QA || MOBILE003_QA || MOBILE004_QA || MOBILE004_UPGRADE_QA
         let api = try API(base: "http://127.0.0.1:3102")
         #else
         let api = try API(base: "http://127.0.0.1:3101")
@@ -313,6 +315,51 @@ import XCTest
         }
         let person = pre.components(separatedBy: " person=").last ?? ""
         XCTAssertNotNil(try store.activeBundle(person), "The installed encrypted cache and its original key remain available.")
+    }
+    #endif
+
+    #if MOBILE005_UPGRADE_QA
+    /// Opens the data written by the archived Mobile004 app after this app has
+    /// been installed over the same isolated bundle.  The schema-8 migration is
+    /// additive, so this asserts the prior SQLCipher key and every protected
+    /// operation/draft byte exactly, rather than merely checking row counts.
+    func testMobile005OpensActualInstalledSchemaSevenStoreWithoutChangingProtectedRows() throws {
+        let identity = "aa6004f1-894f-448b-aa1a-bde28cc66acd_856340c3-3e5b-4776-89eb-e0c225306505"
+        let context = "mobile005-installed-schema-seven-context"
+        let directory = try SecureStorage.directory(synthetic: true)
+        let pre = try String(contentsOf: directory.appendingPathComponent("mobile005-schema-seven-inventory.txt"))
+        XCTAssertTrue(pre.hasPrefix("schema=7 key="), pre)
+        func field(_ left: String, _ right: String? = nil) -> String {
+            let suffix = pre.components(separatedBy: left).dropFirst().first ?? ""
+            return right.map { String(suffix.components(separatedBy: $0).first ?? "") } ?? String(suffix)
+        }
+        let secure = SecureStorage(synthetic: true)
+        let path = directory.appendingPathComponent(identity + ".sqlite")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: path.path), "The archived app must be installed and create its protected store first.")
+        let key = try secure.key(for: identity, existingFile: true)
+        let store = try LocalStore(url: path, key: key, identity: identity, context: context)
+        XCTAssertEqual(try store.rows("PRAGMA user_version")[0][0], "8")
+        func digest(_ data: Data) -> String { String(data.reduce(1469598103934665603) { ($0 ^ UInt64($1)) &* 1099511628211 }, radix: 16) }
+        XCTAssertEqual(field("key=", " ops="), digest(key), "The installed SQLCipher key must survive the schema-8 migration.")
+
+        let expectedOperations = field(" ops=", " drafts=").split(separator: ",").map(String.init)
+        let queue = try store.queue(); XCTAssertEqual(queue.count, expectedOperations.count)
+        for expected in expectedOperations {
+            let parts = expected.split(separator: ":", maxSplits: 2).map(String.init)
+            let op = try XCTUnwrap(queue.first { $0.id == parts[0] })
+            XCTAssertEqual(op.bytes.base64EncodedString(), parts[1], "Immutable schema-7 envelope bytes changed during migration.")
+            XCTAssertEqual(op.receipt == nil ? "0" : "1", parts[2])
+        }
+        let expectedDrafts = field(" drafts=", " person=").split(separator: ",").map(String.init)
+        let drafts = try store.drafts(); XCTAssertEqual(drafts.count, expectedDrafts.count)
+        for expected in expectedDrafts {
+            let parts = expected.split(separator: ":", maxSplits: 1).map(String.init)
+            let draft = try XCTUnwrap(drafts.first { $0.id == parts[0] })
+            XCTAssertEqual((try encode(draft)).base64EncodedString(), parts[1], "Protected schema-7 draft bytes changed during migration.")
+        }
+        let person = field(" person=", " generation=")
+        XCTAssertNotNil(try store.activeBundle(person), "The old cached bundle remains readable, although it is not details-qualified.")
+        XCTAssertFalse(try store.hasQualifiedDetailsBundle(person, "2"), "Schema-7 cache cannot silently acquire a details qualification token.")
     }
     #endif
 

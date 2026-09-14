@@ -14,6 +14,8 @@ var appDefaults: UserDefaults {
     return UserDefaults(suiteName: "dev.crm.FieldCRM.mobile004qa") ?? .standard
     #elseif MOBILE004_UPGRADE_QA
     return UserDefaults(suiteName: "dev.crm.FieldCRM.mobile004upgradeqa") ?? .standard
+    #elseif MOBILE005_UPGRADE_QA
+    return UserDefaults(suiteName: "dev.crm.FieldCRM.mobile005upgradeqa") ?? .standard
     #else
     return .standard
     #endif
@@ -84,6 +86,8 @@ final class SecureStorage {
         base += ".mobile004qa"
         #elseif MOBILE004_UPGRADE_QA
         base += ".mobile004upgradeqa"
+        #elseif MOBILE005_UPGRADE_QA
+        base += ".mobile005upgradeqa"
         #endif
         #if DEBUG
         service = testingNamespace.map { base + ".test." + $0 } ?? base
@@ -169,6 +173,8 @@ final class SecureStorage {
                     return "SyntheticFieldCRMMobile004QA"
                     #elseif MOBILE004_UPGRADE_QA
                     return "SyntheticFieldCRMMobile004UpgradeQA"
+                    #elseif MOBILE005_UPGRADE_QA
+                    return "SyntheticFieldCRMMobile005UpgradeQA"
                     #else
                     return "SyntheticFieldCRM"
                     #endif

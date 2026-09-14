@@ -40,6 +40,14 @@ struct StageProposal: Identifiable {
         guard let capabilities = credential?.bootstrap.capabilities else { return false }
         return ["change_person_stage", "stage_revisions", "stage_catalog"].allSatisfy(capabilities.contains)
     }
+    private var detailsCapabilitiesReady: Bool {
+        guard let capabilities = credential?.bootstrap.capabilities else { return false }
+        return ["update_person_details", "details_revisions"].allSatisfy(capabilities.contains)
+    }
+    func canEditDetails(person: String) -> Bool {
+        guard unlocked, detailsCapabilitiesReady, let store else { return false }
+        return (try? store.editableDetails(person: person)) != nil
+    }
     var canChangeStage: Bool {
         guard unlocked, stageCapabilitiesReady, let store else { return false }
         return (try? store.activeStages().isEmpty == false) ?? false
@@ -69,6 +77,9 @@ struct StageProposal: Identifiable {
         bytes.reduce(1469598103934665603) { ($0 ^ UInt64($1)) &* 1099511628211 }
     }
     func mobile003QAInventoryURL() throws -> URL { try directory().appendingPathComponent("historical-upgrade-inventory.txt") }
+    #endif
+    #if MOBILE005_QA
+    @Published var qaProfileConflictStage = "no pending profile change"
     #endif
     init(synthetic: Bool = false, startMonitor: Bool = true, restoreOnInit: Bool = true) {
         secure = SecureStorage(synthetic: synthetic); self.synthetic = secure.synthetic
@@ -108,7 +119,9 @@ struct StageProposal: Identifiable {
         return try SecureStorage.directory(synthetic: synthetic)
     }
     private var qaBaseURL: String {
-        #if MOBILE002_QA || MOBILE003_QA || MOBILE004_QA || MOBILE004_UPGRADE_QA
+        #if MOBILE005_QA || MOBILE005_UPGRADE_QA
+        return "http://127.0.0.1:3103"
+        #elseif MOBILE002_QA || MOBILE003_QA || MOBILE004_QA || MOBILE004_UPGRADE_QA
         return "http://127.0.0.1:3102"
         #else
         return "http://127.0.0.1:3101"
@@ -269,6 +282,85 @@ struct StageProposal: Identifiable {
         } catch { qaFixtureStage = "fixture error: " + error.localizedDescription; message = error.localizedDescription }
     }
     #endif
+    #if MOBILE005_QA
+    /// Synthetic-simulator-only harness for the real profile conflict path.
+    /// It creates the same immutable outbox envelope as the editor, then a
+    /// distinct authorized actor advances the server revision before sync.
+    func prepareQAProfileConflict() {
+        guard let store, let person = people.first(where: { $0.person == "07cb08d0-56c3-43c1-a538-68573e5a24f0" }) else { qaProfileConflictStage = "profile unavailable"; return }
+        if let pending = queue.first(where: { $0.isDetails && !["accepted", "superseded", "discarded", "unavailable"].contains($0.status) }) { qaProfileConflictStage = "primary profile already queued " + pending.id; return }
+        do {
+            // A failed/restarted synthetic QA run may leave only its old
+            // conflict record.  Supersede that completed test fixture before
+            // creating a fresh, independently reviewable conflict.
+            for old in try store.queue() where old.isDetails && old.status == "conflict" { try store.markSuperseded(old.id) }
+            var draft = try newDetailsDraft(person: person.person)
+            draft.proposal = .object(["last_name": .s("iOS primary profile conflict " + UUID().uuidString.lowercased())])
+            draft = try save(draft); try store.submit(draft); try reload()
+            guard let operation = try store.queue().first(where: { $0.isDetails && $0.status == "pending" }) else { throw LocalError.invalidProtocol }
+            qaProfileConflictStage = "primary profile queued " + operation.id
+        } catch { qaProfileConflictStage = "primary profile error: " + error.localizedDescription }
+    }
+    func advanceQAProfileConflictAsSecondActor() async {
+        guard let pending = queue.first(where: { $0.isDetails && $0.status == "pending" }) else { qaProfileConflictStage = "no pending profile change"; return }
+        do {
+            let other = try client(base: qaBaseURL); try await other.login(email: "second@mobile.test", password: "Mobile-demo-only-123!")
+            let key = "mobile005.qa.second.profile.installation"
+            let installation = appDefaults.string(forKey: key) ?? { let value = UUID().uuidString.lowercased(); appDefaults.set(value, forKey: key); return value }()
+            let boot: Bootstrap = try await other.call("/bootstrap", method: "POST", body: .object(["protocol": .s("mobile-v1"), "installation_id": .s(installation)]))
+            let current = try await other.currentDetails(person: pending.envelope.person, context: boot.context_id)
+            let replacement = Envelope(context_id: boot.context_id, operation_id: UUID().uuidString.lowercased(), kind: "update_person_details", device_recorded_at: stamp(), payload: .object(["person_id": .s(pending.envelope.person), "expected_details_revision": .s(current.details_revision), "last_name": .s("iOS second actor profile " + UUID().uuidString.lowercased()), "contact_operations": .array([])]))
+            let receipt = try await other.operation(try encode(replacement), context: boot.context_id)
+            qaProfileConflictStage = "second actor accepted profile " + (receipt.committed_revision ?? "?")
+        } catch { qaProfileConflictStage = "second actor profile error: " + error.localizedDescription }
+    }
+    func drainQAProfileConflict() async {
+        await sync(manual: true)
+        if let operation = queue.last(where: { $0.isDetails }) { qaProfileConflictStage = "profile " + operation.status + " " + operation.id }
+        else { qaProfileConflictStage = "profile operation unavailable" }
+    }
+    func inspectQAProfileOutbox() {
+        guard let operation = queue.last(where: { $0.isDetails }) else { qaProfileConflictStage = "profile outbox unavailable"; return }
+        let digest = operation.bytes.reduce(1469598103934665603) { ($0 ^ UInt64($1)) &* 1099511628211 }
+        qaProfileConflictStage = "profile outbox " + operation.id + " " + String(digest, radix: 16)
+    }
+    func inspectQAProfileCache() {
+        guard let store else { qaProfileConflictStage = "profile cache unavailable"; return }
+        do {
+            let person = "07cb08d0-56c3-43c1-a538-68573e5a24f0"
+            let bundle = try store.activeBundle(person)
+            let qualified = try bundle.map { try store.hasQualifiedDetailsBundle(person, $0.revision) } ?? false
+            qaProfileConflictStage = "profile cache rev=" + (bundle?.revision ?? "none") + " qualified=" + (qualified ? "yes" : "no") + " editable=" + ((try store.editableDetails(person: person)) == nil ? "no" : "yes") + " caps=" + (detailsCapabilitiesReady ? "yes" : "no")
+        } catch { qaProfileConflictStage = "profile cache error: " + error.localizedDescription }
+    }
+    func verifyQAProfileReceipt() async {
+        guard let api, let credential, let operation = queue.last(where: { $0.isDetails }), operation.status == "accepted",
+              let receipt = operation.receipt, receipt.resource_type == "person_details", receipt.outcome == "accepted" else { qaProfileConflictStage = "profile receipt unavailable"; return }
+        do {
+            let operations = operation.envelope.payload["contact_operations"].list
+            let additions = operations.enumerated().filter { $0.element["op"].text == "add" }
+            guard let mapping = receipt.added_contact_ids, mapping.count == additions.count,
+                  Set(mapping.map(\.ordinal)).count == mapping.count else { throw LocalError.invalidProtocol }
+            var cursor: String? = nil, contacts: [JSON] = [], first: CurrentDetailsResponse?
+            repeat {
+                let page = try await api.currentDetails(person: operation.envelope.person, cursor: cursor, context: credential.bootstrap.context_id)
+                guard page.context_id == credential.bootstrap.context_id, page.person_id == operation.envelope.person,
+                      page.complete == (page.next_cursor == nil), (try? revision(page.details_revision)) != nil else { throw LocalError.invalidProtocol }
+                if let first { guard first.details_revision == page.details_revision && first.person_revision == page.person_revision else { throw LocalError.invalidProtocol } }
+                else { first = page }
+                contacts += page.items; cursor = page.next_cursor
+            } while cursor != nil
+            for entry in operations where entry["op"].text == "edit" {
+                guard contacts.contains(where: { $0["id"].text == entry["id"].text && $0["value"].text == entry["value"].text }) else { throw LocalError.invalidProtocol }
+            }
+            for entry in mapping {
+                guard let source = additions.first(where: { $0.offset == entry.ordinal })?.element,
+                      contacts.contains(where: { $0["id"].text == entry.id && $0["value"].text == source["value"].text }) else { throw LocalError.invalidProtocol }
+            }
+            qaProfileConflictStage = "profile receipt verified " + operation.id
+        } catch { qaProfileConflictStage = "profile receipt error: " + error.localizedDescription }
+    }
+    #endif
     @discardableResult func validateAccess() -> Bool {
         do {
             guard var saved = credential, !saved.signedOut, unlocked else { throw LocalError.locked }
@@ -323,6 +415,48 @@ struct StageProposal: Identifiable {
         let now = stamp()
         return try save(Draft(id: UUID().uuidString.lowercased(), person: person, kind: "log_contact_attempt", revision: 0,
                               contactChannel: "call", contactOutcome: "reached", occurredAt: now, deviceRecordedAt: now))
+    }
+    func newDetailsDraft(person: String) throws -> Draft {
+        guard validateAccess(), detailsCapabilitiesReady, let store, let baseline = try store.editableDetails(person: person) else { throw LocalError.invalidInput }
+        let expected = baseline["details_revision"].text
+        guard (try? revision(expected)) != nil else { throw LocalError.invalidProtocol }
+        return try save(Draft(id: UUID().uuidString.lowercased(), person: person, kind: "update_person_details", revision: 0,
+                              expectedRevision: expected, baseline: baseline,
+                              proposal: .object([:])))
+    }
+    func startDetails(person: String) throws -> Draft { try newDetailsDraft(person: person) }
+    func requalifyDetails(_ draft: Draft) async throws -> Draft {
+        guard validateAccess(), let api, let credential, draft.isDetails else { throw LocalError.locked }
+        let run = epoch
+        var cursor: String? = nil, all: [JSON] = [], first: CurrentDetailsResponse?
+        repeat {
+            let page = try await api.currentDetails(person: draft.person, cursor: cursor, context: credential.bootstrap.context_id)
+            try current(run)
+            guard page.context_id == credential.bootstrap.context_id, page.person_id == draft.person,
+                  (try? revision(page.details_revision)) != nil,
+                  (try? revision(page.person_revision)) != nil,
+                  page.complete == (page.next_cursor == nil) else { throw LocalError.invalidProtocol }
+            if let first { guard first.details_revision == page.details_revision && first.person_revision == page.person_revision else { throw LocalError.invalidProtocol } }
+            else { first = page }
+            all += page.items; guard all.count <= 10_000 else { throw LocalError.invalidProtocol }
+            cursor = page.next_cursor
+            if page.complete { break }
+        } while true
+        guard let response = first, cursor == nil else { throw LocalError.invalidProtocol }
+        guard let store else { throw LocalError.locked }
+        let currentJSON: JSON = .object(["first_name": response.first_name.map(JSON.s) ?? .null, "last_name": response.last_name.map(JSON.s) ?? .null,
+                                         "details_revision": .s(response.details_revision), "contacts": .array(all)])
+        let saved = try store.saveCurrent(draft.id, current: currentJSON, contextID: response.context_id, person: draft.person, editorEpoch: draft.editorEpoch)
+        try reload(); return saved
+    }
+    func revisedDetailsDraft(_ draft: Draft) throws -> Draft {
+        guard draft.isDetails, let current = draft.current, let store else { throw LocalError.invalidProtocol }
+        let expected = current["details_revision"].text
+        guard (try? revision(expected)) != nil else { throw LocalError.invalidProtocol }
+        if let predecessor = draft.predecessor { try store.markSuperseded(predecessor) }
+        var next = Draft(id: UUID().uuidString.lowercased(), person: draft.person, kind: "update_person_details", revision: 0,
+                         expectedRevision: expected, baseline: current, proposal: draft.proposal, mode: "editing", predecessor: draft.predecessor)
+        next = try store.saveDraft(next); try reload(); return next
     }
     func revisedContactDraft(from operation: Queued) throws -> Draft {
         guard operation.isContact else { throw LocalError.invalidInput }
@@ -454,6 +588,10 @@ struct StageProposal: Identifiable {
                     message = "Stage changes are unavailable for this account. Saved stage work remains protected."
                     continue
                 }
+                if op.isDetails && !detailsCapabilitiesReady {
+                    message = "Profile editing is unavailable for this account. Saved profile work remains protected."
+                    continue
+                }
                 do {
                     let receipt = try await api.operation(op.bytes, context: credential.bootstrap.context_id)
                     try current(run); try store.acknowledge(receipt); try reload()
@@ -474,6 +612,29 @@ struct StageProposal: Identifiable {
                                 catch { /* Preserve the stage proposal if a conflict baseline is unavailable. */ }
                             }
                             try store.recordStageConflict(op.id, current: currentStage, contextID: credential.bootstrap.context_id, person: op.envelope.person)
+                            try reload(); continue
+                        }
+                        if op.isDetails {
+                            var details: CurrentDetailsResponse? = nil
+                            if let draft = try store.draftForOperation(op.id) {
+                                do {
+                                    var cursor: String? = nil, contacts: [JSON] = [], first: CurrentDetailsResponse?
+                                    repeat {
+                                        let page = try await api.currentDetails(person: draft.person, cursor: cursor, context: credential.bootstrap.context_id)
+                                        try current(run)
+                                        guard page.context_id == credential.bootstrap.context_id, page.person_id == draft.person,
+                                              (try? revision(page.details_revision)) != nil,
+                                              (try? revision(page.person_revision)) != nil,
+                                              page.complete == (page.next_cursor == nil) else { throw LocalError.invalidProtocol }
+                                        if let first { guard first.details_revision == page.details_revision && first.person_revision == page.person_revision else { throw LocalError.invalidProtocol } } else { first = page }
+                                        contacts += page.items; cursor = page.next_cursor
+                                        if page.complete { break }
+                                    } while true
+                                    if var complete = first, cursor == nil { complete = CurrentDetailsResponse(context_id: complete.context_id, person_id: complete.person_id, person_revision: complete.person_revision, details_revision: complete.details_revision, first_name: complete.first_name, last_name: complete.last_name, items: contacts, next_cursor: nil, complete: true); details = complete }
+                                } catch { /* Keep the protected proposal when the bounded current read is unavailable. */ }
+                            }
+                            let currentJSON: JSON? = details.map { JSON.object(["first_name": $0.first_name.map(JSON.s) ?? JSON.null, "last_name": $0.last_name.map(JSON.s) ?? JSON.null, "details_revision": JSON.s($0.details_revision), "contacts": JSON.array($0.items)]) }
+                            try store.recordConflict(op.id, current: currentJSON, contextID: credential.bootstrap.context_id, person: op.envelope.person)
                             try reload(); continue
                         }
                         if let draft = try store.draftForOperation(op.id), let target = draft.targetID {
@@ -561,7 +722,9 @@ struct StageProposal: Identifiable {
         for (index, (person, rev)) in members.enumerated() {
             try current(run)
             message = "Downloading \(index + 1) of \(members.count) people. Previous workspace remains available."
-            let hasQualifiedRepresentation = gen.stage_catalog == nil ? true : (try store.hasQualifiedStageBundle(person, rev))
+            let stageQualified = gen.stage_catalog == nil ? true : (try store.hasQualifiedStageBundle(person, rev))
+            let detailsQualified = detailsCapabilitiesReady ? try store.hasQualifiedDetailsBundle(person, rev) : true
+            let hasQualifiedRepresentation = stageQualified && detailsQualified
             if try store.hasBundle(person, rev), hasQualifiedRepresentation { continue }
             for section in ["summary", "notes", "tasks"] {
                 while true {

@@ -151,7 +151,7 @@ async fn approve_all(f: &Fixture, root: Uuid, _plan: Uuid) -> Uuid {
     )
     .await
     .unwrap();
-    drain_preparation(&f, root).await;
+    drain_preparation(f, root).await;
     let plan: Uuid = sqlx::query_scalar(
         "SELECT latest_plan_id FROM migration_admitted_metadata_import WHERE id=$1",
     )

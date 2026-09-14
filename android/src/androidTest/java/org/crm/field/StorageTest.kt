@@ -238,6 +238,11 @@ class StorageTest {
         // Generation and receipt use the same transaction lock; an older complete seal cannot cover
         // revision 2002.
         store.beginGeneration(generation)
+        store.stagePage(id, chosen, "summary", "", summary)
+        for (section in listOf("notes", "tasks")) {
+            val page = fixture("${section}_page").put("next_cursor", null).put("complete", true)
+            store.stagePage(id, chosen, section, "", page)
+        }
         store.promote(seal)
         assertEquals("accepted", store.dao.operation(op.id)!!.status)
         store.dao.person(store.dao.person(chosen)!!.copy(revision = "2002"))
@@ -246,13 +251,29 @@ class StorageTest {
     }
 
     @Test
-    fun migrationOneToTwoPreservesDraftsOperationsAndCheckpoint() {
+    fun migrationOneToSixPreservesDraftsOperationsAndCheckpoint() {
         val saved = draft()
         val op = store.submitDraft(saved.id, saved.revision)
         draft("remaining")
         store.dao.meta(MetaRow("manifest_cursor", "durable-checkpoint"))
-        // Construct the actual v1 shape from v2, without destructive Room fallback.
+        // Construct the actual v1 shape from the current database, without Room fallback.
+        // Merely lowering user_version leaves later columns in place, which is not an upgrade
+        // input and makes the next ALTER TABLE fail before the migration can be tested.
         val raw = database.openHelper.writableDatabase
+        raw.execSQL("DROP TABLE IF EXISTS profile_context")
+        raw.execSQL("DROP TABLE IF EXISTS profile_drafts")
+        raw.execSQL("DROP TABLE IF EXISTS stage_catalog_pages")
+        raw.execSQL("DROP TABLE IF EXISTS stage_catalog")
+        raw.execSQL("DROP TABLE IF EXISTS stage_context")
+        raw.execSQL("DROP TABLE IF EXISTS stage_drafts")
+        raw.execSQL("DROP TABLE IF EXISTS contact_drafts")
+        raw.execSQL("DROP TABLE IF EXISTS edit_context")
+        raw.execSQL("ALTER TABLE people DROP COLUMN detailsRevisionsQualified")
+        raw.execSQL("ALTER TABLE people DROP COLUMN stageRevisionsQualified")
+        raw.execSQL("ALTER TABLE people DROP COLUMN noteRevisionsQualified")
+        raw.execSQL("ALTER TABLE drafts DROP COLUMN state")
+        raw.execSQL("ALTER TABLE drafts DROP COLUMN target")
+        raw.execSQL("ALTER TABLE drafts DROP COLUMN baseline")
         raw.execSQL("ALTER TABLE operations DROP COLUMN lastError")
         raw.execSQL("DROP TABLE room_master_table")
         raw.execSQL("PRAGMA user_version=1")
@@ -263,7 +284,7 @@ class StorageTest {
         assertEquals("durable-checkpoint", store.dao.meta("manifest_cursor"))
         database.openHelper.writableDatabase.query("PRAGMA user_version").use {
             it.moveToFirst()
-            assertEquals(2, it.getInt(0))
+            assertEquals(6, it.getInt(0))
         }
     }
 

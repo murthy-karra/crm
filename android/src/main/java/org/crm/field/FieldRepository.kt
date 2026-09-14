@@ -35,6 +35,7 @@ class FieldUi(
     val stageContexts: List<StageContextRow> = emptyList(),
     val profileDrafts: List<ProfileDraftRow> = emptyList(),
     val profileContexts: List<ProfileContextRow> = emptyList(),
+    val profileEditingEnabled: Boolean = false,
 )
 
 class ActiveAccount(
@@ -232,7 +233,8 @@ class FieldRepository(
                                 it.status !in listOf("accepted", "covered")
                             } +
                                 old.store.dao.drafts().size +
-                                old.store.dao.contactDrafts().count { it.operation.isEmpty() }
+                                old.store.dao.contactDrafts().count { it.operation.isEmpty() } +
+                                old.store.dao.profileDrafts().count { it.operation.isEmpty() }
                         registry.put("pending", count)
                         if (signingOut) old.store.lock()
                     }
@@ -699,24 +701,44 @@ class FieldRepository(
     }
 
     /** Traversal is context/operation fenced by the caller; it never becomes reconciliation data. */
-    private suspend fun currentProfile(account: ActiveAccount, row: OperationRow): JSONObject {
+    internal suspend fun currentProfile(account: ActiveAccount, row: OperationRow): JSONObject {
         val path = "/api/mobile/v1/people/${uuid(row.person)}/details"
-        var page = account.api.page(path, account.store.binding, "")
-        val output = JSONObject(page.toString())
-        val all = JSONArray(page.getJSONArray("items").toString())
-        val details = revision(page.getString("details_revision"))
-        val personRevision = revision(page.getString("person_revision"))
-        var cursor = page.stringOrNull("next_cursor")
-        if (page.getBoolean("complete") != (cursor == null)) throw ProtocolFailure()
-        while (cursor != null) {
-            page = account.api.page(path, account.store.binding, cursor)
-            if (page.getString("context_id") != account.store.binding.context || page.getString("person_id") != row.person || page.getString("details_revision") != details || page.getString("person_revision") != personRevision) throw ProtocolFailure()
+        var cursor = ""
+        val visited = mutableSetOf<String>()
+        var output: JSONObject? = null
+        val all = JSONArray()
+        var details: String? = null
+        var personRevision: String? = null
+        while (true) {
+            if (!visited.add(cursor)) throw ProtocolFailure()
+            val page =
+                account.api.page(path, account.store.binding, cursor)
+            if (
+                page.getString("context_id") != account.store.binding.context ||
+                    page.getString("person_id") != row.person ||
+                    page.getJSONArray("items").length() > 100 ||
+                    page.toString().toByteArray().size > 524_288
+            )
+                throw ProtocolFailure()
+            val pageDetails = revision(page.getString("details_revision"))
+            val pagePersonRevision = revision(page.getString("person_revision"))
+            if (details == null) {
+                details = pageDetails
+                personRevision = pagePersonRevision
+                output = JSONObject(page.toString())
+            } else if (pageDetails != details || pagePersonRevision != personRevision)
+                throw ProtocolFailure()
             page.getJSONArray("items").objects().forEach { all.put(it) }
-            cursor = page.stringOrNull("next_cursor")
-            if (page.getBoolean("complete") != (cursor == null)) throw ProtocolFailure()
+            val next = page.stringOrNull("next_cursor")
+            if (
+                page.getBoolean("complete") != (next == null) ||
+                    next == cursor ||
+                    (next != null && (next.isEmpty() || next.toByteArray().size > 2_048))
+            ) throw ProtocolFailure()
+            if (next == null) break
+            cursor = next
         }
-        output.put("items", all).put("next_cursor", JSONObject.NULL).put("complete", true)
-        return output
+        return requireNotNull(output).put("items", all).put("next_cursor", JSONObject.NULL).put("complete", true)
     }
 
     private suspend fun download(account: ActiveAccount) {
@@ -771,7 +793,17 @@ class FieldRepository(
         }
         for ((index, item) in manifest.withIndex()) {
             check(account)
-            if (dao.person(item.person)?.let { it.revision == item.revision && it.noteRevisionsQualified && (!generation.has("stage_catalog") || it.stageRevisionsQualified) } == true) continue
+            if (
+                dao.person(item.person)?.let {
+                    it.revision == item.revision &&
+                        it.noteRevisionsQualified &&
+                        (!generation.has("stage_catalog") || it.stageRevisionsQualified) &&
+                        // A schema-5 cache has no details baseline even when its broad revision
+                        // is current. Only a server that advertises Mobile005 details must fetch
+                        // the complete contact traversal to qualify that new baseline.
+                        (!store.binding.supportsPersonDetails() || it.detailsRevisionsQualified)
+                } == true
+            ) continue
             if (vault.root.usableSpace < 16 * 1024 * 1024) throw StorageFailure()
             for (section in listOf("summary", "notes", "tasks")) {
                 while (true) {
@@ -836,7 +868,8 @@ class FieldRepository(
                     "pending",
                     ops.count { it.status != "accepted" } +
                         drafts.size +
-                        contacts.count { it.operation.isEmpty() },
+                        contacts.count { it.operation.isEmpty() } +
+                        profiles.count { it.operation.isEmpty() },
                 )
                 vault.saveRegistry(registry)
                 val result =
@@ -864,6 +897,7 @@ class FieldRepository(
                         stageContexts,
                         profiles,
                         profileContexts,
+                        account.store.binding.supportsPersonDetails(),
                     )
                 if (active === account) mutable.value = result
             } catch (_: Exception) {

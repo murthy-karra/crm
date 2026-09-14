@@ -16,9 +16,10 @@ class LeaseTest {
     }
 
     @Test
-    fun revisionOrderingDoesNotLosePrecision() {
-        assertTrue(revisionAtLeast("9223372036854775808", "9223372036854775807"))
+    fun revisionsAreCanonicalPositiveSignedLongs() {
+        assertTrue(revisionAtLeast("9223372036854775807", "9223372036854775806"))
         assertFalse(revisionAtLeast("9", "10"))
         assertThrows(IllegalArgumentException::class.java) { revision("0") }
+        assertThrows(IllegalArgumentException::class.java) { revision("9223372036854775808") }
     }
 }

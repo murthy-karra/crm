@@ -130,6 +130,93 @@ async fn prepare(f: &Fixture, command: &admitted::Prepare) -> Result<Value, Migr
     .await
 }
 
+async fn assert_registry_unmodified(
+    f: &Fixture,
+    original: Uuid,
+    expected: (i64, i64, i64, i64, i64, i64),
+) {
+    assert_eq!(ledgers(f, original).await, expected);
+    let counts: (i64, i64, i64, i64) = sqlx::query_as("SELECT (SELECT count(*) FROM migration_metadata_catalog_claim),(SELECT count(*) FROM migration_metadata_catalog_readiness),(SELECT count(*) FROM migration_admitted_metadata_import),(SELECT count(*) FROM migration_admitted_metadata_receipt)")
+        .fetch_one(&f.pool).await.unwrap();
+    assert_eq!(counts, (0, 0, 0, 0));
+}
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn rejected_metadata_preparation_cannot_activate_catalog_handover(migrator: PgPool) {
+    let (f, original, _, command) = fixture(&migrator).await;
+    finish_original(&f, original).await;
+    let (foreign, foreign_original, _, foreign_command) = fixture(&migrator).await;
+    finish_original(&foreign, foreign_original).await;
+    let operational =
+        crate::import_support::fixture(&migrator, crate::import_support::default_people()).await;
+    let before = ledgers(&f, original).await;
+    let foreign_before = ledgers(&foreign, foreign_original).await;
+    let evidence = original_evidence(&f, original).await;
+    let foreign_evidence = original_evidence(&foreign, foreign_original).await;
+    let calls = (
+        f.reader.calls(),
+        foreign.reader.calls(),
+        operational.reader.calls(),
+    );
+    for (admission_id, source_report_id) in [
+        (Uuid::new_v4(), command.source_report_id),
+        (command.admission_id, Uuid::new_v4()),
+        (foreign_command.admission_id, command.source_report_id),
+        (command.admission_id, foreign_command.source_report_id),
+        (
+            foreign_command.admission_id,
+            foreign_command.source_report_id,
+        ),
+    ] {
+        let bad = admitted::Prepare {
+            request_id: Uuid::new_v4(),
+            admission_id,
+            source_report_id,
+        };
+        assert!(matches!(
+            prepare(&f, &bad).await,
+            Err(MigrationError::SourceNotEligible)
+        ));
+        assert_registry_unmodified(&f, original, before).await;
+        assert_eq!(ledgers(&foreign, foreign_original).await, foreign_before);
+    }
+    // An authorized operational-workspace request has no eligible local cohort.
+    // Even an empty registry must not be activated by that rejected request.
+    let mode: String = sqlx::query_scalar("SELECT workspace_mode FROM organization WHERE id=$1")
+        .bind(operational.org)
+        .fetch_one(&operational.pool)
+        .await
+        .unwrap();
+    assert_eq!(mode, "operational");
+    assert!(matches!(
+        prepare(&operational, &command).await,
+        Err(MigrationError::SourceNotEligible)
+    ));
+    assert_registry_unmodified(&f, original, before).await;
+
+    assert_eq!(original_evidence(&f, original).await, evidence);
+    assert_eq!(
+        original_evidence(&foreign, foreign_original).await,
+        foreign_evidence
+    );
+    assert_eq!(ledgers(&foreign, foreign_original).await, foreign_before);
+    assert_eq!(
+        (
+            f.reader.calls(),
+            foreign.reader.calls(),
+            operational.reader.calls()
+        ),
+        calls
+    );
+    let receipt = prepare(&f, &command).await.unwrap();
+    let after = ledgers(&f, original).await;
+    assert!(after.0 > before.0);
+    assert_eq!(prepare(&f, &command).await.unwrap(), receipt);
+    assert_eq!(ledgers(&f, original).await, after);
+    assert_eq!(ledgers(&foreign, foreign_original).await, foreign_before);
+}
+
 #[sqlx::test]
 #[ignore = "requires isolated PostgreSQL migrator"]
 async fn populated_metadata_handover_rolls_back_partial_claims_then_charges_once(migrator: PgPool) {

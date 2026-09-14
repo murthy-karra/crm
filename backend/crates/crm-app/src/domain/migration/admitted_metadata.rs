@@ -248,12 +248,14 @@ async fn handover(
     key: &RawPayloadKey,
     release: &ReleaseReadiness,
     ctx: &CommandContext,
+    cmd: &Prepare,
 ) -> Result<(), MigrationError> {
     workspace::bounded_lock_wait(conn).await?;
     workspace::exclusive(conn, ctx.organization_id).await?;
     super::store::require_admin(conn, ctx).await?;
     release.require_admitted_metadata(conn).await?;
     super::store::lock_org(conn, ctx.organization_id).await?;
+    qualify_preparation(conn, key, ctx, cmd).await?;
     let readiness = sqlx::query("SELECT state,engine_version FROM migration_metadata_catalog_readiness WHERE organization_id=$1 FOR UPDATE")
         .bind(ctx.organization_id.0).fetch_optional(&mut *conn).await?;
     if let Some(row) = readiness {
@@ -476,25 +478,17 @@ async fn prepare_replay(
     replay_receipt(c, key, ctx, "prepare", cmd.request_id, &digest, root).await
 }
 
-pub async fn prepare(
-    pool: &PgPool,
+// Qualification precedes the one-way catalog handover and is repeated under
+// the later root-creation transaction. A rejected request must not activate the
+// registry; a successfully qualified handover still survives later preview failure.
+async fn qualify_preparation(
+    conn: &mut sqlx::PgConnection,
     key: &RawPayloadKey,
-    release: &ReleaseReadiness,
     ctx: &CommandContext,
-    cmd: Prepare,
-) -> Result<Value, MigrationError> {
-    if let Some(value) = replay_prepare(pool, key, ctx, &cmd).await? {
-        return Ok(value);
-    }
-    let mut tx = pool.begin().await?;
-    handover(&mut tx, key, release, ctx).await?;
-    tx.commit().await?;
-    let mut tx = lifecycle_tx(pool, ctx).await?;
-    if let Some(value) = prepare_replay(&mut tx, key, ctx, &cmd).await? {
-        return Ok(value);
-    }
+    cmd: &Prepare,
+) -> Result<(sqlx::postgres::PgRow, i64), MigrationError> {
     let a=sqlx::query("SELECT a.parent_import_id,a.parent_plan_id,a.confirmed_admission_plan_id,a.report_id AS admission_report_id,a.source_account_id,a.newer_snapshot_id,a.newer_sequence,a.newer_completed_at AS admission_completed_at,a.workspace_revision,a.state,r.parent_import_id AS report_parent_import_id,r.parent_plan_id AS report_parent_plan_id,r.source_account_id AS report_account,r.newer_snapshot_id AS report_snapshot,r.newer_sequence AS report_sequence,(SELECT started_at FROM migration_snapshot WHERE id=r.newer_snapshot_id AND organization_id=r.organization_id) AS report_started_at,r.state AS report_state,r.output_revision FROM migration_people_admission a JOIN migration_core_change_report r ON r.id=$2 AND r.organization_id=a.organization_id WHERE a.id=$1 AND a.organization_id=$3 FOR UPDATE")
- .bind(cmd.admission_id).bind(cmd.source_report_id).bind(ctx.organization_id.0).fetch_optional(&mut *tx).await?.ok_or(MigrationError::SourceNotEligible)?;
+ .bind(cmd.admission_id).bind(cmd.source_report_id).bind(ctx.organization_id.0).fetch_optional(&mut *conn).await?.ok_or(MigrationError::SourceNotEligible)?;
     let same_boundary = a.get::<Uuid, _>("admission_report_id") == cmd.source_report_id;
     if !matches!(
         a.get::<String, _>("state").as_str(),
@@ -515,13 +509,41 @@ pub async fn prepare(
     )
     .bind(cmd.source_report_id)
     .bind(ctx.organization_id.0)
-    .fetch_one(&mut *tx)
+    .fetch_one(&mut *conn)
     .await?;
-    core_change_store::validate(&mut tx, key, ctx.organization_id, &report).await?;
-    let settled:i64=sqlx::query_scalar("SELECT count(*) FROM migration_people_admission_result WHERE admission_id=$1 AND organization_id=$2 AND disposition='settled'").bind(cmd.admission_id).bind(ctx.organization_id.0).fetch_one(&mut *tx).await?;
+    core_change_store::validate(conn, key, ctx.organization_id, &report).await?;
+    let settled:i64=sqlx::query_scalar("SELECT count(*) FROM migration_people_admission_result WHERE admission_id=$1 AND organization_id=$2 AND disposition='settled'").bind(cmd.admission_id).bind(ctx.organization_id.0).fetch_one(&mut *conn).await?;
     if settled == 0 {
         return Err(MigrationError::SourceNotEligible);
     }
+    qualified_streams(
+        conn,
+        ctx.organization_id,
+        a.get("report_snapshot"),
+        a.get("report_sequence"),
+    )
+    .await?;
+    Ok((a, settled))
+}
+
+pub async fn prepare(
+    pool: &PgPool,
+    key: &RawPayloadKey,
+    release: &ReleaseReadiness,
+    ctx: &CommandContext,
+    cmd: Prepare,
+) -> Result<Value, MigrationError> {
+    if let Some(value) = replay_prepare(pool, key, ctx, &cmd).await? {
+        return Ok(value);
+    }
+    let mut tx = pool.begin().await?;
+    handover(&mut tx, key, release, ctx, &cmd).await?;
+    tx.commit().await?;
+    let mut tx = lifecycle_tx(pool, ctx).await?;
+    if let Some(value) = prepare_replay(&mut tx, key, ctx, &cmd).await? {
+        return Ok(value);
+    }
+    let (a, settled) = qualify_preparation(&mut tx, key, ctx, &cmd).await?;
     let id = Uuid::new_v4();
     let plan = Uuid::new_v4();
     let inserted=sqlx::query("INSERT INTO migration_admitted_metadata_import(id,organization_id,parent_import_id,parent_plan_id,admission_id,source_report_id,snapshot_id,source_account_id,capture_sequence,workspace_revision,executor_user_id,engine_version,state,admission_plan_id,settled_people) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'proposed',$13,$14) ON CONFLICT DO NOTHING").bind(id).bind(ctx.organization_id.0).bind(a.get::<Uuid,_>("parent_import_id")).bind(a.get::<Uuid,_>("parent_plan_id")).bind(cmd.admission_id).bind(cmd.source_report_id).bind(a.get::<Uuid,_>("report_snapshot")).bind(a.get::<i64,_>("source_account_id")).bind(a.get::<i64,_>("report_sequence")).bind(a.get::<i64,_>("workspace_revision")).bind(ctx.actor_user_id.0).bind(ENGINE).bind(a.get::<Uuid,_>("confirmed_admission_plan_id")).bind(settled).execute(&mut *tx).await?;
@@ -536,13 +558,6 @@ pub async fn prepare(
             "inputs",
             &json!({"report_id":cmd.source_report_id,"snapshot_id":a.get::<Uuid,_>("report_snapshot"),"admission_id":cmd.admission_id,"source_account_id":a.get::<i64,_>("source_account_id").to_string(),"parser":"metadata_source_v1","output_revision":a.get::<Option<Uuid>,_>("output_revision")}),
         )?;
-        qualified_streams(
-            &mut tx,
-            ctx.organization_id,
-            a.get("report_snapshot"),
-            a.get("report_sequence"),
-        )
-        .await?;
         sqlx::query("UPDATE migration_admitted_metadata_plan SET inputs_nonce=$2,inputs_ciphertext=$3 WHERE id=$1").bind(plan).bind(inputs.nonce).bind(inputs.ciphertext).execute(&mut *tx).await?;
         sqlx::query("UPDATE migration_admitted_metadata_import SET latest_plan_id=$3 WHERE id=$1 AND organization_id=$2")
             .bind(id).bind(ctx.organization_id.0).bind(plan).execute(&mut *tx).await?;

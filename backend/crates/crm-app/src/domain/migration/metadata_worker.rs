@@ -1153,7 +1153,7 @@ async fn mappings(
     s::settle(conn, j.org, j.id, token, added).await
 }
 
-async fn value_state(
+pub(crate) async fn value_state(
     conn: &mut PgConnection,
     org: OrganizationId,
     person: Uuid,
@@ -1163,13 +1163,13 @@ async fn value_state(
     let (text, number, date, option) = native_parts(value)?;
     Ok(sqlx::query_scalar("SELECT text_value IS NOT DISTINCT FROM $4 AND number_value IS NOT DISTINCT FROM CAST($5::text AS numeric) AND date_value IS NOT DISTINCT FROM $6 AND option_id IS NOT DISTINCT FROM $7 FROM person_custom_field_value WHERE organization_id=$1 AND person_id=$2 AND field_id=$3").bind(org.0).bind(person).bind(field).bind(text).bind(number).bind(date).bind(option).fetch_optional(conn).await?)
 }
-type NativeParts<'a> = (
+pub(crate) type NativeParts<'a> = (
     Option<&'a str>,
     Option<&'a str>,
     Option<chrono::NaiveDate>,
     Option<Uuid>,
 );
-fn native_parts(value: &source::NativeValue) -> Result<NativeParts<'_>, MigrationError> {
+pub(crate) fn native_parts(value: &source::NativeValue) -> Result<NativeParts<'_>, MigrationError> {
     Ok(match value {
         source::NativeValue::Text(v) => (Some(v.as_str()), None, None, None),
         source::NativeValue::Number(v) => (None, Some(v.as_str()), None, None),

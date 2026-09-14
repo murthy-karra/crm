@@ -2759,6 +2759,241 @@ async fn mobile005_profile_snapshot(f: &Fixture) -> Value {
 
 #[sqlx::test]
 #[ignore]
+async fn mobile005_native_additions_keep_request_order_after_sync(pool: PgPool) {
+    let f = fixture(&pool).await;
+    // A future native timestamp also proves a clock adjustment cannot place new
+    // methods before an existing null-import-order method.
+    let existing: Uuid = sqlx::query_scalar("INSERT INTO contact_method(organization_id,person_id,kind,value,normalized_value,created_at) VALUES($1,$2,'email','existing@example.test','existing@example.test',now()+interval '1 day') RETURNING id")
+        .bind(f.org).bind(f.person).fetch_one(&f.app).await.unwrap();
+    let initial = mobile005_profile_snapshot(&f).await;
+    let operation = f.operation("update_person_details", json!({
+        "person_id": f.person, "expected_details_revision": initial["person"]["details_revision"].as_i64().unwrap().to_string(),
+        "contact_operations":[
+            {"op":"add","kind":"email","value":"first-add@example.test"},
+            {"op":"edit","id":existing,"value":"retained-existing@example.test"},
+            {"op":"add","kind":"email","value":"second-add@example.test"}
+        ]
+    }));
+    let (status, receipt) = f.post("/api/mobile/v1/operations", operation.clone()).await;
+    assert_eq!(status, StatusCode::OK, "{receipt}");
+    assert_eq!(receipt["added_contact_ids"][0]["ordinal"], 0);
+    assert_eq!(receipt["added_contact_ids"][1]["ordinal"], 2);
+    let expected = vec![
+        existing,
+        id(&receipt["added_contact_ids"][0], "id"),
+        id(&receipt["added_contact_ids"][1], "id"),
+    ];
+    let (status, current) = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &format!("/api/mobile/v1/people/{}/details", f.person),
+        json!(null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let items = current["items"].as_array().unwrap();
+    assert_eq!(
+        items.iter().map(|v| id(v, "id")).collect::<Vec<_>>(),
+        expected
+    );
+    let times: Vec<chrono::DateTime<chrono::Utc>> = items
+        .iter()
+        .map(|v| serde_json::from_value(v["created_at"].clone()).unwrap())
+        .collect();
+    assert!(times.windows(2).all(|pair| pair[0] < pair[1]));
+    assert!(items.iter().all(|v| v["import_order"].is_null()));
+    let generation = f.gen().await;
+    let gen = id(&generation, "generation_id");
+    let (status, summary) = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &format!(
+            "/api/mobile/v1/reconciliations/{gen}/people/{}/summary",
+            f.person
+        ),
+        json!(null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let mut display = summary["items"].as_array().unwrap().clone();
+    display.sort_by_key(|v| {
+        (
+            serde_json::from_value::<chrono::DateTime<chrono::Utc>>(v["created_at"].clone())
+                .unwrap(),
+            id(v, "id"),
+        )
+    });
+    assert_eq!(
+        display.iter().map(|v| id(v, "id")).collect::<Vec<_>>(),
+        expected
+    );
+    for section in ["notes", "tasks"] {
+        assert_eq!(
+            request(
+                &f.router,
+                &f.cookie,
+                Some(f.context),
+                "GET",
+                &format!(
+                    "/api/mobile/v1/reconciliations/{gen}/people/{}/{section}",
+                    f.person
+                ),
+                json!(null)
+            )
+            .await
+            .0,
+            StatusCode::OK
+        );
+    }
+    assert_eq!(
+        f.post(
+            &format!("/api/mobile/v1/reconciliations/{gen}/seal"),
+            json!({})
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    let after = mobile005_profile_snapshot(&f).await;
+    let (status, replay) = f.post("/api/mobile/v1/operations", operation).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(replay["added_contact_ids"], receipt["added_contact_ids"]);
+    assert_eq!(
+        mobile005_profile_snapshot(&f).await,
+        after,
+        "exact replay cannot reallocate insertion order"
+    );
+}
+
+#[sqlx::test]
+#[ignore]
+async fn mobile005_details_revision_rejects_direct_increments(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let before = mobile005_profile_snapshot(&f).await;
+    for expression in ["details_revision+1", "details_revision+2", "0"] {
+        let error = sqlx::query(&format!(
+            "UPDATE person SET details_revision={expression} WHERE id=$1"
+        ))
+        .bind(f.person)
+        .execute(&f.app)
+        .await
+        .expect_err("unrelated direct writes cannot invent a profile revision");
+        assert_eq!(
+            error.as_database_error().unwrap().code().as_deref(),
+            Some("22003")
+        );
+        assert_eq!(mobile005_profile_snapshot(&f).await, before);
+    }
+    let previous = before["person"]["details_revision"].as_i64().unwrap();
+    let derived: i64 = sqlx::query_scalar("UPDATE person SET first_name='Derived name',details_revision=999999 WHERE id=$1 RETURNING details_revision")
+        .bind(f.person).fetch_one(&f.app).await.unwrap();
+    assert_eq!(
+        derived,
+        previous + 1,
+        "a name change derives from OLD, never the caller value"
+    );
+    let contact: Uuid = sqlx::query_scalar("INSERT INTO contact_method(organization_id,person_id,kind,value,normalized_value) VALUES($1,$2,'email','derived@example.test','derived@example.test') RETURNING id")
+        .bind(f.org).bind(f.person).fetch_one(&f.app).await.unwrap();
+    assert_eq!(
+        mobile005_profile_snapshot(&f).await["person"]["details_revision"],
+        derived + 1
+    );
+    sqlx::query("UPDATE contact_method SET value='corrected@example.test',normalized_value='corrected@example.test' WHERE id=$1")
+        .bind(contact).execute(&f.app).await.unwrap();
+    assert_eq!(
+        mobile005_profile_snapshot(&f).await["person"]["details_revision"],
+        derived + 2
+    );
+    sqlx::query("DELETE FROM contact_method WHERE id=$1")
+        .bind(contact)
+        .execute(&f.app)
+        .await
+        .unwrap();
+    assert_eq!(
+        mobile005_profile_snapshot(&f).await["person"]["details_revision"],
+        derived + 3
+    );
+}
+
+#[sqlx::test]
+#[ignore]
+async fn mobile005_current_final_page_waits_for_parent_writer(pool: PgPool) {
+    use std::time::{Duration, Instant};
+    let f = fixture(&pool).await;
+    sqlx::query("INSERT INTO contact_method(organization_id,person_id,kind,value,normalized_value,import_order) SELECT $1,$2,'email','page'||n||'@example.test','page'||n||'@example.test',n FROM generate_series(1,101)n")
+        .bind(f.org).bind(f.person).execute(&f.app).await.unwrap();
+    let base = format!("/api/mobile/v1/people/{}/details", f.person);
+    let (status, first) = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &base,
+        json!(null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(first["complete"], false);
+    let url = format!("{base}?cursor={}", first["next_cursor"].as_str().unwrap());
+    let mut writer = f.app.begin().await.unwrap();
+    let writer_pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&mut *writer)
+        .await
+        .unwrap();
+    sqlx::query("SELECT id FROM person WHERE id=$1 FOR UPDATE")
+        .bind(f.person)
+        .fetch_one(&mut *writer)
+        .await
+        .unwrap();
+    let router = f.router.clone();
+    let cookie = f.cookie.clone();
+    let context = f.context;
+    let reader = tokio::spawn(async move {
+        request(&router, &cookie, Some(context), "GET", &url, json!(null)).await
+    });
+    let started = Instant::now();
+    loop {
+        let blocked: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND $1=ANY(pg_blocking_pids(pid)))")
+            .bind(writer_pid).fetch_one(&pool).await.unwrap();
+        if blocked {
+            break;
+        }
+        assert!(!reader.is_finished(), "final page must wait for the in-flight profile writer, not complete from an old snapshot");
+        assert!(
+            started.elapsed() < Duration::from_secs(1),
+            "reader never acquired the parent lock"
+        );
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    sqlx::query("UPDATE person SET first_name='Committed during traversal' WHERE id=$1")
+        .bind(f.person)
+        .execute(&mut *writer)
+        .await
+        .unwrap();
+    writer.commit().await.unwrap();
+    let (status, body) = reader.await.unwrap();
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert_eq!(body["error"], "revision_conflict");
+    let (status, restarted) = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &base,
+        json!(null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(restarted["first_name"], "Committed during traversal");
+    assert_ne!(restarted["details_revision"], first["details_revision"]);
+}
+
+#[sqlx::test]
+#[ignore]
 async fn mobile005_revision_overflow_rolls_back_contacts_but_allows_erasure(pool: PgPool) {
     let f = fixture(&pool).await;
     let contact: Uuid = sqlx::query_scalar("INSERT INTO contact_method(organization_id,person_id,kind,value,normalized_value) VALUES($1,$2,'email','overflow@example.test','overflow@example.test') RETURNING id")

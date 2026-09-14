@@ -102,7 +102,9 @@ export function fetchMetadataField(request: MetadataFieldRequest, cursor?: strin
       : `${planPath(request.importId, request.planId)}/records/${encodeURIComponent(request.recordId)}`
   return apiFetch<MetadataSegment>(`${base}/fields/${encodeURIComponent(request.fieldKey)}${query({ cursor, limit: 65536 })}`, { signal })
 }
-export function useMetadataAccess() { return useImportAccess('metadata-imports') }
+export type MetadataReaders = { namespace: 'metadata-imports' | 'admitted-metadata-imports'; mappings: typeof fetchMetadataMappings; targets: typeof fetchMetadataTargets; aliases: typeof fetchMetadataAliases; records: typeof fetchMetadataRecords; results: typeof fetchMetadataResults; field: typeof fetchMetadataField }
+export const metadataReaders: MetadataReaders = { namespace: 'metadata-imports', mappings: fetchMetadataMappings, targets: fetchMetadataTargets, aliases: fetchMetadataAliases, records: fetchMetadataRecords, results: fetchMetadataResults, field: fetchMetadataField }
+export function useMetadataAccess(readers: MetadataReaders = metadataReaders) { return useImportAccess(readers.namespace) }
 export function metadataActive(value?: MetadataImport) { return !!value && (['queued', 'running'].includes(value.state) || value.state === 'proposed' && value.latest_plan?.state === 'building') }
 export function metadataName(source: MetadataSummary, fallback = 'Source record') {
   const field = ['label', 'tag', 'choice', 'name', 'firstName', 'raw'].map(label => source.fields.find(f => f.label === label)).find(Boolean)

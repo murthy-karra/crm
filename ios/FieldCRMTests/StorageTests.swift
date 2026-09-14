@@ -12,7 +12,7 @@ final class StorageTests: XCTestCase {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
     override func tearDownWithError() throws { try FileManager.default.removeItem(at: directory) }
-    func open(_ name: String = "store", version: Int = 7) throws -> LocalStore {
+    func open(_ name: String = "store", version: Int = 8) throws -> LocalStore {
         try LocalStore(url: directory.appendingPathComponent(name + ".sqlite"), key: key, identity: identity, context: context, schemaTarget: version)
     }
     func draft(_ text: String = "Synthetic iOS private note") -> Draft { Draft(id: UUID().uuidString, person: person, kind: "add_note", text: text, revision: 0) }
@@ -30,6 +30,14 @@ final class StorageTests: XCTestCase {
         try store.finishBundle(gen.generation_id, person, gen.manifest.items[0].revision)
     }
     func seal(_ gen: Generation) -> Seal { Seal(generation_id: gen.generation_id, context_id: context, sealed_at: "2026-09-13T00:01:00Z", evaluated_at: gen.evaluated_at, selected_count: 1, today: .object(["items": .array([])])) }
+    func detailsBaseline(_ store: LocalStore, revision: String = "1", details: String = "7") throws {
+        let gen = generation(revision); try store.begin(gen)
+        let email = "55555555-5555-4555-8555-555555555555", phone = "66666666-6666-4666-8666-666666666666"
+        let summary = JSON.object(["id": .s(person), "display_name": .s("Ada Lovelace"), "first_name": .s("Ada"), "last_name": .s("Lovelace"), "details_revision": .s(details)])
+        let contacts: [JSON] = [.object(["id": .s(email), "kind": .s("email"), "value": .s("ada@example.test"), "import_order": .number(0), "created_at": .s("2026-01-01T00:00:00Z")]), .object(["id": .s(phone), "kind": .s("phone"), "value": .s("555-0100"), "import_order": .null, "created_at": .s("2026-01-02T00:00:00Z")])]
+        for section in ["summary", "notes", "tasks"] { try store.appendPage(Page(generation_id: gen.generation_id, person_id: person, revision: revision, section: section, summary: section == "summary" ? summary : nil, items: section == "summary" ? contacts : [], next_cursor: nil, complete: true), expected: revision) }
+        try store.finishBundle(gen.generation_id, person, revision); try store.promote(seal(gen))
+    }
     func testCipherWALFullWrongKeyAndReopen() throws {
         var store: LocalStore? = try open()
         XCTAssertEqual(try store!.rows("PRAGMA journal_mode")[0][0], "wal")
@@ -52,13 +60,128 @@ final class StorageTests: XCTestCase {
         XCTAssertEqual(try store!.queue()[0].bytes, bytes)
         XCTAssertTrue(try store!.drafts().isEmpty)
     }
+    func testMobile005ImmutableDetailsEnvelopeMappingConflictAndFollowUp() throws {
+        let store = try open(); try detailsBaseline(store)
+        let baseline = try XCTUnwrap(store.editableDetails(person: person))
+        let contact = baseline["contacts"].list[0]["id"].text
+        let proposal: JSON = .object(["first_name": .s("Ada Updated"), "contact_operations": .array([.object(["op": .s("edit"), "id": .s(contact), "value": .s("ada.updated@example.test")]), .object(["op": .s("add"), "kind": .s("phone"), "value": .s("555-0101")]), .object(["op": .s("remove"), "id": .s(baseline["contacts"].list[1]["id"].text)])])])
+        let saved = try store.saveDraft(Draft(id: UUID().uuidString, person: person, kind: "update_person_details", revision: 0, expectedRevision: "7", baseline: baseline, proposal: proposal))
+        let envelope = try store.submit(saved)
+        XCTAssertEqual(envelope.payload["expected_details_revision"].text, "7")
+        XCTAssertEqual(envelope.payload["contact_operations"].list[1]["op"].text, "add")
+        XCTAssertThrowsError(try store.submit(saved), "A submitted details envelope is immutable and cannot be duplicated locally")
+        try store.recordConflict(envelope.operation_id, current: .object(["details_revision": .s("8"), "first_name": .s("Other"), "contacts": baseline["contacts"]]), contextID: context, person: person)
+        let conflict = try XCTUnwrap(store.draftForOperation(envelope.operation_id)); XCTAssertEqual(conflict.mode, "conflict")
+        let before = try XCTUnwrap(store.queue().last?.bytes)
+        try store.markSuperseded(envelope.operation_id)
+        let replacement = try store.saveDraft(Draft(id: UUID().uuidString, person: person, kind: "update_person_details", revision: 0, expectedRevision: "8", baseline: conflict.current, proposal: proposal, predecessor: envelope.operation_id))
+        let second = try store.submit(replacement)
+        XCTAssertNotEqual(second.operation_id, envelope.operation_id); XCTAssertEqual(try store.queue().first { $0.id == envelope.operation_id }?.bytes, before)
+        let follow = try store.saveDraft(Draft(id: UUID().uuidString, person: person, kind: "update_person_details", revision: 0, expectedRevision: "8", baseline: conflict.current, proposal: proposal))
+        XCTAssertThrowsError(try store.submit(follow), LocalError.waitingPredecessor.localizedDescription)
+        XCTAssertEqual(try store.drafts().first { $0.id == follow.id }?.mode, "follow_up")
+        let receipt = Receipt(operation_id: second.operation_id, outcome: "accepted", resource_type: "person_details", resource_id: person, committed_revision: "9", person_revision: "2", accepted_at: stamp(), changed: true, replayed: false, added_contact_ids: [AddedContactID(ordinal: 1, id: "77777777-7777-4777-8777-777777777777")])
+        try store.acknowledge(receipt)
+        XCTAssertEqual(try store.queue().first { $0.id == second.operation_id }?.status, "accepted")
+    }
+    func testMobile005NameOnlyPatchPreservesLargeImportedProfileAndRequiresExactEmptyReceiptMap() throws {
+        let store = try open(); let gen = generation("4"); try store.begin(gen)
+        let summary: JSON = .object(["id": .s(person), "display_name": .s("Imported profile"), "first_name": .s("Imported"), "last_name": .s(String(repeating: "L", count: 200)), "details_revision": .s("9")])
+        let contacts = (0..<51).map { index in JSON.object(["id": .s(String(format: "00000000-0000-4000-8000-%012d", index + 1)), "kind": .s(index.isMultiple(of: 2) ? "email" : "phone"), "value": .s("imported-\(index)@example.test"), "import_order": .number(Double(index)), "created_at": .s("2026-01-01T00:00:00Z")]) }
+        for section in ["summary", "notes", "tasks"] { try store.appendPage(Page(generation_id: gen.generation_id, person_id: person, revision: "4", section: section, summary: section == "summary" ? summary : nil, items: section == "summary" ? contacts : [], next_cursor: nil, complete: true), expected: "4") }
+        try store.finishBundle(gen.generation_id, person, "4"); try store.promote(seal(gen))
+        let baseline = try XCTUnwrap(store.editableDetails(person: person))
+        let draft = try store.saveDraft(Draft(id: UUID().uuidString, person: person, kind: "update_person_details", revision: 0, expectedRevision: "9", baseline: baseline, proposal: .object(["first_name": .s("Changed only")])))
+        let envelope = try store.submit(draft)
+        XCTAssertEqual(envelope.payload["first_name"].text, "Changed only")
+        XCTAssertEqual(envelope.payload["contact_operations"].list, [])
+        XCTAssertEqual(envelope.payload["last_name"], .null, "Untouched imported names are not resubmitted.")
+        XCTAssertEqual(envelope.payload["contacts"], .null, "Untouched imported methods are never sent back as replacement state.")
+        XCTAssertEqual(try store.activeBundle(person)?.contacts.count, 51, "Large imported contact sets remain readable and intact.")
+        let noAdds = Receipt(operation_id: envelope.operation_id, outcome: "accepted", resource_type: "person_details", resource_id: person, committed_revision: "10", person_revision: "4", accepted_at: stamp(), changed: true, replayed: false, added_contact_ids: [])
+        try store.acknowledge(noAdds)
+        XCTAssertEqual(try store.queue().first?.status, "accepted")
+
+        let second = try store.saveDraft(Draft(id: UUID().uuidString, person: person, kind: "update_person_details", revision: 0, expectedRevision: "10", baseline: baseline, proposal: .object(["last_name": .s("Changed only")])))
+        let secondEnvelope = try store.submit(second)
+        let missingMap = Receipt(operation_id: secondEnvelope.operation_id, outcome: "accepted", resource_type: "person_details", resource_id: person, committed_revision: "11", person_revision: "4", accepted_at: stamp(), changed: true, replayed: false)
+        XCTAssertThrowsError(try store.acknowledge(missingMap))
+        XCTAssertEqual(try store.queue().first { $0.id == secondEnvelope.operation_id }?.status, "pending", "A malformed no-add receipt leaves the immutable operation available for exact replay.")
+    }
+    func testMobile005EditorProjectionReopensSparseDraftWithoutNormalizingUntouchedImportedValues() throws {
+        let emailID = "55555555-5555-4555-8555-555555555555"
+        let baseline: JSON = .object([
+            "first_name": .s("  Imported First  "),
+            "last_name": .s(String(repeating: "L", count: 201)),
+            "contacts": .array([.object(["id": .s(emailID), "kind": .s("email"), "value": .s("  imported@example.test  ")])])
+        ])
+        let untouched = DetailsEditorProjection.fields(for: Draft(id: "draft-whitespace", person: person, kind: "update_person_details", revision: 1, expectedRevision: "7", baseline: baseline, proposal: .object([:])))
+        let changedOnly = DetailsEditorProjection.proposal(firstName: "Changed", lastName: untouched.lastName, methods: untouched.methods, baseline: baseline)
+        XCTAssertEqual(changedOnly["first_name"].text, "Changed")
+        XCTAssertEqual(changedOnly["last_name"], .null, "An untouched oversized imported name remains readable but is not normalized into an edit.")
+        XCTAssertEqual(changedOnly["contact_operations"].list, [], "An untouched whitespace-bearing imported contact is omitted.")
+
+        let savedProposal: JSON = .object([
+            "first_name": .s("Saved first"),
+            "contact_operations": .array([
+                .object(["op": .s("edit"), "id": .s(emailID), "value": .s("saved@example.test")]),
+                .object(["op": .s("add"), "kind": .s("phone"), "value": .s("555-0109")])
+            ])
+        ])
+        let reopenedDraft = Draft(id: "draft-reopen", person: person, kind: "update_person_details", revision: 2, expectedRevision: "7", baseline: baseline, proposal: savedProposal)
+        let reopened = DetailsEditorProjection.fields(for: reopenedDraft)
+        XCTAssertEqual(reopened.firstName, "Saved first")
+        XCTAssertEqual(reopened.lastName, String(repeating: "L", count: 201))
+        XCTAssertEqual(reopened.methods.map(\.id), ["draft:draft-reopen:add:1", emailID])
+        XCTAssertEqual(reopened.methods.map(\.value), ["555-0109", "saved@example.test"])
+        XCTAssertEqual(DetailsEditorProjection.proposal(firstName: reopened.firstName, lastName: reopened.lastName, methods: reopened.methods, baseline: baseline), savedProposal, "Reopening a protected draft retains its sparse proposal and stable local add ID.")
+    }
+    func testMobile005ContactDisplayUsesServerOrderAndPreviewsPrimaryPerKind() throws {
+        func contact(_ suffix: String, _ kind: String, _ order: JSON, _ created: String) -> JSON {
+            .object(["id": .s("00000000-0000-4000-8000-00000000000" + suffix), "kind": .s(kind), "value": .s(kind + suffix + "@synthetic.test"), "import_order": order, "created_at": .s(created)])
+        }
+        // UUID page order deliberately disagrees with imported/created order.
+        let native = contact("1", "email", .null, "2026-09-14T12:00:00Z")
+        let email = contact("2", "email", .number(1), "2026-09-14T12:00:00.002Z")
+        let phone = contact("3", "phone", .number(0), "2026-09-14T12:00:00Z")
+        let fallback = contact("4", "email", .number(1), "2026-09-14T12:00:00.003Z")
+        let tied = contact("5", "email", .number(1), "2026-09-14T12:00:00.003Z")
+        let raw = [native, email, phone, fallback, tied]
+        let bundle = Bundle(person: person, revision: "1", summary: .object([:]), contacts: raw, tasks: [], notes: [])
+        XCTAssertEqual(bundle.contacts, raw, "Wire page order remains unchanged.")
+        XCTAssertEqual(bundle.orderedContacts, [phone, email, fallback, tied, native])
+        let baseline: JSON = .object(["contacts": .array(raw)])
+        let proposal: JSON = .object(["contact_operations": .array([
+            .object(["op": .s("remove"), "id": email["id"]]),
+            .object(["op": .s("add"), "kind": .s("email"), "value": .s("new@synthetic.test")])])])
+        let draft = Draft(id: "ordered-draft", person: person, kind: "update_person_details", revision: 1, baseline: baseline, proposal: proposal)
+        var fields = DetailsEditorProjection.fields(for: draft)
+        XCTAssertEqual(fields.methods.filter { !$0.isNew }.map(\.id), bundle.orderedContacts.map { $0["id"].text })
+        XCTAssertEqual(DetailsEditorProjection.primaryRemovalPreviews(fields.methods), ["After sync, the first email will be email4@synthetic.test."])
+        fields.methods[fields.methods.firstIndex { $0.id == phone["id"].text }!].removed = true
+        XCTAssertEqual(DetailsEditorProjection.primaryRemovalPreviews(fields.methods), ["After sync, the first email will be email4@synthetic.test.", "After sync, this profile will have no phone contact method."])
+        XCTAssertEqual(ContactDisplayOrder.sorted([.object(["value": .s("legacy")])]), [.object(["value": .s("legacy")])])
+    }
+
+    func testMobile005SchemaSevenInstalledUpgradePreservesOpaqueRowsAndRequiresCompleteDetails() throws {
+        var old: LocalStore? = try open(version: 7)
+        let oldGeneration = generation("1"); try stage(old!, oldGeneration); try old!.promote(seal(oldGeneration))
+        let saved = try old!.saveDraft(draft("schema seven protected note")); _ = try old!.submit(saved)
+        let oldBytes = try XCTUnwrap(old!.queue().first?.bytes); old = nil
+        let upgraded = try open()
+        XCTAssertEqual(try upgraded.rows("PRAGMA user_version")[0][0], "8"); XCTAssertEqual(try upgraded.queue().first?.bytes, oldBytes)
+        XCTAssertNil(try upgraded.editableDetails(person: person))
+        XCTAssertEqual(try upgraded.activeBundle(person)?.summary["display_name"].text, "Synthetic Person")
+        try detailsBaseline(upgraded, revision: "1", details: "1")
+        XCTAssertNotNil(try upgraded.editableDetails(person: person), "A fully traversed same-broad-revision summary replaces only the cache representation")
+    }
     func testVersionOneMigrationPreservesSavedWorkAndFutureSchemaFailsClosed() throws {
         var old: LocalStore? = try open(version: 1)
         let saved = try old!.saveDraft(draft())
         try old!.submit(saved)
         old = nil
         var upgraded: LocalStore? = try open()
-        XCTAssertEqual(try upgraded!.rows("PRAGMA user_version")[0][0], "7")
+        XCTAssertEqual(try upgraded!.rows("PRAGMA user_version")[0][0], "8")
         XCTAssertEqual(try upgraded!.queue().count, 1)
         XCTAssertEqual(try upgraded!.queue()[0].attempts, 0)
         try upgraded!.run("PRAGMA user_version=999"); upgraded = nil
@@ -75,7 +198,7 @@ final class StorageTests: XCTestCase {
         let oldBytes = try legacy!.queue().first!.bytes; legacy = nil
 
         let store = try open()
-        XCTAssertEqual(try store.rows("PRAGMA user_version")[0][0], "7")
+        XCTAssertEqual(try store.rows("PRAGMA user_version")[0][0], "8")
         XCTAssertEqual(try store.queue().first!.bytes, oldBytes)
         XCTAssertNil(try store.editableStage(person: person), "Old summaries cannot seed a stage CAS baseline")
         let stageID = "55555555-5555-4555-8555-555555555555"
@@ -306,7 +429,7 @@ final class StorageTests: XCTestCase {
         let generation = self.generation(); try stage(old!, generation, notes: [.object(["id": .s("55555555-5555-4555-8555-555555555555"), "body": .s("Legacy readable note"), "can_manage": .bool(true)])]); try old!.promote(seal(generation))
         old = nil
         let upgraded = try open()
-        XCTAssertEqual(try upgraded.rows("PRAGMA user_version")[0][0], "7")
+        XCTAssertEqual(try upgraded.rows("PRAGMA user_version")[0][0], "8")
         XCTAssertEqual(try upgraded.queue().first?.id, legacy.operation_id)
         XCTAssertEqual(try upgraded.queue().first?.bytes, bytes)
         XCTAssertNil(try upgraded.editableRecord(person: person, type: "note", id: "55555555-5555-4555-8555-555555555555"))
@@ -387,7 +510,7 @@ final class StorageTests: XCTestCase {
         old = nil
 
         let store = try open()
-        XCTAssertEqual(try store.rows("PRAGMA user_version")[0][0], "7")
+        XCTAssertEqual(try store.rows("PRAGMA user_version")[0][0], "8")
         XCTAssertEqual(try store.queue().first?.id, prior.operation_id)
         XCTAssertEqual(try store.queue().first?.bytes, priorBytes)
 

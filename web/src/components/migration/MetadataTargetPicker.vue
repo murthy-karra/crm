@@ -2,18 +2,19 @@
 import { computed, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import Dialog from 'primevue/dialog'
-import { fetchMetadataTargets, metadataName, useMetadataAccess, type MetadataMapping, type MetadataTarget } from '../../api/metadataImports'
+import { metadataName, metadataReaders, useMetadataAccess, type MetadataReaders, type MetadataMapping, type MetadataTarget } from '../../api/metadataImports'
 import { buttonClasses, dialogPt } from '../../lib/controls'
 import { describeApiError } from '../../lib/errors'
-const props = defineProps<{ importId: string; planId: string; mapping: MetadataMapping; disabled: boolean }>()
+const props = defineProps<{ readers?: MetadataReaders; importId: string; planId: string; mapping: MetadataMapping; disabled: boolean }>()
 const emit = defineEmits<{ close: []; select: [target: MetadataTarget] }>()
-const access = useMetadataAccess()
+const readers = props.readers ?? metadataReaders
+const access = useMetadataAccess(readers)
 const titleId = useId()
 const cursors = ref<string[]>([''])
 const branch = computed(() => [...access.prefix.value, 'targets', props.importId, props.planId, props.mapping.id])
 const key = computed(() => [...branch.value, props.mapping.kind, props.mapping.field_id ?? '', cursors.value.at(-1) ?? ''])
 const enabled = computed(() => access.enabled.value && !props.disabled && (props.mapping.kind !== 'option' || !!props.mapping.field_id))
-const reading = useQuery({ queryKey: key, enabled, retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(key.value, () => key.value, () => fetchMetadataTargets(props.importId, props.planId, props.mapping.kind, props.mapping.field_id || undefined, cursors.value.at(-1) || undefined, signal)) })
+const reading = useQuery({ queryKey: key, enabled, retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(key.value, () => key.value, () => readers.targets(props.importId, props.planId, props.mapping.kind, props.mapping.field_id || undefined, cursors.value.at(-1) || undefined, signal)) })
 const page = computed(() => enabled.value ? reading.data.value : undefined)
 const sourceType = computed(() => {
   const raw = props.mapping.source.fields.find(f => f.label === 'type')

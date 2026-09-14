@@ -59,7 +59,16 @@ struct Receipt: Codable, Equatable, Sendable {
     let operation_id: String, outcome: String, resource_type: String, resource_id: String
     let committed_revision: String?, person_revision: String, accepted_at: String
     let changed: Bool, replayed: Bool
+    /// The server maps additions to positions in the original operation array.
+    /// This is deliberately optional so pre-Mobile005 receipt bytes still decode.
+    let added_contact_ids: [AddedContactID]?
+    init(operation_id: String, outcome: String, resource_type: String, resource_id: String, committed_revision: String?, person_revision: String, accepted_at: String, changed: Bool, replayed: Bool, added_contact_ids: [AddedContactID]? = nil) {
+        self.operation_id = operation_id; self.outcome = outcome; self.resource_type = resource_type; self.resource_id = resource_id
+        self.committed_revision = committed_revision; self.person_revision = person_revision; self.accepted_at = accepted_at
+        self.changed = changed; self.replayed = replayed; self.added_contact_ids = added_contact_ids
+    }
 }
+struct AddedContactID: Codable, Equatable, Sendable { let ordinal: Int, id: String }
 struct ManifestItem: Codable, Sendable { let person_id: String, revision: String; let reasons: [String] }
 struct Manifest: Codable, Sendable { let items: [ManifestItem]; let next_cursor: String?; let complete: Bool }
 struct Generation: Codable, Sendable {
@@ -102,9 +111,41 @@ struct CurrentRecordResponse: Codable, Sendable {
 struct CurrentStageResponse: Codable, Sendable {
     let context_id: String, person_id: String, person_revision: String, stage_revision: String, stage: Stage
 }
+struct CurrentDetailsResponse: Codable, Sendable {
+    let context_id: String, person_id: String, person_revision: String, details_revision: String
+    let first_name: String?, last_name: String?, items: [JSON], next_cursor: String?, complete: Bool
+}
 struct Bundle: Codable, Sendable {
     let person: String, revision: String, summary: JSON, contacts: [JSON], tasks: [JSON]
     var notes: [JSON]
+    var orderedContacts: [JSON] { ContactDisplayOrder.sorted(contacts) }
+}
+
+/// Summary pages retain their UUID pagination order. Only the complete display
+/// projection uses the server's imported-first contact ordering. Old downloaded
+/// representations without ordering metadata retain their readable legacy order.
+enum ContactDisplayOrder {
+    static func sorted(_ contacts: [JSON]) -> [JSON] {
+        var keyed: [(value: JSON, order: Int?, created: Date, id: String)] = []
+        for contact in contacts {
+            guard let created = try? date(contact["created_at"].text),
+                  let id = UUID(uuidString: contact["id"].text) else { return contacts }
+            let order: Int?
+            switch contact["import_order"] {
+            case .null: order = nil
+            case .number(let value):
+                guard value.isFinite, value.rounded() == value, value >= Double(Int32.min), value <= Double(Int32.max) else { return contacts }
+                order = Int(value)
+            default: return contacts
+            }
+            keyed.append((contact, order, created, id.uuidString.lowercased()))
+        }
+        return keyed.sorted {
+            if $0.order != $1.order { return ($0.order ?? Int.max) < ($1.order ?? Int.max) }
+            if $0.created != $1.created { return $0.created < $1.created }
+            return $0.id < $1.id
+        }.map(\.value)
+    }
 }
 /// A draft is protected input, not a projection of the replaceable downloaded
 /// bundle.  `baseline` and `proposal` deliberately live in the encrypted store.
@@ -146,6 +187,7 @@ struct Draft: Codable, Identifiable, Sendable {
         current = try c.decodeIfPresent(JSON.self, forKey: .current); editorEpoch = try c.decodeIfPresent(String.self, forKey: .editorEpoch) ?? UUID().uuidString.lowercased()
     }
     var isEdit: Bool { kind == "edit_note" || kind == "update_task" }
+    var isDetails: Bool { kind == "update_person_details" }
     var resourceType: String? { kind == "edit_note" ? "note" : kind == "update_task" ? "task" : nil }
 }
 struct Queued: Identifiable, Sendable {
@@ -154,10 +196,12 @@ struct Queued: Identifiable, Sendable {
     var id: String { envelope.operation_id }
     var isContact: Bool { envelope.kind == "log_contact_attempt" }
     var isStage: Bool { envelope.kind == "change_person_stage" }
+    var isDetails: Bool { envelope.kind == "update_person_details" }
     var title: String {
         if envelope.kind == "add_note" || envelope.kind == "edit_note" { return envelope.payload["body"].text }
         if isContact { return [envelope.payload["channel"].text, envelope.payload["outcome"].text, envelope.payload["occurred_at"].text].filter { !$0.isEmpty }.joined(separator: " · ") }
         if isStage { return envelope.payload["stage_id"].text }
+        if isDetails { return "Profile details" }
         if ["create_task", "update_task"].contains(envelope.kind) { return envelope.payload["title"].text }
         return ""
     }
@@ -166,6 +210,7 @@ struct Queued: Identifiable, Sendable {
         if envelope.kind == "update_task" { return envelope.payload["task_id"].text }
         if envelope.kind == "complete_task" { return envelope.payload["target"]["task_id"].text.isEmpty ? nil : envelope.payload["target"]["task_id"].text }
         if envelope.kind == "change_person_stage" { return envelope.payload["person_id"].text }
+        if envelope.kind == "update_person_details" { return envelope.payload["person_id"].text }
         return nil
     }
 }

@@ -88,6 +88,13 @@ class Binding(
             (0 until capabilities.length()).any { capabilities.getString(it) == wanted }
         }
     }
+
+    fun supportsPersonDetails(): Boolean {
+        val capabilities = JSONObject(bootstrap).getJSONArray("capabilities")
+        return listOf("update_person_details", "details_revisions").all { wanted ->
+            (0 until capabilities.length()).any { capabilities.getString(it) == wanted }
+        }
+    }
     companion object {
         fun parse(value: JSONObject, actor: String, org: String, installation: String): Binding {
             if (value.getString("protocol") != PROTOCOL)
@@ -133,6 +140,7 @@ fun errorMessage(code: String): String =
         "contact_time_in_future" ->
             "The reported contact time is later than the server clock. Correct the time to create a new saved contact; the original is preserved."
         "invalid_stage" -> "That stage is no longer available. Choose a stage from the current catalog in a new saved proposal."
+        "invalid_person_details" -> "Those profile changes could not be accepted. The saved proposal remains available for review."
         "dependency_pending" -> "Waiting for the original task creation."
         "generation_changed",
         "generation_expired" ->

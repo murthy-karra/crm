@@ -8,6 +8,7 @@ import PageHeader from '../components/PageHeader.vue'
 import Card from '../components/Card.vue'
 import CoreSnapshotPanel from '../components/migration/CoreSnapshotPanel.vue'
 import PeopleImportPanel from '../components/migration/PeopleImportPanel.vue'
+import AdmittedMetadataImportPanel from '../components/migration/AdmittedMetadataImportPanel.vue'
 import MetadataImportPanel from '../components/migration/MetadataImportPanel.vue'
 import ActivityImportPanel from '../components/migration/ActivityImportPanel.vue'
 import HistoryCapturePanel from '../components/migration/HistoryCapturePanel.vue'
@@ -509,6 +510,8 @@ function checkStatusLabel(check: FubAssessmentCheck) {
       :refresh-workspace="refreshWorkspace"
       @review-snapshot="openCoreSnapshot"
     />
+
+    <AdmittedMetadataImportPanel @review-snapshot="openCoreSnapshot" />
 
     <CoreSnapshotPanel
       v-if="canRead"

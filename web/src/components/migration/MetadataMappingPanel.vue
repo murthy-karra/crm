@@ -5,13 +5,14 @@ import Card from '../Card.vue'
 import MetadataEvidence from './MetadataEvidence.vue'
 import MetadataFieldViewer from './MetadataFieldViewer.vue'
 import MetadataTargetPicker from './MetadataTargetPicker.vue'
-import { fetchMetadataAliases, fetchMetadataMappings, metadataName, useMetadataAccess, type MetadataChoice, type MetadataKind, type MetadataMapping, type MetadataPatch, type MetadataTarget } from '../../api/metadataImports'
+import { metadataName, metadataReaders, useMetadataAccess, type MetadataReaders, type MetadataChoice, type MetadataKind, type MetadataMapping, type MetadataPatch, type MetadataTarget } from '../../api/metadataImports'
 import { buttonClasses, INPUT_CLASSES } from '../../lib/controls'
 import { describeApiError } from '../../lib/errors'
 import { snapshotLabel } from './format'
-const props = defineProps<{ importId: string; planId: string; revision: string; canReplan: boolean; progressVersion?: string }>()
+const props = defineProps<{ readers?: MetadataReaders; importId: string; planId: string; revision: string; canReplan: boolean; progressVersion?: string }>()
 const emit = defineEmits<{ apply: [mappings: MetadataPatch[]]; dirty: [value: boolean] }>()
-const access = useMetadataAccess()
+const readers = props.readers ?? metadataReaders
+const access = useMetadataAccess(readers)
 const kind = ref<MetadataKind>('tag')
 const cursors = ref<string[]>([''])
 const drafts = ref<Record<string, MetadataChoice>>({})
@@ -25,9 +26,9 @@ const message = ref('')
 const branch = computed(() => [...access.prefix.value, 'mappings', props.importId, props.planId, props.revision])
 const key = computed(() => [...branch.value, kind.value, cursors.value.at(-1) ?? '', props.progressVersion ?? ''])
 const enabled = computed(() => access.enabled.value && !!props.importId && !!props.planId)
-const reading = useQuery({ queryKey: key, enabled, retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(key.value, () => key.value, () => fetchMetadataMappings(props.importId, props.planId, kind.value, cursors.value.at(-1) || undefined, signal)) })
+const reading = useQuery({ queryKey: key, enabled, retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(key.value, () => key.value, () => readers.mappings(props.importId, props.planId, kind.value, cursors.value.at(-1) || undefined, signal)) })
 const aliasKey = computed(() => [...branch.value, 'aliases', aliasMapping.value?.id ?? '', aliasCursors.value.at(-1) ?? '', props.progressVersion ?? ''])
-const aliases = useQuery({ queryKey: aliasKey, enabled: computed(() => enabled.value && !!aliasMapping.value), retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(aliasKey.value, () => aliasKey.value, () => fetchMetadataAliases(props.importId, props.planId, aliasMapping.value!.id, aliasCursors.value.at(-1) || undefined, signal)) })
+const aliases = useQuery({ queryKey: aliasKey, enabled: computed(() => enabled.value && !!aliasMapping.value), retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(aliasKey.value, () => aliasKey.value, () => readers.aliases(props.importId, props.planId, aliasMapping.value!.id, aliasCursors.value.at(-1) || undefined, signal)) })
 const page = computed(() => enabled.value ? reading.data.value : undefined)
 const aliasPage = computed(() => enabled.value ? aliases.data.value : undefined)
 const changes = computed(() => Object.keys(drafts.value).length)
@@ -362,18 +363,21 @@ function showAliases(row: MetadataMapping) { aliasMapping.value = row; aliasCurs
       </div>
       <MetadataFieldViewer
         v-if="aliasRecord"
+        :readers="readers"
         :request="{ kind: 'record', importId, planId, recordId: aliasRecord, fieldKey: 'source.all' }"
         title="Exact tag source fields"
       />
     </section>
     <MetadataEvidence
       v-if="selected && enabled"
+      :readers="readers"
       :source="selected.source"
       :request="{ kind: 'mapping', importId, planId, mappingId: selected.id, fieldKey: 'all' }"
       :title="`Source mapping for ${metadataName(selected.source)}`"
     />
     <MetadataTargetPicker
       v-if="picking && enabled"
+      :readers="readers"
       :import-id="importId"
       :plan-id="planId"
       :mapping="picking"

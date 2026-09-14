@@ -7,7 +7,7 @@ final class LocalStore {
     private var db: OpaquePointer?
     let identity: String, context: String, url: URL
     private let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
-    init(url: URL, key: Data, identity: String, context: String, schemaTarget: Int = 7) throws {
+    init(url: URL, key: Data, identity: String, context: String, schemaTarget: Int = 8) throws {
         self.url = url; self.identity = identity; self.context = context
         guard sqlite3_open_v2(url.path, &db, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX, nil) == SQLITE_OK else {
             sqlite3_close(db); db = nil; throw LocalError.storage
@@ -31,7 +31,7 @@ final class LocalStore {
     deinit { sqlite3_close(db) }
     private func migrate(to target: Int) throws {
         let version = Int(try rows("PRAGMA user_version").first?.first ?? "0") ?? 0
-        guard version <= 7 else { throw LocalError.invalidProtocol }
+        guard version <= 8 else { throw LocalError.invalidProtocol }
         try transaction {
             if version < 1 {
                 for sql in [
@@ -84,6 +84,13 @@ final class LocalStore {
                 try run("CREATE INDEX stage_catalog_order ON stage_catalog_stages(generation,position,id)")
                 try run("PRAGMA user_version=7")
             }
+            // Mobile005 adds only a representation qualification bit. Existing
+            // encrypted bundles, drafts, immutable envelopes and receipts are
+            // not decoded/re-encoded during the installed-store upgrade.
+            if version < 8 && target >= 8 {
+                try run("ALTER TABLE bundle_qualification ADD COLUMN details_revisions INTEGER NOT NULL DEFAULT 0")
+                try run("PRAGMA user_version=8")
+            }
         }
     }
     @discardableResult func rows(_ sql: String, _ args: [String?] = []) throws -> [[String]] {
@@ -128,7 +135,20 @@ final class LocalStore {
     }
     @discardableResult func submit(_ draft: Draft) throws -> Envelope {
         var payload: [String: JSON] = ["person_id": .s(draft.person)]
-        if draft.kind == "log_contact_attempt" {
+        if draft.kind == "update_person_details" {
+            guard let expected = draft.expectedRevision, (try? revision(expected)) != nil,
+                  let proposal = draft.proposal, case .object(let edits) = proposal,
+                  !edits.isEmpty else { throw LocalError.invalidInput }
+            payload["expected_details_revision"] = .s(expected)
+            for key in ["first_name", "last_name", "contact_operations"] {
+                if let value = edits[key] { payload[key] = value }
+            }
+            // The frozen adapter requires this field even for a name-only
+            // patch; an empty array is distinct from an omitted operation list.
+            if payload["contact_operations"] == nil { payload["contact_operations"] = .array([]) }
+            guard payload.count > 2 else { throw LocalError.invalidInput }
+            try validateDetailsPayload(payload)
+        } else if draft.kind == "log_contact_attempt" {
             guard let channel = draft.contactChannel, let outcome = draft.contactOutcome, let occurredAt = draft.occurredAt,
                   ["call", "text", "email", "other"].contains(channel),
                   ["reached", "no_answer", "left_message", "sent", "busy", "wrong_number"].contains(outcome),
@@ -155,7 +175,7 @@ final class LocalStore {
                 _ = try revision(expected); payload["task_id"] = .s(target); payload["expected_revision"] = .s(expected)
             } else { payload["assignee_user_id"] = .null }
         }
-        let earlier = draft.kind == "change_person_stage"
+        let earlier = draft.kind == "change_person_stage" || draft.kind == "update_person_details"
             ? try unresolvedOperation(person: draft.person, target: draft.person)
             : draft.targetID.flatMap { try? unresolvedOperation(person: draft.person, target: $0) }
         if let earlier {
@@ -172,12 +192,42 @@ final class LocalStore {
             guard let row = try rows("SELECT body FROM drafts WHERE id=?", [draft.id]).first,
                   let stored = try? decode(Draft.self, Data(row[0].utf8)), stored.revision == draft.revision else { throw LocalError.staleDraft }
             let envelope = try insertEnvelope(kind: draft.kind, payload: .object(payload), deviceRecordedAt: draft.kind == "log_contact_attempt" ? stamp() : draft.deviceRecordedAt)
-            if draft.isEdit {
+            if draft.isEdit || draft.isDetails {
                 var protected = stored; protected.mode = "submitted"; protected.predecessor = envelope.operation_id; protected.revision += 1
                 try run("UPDATE drafts SET body=? WHERE id=?", [try string(protected), protected.id])
             } else { try run("DELETE FROM drafts WHERE id=?", [draft.id]) }
             return envelope
         }
+    }
+    private func validateDetailsPayload(_ payload: [String: JSON]) throws {
+        if let name = payload["first_name"] { try validateDetailName(name) }
+        if let name = payload["last_name"] { try validateDetailName(name) }
+        if let operations = payload["contact_operations"] {
+            guard case .array(let list) = operations, list.count <= 50 else { throw LocalError.invalidInput }
+            var targets = Set<String>()
+            for entry in list {
+                guard case .object(let object) = entry else { throw LocalError.invalidInput }
+                switch object["op"]?.text {
+                case "add":
+                    guard ["email", "phone"].contains(object["kind"]?.text ?? "") else { throw LocalError.invalidInput }
+                    try validateDetailValue(object["value"] ?? .null)
+                case "edit":
+                    guard let id = object["id"]?.text, UUID(uuidString: id) != nil, targets.insert(id).inserted else { throw LocalError.invalidInput }
+                    try validateDetailValue(object["value"] ?? .null)
+                case "remove":
+                    guard let id = object["id"]?.text, UUID(uuidString: id) != nil, targets.insert(id).inserted else { throw LocalError.invalidInput }
+                default: throw LocalError.invalidInput
+                }
+            }
+        }
+    }
+    private func validateDetailName(_ value: JSON) throws {
+        guard value == .null || (value.text.unicodeScalars.count <= 200 && !value.text.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) })) else { throw LocalError.invalidInput }
+    }
+    private func validateDetailValue(_ value: JSON) throws {
+        let text = value.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, text.lengthOfBytes(using: .utf8) <= 1024,
+              !text.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { throw LocalError.invalidInput }
     }
     @discardableResult func complete(person: String, target: JSON) throws -> Envelope {
         try transaction {
@@ -275,12 +325,21 @@ final class LocalStore {
             guard UUID(uuidString: receipt.operation_id) != nil, UUID(uuidString: receipt.resource_id) != nil,
                   (try? date(receipt.accepted_at)) != nil else { throw LocalError.invalidProtocol }
             let expected: String
-            switch op.envelope.kind { case "add_note", "edit_note": expected = "note"; case "create_task", "update_task", "complete_task": expected = "task"; case "log_contact_attempt": expected = "contact_attempt"; case "change_person_stage": expected = "person_stage"; default: throw LocalError.invalidProtocol }
+            switch op.envelope.kind { case "add_note", "edit_note": expected = "note"; case "create_task", "update_task", "complete_task": expected = "task"; case "log_contact_attempt": expected = "contact_attempt"; case "change_person_stage": expected = "person_stage"; case "update_person_details": expected = "person_details"; default: throw LocalError.invalidProtocol }
             guard receipt.resource_type == expected else { throw LocalError.invalidProtocol }
             if op.envelope.kind == "log_contact_attempt" {
                 guard receipt.committed_revision == nil, receipt.changed else { throw LocalError.invalidProtocol }
             } else if op.envelope.kind == "add_note" { guard receipt.committed_revision == nil else { throw LocalError.invalidProtocol } }
             else { guard let committed = receipt.committed_revision, (try? revision(committed)) != nil else { throw LocalError.invalidProtocol } }
+            if op.isDetails {
+                let additions = op.envelope.payload["contact_operations"].list.enumerated().filter { $0.element["op"].text == "add" }
+                // Legacy receipt kinds predate this field, but every Mobile005
+                // profile receipt must carry an exact map, including an empty
+                // array when no contacts were added.
+                guard let mapping = receipt.added_contact_ids else { throw LocalError.invalidProtocol }
+                guard mapping.count == additions.count, Set(mapping.map(\.ordinal)).count == mapping.count,
+                      mapping.allSatisfy({ entry in additions.contains(where: { $0.offset == entry.ordinal }) && UUID(uuidString: entry.id) != nil }) else { throw LocalError.invalidProtocol }
+            }
             if let target = op.targetID, target != receipt.resource_id { throw LocalError.invalidProtocol }
             // A contact can change server-ranked Today without changing the
             // Person revision.  Keep its overlay until a new seal succeeds.
@@ -334,6 +393,9 @@ final class LocalStore {
     func hasQualifiedStageBundle(_ person: String, _ rev: String) throws -> Bool {
         try rows("SELECT 1 FROM bundle_qualification WHERE person=? AND revision=? AND stage_revisions=1", [person, rev]).isEmpty == false
     }
+    func hasQualifiedDetailsBundle(_ person: String, _ rev: String) throws -> Bool {
+        try rows("SELECT 1 FROM bundle_qualification WHERE person=? AND revision=? AND details_revisions=1", [person, rev]).isEmpty == false
+    }
     func pages(_ gen: String, _ person: String, _ section: String) throws -> [Page] {
         try rows("SELECT body FROM pages WHERE generation=? AND person=? AND section=? ORDER BY position", [gen, person, section])
             .map { try decode(Page.self, Data($0[0].utf8)) }
@@ -352,7 +414,14 @@ final class LocalStore {
         let summary = try pages(gen, person, "summary"), notes = try pages(gen, person, "notes"), tasks = try pages(gen, person, "tasks")
         guard summary.last?.complete == true, notes.last?.complete == true, tasks.last?.complete == true,
               let head = summary.first?.summary, head["id"].text == person else { throw LocalError.invalidProtocol }
-        let bundle = Bundle(person: person, revision: rev, summary: head, contacts: summary.flatMap(\.items), tasks: tasks.flatMap(\.items), notes: notes.flatMap(\.items))
+        let contacts = summary.flatMap(\.items)
+        let details = head["details_revision"].text
+        let detailsQualified = (try? revision(details)) != nil && contacts.allSatisfy({ UUID(uuidString: $0["id"].text) != nil && ["email", "phone"].contains($0["kind"].text) && !$0["value"].text.isEmpty && !$0["created_at"].text.isEmpty })
+        // An installed schema-7 bundle may legitimately lack the new token and
+        // order metadata. Keep it readable, mark it non-editable, and replace
+        // it only after a same-broad-revision complete current representation.
+        if !details.isEmpty && !detailsQualified { throw LocalError.invalidProtocol }
+        let bundle = Bundle(person: person, revision: rev, summary: head, contacts: contacts, tasks: tasks.flatMap(\.items), notes: notes.flatMap(\.items))
         try transaction {
             // Only the identical broad revision is replaced here.  Promotion
             // still refuses to lower a newer active Person revision, while this
@@ -360,10 +429,15 @@ final class LocalStore {
             try run("INSERT INTO bundles VALUES(?,?,?) ON CONFLICT(person,revision) DO UPDATE SET body=excluded.body", [person, rev, try string(bundle)])
             if !(try rows("SELECT 1 FROM sqlite_master WHERE type='table' AND name='bundle_qualification'")).isEmpty {
                 let versioned = notes.flatMap(\.items).allSatisfy { !$0["revision"].text.isEmpty && (try? revision($0["revision"].text)) != nil }
-                let hasStageColumn = try rows("PRAGMA table_info(bundle_qualification)").contains { $0.count > 1 && $0[1] == "stage_revisions" }
+                let columns = try rows("PRAGMA table_info(bundle_qualification)").compactMap { $0.count > 1 ? $0[1] : nil }
+                let hasStageColumn = columns.contains("stage_revisions"), hasDetailsColumn = columns.contains("details_revisions")
                 if hasStageColumn {
                     let stageVersioned = !head["stage_revision"].text.isEmpty && (try? revision(head["stage_revision"].text)) != nil && UUID(uuidString: head["stage"]["id"].text) != nil
-                    try run("INSERT INTO bundle_qualification(person,revision,notes_versioned,stage_revisions) VALUES(?,?,?,?) ON CONFLICT(person,revision) DO UPDATE SET notes_versioned=excluded.notes_versioned,stage_revisions=excluded.stage_revisions", [person, rev, versioned ? "1" : "0", stageVersioned ? "1" : "0"])
+                    if hasDetailsColumn {
+                        try run("INSERT INTO bundle_qualification(person,revision,notes_versioned,stage_revisions,details_revisions) VALUES(?,?,?,?,?) ON CONFLICT(person,revision) DO UPDATE SET notes_versioned=excluded.notes_versioned,stage_revisions=excluded.stage_revisions,details_revisions=excluded.details_revisions", [person, rev, versioned ? "1" : "0", stageVersioned ? "1" : "0", detailsQualified ? "1" : "0"])
+                    } else {
+                        try run("INSERT INTO bundle_qualification(person,revision,notes_versioned,stage_revisions) VALUES(?,?,?,?) ON CONFLICT(person,revision) DO UPDATE SET notes_versioned=excluded.notes_versioned,stage_revisions=excluded.stage_revisions", [person, rev, versioned ? "1" : "0", stageVersioned ? "1" : "0"])
+                    }
                 } else {
                     try run("INSERT INTO bundle_qualification VALUES(?,?,?) ON CONFLICT(person,revision) DO UPDATE SET notes_versioned=excluded.notes_versioned", [person, rev, versioned ? "1" : "0"])
                 }
@@ -418,6 +492,23 @@ final class LocalStore {
             guard qualified else { return nil }
         }
         return record
+    }
+    /// A profile proposal is permitted only from a sealed complete summary with
+    /// the aggregate revision and all contact ordering fields. Primary display
+    /// summaries and partial pages are never an editable baseline.
+    func editableDetails(person: String) throws -> JSON? {
+        guard let bundle = try activeBundle(person), try hasQualifiedDetailsBundle(person, bundle.revision),
+              (try? revision(bundle.summary["details_revision"].text)) != nil else { return nil }
+        let contacts = bundle.contacts
+        guard contacts.allSatisfy({ UUID(uuidString: $0["id"].text) != nil && ["email", "phone"].contains($0["kind"].text) && !$0["created_at"].text.isEmpty }) else { return nil }
+        return .object(["first_name": bundle.summary["first_name"], "last_name": bundle.summary["last_name"], "details_revision": bundle.summary["details_revision"], "contacts": .array(contacts)])
+    }
+    func saveDetailsCurrent(_ draftID: String, current: CurrentDetailsResponse, contextID: String, person: String, editorEpoch: String) throws -> Draft {
+        guard current.context_id == contextID, current.person_id == person, current.complete, current.next_cursor == nil,
+              (try? revision(current.details_revision)) != nil else { throw LocalError.invalidProtocol }
+        let currentJSON: JSON = .object(["first_name": current.first_name.map(JSON.s) ?? .null, "last_name": current.last_name.map(JSON.s) ?? .null,
+                                         "details_revision": .s(current.details_revision), "contacts": .array(current.items)])
+        return try saveCurrent(draftID, current: currentJSON, contextID: contextID, person: person, editorEpoch: editorEpoch)
     }
     func saveCurrent(_ draftID: String, current: JSON, contextID: String, person: String, editorEpoch: String) throws -> Draft {
         guard contextID == context else { throw LocalError.identityChanged }

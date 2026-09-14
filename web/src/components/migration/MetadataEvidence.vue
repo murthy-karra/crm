@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useMetadataAccess, type MetadataFieldRequest, type MetadataSummary } from '../../api/metadataImports'
+import { metadataReaders, useMetadataAccess, type MetadataReaders, type MetadataFieldRequest, type MetadataSummary } from '../../api/metadataImports'
 import MetadataFieldViewer from './MetadataFieldViewer.vue'
 import { buttonClasses } from '../../lib/controls'
-const props = defineProps<{ source: MetadataSummary; operations?: MetadataSummary; request: MetadataFieldRequest; title: string }>()
-const access = useMetadataAccess()
+const props = defineProps<{ readers?: MetadataReaders; source: MetadataSummary; operations?: MetadataSummary; request: MetadataFieldRequest; title: string }>()
+const readers = props.readers ?? metadataReaders
+const access = useMetadataAccess(readers)
 const field = ref<{ key: string; title: string } | null>(null)
 const sections = computed(() => [{ name: 'Source fields', value: props.source }, ...(props.operations ? [{ name: 'Planned or committed values', value: props.operations }] : [])])
 watch(() => JSON.stringify([access.scope.value, props.request]), () => { field.value = null }, { flush: 'sync' })
@@ -73,6 +74,7 @@ watch(() => JSON.stringify([access.scope.value, props.request]), () => { field.v
     </div>
     <MetadataFieldViewer
       v-if="field"
+      :readers="readers"
       :request="{ ...request, fieldKey: field.key }"
       :title="field.title"
     />

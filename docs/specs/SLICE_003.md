@@ -388,6 +388,14 @@ across two specs (AGENTS.md §11 item 6).
 
 ## 6. Realtime contracts
 
+**Mobile005 amendment — D-082, 2026-09-14:**
+[Mobile005](MOBILE_005_OFFLINE_PERSON_DETAILS.md#2-shared-contract-declaration)
+adds `details_changed` to `person.changed.data.change` for a changed, committed
+Person profile operation. The v1 envelope and IDs-only audience are unchanged;
+Web invalidates Person detail, People, Today and saved-list counts. Exact replay,
+no-op and rollback publish nothing. Best-effort publication failure does not undo
+or reject an accepted command; existing reconnect/focus refetch recovers state.
+
 *Amendment pointer (Slice 011e, 2026-09-07, declared additive, AGENTS.md
 §11):* `data.change` also admits `tags_changed`, published on `person.changed`
 after a tag is applied to or removed from a Person (only when a row changed;

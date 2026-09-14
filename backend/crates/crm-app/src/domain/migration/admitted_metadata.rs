@@ -867,21 +867,7 @@ pub async fn apply_mappings(
             choice: patch.choice.clone(),
         });
     }
-    if changed {
-        let cancel:Uuid=sqlx::query_scalar("SELECT token FROM migration_admitted_metadata_reservation WHERE import_id=$1 AND organization_id=$2 AND purpose='cancel'").bind(import).bind(ctx.organization_id.0).fetch_one(&mut *tx).await?;
-        super::admitted_metadata_worker::settle(&mut tx, ctx.organization_id, import, cancel, 0)
-            .await?;
-        super::admitted_metadata_worker::reserve(
-            &mut tx,
-            ctx.organization_id,
-            import,
-            previous,
-            snapshot,
-            "cancel",
-            metadata_store::CANCEL_RESERVATION,
-        )
-        .await?;
-    }
+
     let plan = Uuid::new_v4();
     let inputs = seal(
         key,
@@ -893,6 +879,21 @@ pub async fn apply_mappings(
         &PlanChoices { patches },
     )?;
     sqlx::query("INSERT INTO migration_admitted_metadata_plan(id,import_id,organization_id,revision,state,inputs_nonce,inputs_ciphertext,counts,snapshot_id,source_report_id,source_output_revision,capture_sequence,previous_plan_id) VALUES($1,$2,$3,$4,'building',$5,$6,'{}',$7,$8,$9,$10,$11)").bind(plan).bind(import).bind(ctx.organization_id.0).bind(revision.checked_add(1).ok_or(MigrationError::Conflict)?).bind(inputs.nonce).bind(inputs.ciphertext).bind(snapshot).bind(report_id).bind(report.get::<Uuid,_>("output_revision")).bind(report.get::<i64,_>("newer_sequence")).bind(if changed{None}else{Some(previous)}).execute(&mut *tx).await?;
+    if changed {
+        let cancel:Uuid=sqlx::query_scalar("SELECT token FROM migration_admitted_metadata_reservation WHERE import_id=$1 AND organization_id=$2 AND purpose='cancel'").bind(import).bind(ctx.organization_id.0).fetch_one(&mut *tx).await?;
+        super::admitted_metadata_worker::settle(&mut tx, ctx.organization_id, import, cancel, 0)
+            .await?;
+        super::admitted_metadata_worker::reserve(
+            &mut tx,
+            ctx.organization_id,
+            import,
+            plan,
+            snapshot,
+            "cancel",
+            metadata_store::CANCEL_RESERVATION,
+        )
+        .await?;
+    }
     sqlx::query("UPDATE migration_admitted_metadata_plan SET state='superseded' WHERE id=$1 AND organization_id=$2").bind(previous).bind(ctx.organization_id.0).execute(&mut *tx).await?;
     sqlx::query("UPDATE migration_admitted_metadata_import SET latest_plan_id=$3,snapshot_id=$4,source_report_id=$5,capture_sequence=$6,executor_user_id=$7,phase='preparation',pause_reason=NULL,updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2").bind(import).bind(ctx.organization_id.0).bind(plan).bind(snapshot).bind(report_id).bind(report.get::<i64,_>("newer_sequence")).bind(ctx.actor_user_id.0).execute(&mut *tx).await?;
     charge_plan(&mut tx, ctx.organization_id, import, plan, snapshot).await?;

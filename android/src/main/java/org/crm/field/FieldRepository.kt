@@ -420,7 +420,7 @@ class FieldRepository(
 
     suspend fun profileEditingSupported(): Boolean = withContext(Dispatchers.IO) {
         val account = active ?: return@withContext false
-        check(account); account.store.binding.supportsPersonDetails() && account.store.dao.person(selected ?: return@withContext false)?.detailsRevisionsQualified == true
+        check(account); account.store.binding.supportsPersonDetails() && account.store.dao.person(selected ?: return@withContext false)?.let(account.store::detailsQualified) == true
     }
 
     suspend fun reviseProfileConflict(operation: String): ProfileDraftRow = withContext(Dispatchers.IO) {
@@ -715,26 +715,31 @@ class FieldRepository(
         var output: JSONObject? = null
         val all = JSONArray()
         var details: String? = null
-        var personRevision: String? = null
+        var firstName: String? = null
+        var lastName: String? = null
         while (true) {
             if (!visited.add(cursor)) throw ProtocolFailure()
             val page =
-                account.api.page(path, account.store.binding, cursor)
+                account.api.page(path, account.store.binding, cursor, maximumBytes = 524_288)
             if (
                 page.getString("context_id") != account.store.binding.context ||
                     page.getString("person_id") != row.person ||
-                    page.getJSONArray("items").length() > 100 ||
-                    page.toString().toByteArray().size > 524_288
+                    page.getJSONArray("items").length() > 100
             )
                 throw ProtocolFailure()
             val pageDetails = revision(page.getString("details_revision"))
             val pagePersonRevision = revision(page.getString("person_revision"))
+            val pageFirst = if (page.get("first_name") === JSONObject.NULL) null else page.get("first_name") as String
+            val pageLast = if (page.get("last_name") === JSONObject.NULL) null else page.get("last_name") as String
+            validateDetailContacts(page.getJSONArray("items"))
             if (details == null) {
                 details = pageDetails
-                personRevision = pagePersonRevision
+                firstName = pageFirst
+                lastName = pageLast
                 output = JSONObject(page.toString())
-            } else if (pageDetails != details || pagePersonRevision != personRevision)
+            } else if (pageDetails != details || pageFirst != firstName || pageLast != lastName)
                 throw ProtocolFailure()
+            requireNotNull(output).put("person_revision", pagePersonRevision)
             page.getJSONArray("items").objects().forEach { all.put(it) }
             val next = page.stringOrNull("next_cursor")
             if (
@@ -745,6 +750,7 @@ class FieldRepository(
             if (next == null) break
             cursor = next
         }
+        validateDetailContacts(all)
         return requireNotNull(output).put("items", all).put("next_cursor", JSONObject.NULL).put("complete", true)
     }
 
@@ -808,7 +814,7 @@ class FieldRepository(
                         // A schema-5 cache has no details baseline even when its broad revision
                         // is current. Only a server that advertises Mobile005 details must fetch
                         // the complete contact traversal to qualify that new baseline.
-                        (!store.binding.supportsPersonDetails() || it.detailsRevisionsQualified)
+                        (!store.binding.supportsPersonDetails() || store.detailsQualified(it))
                 } == true
             ) continue
             if (vault.root.usableSpace < 16 * 1024 * 1024) throw StorageFailure()
@@ -848,7 +854,8 @@ class FieldRepository(
             try {
                 check(account)
                 val dao = account.store.dao
-                val visibleIds = dao.people().map { it.id }.toSet()
+                val people = dao.people()
+                val visibleIds = people.map { it.id }.toSet()
                 val ops =
                     dao.operations()
                         .filter { it.status != "covered" }
@@ -884,8 +891,8 @@ class FieldRepository(
                         false,
                         busy,
                         message,
-                        dao.people(),
-                        selected?.let { dao.person(it) },
+                        people,
+                        selected?.let { dao.person(it) }?.let { it.copy(detailsRevisionsQualified = account.store.detailsQualified(it)) },
                         ops,
                         drafts,
                         contacts,

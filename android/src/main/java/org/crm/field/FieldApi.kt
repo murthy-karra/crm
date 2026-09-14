@@ -8,7 +8,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
-class HttpResult(val status: Int, val body: JSONObject, val cookie: String?, val retryAfter: Long)
+/** Preserve actual response bytes until the caller has enforced its route's byte budget. */
+class HttpResult(val status: Int, bytes: ByteArray, val cookie: String?, val retryAfter: Long) {
+    private val wire = bytes.copyOf()
+    val wireByteCount: Int get() = wire.size
+    val body: JSONObject by lazy { if (wire.isEmpty()) JSONObject() else JSONObject(String(wire, Charsets.UTF_8)) }
+}
 
 fun interface Transport {
     suspend fun request(
@@ -76,7 +81,6 @@ class HttpTransport : Transport {
                         }
                         out.toByteArray()
                     } ?: ByteArray(0)
-                val response = if (bytes.isEmpty()) JSONObject() else JSONObject(String(bytes))
                 val updated =
                     connection.headerFields.entries
                         .firstOrNull { it.key.equals("Set-Cookie", true) }
@@ -90,7 +94,7 @@ class HttpTransport : Transport {
                     throw ProtocolFailure()
                 HttpResult(
                     status,
-                    response,
+                    bytes,
                     updated,
                     connection.getHeaderField("Retry-After")?.toLongOrNull()?.coerceIn(1, 3600)
                         ?: 30,
@@ -111,8 +115,10 @@ class FieldApi(
         path: String,
         context: String? = null,
         body: String? = null,
+        maximumBytes: Int = 1_048_576,
     ): JSONObject {
         val response = transport.request(origin, method, path, cookie, context, body)
+        if (response.wireByteCount > maximumBytes) throw ProtocolFailure()
         if (response.status !in 200..299)
             throw ApiFailure(
                 response.status,
@@ -145,10 +151,11 @@ class FieldApi(
     suspend fun currentStage(binding: Binding, person: String) =
         call("GET", "/api/mobile/v1/people/${uuid(person)}/stage", binding.context)
 
-    suspend fun page(path: String, binding: Binding, cursor: String) =
+    suspend fun page(path: String, binding: Binding, cursor: String, maximumBytes: Int = 1_048_576) =
         call(
             "GET",
             path + if (cursor.isEmpty()) "" else "?cursor=" + URLEncoder.encode(cursor, "UTF-8"),
             binding.context,
+            maximumBytes = maximumBytes,
         )
 }

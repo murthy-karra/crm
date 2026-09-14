@@ -283,7 +283,7 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
     ): ProfileDraftRow = atomic {
         requireAccess(); uuid(id)
         val cached = dao.person(person) ?: throw AccessLocked()
-        require(cached.detailsRevisionsQualified) { "Refresh this Person before editing details" }
+        require(detailsQualified(cached)) { "Refresh this Person before editing details" }
         val current = dao.profileDraft(id)
         require((current?.revision ?: 0) == expectedRevision) { "Profile draft changed; reload it" }
         require(current == null || current.person == person)
@@ -304,7 +304,7 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         requireAccess()
         val draft = dao.profileDraft(id) ?: throw StorageFailure()
         require(draft.revision == expectedRevision)
-        require(dao.person(draft.person)?.detailsRevisionsQualified == true)
+        require(dao.person(draft.person)?.let(::detailsQualified) == true)
         if (draft.operation.isNotEmpty()) return@atomic dao.operation(draft.operation) ?: throw ProtocolFailure()
         val baseline = JSONObject(draft.baseline)
         val proposal = JSONObject(draft.proposal)
@@ -337,6 +337,7 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
 
     /** Client checks only declared syntax/identity. Normalization and uniqueness stay server-owned. */
     private fun validateProfileProposal(person: String, details: String, proposal: JSONObject, baseline: JSONObject) {
+        validateDetailContacts(baseline.getJSONArray("contacts"))
         revision(details); require(proposal.length() in 1..3)
         require(proposal.has("contact_operations")); require(proposal.getJSONArray("contact_operations").length() <= 50)
         proposal.keys().forEach { require(it in setOf("first_name", "last_name", "contact_operations")) }
@@ -365,24 +366,9 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         require(value.isNotEmpty() && value.toByteArray().size <= 1024 && value.none { it.isISOControl() })
     }
 
-    /** Every reconciliation contact is readable, even when an older server omits edit metadata. */
-    private fun validateContactItems(contacts: JSONArray) {
-        val ids = mutableSetOf<String>()
-        contacts.objects().forEach { item ->
-            require(ids.add(uuid(item.getString("id"))))
-            require(item.getString("kind") in setOf("email", "phone")); require(item.getString("value").isNotEmpty())
-        }
-    }
-
-    /** Full metadata is required only before contacts can become an editable details baseline. */
-    private fun validateDetailContacts(contacts: JSONArray) {
-        validateContactItems(contacts)
-        contacts.objects().forEach { item ->
-            // A complete server baseline can contain an imported legacy value that exceeds a
-            // current edit limit. It remains readable and frozen; only add/edit input is bounded.
-            require(item.has("import_order")); Instant.parse(item.getString("created_at"))
-        }
-    }
+    /** Recheck persisted flags: a pre-fix cache may have qualified coercible metadata. */
+    fun detailsQualified(person: PersonRow): Boolean = person.detailsRevisionsQualified &&
+        runCatching { profileBaseline(person) }.isSuccess
 
     /**
      * Page bytes remain verbatim reconciliation evidence. Once the complete contact traversal
@@ -392,11 +378,11 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
      */
     private fun orderedDetailContacts(contacts: JSONArray): JSONArray {
         val values = contacts.objects()
-        if (values.any { !it.has("import_order") || !it.has("created_at") }) return JSONArray(values)
+        if (runCatching { validateDetailContacts(contacts) }.isFailure) return JSONArray(values)
         return JSONArray(
             values.sortedWith(
                 compareBy<JSONObject> { item ->
-                    if (item.isNull("import_order")) Long.MAX_VALUE else item.getLong("import_order")
+                    detailImportOrder(item)?.toLong() ?: Long.MAX_VALUE
                 }.thenBy { item -> Instant.parse(item.getString("created_at")) }
                     .thenBy { item -> item.getString("id") },
             ),
@@ -622,8 +608,11 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
                 val payload = JSONObject(operation.envelope).getJSONObject("payload")
                 val adds = payload.getJSONArray("contact_operations").objects().mapIndexedNotNull { index, op -> if (op.getString("op") == "add") index else null }.toSet()
                 val mapping = response.getJSONArray("added_contact_ids").objects()
-                require(mapping.size == adds.size && mapping.map { it.getInt("ordinal") }.toSet() == adds)
-                mapping.forEach { entry -> require(entry.length() == 2); uuid(entry.getString("id")) }
+                val operationCount = payload.getJSONArray("contact_operations").length()
+                val ordinals = mapping.map { strictJsonInt(it.get("ordinal"), 0, operationCount - 1) }
+                val ids = mapping.map { entry -> require(entry.length() == 2); uuid(entry.get("id") as String) }
+                require(mapping.size == adds.size && ordinals.toSet() == adds)
+                require(ids.toSet().size == ids.size)
                 if (!response.getBoolean("changed")) require(mapping.isEmpty())
             }
             else -> throw ProtocolFailure()
@@ -905,7 +894,7 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         val pending = dao.operations().filter { it.status != "covered" }
         for (item in manifest) {
             val old = dao.person(item.person)
-            val needsQualification = old != null && (!old.noteRevisionsQualified || !old.stageRevisionsQualified || !old.detailsRevisionsQualified)
+            val needsQualification = old != null && (!old.noteRevisionsQualified || !old.stageRevisionsQualified || !detailsQualified(old))
             if (old == null || old.revision != item.revision || needsQualification) {
                 val summary = component(id, item.person, "summary")
                 val notes = component(id, item.person, "notes").second
@@ -947,7 +936,7 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
                                 revisionAtLeast(currentStageRevision, receipt.getString("committed_revision"))
                         } else if (op.kind == "update_person_details") {
                             val details = JSONObject(active.summary).stringOrNull("details_revision")
-                            details != null && active.detailsRevisionsQualified && revisionAtLeast(details, receipt.getString("committed_revision"))
+                            details != null && detailsQualified(active) && revisionAtLeast(details, receipt.getString("committed_revision"))
                         } else revisionAtLeast(active.revision, receipt.getString("person_revision"))
                     if (covered)
                         dao.cover(op.id)

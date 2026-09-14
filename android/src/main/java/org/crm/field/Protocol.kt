@@ -20,6 +20,37 @@ fun JSONArray.objects(): List<JSONObject> = (0 until length()).map { getJSONObje
 fun uuid(value: String): String =
     UUID.fromString(value).toString().also { require(it == value.lowercase()) }
 
+/** JSON numbers must be integral and exactly in range; org.json numeric getters coerce strings. */
+fun strictJsonInt(value: Any, minimum: Int = Int.MIN_VALUE, maximum: Int = Int.MAX_VALUE): Int {
+    require(value is Number)
+    val number = java.math.BigDecimal(value.toString()).intValueExact()
+    require(number in minimum..maximum)
+    return number
+}
+
+fun detailImportOrder(item: JSONObject): Int? {
+    require(item.has("import_order"))
+    return if (item.isNull("import_order")) null else strictJsonInt(item.get("import_order"))
+}
+
+fun validateContactItems(contacts: JSONArray) {
+    val ids = mutableSetOf<String>()
+    contacts.objects().forEach { item ->
+        require(ids.add(uuid(item.get("id") as String)))
+        require(item.get("kind") in setOf("email", "phone"))
+        require((item.get("value") as String).isNotEmpty())
+    }
+}
+
+/** Full server metadata qualifies a baseline; legacy value lengths remain readable/frozen. */
+fun validateDetailContacts(contacts: JSONArray) {
+    validateContactItems(contacts)
+    contacts.objects().forEach { item ->
+        detailImportOrder(item)
+        Instant.parse(item.get("created_at") as String)
+    }
+}
+
 /** Canonical protocol revision: a positive signed 64-bit integer, rendered without leading zeroes. */
 fun revision(value: String): String =
     value.also {

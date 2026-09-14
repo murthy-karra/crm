@@ -7,6 +7,75 @@ isolated `crm_mobile_005` on port 3103.  The native work used emulator
 Android Studio bundled JBR.  Gradle outputs and command logs are isolated under
 `/private/tmp/crm-mobile005-010f3/android`.
 
+## Independent implementation review round 2 — current corrections
+
+This is the final round-2 fix cycle after sealed checkpoint `cf68808`, not a new
+broad review. The earlier acceptance and its immutable artifacts remain below.
+The Android HTTP/schema contracts and schema version are unchanged.
+
+- Current-details traversal validates every broad revision as positive signed-i64,
+  permits unrelated broad-revision changes, fences details revision and both names,
+  and returns the final page's broad revision. Every page and the combined contact
+  set use the strict contact validator.
+- `HttpResult` retains the actual response bytes and decodes JSON lazily. The page
+  API checks the current-details 524288-byte budget before decoding, so whitespace
+  cannot hide an oversized response. Synthetic transports now explicitly serialize
+  their response bytes through `testHttpResult`; an actual loopback HTTP server
+  tests valid JSON padded to 524288, 524289 and 614400 bytes.
+- Contact qualification and ordering share strict UUID/kind/nonempty-string value,
+  parseable timestamp and explicit-null-or-integral-signed-int32 import-order
+  validation. Strings, fractions, missing fields and out-of-range orders cannot
+  qualify. Persisted qualification flags are revalidated for editor availability,
+  draft save/submit, download skipping, promotion and receipt coverage. An invalid
+  pre-fix cache is refetched at the same broad revision while preserving saved work.
+- Receipt ordinals must be raw integral JSON numbers within the original operation
+  array bounds. Both the exact add-index set and unique mapped contact UUIDs are
+  required before accepting a receipt; malformed results preserve the queue,
+  envelope, draft and comparison.
+
+All Android round-2 checks completed on source-tree SHA-256
+`d024aecd58e325a9091a9ec44b1164f824fae2a9ab0d9881ae3a42cb005811b3`. The final source is bound to its clean local commit
+by `final-checkpoint-round2.json`; `android-round2-final.json` contains exact source
+file hashes, command logs, per-test outcomes and retained failed attempts.
+
+| Check | Result | Artifact |
+|---|---|---|
+| JVM unit, lint, demo compile, QA app/test assembly | pass; 2 JVM tests, lint 0 errors | `round2-final-platform-ready.log`, command exit 0 / 5.312 s |
+| Full storage + repository + Compose regression command | pass; 42 tests / 278.655 s, no skips | `round2-all-regressions-42.log`, command exit 0 |
+| Focused malformed-cache recovery | pass; 1 test / 9.321 s | `round2-cache-recovery-focused.log` |
+| Whitespace/diff check | pass | `round2-diff-check.log` |
+
+The 42-test command comprises Mobile005StorageTest **13**, historical StorageTest
+**8**, Mobile004StorageTest **7**, RepositoryBoundaryTest **11**, and
+Mobile005ProfileUiRegressionTest **3**. It includes the actual padded HTTP test,
+all revision/name fences, same-broad-revision cache recovery preserving the exact
+pending envelope/draft, malformed metadata/receipt preservation, old-wire reads,
+lease/account boundaries, upgrade storage regressions and capability/card UI.
+
+The platform command used the established JBR/SDK and isolated Gradle output:
+`:testMobile005qaDebugUnitTest :lintMobile005qaDebug :compileDemoDebugKotlin
+:assembleMobile005qaDebug :assembleMobile005qaDebugAndroidTest`.
+QA APKs were installed with `adb install -r`; the full emulator command used
+`adb shell am instrument -w -r -e class` with those five classes and runner
+`org.crm.field.mobile005qa.test/androidx.test.runner.AndroidJUnitRunner`.
+The native API lock serialized all native runs. Full commands and output remain
+in the named artifacts under `/private/tmp/crm-mobile005-010f3/android`.
+
+Retained failed attempts: `round2-platform.log` caught a PersonCard/PersonRow
+projection type mismatch, corrected before the passing platform command.
+`round2-storage-28.log` ran all 28 cases with one new-fixture failure: its seal
+omitted required `sealed_at`. `round2-repository-11.log` ran all 11 cases with one
+new-fixture failure: it asserted selection state before awaiting its asynchronous
+refresh. Both setups were corrected and the final full 42-test command passed.
+These failures are retained, not replaced by a passing narrow subset.
+
+The immutable round-1 native offline/restart/replay/conflict/discard/use-current
+and actual installed schema-5 upgrade evidence remains applicable: this cycle
+changes no schema, keys, immutable envelopes, draft lifecycle or UI flow. Strict
+wire/metadata behavior and cache requalification are covered by the new focused
+regressions. No existing app store was cleared, downgraded or reseeded. No Android
+check remains pending; coordinator combined integration gates remain separate.
+
 ## Implemented Android behavior
 
 - Schema 6 adds only `detailsRevisionsQualified`, encrypted `profile_drafts`, and
@@ -155,14 +224,14 @@ visually inspected. Unrelated retained comparison cards visible in the latter
 images are not the operation explicitly discarded by that phase.
 
 `android-acceptance-final.json` seals passing command artifacts, their source/diff
-hashes, source-file hashes, screenshots and the inventory of retained logs. Final
+hashes, source-file hashes, screenshots and the inventory of retained logs. Round-1
 Android source-tree SHA-256 is
 `9e2b940b798edab1b5822c5e5662e4e458668042a9b8d95ae576f9782fb98735`.
 The storage/repository/Compose/installed-upgrade test bodies and production code
 were unchanged by subsequent UI harness/capture corrections, so their complete
 passing evidence is reused. `final-checkpoint.json` binds the clean local commit
-to the sealed manifest. No Android acceptance check remains pending; coordinator
-integration gates and independent review round 2 remain separate requirements.
+to the sealed manifest. At that round-1 checkpoint no Android acceptance check remained pending;
+round-2 corrections and their current evidence are recorded above.
 
 ## Retained failures and recovery
 

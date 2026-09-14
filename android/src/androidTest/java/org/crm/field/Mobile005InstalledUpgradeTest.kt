@@ -68,7 +68,7 @@ class Mobile005InstalledUpgradeTest {
                 }
                 else -> error("Unexpected path $path; upgrade must not upload retained queued work")
             }
-            HttpResult(200,body,null,30)
+            testHttpResult(200,body,null,30)
         }
         val repo = FieldRepository(context, namespace=BuildConfig.VAULT_NAMESPACE, clock=TestClock(), transport=remote)
         repo.restore()

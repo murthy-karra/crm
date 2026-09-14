@@ -682,7 +682,19 @@ async fn unit(
             if children.len() > 50 {
                 return Err(MigrationError::StorageLimit);
             }
-            children
+            let mut ordered = Vec::with_capacity(children.len());
+            for child in children {
+                let value: FrozenMapping = j.decode(key, &child, "mapping")?;
+                let ordinal = value
+                    .definition
+                    .as_ref()
+                    .and_then(|d| d.choices.iter().find(|o| o.raw == value.raw_choice))
+                    .map(|o| o.ordinal)
+                    .ok_or(MigrationError::Crypto)?;
+                ordered.push((ordinal, child));
+            }
+            ordered.sort_by_key(|(ordinal, _)| *ordinal);
+            ordered.into_iter().map(|(_, row)| row).collect()
         } else {
             Vec::new()
         }

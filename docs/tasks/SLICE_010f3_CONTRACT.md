@@ -143,3 +143,163 @@ workspace HTTP guard and `.sqlx` cache. The original metadata catalog writer is
 amended to consult readiness/claims at its native commit boundary. No existing
 route DTO, original reader, identity FK, child semantics or Web realtime file is
 changed by this contract.
+
+## Frozen Web transport checkpoint — staged preparation and lifecycle
+
+This section replaces the earlier shorthand “preserve the 010f1 shapes” and the
+initial scaffold's `{import_id,state}` mutation responses. It is owned concrete
+implementation detail under D-082. The worker checkpoint is implemented; these
+remaining transport/preparation routes are the next implementation checkpoint.
+The Web writer can build against these shapes while the backend completes them.
+No source operation is added.
+
+Reuse the exact `MetadataPlan`, `MetadataCounts`, `MetadataMapping`,
+`MetadataTarget`, `MetadataAlias`, `MetadataRecord`, `MetadataResult`,
+`MetadataIssue`, `MetadataSummary`, `MetadataField`, `MetadataSegment`,
+`MetadataChoice`, `MetadataPatch`, `MetadataConfirm`, and `MetadataPage<T>` shapes
+in `web/src/api/metadataImports.ts`. A page is always `{items,next_cursor}`;
+`next_cursor` is an opaque authenticated string, never a UUID pagination token.
+Field segments use the same UTF-8 boundary behavior and `{text,full_utf8_bytes,
+offset_bytes,next_cursor,complete}` envelope as 010f1. Ordinary paths never
+return complete encrypted/raw source envelopes.
+
+The admitted detail is `MetadataImport` plus these exact fields (its `actions`
+adds `remainder`, and `engine_version` is `fub-admitted-metadata-v1`):
+
+```typescript
+interface AdmittedMetadataDetail extends MetadataImport {
+  admission_id: string
+  admission_plan_id: string
+  source_report_id: string
+  source_output_revision: string
+  source_capture_interval: CoreChangeBoundary
+  shared_claims_ready: boolean
+  cohort_counts: {
+    settled_people: string
+    eligible_people: string
+    excluded_people: string
+    settled_metadata_people: string
+    remaining_people: string
+  }
+  progress: {
+    phase: 'fields' | 'cohort' | 'baselines' | 'seal' | 'catalog' | 'people' | 'complete'
+    fields_processed: string
+    people_processed: string
+  }
+  remainder: {
+    available: boolean
+    predecessor_import_id: string | null
+    successor_import_id: string | null
+    remaining_catalog: string
+    remaining_people: string
+    excluded_settled_catalog: string
+    excluded_settled_people: string
+    excluded_held_people: string
+  }
+  actions: MetadataImport['actions'] & { remainder: boolean }
+}
+```
+
+`CoreChangeBoundary` is exactly the existing type from
+`web/src/api/coreChangeReports.ts`; the selected report's **newer capture** is
+shown, including its actual `started_at`/`completed_at`, sequence and stream
+coverage. Existing `fetchImports`, `fetchPeopleAdmissions` and
+`fetchCoreChangeReports` provide the labeled selectors. Filter to a completed
+original import, a completed/cancelled admission with successful results, and
+same-parent completed reports; the server independently qualifies the capture
+and cohort. The report used by admission is allowed, as is a later capture whose
+`started_at` is strictly after admission's source `completed_at`.
+
+All detail/mutation fields not listed above retain `MetadataImport` semantics.
+`latest_plan.phase` and `progress.phase` disclose preparation progress.
+Preparation is active when `state='proposed'` and `latest_plan.state='building'`.
+Poll only that condition or queued/running execution. A paused plan/root requires
+explicit Retry; completed/cancelled/expired/paused polling stops. Counts on a
+building plan describe only processed evidence and cannot authorize confirmation.
+Ready plans expose a non-null digest, complete counted subset and ten-minute
+expiry. `actions.confirm` requires a ready unconfirmed plan and at least one
+executable operation; dirty client choices must be applied or discarded first.
+
+| Method and suffix under `/api/migrations/fub/admitted-metadata-imports` | Exact input | Exact output |
+|---|---|---|
+| `GET /` | `admission_id?`, `cursor?`, `limit?` (1–50) | `{imports: AdmittedMetadataDetail[],next_cursor}` |
+| `POST /` | `{request_id,admission_id,source_report_id}` | `201 {import: AdmittedMetadataDetail}` |
+| `GET /{id}` | none | `AdmittedMetadataDetail` (unwrapped) |
+| `POST /{id}/plans` | `MetadataReplan` plus optional `source_report_id` | `202 {import: AdmittedMetadataDetail}` |
+| `POST /{id}/confirm` | exact `MetadataConfirm` | `202 {import: AdmittedMetadataDetail}` |
+| `POST /{id}/retry` | `{request_id}` | `202 {import: AdmittedMetadataDetail}` |
+| `POST /{id}/cancel` | `{request_id}` | `202 {import: AdmittedMetadataDetail}` |
+| `GET /{id}/plans/{plan}/mappings` | `kind?`, `cursor?`, `limit?` | `MetadataPage<MetadataMapping>` |
+| `GET /{id}/plans/{plan}/targets` | `kind`, `field_id?`, `cursor?`, `limit?` | `MetadataPage<MetadataTarget>` |
+| `GET /{id}/plans/{plan}/mappings/{mapping}/aliases` | `cursor?`, `limit?` | `MetadataPage<MetadataAlias>` |
+| `GET /{id}/plans/{plan}/records` | `disposition?`, `cursor?`, `limit?` | `MetadataPage<MetadataRecord>` |
+| `GET /{id}/plans/{plan}/issues` | `cursor?`, `limit?` | `MetadataPage<MetadataIssue>` |
+| `GET /{id}/results` | `kind?`, `disposition?`, `cursor?`, `limit?` | `MetadataPage<MetadataResult>` |
+| `GET /{id}/remainder` | none | the exact `remainder` object above |
+| `POST /{id}/remainder` | `{request_id}` | `202 {import: AdmittedMetadataDetail}` for the unique exact successor |
+
+`MetadataReplan` and `MetadataConfirm` are literal envelopes, for example:
+
+```json
+{
+  "request_id": "c4a2386b-a37b-4ba6-a9bf-4f2a5014d4a8",
+  "expected_plan_revision": "1",
+  "mappings": [
+    {"mapping_id":"af5774b6-e231-40c7-9ddf-3b514f02560f","choice":{"kind":"create_matching"}},
+    {"mapping_id":"a306cf73-a59b-4c78-a913-8b4080d05db0","choice":{"kind":"map_existing","target_id":"02dde962-cd44-416f-87d4-d844ceaa8dc8"}},
+    {"mapping_id":"c87cf220-af27-4663-95cb-05bb69ab27c8","choice":{"kind":"hold"}}
+  ]
+}
+```
+
+```json
+{
+  "request_id": "75a843e0-c3f1-4f7c-87a5-8ad495409a9d",
+  "plan_id": "e29fe399-d7f5-46c3-8566-fcc6fcd7033b",
+  "plan_revision": "2",
+  "confirmation_digest": "server-returned-opaque-digest",
+  "workspace_revision": "1",
+  "acknowledgments": {"held_count":"3","review_only":true,"remaining_data":true}
+}
+```
+
+A replacement plan is immutable once ready. Same-boundary replacement inherits
+previous explicit choices in bounded worker steps, applies at most 50 patches,
+refreshes the frozen native comparison, and exposes a new revision/digest.
+Changing `source_report_id` creates a fresh preparation revision, invalidates old
+cursors/dependent choices, and requires a new ready-plan confirmation. Historical
+plan/receipt encryption and retention remain bound to their original snapshots.
+Confirmed roots reject replacement source or choices.
+
+Each mutation persists its actor-bound receipt atomically and returns that exact
+receipt on uncertain-response replay. Reuse the same request ID and body until a
+definite result; do not create a new request ID after a timeout. A cancelled
+confirmed root may start one successor automatically queued for exactly the
+never-settled units of its already-confirmed source/plan; successful and held
+terminal units are excluded. Catalog dependencies reference the original committed
+results. No new source/mapping prompt or destructive undo is implied by remainder.
+Cancelled **unconfirmed** preparation can be prepared again because it never
+accepted a source/mapping execution boundary.
+
+Field-segment paths mirror 010f1, scoped to this admitted route family:
+
+- `/{id}/plans/{plan}/mappings/{mapping}/fields/{field_key}`
+- `/{id}/plans/{plan}/records/{record}/fields/{field_key}`
+- `/{id}/results/{result}/fields/{field_key}`
+
+Admitted Person provenance is separate from original-import provenance:
+`GET /api/people/{person}/admitted-metadata-import-provenance` returns
+`MetadataPage<MetadataResult>` with the same bounded filtering/cursor conventions.
+`GET /api/people/{person}/admitted-metadata-import-provenance/{result}/fields/{field_key}`
+returns `MetadataSegment`. Every provenance result is checked against the exact
+same-Org Person/admission/root/result before decryption, including segment replay.
+These paths require coordinator workspace/no-store registration; no original
+provenance route changes meaning.
+
+The new Web panel remains `AdmittedMetadataImportPanel.vue`, with no required
+props: it reads trusted actor/Organization state and uses the existing parent,
+admission and report lists for selection. It can be mounted below the existing
+migration family panels once these transports integrate. A separate
+`PersonAdmittedMetadataProvenance.vue` accepts the same `personId` prop convention
+as `PersonMetadataProvenance.vue`. Reused evidence widgets must receive explicit
+admitted route adapters so a cached original field request cannot cross families.

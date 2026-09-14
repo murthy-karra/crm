@@ -37,7 +37,7 @@ async function setup(handle: (url: string) => unknown, me = identity()) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:pathMatch(.*)*', component: { template: '<div />' } }] })
   await router.push('/people/person')
-  const wrapper = mount(PersonActivityReview, { props: { personId: 'person' }, attachTo: document.body, global: { plugins: [router, [VueQueryPlugin, { queryClient: client }], [PrimeVue, { unstyled: true }]], stubs: { PersonImportProvenance: true, PersonMetadataProvenance: true, PersonHistoryReview: true } } })
+  const wrapper = mount(PersonActivityReview, { props: { personId: 'person' }, attachTo: document.body, global: { plugins: [router, [VueQueryPlugin, { queryClient: client }], [PrimeVue, { unstyled: true }]], stubs: { PersonImportProvenance: true, PersonMetadataProvenance: true, PersonAdmittedMetadataProvenance: true, PersonHistoryReview: true } } })
   cleanup.push(() => { wrapper.unmount(); client.clear() })
   await flushPromises(); return { wrapper, client }
 }
@@ -49,6 +49,7 @@ describe('bounded Person activity review', () => {
   it('reviews a valid pre-child/partial-parent core without requiring a completed activity import', async () => {
     const { wrapper } = await setup(url => url.endsWith('/migration-review/v2') ? core() : page([]))
     expect(wrapper.text()).toContain('José person')
+    expect(wrapper.findComponent({ name: 'PersonAdmittedMetadataProvenance' }).props('personId')).toBe('person')
     expect(wrapper.text()).toContain('Notes (51)')
     expect(wrapper.text()).toContain('No notes on this page.')
     expect(api.mock.calls.map(([url]) => url)).toEqual(['/me', '/people/person/migration-review/v2', '/people/person/migration-review/notes?limit=50', '/people/person/migration-review/tasks?limit=50&state=open', '/people/person/migration-review/tasks?limit=50&state=completed'])

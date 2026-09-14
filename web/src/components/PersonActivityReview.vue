@@ -6,6 +6,7 @@ import Card from './Card.vue'
 import StageLabel from './StageLabel.vue'
 import PersonImportProvenance from './migration/PersonImportProvenance.vue'
 import PersonMetadataProvenance from './migration/PersonMetadataProvenance.vue'
+import PersonAdmittedMetadataProvenance from './migration/PersonAdmittedMetadataProvenance.vue'
 import ActivityFieldViewer from './migration/ActivityFieldViewer.vue'
 import { ApiError } from '../api/client'
 import {
@@ -414,7 +415,7 @@ const sourceRequest = computed(() => selectedSource.value ? { kind: 'results' as
         :core="core"
         :refresh-core="() => reading.refetch({ throwOnError: true })"
       />
-      <Card><PersonImportProvenance :person-id="personId" /><PersonMetadataProvenance :person-id="personId" /></Card>
+      <Card><PersonImportProvenance :person-id="personId" /><PersonMetadataProvenance :person-id="personId" /><PersonAdmittedMetadataProvenance :person-id="personId" /></Card>
     </template>
     <Dialog
       :visible="!!selectedNote && access.enabled.value"

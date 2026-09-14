@@ -1,6 +1,6 @@
 # Project state
 
-Updated: 2026-09-13 (Mobile004 / 010e4 published and deployed under D-080).
+Updated: 2026-09-14 (Mobile005 / 010f3 implementation started under D-082; prior release unchanged).
 Current status and live residuals only. [History](PROJECT_HISTORY.md#archived-project-state-snapshot--2026-09-13)
 preserves the previous state verbatim, including superseded instructions.
 Decisions remain authoritative; use the [reading index](../decisions/DECISION_INDEX.md).
@@ -19,6 +19,13 @@ physical-phone/cellular testing, live FUB/customer work, workspace activation an
 production-cluster deployment remain separate. Shared development is Mac-hosted.
 
 ## Current slice
+
+**Implementing: Mobile005 / 010f3.** Offline Person name/contact editing and
+admitted-People tags/custom-field imports are accepted under D-082 after READY review.
+The [coordinated plan](MOBILE_005_010f3_PARALLEL_LAUNCH.md) links both specifications,
+execution briefs and review evidence. [Implementation status](../tasks/MOBILE_005_010f3_IMPLEMENTATION_STATUS.md)
+owns current lane/resources/checks. Mobile backend starts alongside migration,
+then iOS/Android follow the verified mobile contract. Shared development is preserved.
 
 **Mobile004 / 010e4 delivered within their approved synthetic scope.**
 [Mobile stage specification](../specs/MOBILE_004_OFFLINE_STAGE_CHANGES.md),
@@ -42,13 +49,21 @@ this release; use the latest release record for delivered status.
 
 ## Current branch
 
-`main`; runtime backend source `ffbc9fd`, followed by release documentation and
+`codex/mobile005-010f3-integration`; runtime backend source `ffbc9fd`, followed by release documentation and
 sanitized evidence. All six merged milestone branches and completed worktrees are
 removed. Keep the retained release recovery material, implementation evidence,
 QA databases and native demo/QA stores. Only the owned release build cache and
 smoke-test metadata were removed.
 
 ## Last accepted decision
+
+**D-082:** implement both reviewed plans and isolated synthetic verification,
+with Terra high writers and the coordinated three-worktree sequence. Local
+integration checkpoints are allowed; publication/deployment remains separate.
+
+**D-081:** draft Mobile005 and 010f3 together, preserving parallel mobile/migration
+development; 2026-09-14 follow-up authorized independent review, now READY.
+Proposed contracts remain unaccepted; no new implementation or release.
 
 **D-080 plus its release follow-up:** accepted both implementations, then authorized
 commit/push, cleanup and shared-development deployment. Those actions are complete.
@@ -152,14 +167,21 @@ full-suite evidence was reused with its source attribution.
 
 ## Next recommended action
 
-Plan the next small admitted-People family slice in the
-[family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md): tags/fields, followed by
-notes/tasks and history. Native calling follows the agreed progression.
+Implement the accepted [Mobile005 / 010f3 pair](MOBILE_005_010f3_PARALLEL_LAUNCH.md):
+offline names/contact editing on both native platforms alongside admitted-People
+tags/custom fields. D-082 authorizes implementation and isolated verification.
+Notes/tasks and history follow in the
+[family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md); native calling follows the agreed progression.
 Physical-phone/design/live-source work remains deferred; complete C-gate
 erasure/restore work before real customer data. No repeat release action is needed
 for the completed Mobile004 / 010e4 milestone.
 
 ## Approval currently required
+
+D-082 accepts Mobile005's input/revision/contact-operation/realtime and 010f3's
+source/catalog-handover/lifetime contracts. No repeat implementation approval is
+needed; materially different scope/authority/policy requires its own decision.
+Publication/deployment and native distribution remain separate.
 
 D-080 implementation, publication, cleanup and shared-development release are
 complete; no repeat approval is pending. Completed D-078 release also needs no

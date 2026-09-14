@@ -1,6 +1,6 @@
 # Decision reading index
 
-Navigation only, checked against the log on 2026-09-13: D-001–D-080 and O-001–O-015.
+Navigation only, checked against the log on 2026-09-14: D-001–D-082 and O-001–O-015.
 [DECISION_LOG.md](DECISION_LOG.md) remains the highest authority. Labels identify
 where to read; they do not summarize complete policy, grant approval, or override
 later amendments. Open/resolved labels are copied from the log's headings;
@@ -108,6 +108,8 @@ The original decision sections, including superseded choices, remain intact.
 | [D-078](DECISION_LOG.md#d-078--mobile-003-and-migration-010e3-implementation-approved-2026-09-13) | Mobile003; 010e3; approval/release | Mobile 003 and migration 010e3 implementation approved |
 | [D-079](DECISION_LOG.md#d-079--mobile-004-and-sequential-admitted-people-migration-planning-2026-09-13) | Mobile004; 010e4; planning; family sequence | Mobile 004 and sequential admitted-People migration planning |
 | [D-080](DECISION_LOG.md#d-080--mobile-004-and-admitted-people-refresh-implementation-approved-2026-09-13) | Mobile004; 010e4; implementation approval | Mobile 004 and admitted-People refresh implementation approved |
+| [D-081](DECISION_LOG.md#d-081--mobile-005-and-admitted-people-metadata-planning-authorized-2026-09-13) | Mobile005; 010f3; metadata; parallel planning | Mobile 005 and admitted-People metadata planning authorized |
+| [D-082](DECISION_LOG.md#d-082--mobile-005-and-admitted-people-metadata-implementation-approved-2026-09-14) | Mobile005; 010f3; implementation approval | Mobile 005 and admitted-People metadata implementation approved |
 
 ## Open-decision register (includes resolved entries)
 

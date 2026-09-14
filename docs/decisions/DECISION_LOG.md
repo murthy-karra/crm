@@ -2767,3 +2767,67 @@ installed stores, retained evidence and recovery material. Native distribution,
 physical phones, live FUB/customer processing, activation and production-cluster
 work remain separate. Actual release evidence belongs to
 `docs/tasks/MOBILE_004_010e4_RELEASE.md`.
+
+### D-081 — Mobile 005 and admitted-People metadata planning authorized (2026-09-13)
+
+After the completed Mobile004/010e4 release, the user asked about parallel mobile
+development. The assistant proposed offline editing of existing People's names,
+phone numbers and email addresses alongside tags/custom-field imports for newly
+admitted People. The user replied **“Yes develop both plans”**.
+
+This authorizes the [Mobile 005 draft](../specs/MOBILE_005_OFFLINE_PERSON_DETAILS.md),
+[010f3 metadata draft](../specs/SLICE_010f3.md), execution briefs and
+[coordinated plan](../plans/MOBILE_005_010f3_PARALLEL_LAUNCH.md). Continue the established
+sequence: shared mobile backend alongside migration, then iOS and Android after
+the shared mobile contract integrates, within three implementation worktrees when
+implementation is authorized. Preserve Terra high for substantive implementation.
+
+The drafts' profile revision/input/add-remove/conflict/receipt rules, admitted
+metadata source/cohort/catalog claim/lifetime/remainder contracts and exact numeric
+slice assignment are proposed planning detail, not accepted application contracts.
+Required independent review and scope/contract acceptance precede implementation.
+No application, schema, runtime or source-data action is authorized by this entry.
+
+D-079's small sequential migration ladder and calling-afterwards preference remain.
+Notes/tasks and history follow the metadata family; broad mobile design, physical
+phones/cellular, live FUB/customer work, activation, distribution and production
+work remain deferred or separately scoped. Prior publication/deployment approvals
+apply to their completed milestones, not this future pair.
+
+**Review follow-up — 2026-09-14:** The user requested **“Ok go ahead and do the
+independent review.”** This authorizes independent review of both draft specs,
+execution briefs and coordinated plan, and resolution of findings in those
+documents. It does not accept their proposed application contracts or authorize
+implementation. Review results and dispositions belong to
+[the paired review record](../tasks/MOBILE_005_010f3_PLANNING_REVIEW.md).
+
+Independent review completed in two rounds on 2026-09-14: both drafts and the
+coordinated plan are READY, with the realtime declaration, mobile writer/lock
+inventory and metadata claim-handover findings closed. This result is review
+evidence, not acceptance of the proposed contracts or permission to implement.
+
+### D-082 — Mobile 005 and admitted-People metadata implementation approved (2026-09-14)
+
+After independent review returned READY for both specifications and the coordinated
+plan, with all three findings closed, the user requested **“Go ahead and implement
+both plans.”** This accepts [Mobile005](../specs/MOBILE_005_OFFLINE_PERSON_DETAILS.md),
+[010f3](../specs/SLICE_010f3.md), their execution briefs and
+[parallel plan](../plans/MOBILE_005_010f3_PARALLEL_LAUNCH.md), including their declared
+shared contracts and reviewed corrections, for implementation and isolated synthetic
+verification. Use the existing Terra high preference for substantive writers.
+
+Scope includes typed offline Person-detail editing with aggregate details revision,
+explicit contact operations, durable conflict/receipt handling and `details_changed`
+realtime; admitted metadata includes the qualified cohort/source, shared catalog
+claims with atomic readiness handover, conservative native-value protection and
+exact unprocessed remainder. Concrete compatible schema/DTO/guard/lock checkpoints
+are owned implementation work. Independent implementation review and final gates
+remain required; planning review is not implementation verification.
+
+Execute mobile backend alongside migration, then iOS and Android after mobile
+backend integration, with at most three implementation worktrees and exclusive
+file/schema ownership. Local checkpoint/integration commits may supply verified
+bases to dependent writers. Preserve shared development, native demo/QA stores,
+source data and recovery evidence. Publication, deployment, app distribution,
+physical phones/cellular, broad redesign, native calling, live FUB/customer work,
+later migration families and activation remain separately scoped.

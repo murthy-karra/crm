@@ -1,9 +1,10 @@
 # Slice 010f3 — verification record
 
-Implementation remains in progress on `codex/migration-010f3`. The bounded admitted
-execution milestone is implemented and tested; staged preparation now has focused
-DB and plan-shape evidence. Frozen transport and durable lifecycle receipts have focused functional evidence. Exact remainder, Web/browser acceptance, independent implementation
-review and final integrated gates remain required. No review round has been used.
+Backend implementation through `1e9ed69` is complete and has focused functional,
+failure, retention and D-050 evidence recorded below. The coordinator reports
+completed real Web/browser and native preservation acceptance. Independent
+010f3 implementation review and final integrated gates remain required; no
+full-slice completion or review pass is claimed by this lane.
 
 ## Implemented execution checkpoint
 
@@ -71,7 +72,7 @@ are different measures and exclude other evidence/native tables; neither number
 is a customer quota or production capacity prediction. Preparation query evidence is recorded below. Coordinator owns the one paired
 Person/Today regression after integration; this lane did not duplicate it.
 
-## Remaining implementation and evidence
+## Staged preparation checkpoint
 
 The staged checkpoint adds schema `20261002000004`: source observations are
 checked in capture/ordinal order, at most 100 indexed records per step; fields
@@ -119,21 +120,13 @@ change was needed for the fixture corrections. The db5 command used
 `--include-ignored` and skipped both EXPLAIN fixtures; db7 selected only the
 current-tenant-admin reader test.
 
-The frozen transport is now implemented for headers, sources, mappings, aliases,
-records, results, issues, segments and Person provenance; confirmation checks the
-counted revision/digest/acknowledgments. Durable preparation, replan, confirm,
-retry and cancel receipts retain full response envelopes. Exact remainder is the
-remaining transport/lifecycle implementation. New reader hot-query plans and
-final integrated payload/retention checks remain required.
-
-Required remaining tests include failed handover rollback and rerun accounting,
-old already-running writer rejection, multi-cohort collisions/tombstones/archival,
-source variants/incomplete evidence, budget/key/expiry failures, full-tag-set
-limits, HTTP no-store and source-free reader negatives, desktop/390px browser
-workflow and preservation reconciliation. Final `scripts/check`,
-`scripts/sqlx-prepare`, `scripts/check-db`, cross-slice upgrade checks remain coordinator-owned and sequential. The coordinator
-completed the single required same-build Today pair and eleven Mobile statements
-at `83f4fc8`; see `MOBILE_005_010f3_PERFORMANCE.md`.
+The subsequent transport, remainder and final-fidelity checkpoints below complete
+the work that remained at this staged milestone. The coordinator owns populated
+handover/legacy-writer, HTTP no-store/admin denial, readiness and browser evidence.
+Final `scripts/check`, `scripts/sqlx-prepare`, `scripts/check-db`, cross-slice upgrade
+checks and independent review remain coordinator-owned and sequential. The single
+same-build Today pair and eleven Mobile statements at `83f4fc8` are reused; see
+`MOBILE_005_010f3_PERFORMANCE.md`.
 
 
 ## Immutable replacement plans and cancellation capacity checkpoint
@@ -255,12 +248,12 @@ identity-key helper. The unchanged test passes in
 `admitted-remainder-db2-legacy.log` (1 test, 5.50s). This establishes actual valid
 pre-handover legacy behavior and rejection of its old proof after handover.
 
-Remaining implementation/verification: actual Person fan-out bounds and visible
-oversized evidence holds, explicit undeclared custom-key and duplicate machine-name
-outcomes, new reader/remainder SQL plans at D-050 size, full budget/key/expiry/source
-variant matrix, coordinator browser acceptance and final integrated review/gates.
+The following final checkpoint supplies Person bounds, visible evidence holds,
+undeclared/duplicate source outcomes, reader/remainder SQL plans and focused
+policy/key/expiry failure evidence. Coordinator acceptance and final gates are
+tracked in its shared evidence records.
 
-## Final evidence bounds and source fidelity checkpoint (in verification)
+## Final evidence bounds and source fidelity checkpoint
 
 The additive `20261002000008` introduces the manifest's `oversized` flag and a
 32-byte blind field-name key with a scoped partial index. Preparation now checks
@@ -319,3 +312,56 @@ manifest/Organization/kind/source unique index and sorted only five scoped rows
 continues with the predecessor lookup, a nonempty late remainder-mapping probe,
 one-time seal bound and logical/physical inventory; the earlier unchanged plans
 are not repeated.
+
+
+The final tail run passes at source `1e9ed69` in
+`admitted-fidelity-d050-final3-tail.log` (1 test, 59.89s). The nonempty late
+remainder-mapping probe uses the mapping preparation index and exact result-unit
+probe; predecessor resolution uses its scoped unique index (0.017ms). The seal
+bound executes once over the complete plan (24.681ms), with an indexed child
+subplan only for atomic create-matching fields. Together with the retained
+final2 plans this covers seventeen distinct production statements; one late
+remainder probe was repeated with a nonempty result, and the unrelated Today
+pair and old execution/preparation statements were not repeated.
+
+At 25,000 total People and fifty members, the final inert cardinality fixture has
+24,999 manifests, 25,005 mappings, 124,995 operations, 24,998 results, 24,999 aliases
+and 25,003 sources. Its counted variable-column inventory is:
+
+| Retained family | Logical bytes |
+|---|---:|
+| Sources | 18,501,713 |
+| Mappings, including blind field-name keys | 9,651,660 |
+| Manifests | 3,349,862 |
+| Operations | 22,999,080 |
+| Results | 3,174,746 |
+
+Those six physical relations (including reference-only aliases) occupy
+223,371,264 bytes, including their indexes/TOAST. This physical measurement and
+the listed logical-column sums deliberately measure different things. They are
+not a complete billable root inventory or a production storage forecast. The
+separate real normalized-option fixture proves the complete root's charged
+column inventory exactly, including plans, counters, observations, issue codes
+and receipts; immutable source references and normalized option references are
+not charged as duplicate payloads.
+
+Reproduction of the final functional pass:
+
+```sh
+python3 /private/tmp/crm-mobile005-010f3/run-db-check.py --lane migration --log admitted-fidelity-db3-functional.log -- cargo test -p crm-api --features perf-harness --test all db_admitted_metadata:: -- --include-ignored --test-threads=1 --skip admitted_metadata_hot_units_seek_past_settled_people_at_d050 --skip admitted_metadata_preparation_hot_steps_at_d050 --skip admitted_metadata_fidelity_oversized_native_baseline_settles_as_compact_held_unit
+```
+
+The dedicated oversized test uses the same runner with filter
+`admitted_metadata_fidelity_oversized_native_baseline`; its successful log is
+`admitted-fidelity-db2-native-bound.log`. For only the final tail/inventory, set
+`CRM_ADMITTED_PREPARATION_PLAN=finaltail` and select
+`admitted_metadata_preparation_hot_steps_at_d050` with
+`-- --ignored --test-threads=1 --nocapture`. `CRM_ADMITTED_PREPARATION_PLAN=final`
+selects the complete new-plan fixture when production SQL changes justify a
+repeat. All current commands use `--features perf-harness --test all`.
+
+After these checks, only the inactive migration lane's
+`target/debug/incremental` cache was removed following a process check. Test
+executables, SQL/DB evidence and shared running service artifacts were retained.
+The lane is idle for the coordinator's final integrated gates and independent
+review; additional implementation changes require a concrete review finding.

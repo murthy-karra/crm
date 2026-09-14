@@ -87,14 +87,15 @@ import XCTest
         let (model, api, _, boot, store) = try await setupModel(details: true)
         let draft = try profileDraft(store)
         let original = try encode(draft)
-        for scenario in ["rows", "bytes", "cycle"] {
+        for scenario in ["rows", "bytes", "cursor", "cycle"] {
             var calls = 0
             api.responseForTesting = { request in
                 calls += 1
                 if calls > 4 { XCTFail("Unbounded current-profile loop"); return try self.response(request, 503, .object([:])) }
                 let items = scenario == "rows" ? (0..<101).map { _ in self.profileContact() }
                     : [self.profileContact(value: scenario == "bytes" ? String(repeating: "日", count: 180000) : "synthetic@example.test")]
-                let next: String? = scenario == "cycle" ? (calls == 2 ? "second" : "first") : nil
+                let next: String? = scenario == "cursor" ? String(repeating: "x", count: 2049)
+                    : scenario == "cycle" ? (calls == 2 ? "second" : "first") : nil
                 return try self.response(request, 200, self.profilePage(boot, draft.person, items, next: next))
             }
             do { _ = try await model.requalifyDetails(draft); XCTFail("Must reject \(scenario)") }

@@ -94,12 +94,14 @@ private final class NoRedirect: NSObject, URLSessionTaskDelegate, @unchecked Sen
         try await call("/people/\(person)/stage", context: context)
     }
     func currentDetails(person: String, cursor: String? = nil, context: String) async throws -> CurrentDetailsResponse {
+        guard cursor.map({ !$0.isEmpty && $0.utf8.count <= 2048 }) ?? true else { throw LocalError.invalidProtocol }
         let suffix = cursor.map { "?cursor=" + API.cursor($0) } ?? ""
         let (data, _) = try await raw("/api/mobile/v1/people/\(person)/details\(suffix)", method: "GET", context: context)
         guard data.count <= 524288 else { throw LocalError.invalidProtocol }
         let page = try decode(CurrentDetailsResponse.self, data)
         guard page.items.count <= 100, page.complete == (page.next_cursor == nil),
-              page.complete || !page.items.isEmpty else { throw LocalError.invalidProtocol }
+              page.complete || !page.items.isEmpty,
+              page.next_cursor.map({ !$0.isEmpty && $0.utf8.count <= 2048 }) ?? true else { throw LocalError.invalidProtocol }
         for item in page.items {
             guard case .object(let fields) = item, fields["import_order"] != nil,
                   UUID(uuidString: item["id"].text) != nil,

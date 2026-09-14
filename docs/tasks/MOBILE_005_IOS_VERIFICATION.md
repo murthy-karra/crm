@@ -95,6 +95,18 @@ Storage/model verification passed43/43, zero failures/skips, in
 bytes/cyclic cursors, valid multi-page reads with unrelated broad changes, and
 automatic conflict fallback retaining the immutable envelope and proposal.
 
+The final API guard also enforces the existing backend2048-byte UTF-8 cursor
+limit on input and output. At root `be15cb0` plus this cursor guard/test, the
+storage/model rerun passed43/43, zero failures/skips:
+`ios/mobile005-current-pages-tests2.log` and explicit result bundle
+`ios/current-pages-final-43.xcresult`. Both native UI journeys passed2/2 at
+`8b60354`, using valid cursors within that limit: serialized runner
+`integration/run-ios-current-pages-ui.py`,124.68s,
+`ios/mobile005-current-pages-native1.log`,
+`ios/current-pages-native-2.xcresult`. These explicit result bundles are outside
+Xcode's rotating Logs/Test directory. The later cursor-only guard is covered by
+the43-test rerun; it does not invalidate the successful valid-cursor UI journeys.
+
 ```text
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -quiet \
   -project ios/FieldCRM.xcodeproj -scheme FieldCRMMobile005QA \

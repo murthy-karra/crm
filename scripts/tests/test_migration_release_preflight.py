@@ -84,7 +84,15 @@ class PreflightTests(unittest.TestCase):
                          "migration_admitted_metadata_manifest", "migration_admitted_metadata_operation",
                          "crm_admitted_metadata_insert_allowed(uuid,text,jsonb)",
                          "crm_metadata_identity_key_matches(bytea,jsonb)",
-                         "migration_metadata_identity_claim_guard", "tgenabled<>'D'",
+                         "migration_admitted_metadata_observation",
+                         "crm_admitted_metadata_preparation_bytes()",
+                         "'preparation_phase','text'", "'preparation_bytes','bigint'",
+                         "'expected_person_id','uuid'", "'qualified','boolean'", "'conflict','boolean'",
+                         "tgname='admitted_metadata_preparation_bytes'",
+                         "migration_admitted_metadata_source_work", "migration_admitted_metadata_source_order",
+                         "migration_admitted_metadata_observation_source", "migration_admitted_metadata_admission_work",
+                         "migration_admitted_metadata_preparation_work", "indisvalid AND indisready",
+                         "migration_metadata_identity_claim_guard", "tgenabled IN ('O','A')",
                          "attname='unit_id'", "attname='checkpoint_id'", "attname='pause_reason'",
                          "migration_admitted_metadata_result_unit", "indisunique AND indisvalid"]:
                 self.assertIn(name, schema)

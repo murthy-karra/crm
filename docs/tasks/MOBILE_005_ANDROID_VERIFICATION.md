@@ -37,6 +37,7 @@ Android Studio bundled JBR.  Gradle outputs and command logs are isolated under
 | Actual installed Mobile004 → Mobile005 upgrade | passed | schema-5 seed and schema-6 probe below |
 | Native API offline save → force stop/relaunch → exact replay | passed | `mobile005-live-relaunch-final.log` |
 | Native API accepted replay, competing writer conflict, and manual replacement draft | passed | `mobile005-live-replay-conflict-final-source.log` |
+| Native Compose editor offline/restart/conflict proof | in progress | `Mobile005UiProofTest`; test-only screenshots |
 
 The installed upgrade used the historical Mobile004 source archive at the requested
 revision, built under `org.crm.field.mobile005upgradeqa` with the same
@@ -64,3 +65,14 @@ was then replaced under the native lock with source `382aadc` (binary SHA-256
 receipt shapes. The already-persisted envelope replayed exactly after force-stop and
 relaunch, and the subsequent competing-writer test retained the conflict for review
 and created its explicit replacement against the completed current traversal.
+
+## Native UI harness note
+
+The initial Compose-rule package carried the coroutine exception-handler service entry
+without its `ExceptionCollectorAsService` implementation, so the rule failed before any
+gesture. A debug-only direct dependency on the already lockfile-pinned
+`kotlinx-coroutines-test:1.9.0` now packages both provider and service entry in the QA
+debug APK. The next execution reached the actual editor and exercised add-email,
+add-phone, and CAS autosave behavior. The remaining run waits for the UI's final
+encrypted autosave to re-enable Submit before tapping it. Production `FLAG_SECURE` and
+release dependencies are unchanged.

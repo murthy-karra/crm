@@ -1260,11 +1260,7 @@ async fn admitted_metadata_preparation_hot_steps_at_d050(migrator: PgPool) {
             .await
             .unwrap();
         println!("TAG_INDEX_HOT {}", json!({"sql":sql,"plan":p}));
-        assert!(index(
-            &p,
-            "migration_people_admission_result_settled_cohort_source_page"
-        ));
-        assert_eq!(p[0]["Plan"]["Actual Rows"], 1);
+        assert_admitted_metadata_tag_plan(&p);
         return;
     }
     if std::env::var("CRM_ADMITTED_PREPARATION_PLAN").as_deref() == Ok("owners") {
@@ -3253,6 +3249,35 @@ async fn admitted_metadata_review1_composite_owners_reject_app_role_forgeries(mi
         4
     );
     assert_ne!(foreign_root, root);
+}
+
+#[cfg(feature = "perf-harness")]
+fn assert_admitted_metadata_tag_plan(plan: &Value) {
+    fn established_index(v: &Value) -> bool {
+        match v {
+            Value::Object(o) => {
+                o.get("Index Name").and_then(Value::as_str)
+                    == Some("migration_people_admission_result_settled_cohort_source_page")
+                    || o.values().any(established_index)
+            }
+            Value::Array(a) => a.iter().any(established_index),
+            _ => false,
+        }
+    }
+    assert!(established_index(plan));
+    assert_eq!(plan[0]["Plan"]["Actual Rows"].as_f64(), Some(1.0));
+}
+
+#[cfg(feature = "perf-harness")]
+#[test]
+fn admitted_metadata_recorded_tag_plan_reuses_established_index() {
+    // The actual 010 plan succeeded; its original test compared JSON 1.0 with
+    // integer 1. Replay that plan without repeating D-050's one SQL measurement.
+    let plan: Value = serde_json::from_str(include_str!(
+        "fixtures/admitted_metadata_tag_index_plan.json"
+    ))
+    .unwrap();
+    assert_admitted_metadata_tag_plan(&plan);
 }
 
 #[cfg(feature = "perf-harness")]

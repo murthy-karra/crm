@@ -682,3 +682,164 @@ async fn admitted_metadata_hot_units_seek_past_settled_people_at_d050(migrator: 
         json!({"people":25000,"members":50,"classification":"inert_cardinality_seed_not_billable_execution","copied_manifest_operation_result_logical_bytes":logical,"physical_relations_bytes":physical,"fields_per_person":4,"tags_per_person":1})
     );
 }
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn admitted_metadata_reuses_original_claims_after_ready_handover(migrator: PgPool) {
+    use crm_api::domain::migration::{
+        metadata, metadata_worker, people_admission, people_admission_worker,
+    };
+    let (f, parent, original, original_ready) =
+        crate::db_metadata_import_gate::fixture(&migrator, false).await;
+    let admission=crate::db_people_admission_execution::ready(&f,parent,vec![json!({"id":104,"firstName":"Admitted","lastName":"Shared","stage":"Lead","assignedUserId":3,"tags":["Atomic Tag"],"customAtomic":"admitted value"})]).await;
+    let ready = people_admission::detail(&f.pool, &f.key, &f.ctx, admission)
+        .await
+        .unwrap();
+    let p = &ready["plan"];
+    people_admission::confirm(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        admission,
+        people_admission::ConfirmPeopleAdmission {
+            request_id: Uuid::new_v4(),
+            plan_id: Uuid::parse_str(p["id"].as_str().unwrap()).unwrap(),
+            plan_revision: p["revision"].as_str().unwrap().parse().unwrap(),
+            plan_digest: p["digest"].as_str().unwrap().into(),
+            eligible_count: p["counts"]["eligible"].as_str().unwrap().parse().unwrap(),
+            acknowledged_coverage: true,
+            acknowledged_mappings: true,
+            acknowledged_distinct_contacts: true,
+            acknowledged_review_hold: true,
+        },
+        Some(&ReleaseReadiness::for_tests()),
+    )
+    .await
+    .unwrap();
+    for _ in 0..30 {
+        if people_admission::detail(&f.pool, &f.key, &f.ctx, admission)
+            .await
+            .unwrap()["state"]
+            == "completed"
+        {
+            break;
+        }
+        assert!(people_admission_worker::run_once(
+            &f.pool,
+            &f.key,
+            &f.policy,
+            Some(&ReleaseReadiness::for_tests())
+        )
+        .await
+        .unwrap());
+    }
+    let source_report: Uuid =
+        sqlx::query_scalar("SELECT report_id FROM migration_people_admission WHERE id=$1")
+            .bind(admission)
+            .fetch_one(&f.pool)
+            .await
+            .unwrap();
+    let prepared = admitted_metadata::prepare(
+        &f.pool,
+        &f.key,
+        &ReleaseReadiness::for_tests(),
+        &f.ctx,
+        admitted_metadata::Prepare {
+            request_id: Uuid::new_v4(),
+            admission_id: admission,
+            source_report_id: source_report,
+        },
+    )
+    .await
+    .unwrap();
+    let root = Uuid::parse_str(prepared["import"]["id"].as_str().unwrap()).unwrap();
+    // Readiness is active before the original worker obtains its lease. It must
+    // atomically create a shared claim instead of bypassing the new registry.
+    metadata::confirm(&f.pool,&f.key,&f.ctx,original,serde_json::from_value(json!({"request_id":Uuid::new_v4(),"plan_id":original_ready["latest_plan"]["id"],"plan_revision":original_ready["latest_plan"]["revision"],"confirmation_digest":original_ready["latest_plan"]["confirmation_digest"],"workspace_revision":original_ready["workspace_revision"],"acknowledgments":{"held_count":original_ready["latest_plan"]["counts"]["held_count"],"review_only":true,"remaining_data":true}})).unwrap(),&ReleaseReadiness::for_tests(),&f.policy).await.unwrap();
+    for _ in 0..30 {
+        if !metadata_worker::run_once(&f.pool, &f.key, &f.policy)
+            .await
+            .unwrap()
+        {
+            break;
+        }
+    }
+    let original_detail = metadata::detail(&f.pool, &f.key, &f.ctx, original, &f.policy)
+        .await
+        .unwrap();
+    assert_eq!(
+        original_detail["state"], "completed",
+        "pause={}",
+        original_detail["pause_reason"]
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_metadata_catalog_claim WHERE original_import_id=$1"
+        )
+        .bind(original)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap(),
+        2
+    );
+    let evidence:Value=sqlx::query_scalar("SELECT jsonb_agg(to_jsonb(x) ORDER BY kind,source_key) FROM migration_metadata_identity x WHERE import_id=$1").bind(original).fetch_one(&f.pool).await.unwrap();
+    let maps=sqlx::query("SELECT m.id,c.target_id FROM migration_admitted_metadata_mapping m JOIN migration_metadata_catalog_claim c ON c.organization_id=m.organization_id AND c.kind=m.kind AND c.source_key=m.source_key WHERE m.import_id=$1 ORDER BY m.kind,m.id").bind(root).fetch_all(&f.pool).await.unwrap();
+    assert_eq!(
+        maps.len(),
+        2,
+        "original/admitted namespaces use exact matching keys"
+    );
+    let plan: Uuid = sqlx::query_scalar(
+        "SELECT latest_plan_id FROM migration_admitted_metadata_import WHERE id=$1",
+    )
+    .bind(root)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    admitted_metadata::apply_mappings(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        root,
+        admitted_metadata::MappingPatch {
+            request_id: Uuid::new_v4(),
+            mappings: maps
+                .iter()
+                .map(|m| admitted_metadata::MappingChoice {
+                    id: m.get("id"),
+                    disposition: "map_existing".into(),
+                    target_id: Some(m.get("target_id")),
+                })
+                .collect(),
+        },
+    )
+    .await
+    .unwrap();
+    admitted_metadata::confirm(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        root,
+        admitted_metadata::Confirm {
+            request_id: Uuid::new_v4(),
+            plan_id: plan,
+            plan_revision: 1,
+        },
+    )
+    .await
+    .unwrap();
+    finish(&f, root).await;
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_metadata_catalog_claim WHERE admitted_import_id=$1"
+        )
+        .bind(root)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap(),
+        0,
+        "reuse does not copy/adopt ownership"
+    );
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM person_custom_field_value WHERE organization_id=$1 AND text_value='admitted value'").bind(f.org).fetch_one(&f.pool).await.unwrap(),1);
+    assert_eq!(sqlx::query_scalar::<_,Value>("SELECT jsonb_agg(to_jsonb(x) ORDER BY kind,source_key) FROM migration_metadata_identity x WHERE import_id=$1").bind(original).fetch_one(&f.pool).await.unwrap(),evidence);
+}

@@ -425,27 +425,43 @@ struct StageProposal: Identifiable {
                               proposal: .object([:])))
     }
     func startDetails(person: String) throws -> Draft { try newDetailsDraft(person: person) }
-    func requalifyDetails(_ draft: Draft) async throws -> Draft {
-        guard validateAccess(), let api, let credential, draft.isDetails else { throw LocalError.locked }
+    private func completeCurrentDetails(person: String) async throws -> CurrentDetailsResponse {
+        guard validateAccess(), let api, let credential else { throw LocalError.locked }
         let run = epoch
         var cursor: String? = nil, all: [JSON] = [], first: CurrentDetailsResponse?
+        var visited = Set<String>(), contacts = Set<UUID>()
         repeat {
-            let page = try await api.currentDetails(person: draft.person, cursor: cursor, context: credential.bootstrap.context_id)
+            let page = try await api.currentDetails(person: person, cursor: cursor, context: credential.bootstrap.context_id)
             try current(run)
-            guard page.context_id == credential.bootstrap.context_id, page.person_id == draft.person,
+            guard page.context_id == credential.bootstrap.context_id, page.person_id == person,
                   (try? revision(page.details_revision)) != nil,
-                  (try? revision(page.person_revision)) != nil,
-                  page.complete == (page.next_cursor == nil) else { throw LocalError.invalidProtocol }
-            if let first { guard first.details_revision == page.details_revision && first.person_revision == page.person_revision else { throw LocalError.invalidProtocol } }
+                  (try? revision(page.person_revision)) != nil else { throw LocalError.invalidProtocol }
+            if let first {
+                guard first.details_revision == page.details_revision,
+                      first.first_name == page.first_name, first.last_name == page.last_name else { throw LocalError.invalidProtocol }
+            }
             else { first = page }
-            all += page.items; guard all.count <= 10_000 else { throw LocalError.invalidProtocol }
+            for item in page.items {
+                guard let id = UUID(uuidString: item["id"].text), contacts.insert(id).inserted else { throw LocalError.invalidProtocol }
+            }
+            all += page.items
+            if let next = page.next_cursor {
+                guard !next.isEmpty, visited.insert(next).inserted else { throw LocalError.invalidProtocol }
+            }
             cursor = page.next_cursor
-            if page.complete { break }
+            if page.complete {
+                return CurrentDetailsResponse(context_id: page.context_id, person_id: page.person_id,
+                    person_revision: page.person_revision, details_revision: page.details_revision,
+                    first_name: page.first_name, last_name: page.last_name, items: all, next_cursor: nil, complete: true)
+            }
         } while true
-        guard let response = first, cursor == nil else { throw LocalError.invalidProtocol }
+    }
+    func requalifyDetails(_ draft: Draft) async throws -> Draft {
+        guard draft.isDetails else { throw LocalError.invalidProtocol }
+        let response = try await completeCurrentDetails(person: draft.person)
         guard let store else { throw LocalError.locked }
         let currentJSON: JSON = .object(["first_name": response.first_name.map(JSON.s) ?? .null, "last_name": response.last_name.map(JSON.s) ?? .null,
-                                         "details_revision": .s(response.details_revision), "contacts": .array(all)])
+                                         "details_revision": .s(response.details_revision), "contacts": .array(response.items)])
         let saved = try store.saveCurrent(draft.id, current: currentJSON, contextID: response.context_id, person: draft.person, editorEpoch: draft.editorEpoch)
         try reload(); return saved
     }
@@ -618,21 +634,10 @@ struct StageProposal: Identifiable {
                             var details: CurrentDetailsResponse? = nil
                             if let draft = try store.draftForOperation(op.id) {
                                 do {
-                                    var cursor: String? = nil, contacts: [JSON] = [], first: CurrentDetailsResponse?
-                                    repeat {
-                                        let page = try await api.currentDetails(person: draft.person, cursor: cursor, context: credential.bootstrap.context_id)
-                                        try current(run)
-                                        guard page.context_id == credential.bootstrap.context_id, page.person_id == draft.person,
-                                              (try? revision(page.details_revision)) != nil,
-                                              (try? revision(page.person_revision)) != nil,
-                                              page.complete == (page.next_cursor == nil) else { throw LocalError.invalidProtocol }
-                                        if let first { guard first.details_revision == page.details_revision && first.person_revision == page.person_revision else { throw LocalError.invalidProtocol } } else { first = page }
-                                        contacts += page.items; cursor = page.next_cursor
-                                        if page.complete { break }
-                                    } while true
-                                    if var complete = first, cursor == nil { complete = CurrentDetailsResponse(context_id: complete.context_id, person_id: complete.person_id, person_revision: complete.person_revision, details_revision: complete.details_revision, first_name: complete.first_name, last_name: complete.last_name, items: contacts, next_cursor: nil, complete: true); details = complete }
+                                    details = try await completeCurrentDetails(person: draft.person)
                                 } catch { /* Keep the protected proposal when the bounded current read is unavailable. */ }
                             }
+                            try current(run)
                             let currentJSON: JSON? = details.map { JSON.object(["first_name": $0.first_name.map(JSON.s) ?? JSON.null, "last_name": $0.last_name.map(JSON.s) ?? JSON.null, "details_revision": JSON.s($0.details_revision), "contacts": JSON.array($0.items)]) }
                             try store.recordConflict(op.id, current: currentJSON, contextID: credential.bootstrap.context_id, person: op.envelope.person)
                             try reload(); continue

@@ -16,7 +16,7 @@ import XCTest
     func response(_ request: URLRequest, _ status: Int, _ json: JSON, cookie: Bool = false) throws -> (Data, HTTPURLResponse) {
         (try encode(json), HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: "HTTP/1.1", headerFields: cookie ? ["Set-Cookie": "crm_session=synthetic-model-test; Path=/; HttpOnly"] : [:])!)
     }
-    func setupModel() async throws -> (FieldModel, API, SecureStorage, Bootstrap, LocalStore) {
+    func setupModel(details: Bool = false) async throws -> (FieldModel, API, SecureStorage, Bootstrap, LocalStore) {
         let model = FieldModel(synthetic: true, startMonitor: false, restoreOnInit: false)
         let secure = SecureStorage(synthetic: true, testingNamespace: UUID().uuidString); secure.testDirectory = directory
         #if MOBILE005_QA || MOBILE005_UPGRADE_QA
@@ -27,7 +27,7 @@ import XCTest
         let api = try API(base: "http://127.0.0.1:3101")
         #endif
         let boot = Bootstrap(context_id: UUID().uuidString, installation_id: model.installation, actor_user_id: UUID().uuidString, organization_id: UUID().uuidString,
-                             workspace_revision: "1", authorized_at: stamp(), offline_access_expires_at: stamp(Date().addingTimeInterval(7 * 86400)), server_time: stamp(), capabilities: ["add_note", "create_task", "complete_task", "reconciliation", "log_contact_attempt"], protocol: "mobile-v1")
+                             workspace_revision: "1", authorized_at: stamp(), offline_access_expires_at: stamp(Date().addingTimeInterval(7 * 86400)), server_time: stamp(), capabilities: ["add_note", "create_task", "complete_task", "reconciliation", "log_contact_attempt"] + (details ? ["update_person_details", "details_revisions"] : []), protocol: "mobile-v1")
         api.responseForTesting = { request in
             if request.url!.path == "/api/session" { return try self.response(request, 200, .object([:]), cookie: true) }
             return (try encode(boot), HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
@@ -68,6 +68,81 @@ import XCTest
                                               contactChannel: "other", contactOutcome: "reached", occurredAt: "2026-09-12T20:00:00Z", deviceRecordedAt: "2026-09-13T00:00:00Z"))
         _ = try store.submit(draft)
         return (draft, try XCTUnwrap(store.queue().last?.bytes))
+    }
+
+    func profileDraft(_ store: LocalStore) throws -> Draft {
+        let person = try XCTUnwrap(store.activePeople().first?.person)
+        return try store.saveDraft(Draft(id: UUID().uuidString, person: person, kind: "update_person_details", revision: 0, expectedRevision: "7",
+            baseline: .object(["first_name": .s("Original"), "last_name": .null, "details_revision": .s("7"), "contacts": .array([])]),
+            proposal: .object(["first_name": .s("Protected proposal"), "contact_operations": .array([])])))
+    }
+    func profileContact(value: String = "synthetic@example.test") -> JSON {
+        .object(["id": .s(UUID().uuidString), "kind": .s("email"), "value": .s(value), "import_order": .null, "created_at": .s("2026-09-14T12:00:00Z")])
+    }
+    func profilePage(_ boot: Bootstrap, _ person: String, _ items: [JSON], next: String?, broad: String = "9") -> JSON {
+        .object(["context_id": .s(boot.context_id), "person_id": .s(person), "person_revision": .s(broad), "details_revision": .s("8"),
+            "first_name": .s("Current"), "last_name": .null, "items": .array(items), "next_cursor": next.map(JSON.s) ?? .null, "complete": .bool(next == nil)])
+    }
+    func testMobile005CurrentProfileBoundsAndCursorCyclePreserveProtectedDraft() async throws {
+        let (model, api, _, boot, store) = try await setupModel(details: true)
+        let draft = try profileDraft(store)
+        let original = try encode(draft)
+        for scenario in ["rows", "bytes", "cycle"] {
+            var calls = 0
+            api.responseForTesting = { request in
+                calls += 1
+                if calls > 4 { XCTFail("Unbounded current-profile loop"); return try self.response(request, 503, .object([:])) }
+                let items = scenario == "rows" ? (0..<101).map { _ in self.profileContact() }
+                    : [self.profileContact(value: scenario == "bytes" ? String(repeating: "日", count: 180000) : "synthetic@example.test")]
+                let next: String? = scenario == "cycle" ? (calls == 2 ? "second" : "first") : nil
+                return try self.response(request, 200, self.profilePage(boot, draft.person, items, next: next))
+            }
+            do { _ = try await model.requalifyDetails(draft); XCTFail("Must reject \(scenario)") }
+            catch { XCTAssertTrue(error is LocalError, "\(error)") }
+            XCTAssertEqual(calls, scenario == "cycle" ? 3 : 1)
+            XCTAssertEqual(try encode(XCTUnwrap(store.drafts().first { $0.id == draft.id })), original)
+        }
+    }
+    func testMobile005CompleteCurrentProfileAllowsUnrelatedBroadRevisionChange() async throws {
+        let (model, api, _, boot, store) = try await setupModel(details: true)
+        let draft = try profileDraft(store)
+        let first = profileContact(), second = profileContact()
+        var calls = 0
+        api.responseForTesting = { request in
+            calls += 1
+            let cursor = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "cursor" }?.value
+            XCTAssertEqual(cursor, calls == 1 ? nil : "next")
+            return try self.response(request, 200, self.profilePage(boot, draft.person, [calls == 1 ? first : second], next: calls == 1 ? "next" : nil, broad: calls == 1 ? "9" : "10"))
+        }
+        let refreshed = try await model.requalifyDetails(draft)
+        XCTAssertEqual(calls, 2)
+        XCTAssertEqual(refreshed.current?["contacts"].list, [first, second])
+        XCTAssertEqual(refreshed.proposal, draft.proposal)
+        XCTAssertEqual(refreshed.baseline, draft.baseline)
+        XCTAssertEqual(try store.activePeople().first?.revision, "1", "Conflict reads never promote the downloaded Person.")
+    }
+    func testMobile005ConflictWithInvalidCurrentPagesRetainsExactEnvelope() async throws {
+        let (model, api, _, boot, store) = try await setupModel(details: true)
+        let draft = try profileDraft(store)
+        let envelope = try store.submit(draft)
+        let original = try XCTUnwrap(store.queue().first { $0.id == envelope.operation_id }?.bytes)
+        var detailCalls = 0
+        api.responseForTesting = { request in
+            if request.url!.path.hasSuffix("/operations") { return try self.response(request, 409, .object(["error": .s("revision_conflict")])) }
+            if request.url!.path.hasSuffix("/details") {
+                detailCalls += 1
+                if detailCalls > 3 { XCTFail("Unbounded conflict loop"); return try self.response(request, 503, .object([:])) }
+                return try self.response(request, 200, self.profilePage(boot, draft.person, [self.profileContact()], next: "same"))
+            }
+            return try self.response(request, 503, .object(["error": .s("unavailable")]))
+        }
+        model.paused = false; await model.sync()
+        XCTAssertEqual(detailCalls, 2)
+        let queued = try XCTUnwrap(store.queue().first { $0.id == envelope.operation_id })
+        XCTAssertEqual(queued.bytes, original); XCTAssertEqual(queued.status, "conflict")
+        let protected = try XCTUnwrap(store.draftForOperation(envelope.operation_id))
+        XCTAssertEqual(protected.proposal, draft.proposal); XCTAssertEqual(protected.baseline, draft.baseline)
+        XCTAssertNil(protected.current)
     }
     func testAmbiguousOperationAndReceipt404KeepExactEditEnvelopeAndProtectedDraft() async throws {
         let (model, api, _, _, store) = try await setupModel()

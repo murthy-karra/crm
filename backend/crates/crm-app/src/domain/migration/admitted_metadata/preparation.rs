@@ -327,7 +327,7 @@ impl Prep {
             admission,
             ..
         } = *self;
-        let row=sqlx::query("SELECT s.* FROM migration_admitted_metadata_source s WHERE s.plan_id=$1 AND s.organization_id=$2 AND s.family='people' AND s.qualified AND NOT s.conflict AND (s.capture_sequence,s.ordinal,s.id)>($3,$4,$5) AND EXISTS(SELECT 1 FROM migration_people_admission_result r JOIN person p ON p.id=r.person_id AND p.organization_id=r.organization_id JOIN migration_import_identity mi ON mi.organization_id=r.organization_id AND mi.source_account_id=$7 AND mi.family='people' AND mi.source_id=r.source_id AND mi.target_id=r.person_id AND mi.admission_result_id=r.id AND mi.admission_item_id=r.item_id AND mi.admission_id=r.admission_id WHERE r.admission_id=$6 AND r.organization_id=s.organization_id AND r.source_id=s.source_id AND r.disposition='settled') ORDER BY s.capture_sequence,s.ordinal,s.id LIMIT 1").bind(plan).bind(org.0).bind(p.get::<i64,_>("preparation_sequence")).bind(p.get::<i32,_>("preparation_ordinal")).bind(p.get::<Option<Uuid>,_>("preparation_key").unwrap_or(Uuid::nil())).bind(admission).bind(account).fetch_optional(&mut *conn).await?;
+        let row=sqlx::query("SELECT s.* FROM migration_admitted_metadata_source s JOIN LATERAL(SELECT 1 FROM migration_people_admission_result r WHERE r.admission_id=$6 AND r.organization_id=s.organization_id AND r.source_id=s.source_id AND r.disposition='settled' LIMIT 1) cohort ON true WHERE s.plan_id=$1 AND s.organization_id=$2 AND s.family='people' AND s.qualified AND NOT s.conflict AND (s.capture_sequence,s.ordinal,s.id)>($3,$4,$5) ORDER BY s.capture_sequence,s.ordinal,s.id LIMIT 1").bind(plan).bind(org.0).bind(p.get::<i64,_>("preparation_sequence")).bind(p.get::<i32,_>("preparation_ordinal")).bind(p.get::<Option<Uuid>,_>("preparation_key").unwrap_or(Uuid::nil())).bind(admission).fetch_optional(&mut *conn).await?;
         let Some(row) = row else {
             return self.phase(conn, "choices").await;
         };
@@ -521,14 +521,15 @@ impl Prep {
         let mut reasons = vec!["source_evidence_unavailable".to_owned()];
         let mut tag_operations: Vec<(Uuid, String)> = Vec::new();
         if let Some(source) = source {
-            if live.is_some()
-                && result.get::<bool, _>("identity_valid")
-                && source.qualified
-                && !source.conflict
-                && source.record.reasons.is_empty()
-            {
-                disposition = "eligible";
+            if source.qualified && !source.conflict && source.record.reasons.is_empty() {
                 reasons.clear();
+                if live.is_none() {
+                    reasons.push("native_person_missing".into());
+                } else if !result.get::<bool, _>("identity_valid") {
+                    reasons.push("admission_identity_mismatch".into());
+                } else {
+                    disposition = "eligible";
+                }
                 if let Entity::Person(person_source) = source.record.entity {
                     for tag in person_source.tags {
                         let Some(raw) = tag.raw else {

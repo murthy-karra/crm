@@ -20,6 +20,17 @@ struct Prep {
     boundary: i64,
 }
 impl Prep {
+    async fn issues(&self, c: &mut PgConnection, reasons: &[String]) -> Result<(), MigrationError> {
+        for code in reasons {
+            let added = sqlx::query("INSERT INTO migration_admitted_metadata_issue(import_id,plan_id,organization_id,code,count) VALUES($1,$2,$3,$4,1) ON CONFLICT DO NOTHING").bind(self.import).bind(self.plan).bind(self.org.0).bind(code).execute(&mut *c).await?.rows_affected();
+            if added == 1 {
+                sqlx::query("UPDATE migration_admitted_metadata_plan SET preparation_bytes=preparation_bytes+$2 WHERE id=$1").bind(self.plan).bind(code.len() as i64).execute(&mut *c).await?;
+            } else {
+                sqlx::query("UPDATE migration_admitted_metadata_issue SET count=count+1 WHERE plan_id=$1 AND organization_id=$2 AND code=$3").bind(self.plan).bind(self.org.0).bind(code).execute(&mut *c).await?;
+            }
+        }
+        Ok(())
+    }
     async fn sources(
         &self,
         c: &mut PgConnection,
@@ -293,7 +304,7 @@ impl Prep {
                     } else {
                         raw.as_bytes().to_vec()
                     };
-                    insert_mapping(
+                    let mapping_id = insert_mapping(
                         conn,
                         key,
                         org,
@@ -319,6 +330,7 @@ impl Prep {
                         },
                     )
                     .await?;
+                    sqlx::query("INSERT INTO migration_admitted_metadata_alias(id,import_id,plan_id,organization_id,mapping_id,source_row_id,ordinal) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(mapping_id,source_row_id,ordinal) DO NOTHING").bind(Uuid::new_v4()).bind(import).bind(plan).bind(org.0).bind(mapping_id).bind(row.get::<Uuid,_>("id")).bind(i32::try_from(tag.ordinal).map_err(|_|MigrationError::Crypto)?).execute(&mut *conn).await?;
                 }
             }
         }
@@ -412,6 +424,7 @@ impl Prep {
                 frozen.reasons.push("invalid_destination".into());
             }
         }
+        self.issues(c, &frozen.reasons).await?;
         let encrypted = seal(
             key,
             self.org,
@@ -515,7 +528,18 @@ impl Prep {
                 reasons = vec!["source_integrity".into()];
             }
         }
-        let baseline = baseline(conn, key, org, snapshot, plan, manifest_id, person).await?;
+        self.issues(conn, &reasons).await?;
+        let baseline = baseline(
+            conn,
+            key,
+            org,
+            snapshot,
+            plan,
+            manifest_id,
+            person,
+            &reasons,
+        )
+        .await?;
         let bound = (baseline.nonce.len() + baseline.ciphertext.len() + 256 * 1024) as i64;
         if bound > 64 * 1024 * 1024 {
             return Err(MigrationError::StorageLimit);
@@ -621,9 +645,45 @@ impl Prep {
         sqlx::query("UPDATE migration_admitted_metadata_plan SET preparation_parent=$2,preparation_phase=CASE WHEN $3 THEN 'cohort' ELSE 'values' END WHERE id=$1").bind(plan).bind(last).bind(complete).execute(conn).await?;
         Ok(())
     }
-    async fn finish(&self, c: &mut PgConnection) -> Result<(), MigrationError> {
-        let counts:Value=sqlx::query_scalar("SELECT jsonb_build_object('people',jsonb_build_object('source',count(*)::text,'eligible',count(*) FILTER(WHERE disposition='eligible')::text,'held',count(*) FILTER(WHERE disposition='held')::text),'catalog',jsonb_build_object('fields',(SELECT count(*)::text FROM migration_admitted_metadata_mapping WHERE plan_id=$1 AND organization_id=$2 AND kind='field'),'tags',(SELECT count(*)::text FROM migration_admitted_metadata_mapping WHERE plan_id=$1 AND organization_id=$2 AND kind='tag')),'issues',jsonb_build_object('mapping_held',(SELECT count(*)::text FROM migration_admitted_metadata_mapping WHERE plan_id=$1 AND organization_id=$2 AND disposition='held'))) FROM migration_admitted_metadata_manifest WHERE plan_id=$1 AND organization_id=$2").bind(self.plan).bind(self.org.0).fetch_one(&mut *c).await?;
-        sqlx::query("UPDATE migration_admitted_metadata_plan SET preparation_bytes=preparation_bytes+octet_length($2::jsonb::text)-octet_length(counts::text),counts=$2,preparation_phase='complete',state='ready',expires_at=clock_timestamp()+interval '10 minutes' WHERE id=$1").bind(self.plan).bind(counts).execute(c).await?;
+    async fn finish(
+        &self,
+        c: &mut PgConnection,
+        key: &RawPayloadKey,
+    ) -> Result<(), MigrationError> {
+        use super::super::metadata_model::Counts;
+        let mut counts = Counts::default();
+        let people=sqlx::query("SELECT count(*) AS source,count(*) FILTER(WHERE disposition='eligible') AS eligible,count(*) FILTER(WHERE disposition='held') AS excluded FROM migration_admitted_metadata_manifest WHERE plan_id=$1 AND organization_id=$2").bind(self.plan).bind(self.org.0).fetch_one(&mut *c).await?;
+        counts.people.source = people.get("source");
+        counts.people.eligible = people.get("eligible");
+        counts.people.excluded = people.get("excluded");
+        let groups=sqlx::query("SELECT kind,CASE WHEN disposition IN ('create_matching','map_existing') THEN 'eligible' ELSE disposition END AS disposition,count(*) AS n FROM migration_admitted_metadata_mapping WHERE plan_id=$1 AND organization_id=$2 GROUP BY kind,2 UNION ALL SELECT kind,disposition,count(*) AS n FROM migration_admitted_metadata_operation WHERE plan_id=$1 AND organization_id=$2 GROUP BY kind,disposition").bind(self.plan).bind(self.org.0).fetch_all(&mut *c).await?;
+        for row in groups {
+            let kind: String = row.get("kind");
+            let disposition: String = row.get("disposition");
+            let n: i64 = row.get("n");
+            let family = counts.family(&kind);
+            family.planned += n;
+            family.pending += n;
+            family.add(&disposition, n);
+            if disposition == "held" {
+                counts.held_count += n;
+            }
+        }
+        counts.invalid_source_ids=sqlx::query_scalar("SELECT count(*) FROM migration_admitted_metadata_observation WHERE plan_id=$1 AND organization_id=$2 AND source_row_id IS NULL").bind(self.plan).bind(self.org.0).fetch_one(&mut *c).await?;
+        let value = serde_json::to_value(&counts).map_err(|_| MigrationError::Crypto)?;
+        let bound:i64=sqlx::query_scalar("SELECT GREATEST(4096,COALESCE((SELECT max(item_byte_bound) FROM migration_admitted_metadata_manifest WHERE plan_id=$1 AND organization_id=$2),0),COALESCE((SELECT max(octet_length(m.nonce)+octet_length(m.ciphertext)+4096+COALESCE((SELECT sum(octet_length(o.nonce)+octet_length(o.ciphertext)+4096) FROM migration_admitted_metadata_mapping o WHERE o.parent_mapping_id=m.id AND o.plan_id=m.plan_id AND o.organization_id=m.organization_id),0)) FROM migration_admitted_metadata_mapping m WHERE m.plan_id=$1 AND m.organization_id=$2),0))::bigint").bind(self.plan).bind(self.org.0).fetch_one(&mut *c).await?;
+        if bound > metadata_store::UNIT {
+            return Err(MigrationError::StorageLimit);
+        }
+        let binding:Value=sqlx::query_scalar("SELECT jsonb_build_object('root',i.id,'plan',p.id,'revision',p.revision::text,'workspace_revision',i.workspace_revision::text,'admission',i.admission_id,'admission_plan',i.admission_plan_id,'snapshot',p.snapshot_id,'capture_sequence',p.capture_sequence::text,'report',p.source_report_id,'output_revision',p.source_output_revision,'inputs',encode(p.inputs_ciphertext,'hex')) FROM migration_admitted_metadata_import i JOIN migration_admitted_metadata_plan p ON p.import_id=i.id AND p.organization_id=i.organization_id WHERE i.id=$1 AND p.id=$2 AND i.organization_id=$3").bind(self.import).bind(self.plan).bind(self.org.0).fetch_one(&mut *c).await?;
+        let digest = crypto::request_digest(
+            key,
+            "admitted-metadata-confirmation-v1",
+            &serde_json::to_vec(&(binding, &value, bound)).map_err(|_| MigrationError::Crypto)?,
+        );
+        let before:i32=sqlx::query_scalar("SELECT COALESCE(octet_length(counts::text),0) FROM migration_admitted_metadata_import WHERE id=$1 AND organization_id=$2").bind(self.import).bind(self.org.0).fetch_one(&mut *c).await?;
+        sqlx::query("UPDATE migration_admitted_metadata_import SET counts=$3 WHERE id=$1 AND organization_id=$2").bind(self.import).bind(self.org.0).bind(&value).execute(&mut *c).await?;
+        sqlx::query("UPDATE migration_admitted_metadata_plan SET preparation_bytes=preparation_bytes+2*octet_length($2::jsonb::text)-octet_length(counts::text)-$3+32-COALESCE(octet_length(digest),0),counts=$2,digest=$4,max_added_byte_bound=$5,preparation_phase='complete',state='ready',expires_at=clock_timestamp()+interval '10 minutes' WHERE id=$1").bind(self.plan).bind(value).bind(before).bind(digest.as_slice()).bind(bound).execute(c).await?;
         Ok(())
     }
 }
@@ -690,7 +750,7 @@ async fn unit(
         "choices" => j.choices(&mut tx, key, &p).await?,
         "cohort" => j.cohort(&mut tx, key, &p).await?,
         "values" => j.values(&mut tx, key, &p).await?,
-        "seal" => j.finish(&mut tx).await?,
+        "seal" => j.finish(&mut tx, key).await?,
         _ => return Err(MigrationError::Conflict),
     }
     let actual: i64 = sqlx::query_scalar(

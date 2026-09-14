@@ -115,10 +115,33 @@ struct CurrentDetailsResponse: Codable, Sendable {
     let context_id: String, person_id: String, person_revision: String, details_revision: String
     let first_name: String?, last_name: String?, items: [JSON], next_cursor: String?, complete: Bool
 }
+/// A modern editable contact must carry the complete frozen wire representation.
+/// Missing ordering metadata is distinct from an explicitly native (null) order.
+func isQualifiedDetailsContact(_ contact: JSON) -> Bool {
+    guard case .object(let fields) = contact, fields["import_order"] != nil,
+          UUID(uuidString: contact["id"].text) != nil,
+          ["email", "phone"].contains(contact["kind"].text), !contact["value"].text.isEmpty,
+          (try? date(contact["created_at"].text)) != nil else { return false }
+    switch contact["import_order"] {
+    case .null: return true
+    case .number(let value):
+        return value.isFinite && value.rounded() == value && value >= Double(Int32.min) && value <= Double(Int32.max)
+    default: return false
+    }
+}
+
+func isQualifiedDetailsRepresentation(_ summary: JSON, contacts: [JSON]) -> Bool {
+    (try? revision(summary["details_revision"].text)) != nil && contacts.allSatisfy(isQualifiedDetailsContact)
+        && Set(contacts.compactMap { UUID(uuidString: $0["id"].text) }).count == contacts.count
+}
+
 struct Bundle: Codable, Sendable {
     let person: String, revision: String, summary: JSON, contacts: [JSON], tasks: [JSON]
     var notes: [JSON]
     var orderedContacts: [JSON] { ContactDisplayOrder.sorted(contacts) }
+    var hasCompleteDetailsRepresentation: Bool {
+        isQualifiedDetailsRepresentation(summary, contacts: contacts)
+    }
 }
 
 /// Summary pages retain their UUID pagination order. Only the complete display
@@ -128,7 +151,7 @@ enum ContactDisplayOrder {
     static func sorted(_ contacts: [JSON]) -> [JSON] {
         var keyed: [(value: JSON, order: Int?, created: Date, id: String)] = []
         for contact in contacts {
-            guard let created = try? date(contact["created_at"].text),
+            guard isQualifiedDetailsContact(contact), let created = try? date(contact["created_at"].text),
                   let id = UUID(uuidString: contact["id"].text) else { return contacts }
             let order: Int?
             switch contact["import_order"] {

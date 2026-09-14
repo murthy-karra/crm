@@ -337,7 +337,9 @@ final class LocalStore {
                 // profile receipt must carry an exact map, including an empty
                 // array when no contacts were added.
                 guard let mapping = receipt.added_contact_ids else { throw LocalError.invalidProtocol }
-                guard mapping.count == additions.count, Set(mapping.map(\.ordinal)).count == mapping.count,
+                guard receipt.changed || mapping.isEmpty,
+                      mapping.count == additions.count, Set(mapping.map(\.ordinal)).count == mapping.count,
+                      Set(mapping.compactMap { UUID(uuidString: $0.id) }).count == mapping.count,
                       mapping.allSatisfy({ entry in additions.contains(where: { $0.offset == entry.ordinal }) && UUID(uuidString: entry.id) != nil }) else { throw LocalError.invalidProtocol }
             }
             if let target = op.targetID, target != receipt.resource_id { throw LocalError.invalidProtocol }
@@ -394,7 +396,10 @@ final class LocalStore {
         try rows("SELECT 1 FROM bundle_qualification WHERE person=? AND revision=? AND stage_revisions=1", [person, rev]).isEmpty == false
     }
     func hasQualifiedDetailsBundle(_ person: String, _ rev: String) throws -> Bool {
-        try rows("SELECT 1 FROM bundle_qualification WHERE person=? AND revision=? AND details_revisions=1", [person, rev]).isEmpty == false
+        guard let body = try rows("SELECT b.body FROM bundles b JOIN bundle_qualification q ON q.person=b.person AND q.revision=b.revision WHERE b.person=? AND b.revision=? AND q.details_revisions=1", [person, rev]).first?.first else { return false }
+        // Revalidate pre-fix qualified rows so the same broad revision can be
+        // downloaded again; the protected cache, drafts and operations remain.
+        return try decode(Bundle.self, Data(body.utf8)).hasCompleteDetailsRepresentation
     }
     func pages(_ gen: String, _ person: String, _ section: String) throws -> [Page] {
         try rows("SELECT body FROM pages WHERE generation=? AND person=? AND section=? ORDER BY position", [gen, person, section])
@@ -416,12 +421,12 @@ final class LocalStore {
               let head = summary.first?.summary, head["id"].text == person else { throw LocalError.invalidProtocol }
         let contacts = summary.flatMap(\.items)
         let details = head["details_revision"].text
-        let detailsQualified = (try? revision(details)) != nil && contacts.allSatisfy({ UUID(uuidString: $0["id"].text) != nil && ["email", "phone"].contains($0["kind"].text) && !$0["value"].text.isEmpty && !$0["created_at"].text.isEmpty })
+        let bundle = Bundle(person: person, revision: rev, summary: head, contacts: contacts, tasks: tasks.flatMap(\.items), notes: notes.flatMap(\.items))
+        let detailsQualified = bundle.hasCompleteDetailsRepresentation
         // An installed schema-7 bundle may legitimately lack the new token and
         // order metadata. Keep it readable, mark it non-editable, and replace
         // it only after a same-broad-revision complete current representation.
         if !details.isEmpty && !detailsQualified { throw LocalError.invalidProtocol }
-        let bundle = Bundle(person: person, revision: rev, summary: head, contacts: contacts, tasks: tasks.flatMap(\.items), notes: notes.flatMap(\.items))
         try transaction {
             // Only the identical broad revision is replaced here.  Promotion
             // still refuses to lower a newer active Person revision, while this
@@ -500,7 +505,7 @@ final class LocalStore {
         guard let bundle = try activeBundle(person), try hasQualifiedDetailsBundle(person, bundle.revision),
               (try? revision(bundle.summary["details_revision"].text)) != nil else { return nil }
         let contacts = bundle.contacts
-        guard contacts.allSatisfy({ UUID(uuidString: $0["id"].text) != nil && ["email", "phone"].contains($0["kind"].text) && !$0["created_at"].text.isEmpty }) else { return nil }
+        guard bundle.hasCompleteDetailsRepresentation else { return nil }
         return .object(["first_name": bundle.summary["first_name"], "last_name": bundle.summary["last_name"], "details_revision": bundle.summary["details_revision"], "contacts": .array(contacts)])
     }
     func saveDetailsCurrent(_ draftID: String, current: CurrentDetailsResponse, contextID: String, person: String, editorEpoch: String) throws -> Draft {

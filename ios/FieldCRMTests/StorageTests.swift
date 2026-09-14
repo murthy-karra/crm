@@ -38,6 +38,77 @@ final class StorageTests: XCTestCase {
         for section in ["summary", "notes", "tasks"] { try store.appendPage(Page(generation_id: gen.generation_id, person_id: person, revision: revision, section: section, summary: section == "summary" ? summary : nil, items: section == "summary" ? contacts : [], next_cursor: nil, complete: true), expected: revision) }
         try store.finishBundle(gen.generation_id, person, revision); try store.promote(seal(gen))
     }
+    func testMobile005SummaryQualificationRejectsMalformedCompleteContacts() throws {
+        let store = try open(); try detailsBaseline(store)
+        let saved = try store.saveDraft(draft()); _ = try store.submit(saved)
+        let queued = try XCTUnwrap(store.queue().first).bytes
+        let active = try encode(XCTUnwrap(store.activeBundle(person)))
+        let base: [String: JSON] = ["id": .s(UUID().uuidString), "kind": .s("email"), "value": .s("valid@synthetic.test"), "import_order": .null, "created_at": .s("2026-01-01T00:00:00Z")]
+        var malformed: [[String: JSON]] = []
+        let malformedOrders: [JSON?] = [nil, .s("1"), .number(1.5), .number(Double(Int32.max) + 1), .number(Double(Int32.min) - 1), .bool(true)]
+        for value in malformedOrders {
+            var fields = base; fields["import_order"] = value; malformed.append(fields)
+        }
+        for (key, value) in [("created_at", "invalid-date"), ("id", "invalid-uuid"), ("kind", "fax"), ("value", "")] {
+            var fields = base; fields[key] = .s(value); malformed.append(fields)
+        }
+        for fields in malformed {
+            let gen = generation("2"); try store.begin(gen)
+            for section in ["summary", "notes", "tasks"] {
+                try store.appendPage(Page(generation_id: gen.generation_id, person_id: person, revision: "2", section: section,
+                    summary: section == "summary" ? .object(["id": .s(person), "details_revision": .s("8")]) : nil,
+                    items: section == "summary" ? [.object(fields)] : [], next_cursor: nil, complete: true), expected: "2")
+            }
+            XCTAssertThrowsError(try store.finishBundle(gen.generation_id, person, "2"))
+            XCTAssertFalse(try store.hasQualifiedDetailsBundle(person, "2"))
+            XCTAssertEqual(try encode(XCTUnwrap(store.activeBundle(person))), active)
+            XCTAssertEqual(try XCTUnwrap(store.queue().first).bytes, queued)
+        }
+        let validOrders: [JSON] = [.null, .number(Double(Int32.min)), .number(Double(Int32.max))]
+        for value in validOrders {
+            var valid = base; valid["import_order"] = value
+            XCTAssertTrue(isQualifiedDetailsContact(.object(valid)))
+        }
+    }
+    func testMobile005PreFixQualifiedCacheCanRequalifyAtUnchangedRevision() throws {
+        let store = try open(); try detailsBaseline(store)
+        let saved = try store.saveDraft(draft()); _ = try store.submit(saved)
+        let protected = try store.saveDraft(draft("Unsent protected input"))
+        let queued = try XCTUnwrap(store.queue().first).bytes
+        let prior = try XCTUnwrap(store.activeBundle(person))
+        guard case .object(var contact) = prior.contacts[0] else { return XCTFail("fixture contact") }
+        contact.removeValue(forKey: "import_order")
+        let malformed = Bundle(person: prior.person, revision: prior.revision, summary: prior.summary,
+            contacts: [.object(contact)] + Array(prior.contacts.dropFirst()), tasks: prior.tasks, notes: prior.notes)
+        try store.run("UPDATE bundles SET body=? WHERE person=? AND revision=?", [String(decoding: try encode(malformed), as: UTF8.self), person, "1"])
+        XCTAssertFalse(try store.hasQualifiedDetailsBundle(person, "1"))
+        XCTAssertNil(try store.editableDetails(person: person))
+        XCTAssertEqual(try encode(XCTUnwrap(store.activeBundle(person))), try encode(malformed), "Failing qualification preserves readable cached data")
+        try detailsBaseline(store, revision: "1")
+        XCTAssertTrue(try store.hasQualifiedDetailsBundle(person, "1"))
+        XCTAssertNotNil(try store.editableDetails(person: person))
+        XCTAssertEqual(try XCTUnwrap(store.queue().first).bytes, queued)
+        XCTAssertEqual(try store.drafts().first { $0.id == protected.id }?.text, protected.text)
+    }
+    func testMobile005ImpossibleNoopAndDuplicateAddReceiptsPreserveQueue() throws {
+        let store = try open(); try detailsBaseline(store)
+        let proposal: JSON = .object(["contact_operations": .array([
+            .object(["op": .s("add"), "kind": .s("email"), "value": .s("new@synthetic.test")]),
+            .object(["op": .s("add"), "kind": .s("phone"), "value": .s("555-0133")])])])
+        let saved = try store.saveDraft(Draft(id: UUID().uuidString, person: person, kind: "update_person_details", revision: 0,
+            expectedRevision: "7", baseline: try store.editableDetails(person: person), proposal: proposal))
+        let envelope = try store.submit(saved), first = UUID().uuidString, second = UUID().uuidString
+        let before = try XCTUnwrap(store.queue().first).bytes
+        for (changed, otherID) in [(false, second), (true, first)] {
+            let receipt = Receipt(operation_id: envelope.operation_id, outcome: "accepted", resource_type: "person_details", resource_id: person,
+                committed_revision: "8", person_revision: "2", accepted_at: stamp(), changed: changed, replayed: false,
+                added_contact_ids: [AddedContactID(ordinal: 0, id: first), AddedContactID(ordinal: 1, id: otherID)])
+            XCTAssertThrowsError(try store.acknowledge(receipt))
+            let pending = try XCTUnwrap(store.queue().first)
+            XCTAssertEqual(pending.bytes, before); XCTAssertNotEqual(pending.status, "accepted"); XCTAssertNil(pending.receipt)
+            XCTAssertEqual(try store.drafts().first?.proposal, proposal)
+        }
+    }
     func testCipherWALFullWrongKeyAndReopen() throws {
         var store: LocalStore? = try open()
         XCTAssertEqual(try store!.rows("PRAGMA journal_mode")[0][0], "wal")

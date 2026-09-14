@@ -102,18 +102,7 @@ private final class NoRedirect: NSObject, URLSessionTaskDelegate, @unchecked Sen
         guard page.items.count <= 100, page.complete == (page.next_cursor == nil),
               page.complete || !page.items.isEmpty,
               page.next_cursor.map({ !$0.isEmpty && $0.utf8.count <= 2048 }) ?? true else { throw LocalError.invalidProtocol }
-        for item in page.items {
-            guard case .object(let fields) = item, fields["import_order"] != nil,
-                  UUID(uuidString: item["id"].text) != nil,
-                  ["email", "phone"].contains(item["kind"].text), !item["value"].text.isEmpty,
-                  (try? date(item["created_at"].text)) != nil else { throw LocalError.invalidProtocol }
-            switch item["import_order"] {
-            case .null: break
-            case .number(let value):
-                guard value.isFinite, value.rounded() == value, value >= Double(Int32.min), value <= Double(Int32.max) else { throw LocalError.invalidProtocol }
-            default: throw LocalError.invalidProtocol
-            }
-        }
+        guard page.items.allSatisfy(isQualifiedDetailsContact) else { throw LocalError.invalidProtocol }
         return page
     }
     func verifyAuthority(_ boot: Bootstrap) async throws {

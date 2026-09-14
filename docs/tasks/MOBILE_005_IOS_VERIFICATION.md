@@ -234,3 +234,39 @@ zero pending as success.  The dedicated conflict/current iterations remain in
 
 No physical-device run was performed; simulator keychain availability is
 explicitly synthetic and the tests do not represent hardware passcode behavior.
+
+## Independent round2 strict representation and receipt corrections
+
+Coordinator corrections for round2 findings1,4 and the shared portion of6 use one
+strict contact validator across summary qualification, editable profiles, current
+API pages and display-order fallback. Modern contacts require an explicit nullable
+int32 import order, parseable timestamp, UUID, supported kind and nonempty value.
+Complete qualified contacts also have unique IDs. Stored qualification is rechecked
+against the actual cached body, so a pre-fix malformed cache stays readable but
+can be redownloaded at the same broad revision. Saved drafts and queued bytes remain.
+Profile receipts reject unchanged responses with add mappings and duplicate mapped
+server UUIDs; exact ordinals/counts and other existing receipt checks remain.
+
+The complete storage/model suite passes **47/47**, zero failures/skips,33.79s total:
+`ios/round2-strict-tests2.log`, `ios/round2-strict-final-47.xcresult`, and
+`ios/round2-strict-summary2.json`. `ios/round2-strict-test-run2.json` records the
+exact xcodebuild command and hashes of every tested iOS source file. It uses the
+same named iOS26.5 simulator and isolated `modelstorage005c` build directory,
+with both StorageTests/ModelTests and parallel testing disabled. Source is root
+`3755623` plus the iOS correction committed with this record.
+
+Four added tests cover missing/fractional/string/out-of-range contact order and
+other malformed fields, pre-fix qualified-cache replacement at unchanged revision,
+malformed current-page draft preservation, and impossible no-op/duplicate-ID
+receipts retaining the exact queue. The initial run passed46 but failed one new
+assertion because a submitted generic note draft is intentionally removed after
+becoming an immutable operation. The corrected test preserves and checks a separate
+unsent draft alongside that operation. `round2-strict-tests1.log`,
+`round2-strict-47.xcresult` and summary1 remain retained; no production correction
+was needed for that fixture assertion.
+
+The actual native journeys and installed schema7→8 proof above are reused with
+their source attribution. Valid wire payloads/receipts and schema/UI/envelope
+behavior are unchanged; the stricter rejection/requalification cases are covered
+by the complete47-test run. Targeted independent correction assessment and combined
+final gates remain required; this record alone is not a round2 READY verdict.

@@ -104,6 +104,22 @@ import XCTest
             XCTAssertEqual(try encode(XCTUnwrap(store.drafts().first { $0.id == draft.id })), original)
         }
     }
+    func testMobile005MalformedCurrentContactPreservesProtectedDraft() async throws {
+        let (model, api, _, boot, store) = try await setupModel(details: true)
+        let draft = try profileDraft(store), before = try encode(draft)
+        let malformedOrders: [JSON?] = [nil, .s("1"), .number(1.5), .number(Double(Int32.max) + 1)]
+        for value in malformedOrders {
+            guard case .object(var fields) = profileContact() else { return XCTFail("fixture contact") }
+            fields["import_order"] = value
+            let malformed = JSON.object(fields)
+            api.responseForTesting = { request in
+                try self.response(request, 200, self.profilePage(boot, draft.person, [malformed], next: nil))
+            }
+            do { _ = try await model.requalifyDetails(draft); XCTFail("Malformed ordering must not qualify") }
+            catch { XCTAssertTrue(error is LocalError, "\(error)") }
+            XCTAssertEqual(try encode(XCTUnwrap(store.drafts().first { $0.id == draft.id })), before)
+        }
+    }
     func testMobile005CompleteCurrentProfileAllowsUnrelatedBroadRevisionChange() async throws {
         let (model, api, _, boot, store) = try await setupModel(details: true)
         let draft = try profileDraft(store)

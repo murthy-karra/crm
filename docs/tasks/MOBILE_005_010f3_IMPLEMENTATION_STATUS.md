@@ -28,10 +28,19 @@ Source publication/deployment remains separate.
 
 Both implementation lanes began at accepted checkpoint `fcc05b3`. Shared readiness
 and realtime integration is checkpointed at `a565145`: 51 preflight tests and 20
-Web realtime tests pass. Migration checkpoint `deb444b` reports six original
-metadata gate tests and eight workspace-readiness unit tests passing; the earlier
-four guard failures remain recorded in its evidence. These focused passes do
-not verify the full admitted workflow.
+Web realtime tests pass. Readiness now requires the additive per-unit settlement
+schema (`75b40fd`; 51 preflight tests pass).
+
+Migration worker checkpoint `4dd5e69` is integrated. Six focused database tests
+pass for all four supported field types and tags, frozen local-value protection,
+exact accounting/replay, catalog and Person rollback/retry, private permit
+boundaries and missing-unit-schema rejection. `crm-app` all-target Clippy passes.
+These results do not complete staged preparation, plan/recovery lifecycle or the
+Web workflow; those remain in progress. After repeated Terra checkpoints did not
+complete typed execution and accounting, the coordinator escalated that concrete
+blocker to Astra high under `MODEL_ROUTING.md`. The migration writer retains
+exclusive Rust/SQL ownership; a literal Web contract checkpoint precedes Web
+handoff to the coordinator.
 
 The mobile backend contract is frozen and integrated through `382aadc`. Eight
 focused DB/API checks pass, including capture/profile lock overlap, complete
@@ -41,7 +50,11 @@ The native API fixture is served by an immutable private copy of the `382aadc`
 binary on3103; it includes the required empty `added_contact_ids` array for
 name-only/edit/remove receipts, while old receipt kinds omit that field.
 Both native lanes remain active. Android has upgrade/storage and repository/API
-proof; actual Compose acceptance is in progress. Each lane records concrete
+proof; actual Compose editor submission passes and restart/conflict acceptance
+is in progress. iOS has populated-store upgrade, storage/model, real API and
+conflict/replacement proof; full multi-field offline/restart acceptance is in
+progress. The large-contact fixture exposed action placement problems in the
+native UI; fixes are being checked against the complete profile. Each lane records concrete
 schema/DTO/lock/guard contracts and runs isolated focused checks. Coordinator owns shared integration and sequential
 final `scripts/check`, `scripts/sqlx-prepare`, `scripts/check-db`; database gates do
 not overlap. Independent implementation review, real native/browser acceptance,

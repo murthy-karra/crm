@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
-import { fetchMetadataField, useMetadataAccess, type MetadataFieldRequest } from '../../api/metadataImports'
+import { metadataReaders, useMetadataAccess, type MetadataReaders, type MetadataFieldRequest } from '../../api/metadataImports'
 import { buttonClasses } from '../../lib/controls'
 import { describeApiError } from '../../lib/errors'
-const props = defineProps<{ request: MetadataFieldRequest; title: string }>()
-const access = useMetadataAccess()
+const props = defineProps<{ readers?: MetadataReaders; request: MetadataFieldRequest; title: string }>()
+const readers = props.readers ?? metadataReaders
+const access = useMetadataAccess(readers)
 const cursors = ref<string[]>([''])
 const branch = computed(() => [...access.prefix.value, 'field', props.request])
 const key = computed(() => [...branch.value, cursors.value.at(-1) ?? ''])
-const reading = useQuery({ queryKey: key, queryFn: ({ signal }) => access.read(key.value, () => key.value, () => fetchMetadataField(props.request, cursors.value.at(-1) || undefined, signal)), enabled: access.enabled, retry: false, gcTime: 0 })
+const reading = useQuery({ queryKey: key, queryFn: ({ signal }) => access.read(key.value, () => key.value, () => readers.field(props.request, cursors.value.at(-1) || undefined, signal)), enabled: access.enabled, retry: false, gcTime: 0 })
 const segment = computed(() => access.enabled.value ? reading.data.value : undefined)
 const end = computed(() => segment.value ? (BigInt(segment.value.offset_bytes) + BigInt(new TextEncoder().encode(segment.value.text).length)).toString() : '')
 watch(() => JSON.stringify([access.scope.value, props.request]), () => { cursors.value = [''] }, { flush: 'sync' })

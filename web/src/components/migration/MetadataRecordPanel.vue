@@ -4,12 +4,13 @@ import { useQuery } from '@tanstack/vue-query'
 import Card from '../Card.vue'
 import FormField from '../FormField.vue'
 import MetadataEvidence from './MetadataEvidence.vue'
-import { fetchMetadataRecords, fetchMetadataResults, metadataName, useMetadataAccess, type MetadataPage, type MetadataRecord, type MetadataResult, type MetadataResultKind } from '../../api/metadataImports'
+import { metadataName, metadataReaders, useMetadataAccess, type MetadataReaders, type MetadataPage, type MetadataRecord, type MetadataResult, type MetadataResultKind } from '../../api/metadataImports'
 import { buttonClasses, INPUT_CLASSES } from '../../lib/controls'
 import { describeApiError } from '../../lib/errors'
 import { formatBytes, snapshotLabel, snapshotTime } from './format'
-const props = defineProps<{ importId: string; planId: string; mode: 'plan' | 'results'; progressVersion: string }>()
-const access = useMetadataAccess()
+const props = defineProps<{ readers?: MetadataReaders; importId: string; planId: string; mode: 'plan' | 'results'; progressVersion: string }>()
+const readers = props.readers ?? metadataReaders
+const access = useMetadataAccess(readers)
 const cursors = ref<string[]>([''])
 const disposition = ref('')
 const kind = ref<MetadataResultKind | ''>('')
@@ -18,8 +19,8 @@ const branch = computed(() => [...access.prefix.value, 'records', props.importId
 const key = computed(() => [...branch.value, disposition.value, kind.value, cursors.value.at(-1) ?? '', props.progressVersion])
 const enabled = computed(() => access.enabled.value && !!props.importId && !!props.planId)
 const reading = useQuery({ queryKey: key, enabled, retry: false, gcTime: 0, queryFn: ({ signal }) => access.read<MetadataPage<MetadataRecord | MetadataResult>>(key.value, () => key.value, () => props.mode === 'plan'
-  ? fetchMetadataRecords(props.importId, props.planId, disposition.value || undefined, cursors.value.at(-1) || undefined, signal)
-  : fetchMetadataResults(props.importId, kind.value || undefined, disposition.value || undefined, cursors.value.at(-1) || undefined, signal)) })
+  ? readers.records(props.importId, props.planId, disposition.value || undefined, cursors.value.at(-1) || undefined, signal)
+  : readers.results(props.importId, kind.value || undefined, disposition.value || undefined, cursors.value.at(-1) || undefined, signal)) })
 const page = computed(() => enabled.value ? reading.data.value : undefined)
 watch(() => JSON.stringify([access.scope.value, props.importId, props.planId, props.mode, disposition.value, kind.value]), () => { cursors.value = ['']; selected.value = null }, { flush: 'sync' })
 watch(() => cursors.value.at(-1), () => { selected.value = null })
@@ -203,6 +204,7 @@ onBeforeUnmount(() => access.remove(branch.value))
     </div>
     <MetadataEvidence
       v-if="selected && enabled"
+      :readers="readers"
       :source="selected.source"
       :operations="selected.operations"
       :request="mode === 'results' ? { kind: 'result', importId, resultId: selected.id, fieldKey: 'all' } : { kind: 'record', importId, planId, recordId: selected.id, fieldKey: 'all' }"

@@ -84,6 +84,7 @@ import { callCompletedSummary, formatTalkSeconds } from '../telephony/format'
 import { useCallHost } from '../telephony/callHost'
 import { workspaceOperational } from '../workspaceLifecycle'
 import PersonImportProvenance from '../components/migration/PersonImportProvenance.vue'
+import PersonAdmittedMetadataProvenance from '../components/migration/PersonAdmittedMetadataProvenance.vue'
 import PersonMetadataProvenance from '../components/migration/PersonMetadataProvenance.vue'
 import PersonActivityReview from '../components/PersonActivityReview.vue'
 
@@ -2057,6 +2058,10 @@ watch(
       </div>
 
       <PersonImportProvenance
+        v-if="isOrgAdmin"
+        :person-id="props.id"
+      />
+      <PersonAdmittedMetadataProvenance
         v-if="isOrgAdmin"
         :person-id="props.id"
       />

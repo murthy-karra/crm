@@ -185,6 +185,7 @@ async fn qualified_streams(
 /// Resolves a report-owned retained observation back to its encrypted capture,
 /// then verifies the lossless metadata parse against the snapshot record.  The
 /// report group selects the source boundary; raw capture alone never does.
+#[allow(clippy::too_many_arguments)] // Tenant, evidence and immutable owner scopes stay explicit.
 async fn frozen_source(
     conn: &mut sqlx::PgConnection,
     key: &RawPayloadKey,
@@ -401,6 +402,7 @@ async fn handover(
 ) -> Result<(), MigrationError> {
     workspace::bounded_lock_wait(conn).await?;
     workspace::exclusive(conn, ctx.organization_id).await?;
+    super::store::require_admin(conn, ctx).await?;
     release.require_admitted_metadata(conn).await?;
     super::store::lock_org(conn, ctx.organization_id).await?;
     let readiness = sqlx::query("SELECT state,engine_version FROM migration_metadata_catalog_readiness WHERE organization_id=$1 FOR UPDATE")
@@ -453,8 +455,22 @@ async fn handover(
             continue;
         }
         let allowance=sqlx::query("SELECT s.run_byte_limit,s.retained_bytes,s.reserved_bytes,l.byte_limit,l.retained_bytes AS org_retained,l.reserved_bytes AS org_reserved FROM migration_snapshot s JOIN migration_snapshot_storage l ON l.organization_id=s.organization_id WHERE s.id=$1 AND s.organization_id=$2 FOR UPDATE OF s,l").bind(snapshot).bind(ctx.organization_id.0).fetch_one(&mut *conn).await?;
-        let policy=super::snapshot::SnapshotPolicy::default();
-        if bytes>allowance.get::<i64,_>("run_byte_limit").min(policy.run_ceiling_bytes).saturating_sub(allowance.get("retained_bytes")).saturating_sub(allowance.get("reserved_bytes")) || bytes>allowance.get::<i64,_>("byte_limit").min(policy.org_ceiling_bytes).saturating_sub(allowance.get("org_retained")).saturating_sub(allowance.get("org_reserved")){return Err(MigrationError::StorageLimit)}
+        let policy = super::snapshot::SnapshotPolicy::default();
+        if bytes
+            > allowance
+                .get::<i64, _>("run_byte_limit")
+                .min(policy.run_ceiling_bytes)
+                .saturating_sub(allowance.get("retained_bytes"))
+                .saturating_sub(allowance.get("reserved_bytes"))
+            || bytes
+                > allowance
+                    .get::<i64, _>("byte_limit")
+                    .min(policy.org_ceiling_bytes)
+                    .saturating_sub(allowance.get("org_retained"))
+                    .saturating_sub(allowance.get("org_reserved"))
+        {
+            return Err(MigrationError::StorageLimit);
+        }
         let import: Uuid = row.get("import_id");
         sqlx::query("UPDATE migration_metadata_import SET retained_bytes=retained_bytes+$3 WHERE id=$1 AND organization_id=$2")
             .bind(import).bind(ctx.organization_id.0).bind(bytes).execute(&mut *conn).await?;
@@ -468,6 +484,7 @@ async fn handover(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)] // Tenant, evidence and immutable owner scopes stay explicit.
 async fn insert_source(
     conn: &mut sqlx::PgConnection,
     key: &RawPayloadKey,
@@ -519,6 +536,7 @@ async fn baseline(
     )
 }
 
+#[allow(clippy::too_many_arguments)] // Tenant, evidence and immutable owner scopes stay explicit.
 async fn insert_mapping(
     conn: &mut sqlx::PgConnection,
     key: &RawPayloadKey,
@@ -556,6 +574,7 @@ async fn insert_mapping(
     Ok(existing)
 }
 
+#[allow(clippy::too_many_arguments)] // Tenant, evidence and immutable owner scopes stay explicit.
 async fn build_preparation(
     conn: &mut sqlx::PgConnection,
     key: &RawPayloadKey,
@@ -923,6 +942,7 @@ async fn replay_receipt(
         .map_err(|_| MigrationError::Crypto)
 }
 
+#[allow(clippy::too_many_arguments)] // Tenant, evidence and immutable owner scopes stay explicit.
 async fn save_receipt<T: Serialize>(
     conn: &mut sqlx::PgConnection,
     key: &RawPayloadKey,
@@ -1144,15 +1164,66 @@ pub async fn confirm(
     if !valid {
         return Err(MigrationError::Conflict);
     }
+    let selected=sqlx::query("SELECT * FROM migration_admitted_metadata_mapping WHERE import_id=$1 AND plan_id=$2 AND organization_id=$3 AND disposition IN ('create_matching','map_existing') ORDER BY kind,id").bind(import).bind(cmd.plan_id).bind(ctx.organization_id.0).fetch_all(&mut *tx).await?;
+    let binding=sqlx::query("SELECT snapshot_id,source_account_id FROM migration_admitted_metadata_import WHERE id=$1 AND organization_id=$2").bind(import).bind(ctx.organization_id.0).fetch_one(&mut *tx).await?;
+    for m in selected {
+        let f: FrozenMapping = super::admitted_metadata_worker::open(
+            key,
+            ctx.organization_id,
+            binding.get("snapshot_id"),
+            cmd.plan_id,
+            m.get("id"),
+            "mapping",
+            &m.get::<Vec<u8>, _>("nonce"),
+            &m.get::<Vec<u8>, _>("ciphertext"),
+        )?;
+        let kind: String = m.get("kind");
+        let target: Uuid = m
+            .get::<Option<Uuid>, _>("target_id")
+            .ok_or(MigrationError::InvalidImportChoice)?;
+        let source_key: Vec<u8> = m.get("source_key");
+        let now = super::admitted_metadata_worker::target_state(
+            &mut tx,
+            ctx.organization_id,
+            &kind,
+            target,
+        )
+        .await?;
+        let claim = super::admitted_metadata_worker::claim_state(
+            &mut tx,
+            ctx.organization_id,
+            binding.get("source_account_id"),
+            &kind,
+            &source_key,
+        )
+        .await?;
+        if now != f.target_baseline
+            || (claim != f.claim_baseline
+                && !super::admitted_metadata_worker::claim_equal(
+                    &mut tx,
+                    key,
+                    ctx.organization_id,
+                    binding.get("source_account_id"),
+                    &kind,
+                    &source_key,
+                    &f,
+                    target,
+                )
+                .await?)
+        {
+            return Err(MigrationError::InvalidImportChoice);
+        }
+    }
     let executable:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM migration_admitted_metadata_mapping WHERE import_id=$1 AND plan_id=$2 AND organization_id=$3 AND disposition IN ('create_matching','map_existing'))").bind(import).bind(cmd.plan_id).bind(ctx.organization_id.0).fetch_one(&mut *tx).await?;
     if !executable {
         return Err(MigrationError::InvalidImportChoice);
     }
     let snapshot:Uuid=sqlx::query_scalar("SELECT snapshot_id FROM migration_admitted_metadata_import WHERE id=$1 AND organization_id=$2").bind(import).bind(ctx.organization_id.0).fetch_one(&mut *tx).await?;
-    let bound:i64=sqlx::query_scalar("SELECT GREATEST(4096,COALESCE((SELECT max(item_byte_bound) FROM migration_admitted_metadata_manifest WHERE import_id=$1 AND plan_id=$2 AND organization_id=$3),0),COALESCE((SELECT max(octet_length(nonce)+octet_length(ciphertext)+4096) FROM migration_admitted_metadata_mapping WHERE import_id=$1 AND plan_id=$2 AND organization_id=$3),0))::bigint").bind(import).bind(cmd.plan_id).bind(ctx.organization_id.0).fetch_one(&mut *tx).await?;
+    let bound:i64=sqlx::query_scalar("SELECT GREATEST(4096,COALESCE((SELECT max(item_byte_bound) FROM migration_admitted_metadata_manifest WHERE import_id=$1 AND plan_id=$2 AND organization_id=$3),0),COALESCE((SELECT max(octet_length(m.nonce)+octet_length(m.ciphertext)+4096+COALESCE((SELECT sum(octet_length(o.nonce)+octet_length(o.ciphertext)+4096) FROM migration_admitted_metadata_mapping o WHERE o.parent_mapping_id=m.id AND o.plan_id=m.plan_id AND o.organization_id=m.organization_id),0)) FROM migration_admitted_metadata_mapping m WHERE m.import_id=$1 AND m.plan_id=$2 AND m.organization_id=$3),0))::bigint").bind(import).bind(cmd.plan_id).bind(ctx.organization_id.0).fetch_one(&mut *tx).await?;
     if bound > 64 * 1024 * 1024 {
         return Err(MigrationError::StorageLimit);
     }
+    sqlx::query("UPDATE migration_admitted_metadata_plan SET max_added_byte_bound=$3 WHERE id=$1 AND organization_id=$2").bind(cmd.plan_id).bind(ctx.organization_id.0).bind(bound).execute(&mut *tx).await?;
     super::admitted_metadata_worker::reserve(
         &mut tx,
         ctx.organization_id,
@@ -1173,7 +1244,7 @@ pub async fn confirm(
         4096,
     )
     .await?;
-    sqlx::query("UPDATE migration_admitted_metadata_import SET state='queued',phase='catalog',confirmed_plan_id=$3,updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2").bind(import).bind(ctx.organization_id.0).bind(cmd.plan_id).execute(&mut *tx).await?;
+    sqlx::query("UPDATE migration_admitted_metadata_import SET state='queued',phase='catalog',confirmed_plan_id=$3,executor_user_id=$4,updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2").bind(import).bind(ctx.organization_id.0).bind(cmd.plan_id).bind(ctx.actor_user_id.0).execute(&mut *tx).await?;
     let value = json!({"import_id":import,"state":"queued"});
     save_receipt(
         &mut tx,

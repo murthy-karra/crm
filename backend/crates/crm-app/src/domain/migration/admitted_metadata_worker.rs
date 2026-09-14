@@ -13,6 +13,7 @@ use sqlx::{postgres::PgRow, PgConnection, PgPool, Row};
 use uuid::Uuid;
 
 const UNIT: i64 = 64 * 1024 * 1024;
+#[allow(clippy::too_many_arguments)] // Keep exact tenant/evidence/unit boundaries explicit.
 pub(crate) fn open<T: DeserializeOwned>(
     key: &RawPayloadKey,
     org: OrganizationId,
@@ -72,6 +73,7 @@ fn same_source(left: &FrozenMapping, right: &FrozenMapping) -> Result<bool, Migr
         && serde_json::to_value(&left.definition).map_err(|_| MigrationError::Crypto)?
             == serde_json::to_value(&right.definition).map_err(|_| MigrationError::Crypto)?)
 }
+#[allow(clippy::too_many_arguments)] // Keep exact tenant/evidence/unit boundaries explicit.
 pub(crate) async fn claim_equal(
     c: &mut PgConnection,
     key: &RawPayloadKey,
@@ -285,6 +287,7 @@ impl Job {
             .await?;
         Ok(())
     }
+    #[allow(clippy::too_many_arguments)] // Keep exact tenant/evidence/unit boundaries explicit.
     async fn result(
         &self,
         c: &mut PgConnection,
@@ -380,16 +383,22 @@ async fn catalog(
                     f.field_type.as_deref(),
                     Some("text" | "number" | "date" | "choice")
                 ) && f.machine_name.is_some()
-                    && f.definition
-                        .as_ref()
-                        .is_some_and(|d| d.creation_reasons.is_empty());
+                    && (disposition == "map_existing"
+                        || f.definition
+                            .as_ref()
+                            .is_some_and(|d| d.creation_reasons.is_empty()));
             let available = if disposition == "create_matching" {
                 match kind.as_str(){
                     "tag"=>sqlx::query_scalar::<_,bool>("SELECT (SELECT count(*) FROM tag WHERE organization_id=$1)<200 AND NOT EXISTS(SELECT 1 FROM tag WHERE organization_id=$1 AND lower(name)=lower($2))").bind(j.org.0).bind(label).fetch_one(&mut *c).await?,
                     "field"=>sqlx::query_scalar::<_,bool>("SELECT (SELECT count(*) FROM custom_field WHERE organization_id=$1 AND archived_at IS NULL)<50 AND NOT EXISTS(SELECT 1 FROM custom_field WHERE organization_id=$1 AND (lower(label)=lower($2) OR (source='fub' AND external_key=$3)))").bind(j.org.0).bind(label).bind(&f.machine_name).fetch_one(&mut *c).await?,
                     "option"=>sqlx::query_scalar::<_,bool>("SELECT (SELECT count(*) FROM custom_field_option WHERE organization_id=$1 AND field_id=$3 AND archived_at IS NULL)<50 AND NOT EXISTS(SELECT 1 FROM custom_field_option WHERE organization_id=$1 AND field_id=$3 AND lower(label)=lower($2))").bind(j.org.0).bind(label).bind(m.get::<Option<Uuid>,_>("target_field_id")).fetch_one(&mut *c).await?,_=>false}
             } else {
-                !now.is_null() && (kind != "field" || now["field_type"] == json!(f.field_type))
+                !now.is_null()
+                    && (kind != "field"
+                        || now["field_type"] == json!(f.field_type)
+                            && (now["source"].is_null()
+                                || now["source"] == "fub"
+                                    && now["external_key"] == json!(f.machine_name)))
             };
             if claim_ok && target_ok && parent_ok && supported && available {
                 if current_claim.is_null() {
@@ -648,21 +657,52 @@ async fn unit(
         lease: Uuid::new_v4(),
     };
     sqlx::query("UPDATE migration_admitted_metadata_import SET state='running',lease_token=$3,lease_expires_at=clock_timestamp()+interval '60 seconds',pause_reason=NULL WHERE id=$1 AND organization_id=$2").bind(root).bind(org.0).bind(j.lease).execute(&mut *tx).await?;
-    let mapping=sqlx::query("SELECT m.* FROM migration_admitted_metadata_mapping m WHERE m.import_id=$1 AND m.plan_id=$2 AND m.organization_id=$3 AND NOT EXISTS(SELECT 1 FROM migration_admitted_metadata_result r WHERE r.import_id=$1 AND r.organization_id=$3 AND r.unit_id=m.id) ORDER BY m.kind,m.id LIMIT 1").bind(root).bind(j.plan).bind(org.0).fetch_optional(&mut *tx).await?;
-    let manifest = if mapping.is_none() {
-        sqlx::query("SELECT m.* FROM migration_admitted_metadata_manifest m WHERE m.import_id=$1 AND m.plan_id=$2 AND m.organization_id=$3 AND m.disposition IN ('eligible','held') AND NOT EXISTS(SELECT 1 FROM migration_admitted_metadata_result r WHERE r.import_id=$1 AND r.organization_id=$3 AND r.unit_id=m.id) ORDER BY m.id LIMIT 1").bind(root).bind(j.plan).bind(org.0).fetch_optional(&mut *tx).await?
+    let phase: String = r.get("phase");
+    let checkpoint = r
+        .get::<Option<Uuid>, _>("checkpoint_id")
+        .unwrap_or(Uuid::nil());
+    let mapping = if phase == "catalog" {
+        let previous:Option<String>=sqlx::query_scalar("SELECT kind FROM migration_admitted_metadata_mapping WHERE id=$1 AND import_id=$2 AND plan_id=$3 AND organization_id=$4").bind(checkpoint).bind(root).bind(j.plan).bind(org.0).fetch_optional(&mut *tx).await?;
+        sqlx::query("SELECT m.* FROM migration_admitted_metadata_mapping m WHERE m.import_id=$1 AND m.plan_id=$2 AND m.organization_id=$3 AND (m.kind,m.id)>($4,$5) AND NOT EXISTS(SELECT 1 FROM migration_admitted_metadata_result x WHERE x.import_id=$1 AND x.organization_id=$3 AND x.unit_id=m.id) ORDER BY m.kind,m.id LIMIT 1").bind(root).bind(j.plan).bind(org.0).bind(previous.unwrap_or_default()).bind(checkpoint).fetch_optional(&mut *tx).await?
     } else {
         None
     };
+    let manifest = if mapping.is_none() {
+        sqlx::query("SELECT m.* FROM migration_admitted_metadata_manifest m WHERE m.import_id=$1 AND m.plan_id=$2 AND m.organization_id=$3 AND m.id>$4 AND m.disposition IN ('eligible','held') ORDER BY m.id LIMIT 1").bind(root).bind(j.plan).bind(org.0).bind(if phase=="people"{checkpoint}else{Uuid::nil()}).fetch_optional(&mut *tx).await?
+    } else {
+        None
+    };
+    let children = if let Some(m) = mapping.as_ref() {
+        let f: FrozenMapping = j.decode(key, m, "mapping")?;
+        if m.get::<String, _>("kind") == "field"
+            && m.get::<String, _>("disposition") == "create_matching"
+            && f.field_type.as_deref() == Some("choice")
+        {
+            let children=sqlx::query("SELECT * FROM migration_admitted_metadata_mapping WHERE parent_mapping_id=$1 AND plan_id=$2 AND organization_id=$3 ORDER BY id LIMIT 51").bind(m.get::<Uuid,_>("id")).bind(j.plan).bind(org.0).fetch_all(&mut *tx).await?;
+            if children.len() > 50 {
+                return Err(MigrationError::StorageLimit);
+            }
+            children
+        } else {
+            Vec::new()
+        }
+    } else {
+        Vec::new()
+    };
     let selected = mapping.as_ref().or(manifest.as_ref());
     if let Some(row) = selected {
-        let bound = if mapping.is_some() {
+        let mut bound = if mapping.is_some() {
             (row.get::<Vec<u8>, _>("nonce").len() + row.get::<Vec<u8>, _>("ciphertext").len())
                 as i64
                 + 4096
         } else {
             row.get::<i64, _>("item_byte_bound")
         };
+        for child in &children {
+            bound += (child.get::<Vec<u8>, _>("nonce").len()
+                + child.get::<Vec<u8>, _>("ciphertext").len()) as i64
+                + 4096;
+        }
         // Confirmation holds the maximum first unit. Subsequent units reserve
         // independently; only this owner's unused work reservation is released.
         let old:Option<Uuid>=sqlx::query_scalar("SELECT token FROM migration_admitted_metadata_reservation WHERE import_id=$1 AND organization_id=$2 AND purpose='work'").bind(root).bind(org.0).fetch_optional(&mut *tx).await?;
@@ -670,7 +710,7 @@ async fn unit(
             settle(&mut tx, org, root, t, 0).await?
         }
         let token = reserve(&mut tx, org, root, j.plan, j.snapshot, "work", bound).await?;
-        let added = if let Some(m) = mapping.as_ref() {
+        let mut added = if let Some(m) = mapping.as_ref() {
             catalog(&mut tx, key, &j, m).await?
         } else {
             people(
@@ -681,6 +721,9 @@ async fn unit(
             )
             .await?
         };
+        for child in &children {
+            added += catalog(&mut tx, key, &j, child).await?;
+        }
         let alive:bool=sqlx::query_scalar("SELECT lease_token=$3 AND lease_expires_at>clock_timestamp() AND state='running' FROM migration_admitted_metadata_import WHERE id=$1 AND organization_id=$2").bind(root).bind(org.0).bind(j.lease).fetch_one(&mut *tx).await?;
         if !alive {
             return Err(MigrationError::Conflict);

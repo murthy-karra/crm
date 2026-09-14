@@ -77,6 +77,10 @@ now use UUID order after the parent/intake locks. Both changes are included in
 the coordinator checkpoint following382aadc.
 
 New010f3 metadata composition, D-050 and combined final gates remain pending.
+Coordinator Clippy (`cargo clippy --workspace --all-targets --locked -- -D warnings`)
+passed after naming the validated contact-mutation tuple type. The first attempt
+reported `type_complexity`; both logs are retained as `integration/mobile005-clippy.log`
+and `integration/mobile005-clippy2.log`. This is focused evidence before010f3 integration.
 `scripts/check-db` and `scripts/sqlx-prepare` now accept
 `CRM_CHECK_ENV_FILE` for the isolated database environment and
 `CRM_SQLX_TARGET_DIR` for the separate online-schema build. Default behavior is

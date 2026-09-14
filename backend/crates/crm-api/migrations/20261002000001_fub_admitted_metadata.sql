@@ -28,7 +28,7 @@ CREATE TABLE migration_admitted_metadata_import (
  latest_plan_id UUID, confirmed_plan_id UUID, lease_token UUID, lease_expires_at TIMESTAMPTZ,
  retained_bytes BIGINT NOT NULL DEFAULT 0 CHECK(retained_bytes>=0), reserved_bytes BIGINT NOT NULL DEFAULT 0 CHECK(reserved_bytes>=0),
  created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(), updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
- UNIQUE(id,organization_id), UNIQUE(organization_id,admission_id), UNIQUE(predecessor_import_id), UNIQUE(successor_import_id),
+ UNIQUE(id,organization_id), UNIQUE(predecessor_import_id), UNIQUE(successor_import_id),
  FOREIGN KEY(parent_import_id,organization_id) REFERENCES migration_import(id,organization_id),
  FOREIGN KEY(parent_plan_id,parent_import_id,organization_id) REFERENCES migration_import_plan(id,import_id,organization_id),
  FOREIGN KEY(admission_id,organization_id) REFERENCES migration_people_admission(id,organization_id),
@@ -39,6 +39,7 @@ CREATE TABLE migration_admitted_metadata_import (
 );
 CREATE INDEX migration_admitted_metadata_import_page ON migration_admitted_metadata_import(organization_id,created_at DESC,id DESC);
 CREATE INDEX migration_admitted_metadata_import_claim ON migration_admitted_metadata_import(organization_id,id) WHERE state IN ('queued','running');
+CREATE UNIQUE INDEX migration_admitted_metadata_one_root ON migration_admitted_metadata_import(organization_id,admission_id) WHERE predecessor_import_id IS NULL;
 CREATE TABLE migration_admitted_metadata_plan (
  id UUID PRIMARY KEY, import_id UUID NOT NULL, organization_id UUID NOT NULL, revision BIGINT NOT NULL CHECK(revision>0),
  state TEXT NOT NULL CHECK(state IN ('building','ready','paused','failed','superseded')), phase TEXT NOT NULL DEFAULT 'preparation',

@@ -188,14 +188,14 @@ pub async fn prepare(
     }
     let id = Uuid::new_v4();
     let plan = Uuid::new_v4();
-    let inserted=sqlx::query("INSERT INTO migration_admitted_metadata_import(id,organization_id,parent_import_id,parent_plan_id,admission_id,source_report_id,snapshot_id,source_account_id,capture_sequence,workspace_revision,executor_user_id,engine_version,state,latest_plan_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'proposed',$13) ON CONFLICT(organization_id,admission_id) DO NOTHING").bind(id).bind(ctx.organization_id.0).bind(a.get::<Uuid,_>("parent_import_id")).bind(a.get::<Uuid,_>("parent_plan_id")).bind(cmd.admission_id).bind(cmd.source_report_id).bind(a.get::<Uuid,_>("newer_snapshot_id")).bind(a.get::<i64,_>("source_account_id")).bind(a.get::<i64,_>("newer_sequence")).bind(a.get::<i64,_>("workspace_revision")).bind(ctx.actor_user_id.0).bind(ENGINE).bind(plan).execute(&mut *tx).await?;
+    let inserted=sqlx::query("INSERT INTO migration_admitted_metadata_import(id,organization_id,parent_import_id,parent_plan_id,admission_id,source_report_id,snapshot_id,source_account_id,capture_sequence,workspace_revision,executor_user_id,engine_version,state,latest_plan_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'proposed',$13) ON CONFLICT DO NOTHING").bind(id).bind(ctx.organization_id.0).bind(a.get::<Uuid,_>("parent_import_id")).bind(a.get::<Uuid,_>("parent_plan_id")).bind(cmd.admission_id).bind(cmd.source_report_id).bind(a.get::<Uuid,_>("newer_snapshot_id")).bind(a.get::<i64,_>("source_account_id")).bind(a.get::<i64,_>("newer_sequence")).bind(a.get::<i64,_>("workspace_revision")).bind(ctx.actor_user_id.0).bind(ENGINE).bind(plan).execute(&mut *tx).await?;
     if inserted.rows_affected() == 1 {
         sqlx::query("INSERT INTO migration_admitted_metadata_plan(id,import_id,organization_id,revision,state,inputs_nonce,inputs_ciphertext,counts) VALUES($1,$2,$3,1,'building',$4,$5,$6)").bind(plan).bind(id).bind(ctx.organization_id.0).bind(vec![0u8;24]).bind(vec![0u8;16]).bind(json!({"people":{"source":settled,"eligible":settled,"excluded":0,"settled":0}})).execute(&mut *tx).await?;
     }
     let resolved = if inserted.rows_affected() == 1 {
         id
     } else {
-        sqlx::query_scalar("SELECT id FROM migration_admitted_metadata_import WHERE organization_id=$1 AND admission_id=$2").bind(ctx.organization_id.0).bind(cmd.admission_id).fetch_one(&mut *tx).await?
+        sqlx::query_scalar("SELECT id FROM migration_admitted_metadata_import WHERE organization_id=$1 AND admission_id=$2 AND predecessor_import_id IS NULL").bind(ctx.organization_id.0).bind(cmd.admission_id).fetch_one(&mut *tx).await?
     };
     tx.commit().await?;
     Ok(json!({"import":get(pool,ctx,resolved).await?,"request_id":cmd.request_id}))

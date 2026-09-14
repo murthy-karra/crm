@@ -57,6 +57,7 @@ android {
         // Mobile005 has isolated normal and in-place-upgrade identities. Neither reuses a prior
         // verifier's encrypted store, package, API listener, or build output.
         mobile005qa { dimension 'origin'; applicationId 'org.crm.field.mobile005qa'; testApplicationId 'org.crm.field.mobile005qa.test'; buildConfigField 'String','API_BASE','"http://10.0.2.2:3103"'; buildConfigField 'String','VAULT_NAMESPACE','"vaultfield.mobile005qa"' }
+        mobile005reviewupgradeqa { dimension 'origin'; applicationId 'org.crm.field.mobile005reviewupgradeqa'; testApplicationId 'org.crm.field.mobile005reviewupgradeqa.test'; buildConfigField 'String','API_BASE','"http://10.0.2.2:3103"'; buildConfigField 'String','VAULT_NAMESPACE','"vaultfield.mobile005reviewupgradeqa"' }
         mobile005upgradeqa { dimension 'origin'; applicationId 'org.crm.field.mobile005upgradeqa'; testApplicationId 'org.crm.field.mobile005upgradeqa.test'; buildConfigField 'String','API_BASE','"http://10.0.2.2:3103"'; buildConfigField 'String','VAULT_NAMESPACE','"vaultfield.mobile005upgradeqa"' }
     }
     buildFeatures { compose = true; buildConfig = true }

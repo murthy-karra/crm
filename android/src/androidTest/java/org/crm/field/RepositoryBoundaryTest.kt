@@ -269,6 +269,33 @@ class RepositoryBoundaryTest {
             DeviceVault(context, name).root.deleteRecursively()
         }
 
+    @Test fun refreshedCapabilitiesReplaceTheActiveBindingAndProtectPendingProfileDrafts() = runBlocking<Unit> {
+        val namespace = "profile-capabilities-${UUID.randomUUID()}"
+        var supported = true
+        val basic = transport()
+        val remote = Transport { origin, method, path, cookie, binding, body ->
+            val response = basic.request(origin, method, path, cookie, binding, body)
+            if (path.endsWith("bootstrap") && supported) response.body.put("capabilities", org.json.JSONArray(listOf("add_note", "create_task", "complete_task", "reconciliation", "update_person_details", "details_revisions")))
+            response
+        }
+        val repo = FieldRepository(context, namespace = namespace, transport = remote)
+        repo.login("synthetic", "synthetic")
+        val db = database(namespace)
+        db.data().insertProfileDraft(ProfileDraftRow(UUID.randomUUID().toString(), UUID.randomUUID().toString(), "{}", "{}", "1", 1))
+        repo.refreshView()
+        assertEquals(1, repo.ui.value.pendingCount)
+        assertTrue(repo.ui.value.profileEditingEnabled)
+        supported = false
+        repo.sync(true)
+        assertFalse(repo.ui.value.profileEditingEnabled)
+        assertEquals(1, repo.ui.value.pendingCount)
+        assertEquals(1, db.data().profileDrafts().size)
+        db.close()
+        repo.lockLocal("Complete")
+        repo.scope.cancel()
+        DeviceVault(context, namespace).root.deleteRecursively()
+    }
+
     @Test
     fun lateLoginCannotUnlockAfterUserSignsOut() =
         runBlocking<Unit> {
@@ -323,6 +350,7 @@ class RepositoryBoundaryTest {
             DeviceVault(context, namespace).root.deleteRecursively()
         }
         rejects("oversized") { page(org.json.JSONArray().apply { repeat(101) { put(json("id" to UUID.randomUUID().toString())) } }, null) }
-        rejects("cyclic") { cursor -> page(org.json.JSONArray(), "again") }
+        rejects("cyclic") { page(org.json.JSONArray(), "again") }
+        rejects("bytes") { page(org.json.JSONArray(), null).put("padding", "x".repeat(524_289)) }
     }
 }

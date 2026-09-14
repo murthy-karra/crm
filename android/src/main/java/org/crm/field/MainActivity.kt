@@ -557,7 +557,7 @@ internal fun PersonScreen(
     val pendingCompletions = local.filter { it.kind == "complete_task" && it.status != "attention" }
     val localContacts = state.contactDrafts.filter { it.person == row.id }
     LazyColumn(
-        Modifier.fillMaxSize(),
+        Modifier.fillMaxSize().testTag("person-details-list"),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -798,7 +798,7 @@ internal fun SavedWork(
     onDiscardProfile: (OperationRow) -> Unit,
 ) {
     LazyColumn(
-        Modifier.fillMaxSize(),
+        Modifier.fillMaxSize().testTag("saved-work-list"),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {

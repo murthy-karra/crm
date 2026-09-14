@@ -33,6 +33,21 @@ class Mobile005ProfileUiRegressionTest {
         compose.onNodeWithText("Removing the primary phone; 555-555-0101 becomes primary.").assertExists()
     }
 
+    @Test fun qualifiedCacheCannotEnableEditorWithoutCurrentCapability() {
+        val person = PersonRow(UUID.randomUUID().toString(), "7", json("display_name" to "Downloaded Person").toString(), "[]", "[]", "[]", "g", "2026-09-14T00:00:00Z", true, true, true)
+        compose.setContent {
+            MaterialTheme {
+                PersonScreen(
+                    FieldUi(locked = false, person = person, profileEditingEnabled = false),
+                    FieldRepository(InstrumentationRegistry.getInstrumentation().targetContext),
+                    { _, _ -> }, {},
+                )
+            }
+        }
+        compose.onNodeWithTag("edit-profile").assertIsNotEnabled()
+        compose.onNodeWithText("Profile editing is unavailable until this workspace restores its details capability. Existing saved profile work remains protected.").assertExists()
+    }
+
     @Test fun savedWorkShowsOneTypedProfileCardWithoutGenericTaskCard() {
         val person = UUID.randomUUID().toString()
         val operation = OperationRow(UUID.randomUUID().toString(), person, "update_person_details", json("payload" to json()).toString(), 1)

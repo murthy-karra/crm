@@ -39,7 +39,7 @@ class FieldUi(
 )
 
 class ActiveAccount(
-    val store: FieldStore,
+    @Volatile var store: FieldStore,
     val api: FieldApi,
     val key: ByteArray,
     val id: String,
@@ -524,7 +524,14 @@ class FieldRepository(
                 )
             check(account)
             if (binding.context != account.store.binding.context) throw ProtocolFailure()
-            FieldStore(account.store.db, binding, clock).authorize(account.api.cookie)
+            val authorizedStore = FieldStore(account.store.db, binding, clock)
+            authorizedStore.authorize(account.api.cookie)
+            // Capabilities are current authorization state. Retaining the pre-refresh Binding
+            // would strand schema-5 caches or keep withdrawn editor capabilities enabled.
+            synchronized(accountChanges) {
+                if (active !== account || epoch != account.epoch) throw AccessLocked()
+                account.store = authorizedStore
+            }
             upload(account, manual)
             try {
                 download(account)

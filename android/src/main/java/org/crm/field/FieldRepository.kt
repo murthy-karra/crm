@@ -730,7 +730,11 @@ class FieldRepository(
                 throw ProtocolFailure()
             page.getJSONArray("items").objects().forEach { all.put(it) }
             val next = page.stringOrNull("next_cursor")
-            if (page.getBoolean("complete") != (next == null) || next == cursor) throw ProtocolFailure()
+            if (
+                page.getBoolean("complete") != (next == null) ||
+                    next == cursor ||
+                    (next != null && (next.isEmpty() || next.toByteArray().size > 2_048))
+            ) throw ProtocolFailure()
             if (next == null) break
             cursor = next
         }

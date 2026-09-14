@@ -53,8 +53,13 @@ iOS checkpoint `125d044` is integrated as `a19fc88`: populated-store upgrade,
 39 storage/model tests, real API replay, full multi-field offline/restart/sync
 and conflict/replacement UI proofs pass. Coordinator fixes then passed42/42
 iOS checks, including both actual native journeys. Android `9134a44` is integrated
-as `43d8302`: actual Compose restart, exact replay and conflict/replacement
-acceptance, Mobile004/005 storage checks and lint/compile pass. The large-contact fixture
+as `43d8302`, with Mobile004/005 storage and lint/compile evidence. Its claimed
+full native acceptance remains **unverified**: independent review found the cited
+restart log ends in failure, the cited discard log is empty, and captured installed
+upgrade probe evidence is missing. The separate conflict/replacement log passes;
+it does not turn the incomplete restart journey into a pass. The writer is locating
+valid existing artifacts or repeating the required proofs while preserving stores.
+The large-contact fixture
 exposed action placement problems, now fixed in iOS and checked in Android.
 
 The literal010f3 Web contract is integrated, and Web implementation is checkpointed
@@ -70,8 +75,9 @@ backend/iOS findings cover current-profile concurrency, direct revision changes,
 native display/primary fallback order and same-transaction add order. Coordinator
 fixes are committed at `63ccae4`, with five focused DB regressions and final
 iOS42-test verification passing. Android round1 then identified old-server
-summary staging rejection and an unreachable primary-removal warning. Its writer
-owns those corrections plus an explicit audit of earlier historical-suite failures.
+summary staging rejection, an unreachable primary-removal warning, omitted profile
+drafts in pending/removal accounting, and missing current-capability UI gating.
+Its writer owns those corrections plus an explicit audit of earlier historical-suite failures.
 No implementation review has been declared READY. Each lane records concrete
 schema/DTO/lock/guard contracts and runs isolated focused checks. Coordinator owns shared integration and sequential
 final `scripts/check`, `scripts/sqlx-prepare`, `scripts/check-db`; database gates do

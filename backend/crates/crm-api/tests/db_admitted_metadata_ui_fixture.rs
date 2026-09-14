@@ -117,15 +117,24 @@ async fn serve_admitted_metadata_ui_fixture() {
     let pool = common::connect_as_app(&migrator).await;
     let mut config = common::test_config();
     config.cors_allowed_origin = Some("http://127.0.0.1:5174".into());
+    let retained_only_reader = Arc::new(import_support::Book::new(vec![]));
     let mut state = AppState::for_tests(pool.clone(), &config, Publisher::recording())
-        .with_migration_reader(Arc::new(import_support::Book::new(vec![])));
+        .with_migration_reader(retained_only_reader.clone());
     state.import_release = Some(Arc::new(ReleaseReadiness::for_tests()));
     // Root can grant bounded execution units after a real UI confirmation.
     // Preparation runs normally; no direct state mutation or fixture endpoint
     // substitutes for the typed cancel/remainder commands.
     let worker_state = state.clone();
     let worker = tokio::spawn(async move {
-        let mut execution_units = 0_u64;
+        // A tested-binary restart must not grant the previous execution budget
+        // again or destroy the partial-cancellation observation boundary.
+        let mut execution_units = std::fs::read(
+            "/private/tmp/crm-mobile005-010f3/integration/metadata-ui/worker-stats.json",
+        )
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+        .and_then(|value| value["execution_units"].as_u64())
+        .unwrap_or(0);
         let mut interval = tokio::time::interval(std::time::Duration::from_millis(200));
         loop {
             interval.tick().await;
@@ -155,7 +164,7 @@ async fn serve_admitted_metadata_ui_fixture() {
                         if executing {
                             execution_units += 1;
                         }
-                        let stats = json!({"execution_units":execution_units});
+                        let stats = json!({"execution_units":execution_units,"source_reader_calls":retained_only_reader.calls()});
                         std::fs::write(
                             "/private/tmp/crm-mobile005-010f3/integration/metadata-ui/worker-stats.json",
                             serde_json::to_vec(&stats).unwrap(),

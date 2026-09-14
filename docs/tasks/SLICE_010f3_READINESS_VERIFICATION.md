@@ -42,3 +42,29 @@ constraint. Runtime and release preflight use the same checks.
 incomplete variants,171.87s total /1.55s test. Complete readiness succeeds before
 and after. Tested tree is `437e3d3` plus the readiness change committed with this
 section. The initial12-variant proof is superseded by this expanded proof.
+
+## Complete review transport
+
+After transport `6a2f866` integrated at root `3ada9bf`, readiness also requires
+the alias table (14 tables total), admission-plan ownership, correctly nullable
+header/counter columns, both normally enabled mapping-count triggers, all12 reader
+indexes and the exact live-root uniqueness predicate. Cancelled unconfirmed roots
+must be excluded from that predicate; confirmed roots remain unique.
+
+The preflight unittest command passes51 tests. The private command
+`run-db-check.py --lane integration --log admitted-transport-handover-readiness1.log --
+cargo test -p crm-api --test all --features perf-harness --locked
+db_admitted_metadata_ -- --ignored --skip db_admitted_metadata_http_boundary::
+--skip db_admitted_metadata_ui_fixture::` compiled and ran3 tests in188.57s.
+The expanded readiness test passes all36 rollback-only variants; the populated
+handover test also passes. The legacy-session test **fails** before handover:
+`crm_metadata_insert_allowed` tries to cast an empty permit string to JSON despite
+the registry being unready. This is a production defect awaiting the migration
+writer's additive correction, not a passing combined check.
+
+The populated handover proof uses an actual completed original metadata import,
+injects a failure after the first claim is charged, and verifies rollback of all
+claims, readiness and owner ledgers. Its successful retry charges both claims
+exactly once, preserves original plans/results/identity evidence, and replays the
+same preparation receipt without another source call or charge. The remaining
+legacy-session proof and full outer HTTP boundary test remain completion gates.

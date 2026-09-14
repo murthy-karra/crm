@@ -98,6 +98,11 @@ class PreflightTests(unittest.TestCase):
                          "'snapshot_id','uuid',true", "'source_output_revision','uuid',true",
                          "'previous_plan_id','uuid',false", "'preparation_kind','text',true",
                          "attnotnull=r.required", "convalidated", "LIKE '%choices%'",
+                         "migration_admitted_metadata_alias", "crm_admitted_metadata_mapping_counts()",
+                         "migration_admitted_metadata_result_filtered_page", "migration_admitted_metadata_cohort_seek",
+                         "'admission_plan_id','uuid',true", "'settled_eligible_people','bigint',true",
+                         "'dependent_count','bigint',true", "'counts','jsonb',false",
+                         "pg_get_expr(indpred,indrelid)", "confirmed_plan_id IS NOT NULL",
                          "migration_admitted_metadata_result_unit", "indisunique AND indisvalid"]:
                 self.assertIn(name, schema)
             observed = queries[-1]

@@ -12,6 +12,20 @@ async fn admitted_metadata_readiness_requires_complete_preparation_schema(pool: 
         .unwrap();
     for mutation in [
         "DROP TABLE migration_admitted_metadata_observation",
+        "DROP TABLE migration_admitted_metadata_alias",
+        "ALTER TABLE migration_admitted_metadata_import DROP COLUMN admission_plan_id",
+        "ALTER TABLE migration_admitted_metadata_import ALTER COLUMN admission_plan_id DROP NOT NULL",
+        "ALTER TABLE migration_admitted_metadata_import DROP COLUMN settled_eligible_people",
+        "ALTER TABLE migration_admitted_metadata_import DROP COLUMN counts",
+        "ALTER TABLE migration_admitted_metadata_mapping DROP COLUMN dependent_count",
+        "ALTER TABLE migration_admitted_metadata_mapping DROP COLUMN alias_count",
+        "ALTER TABLE migration_admitted_metadata_alias DISABLE TRIGGER admitted_metadata_mapping_counts",
+        "ALTER TABLE migration_admitted_metadata_operation ENABLE REPLICA TRIGGER admitted_metadata_mapping_counts",
+        "DROP INDEX migration_admitted_metadata_alias_page",
+        "DROP INDEX migration_admitted_metadata_result_filtered_page",
+        "DROP INDEX migration_admitted_metadata_person_result_page",
+        "DROP INDEX migration_admitted_metadata_cohort_seek",
+        "DROP INDEX migration_admitted_metadata_one_root; CREATE UNIQUE INDEX migration_admitted_metadata_one_root ON migration_admitted_metadata_import(organization_id,admission_id) WHERE predecessor_import_id IS NULL",
         "ALTER TABLE migration_admitted_metadata_plan DROP COLUMN preparation_phase",
         "ALTER TABLE migration_admitted_metadata_plan DROP COLUMN preparation_bytes",
         "ALTER TABLE migration_admitted_metadata_source DROP COLUMN qualified",
@@ -35,7 +49,7 @@ async fn admitted_metadata_readiness_requires_complete_preparation_schema(pool: 
         "ALTER TABLE migration_admitted_metadata_plan DROP CONSTRAINT migration_admitted_metadata_plan_preparation_phase_check",
     ] {
         let mut tx = pool.begin().await.unwrap();
-        sqlx::query(mutation).execute(&mut *tx).await.unwrap();
+        sqlx::raw_sql(mutation).execute(&mut *tx).await.unwrap();
         let error = release
             .require_admitted_metadata(&mut tx)
             .await

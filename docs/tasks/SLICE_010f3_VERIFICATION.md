@@ -90,3 +90,15 @@ limits, HTTP no-store and source-free reader negatives, desktop/390px browser
 workflow and preservation reconciliation. Final `scripts/check`,
 `scripts/sqlx-prepare`, `scripts/check-db`, paired Person/Today performance and
 cross-slice upgrade checks remain coordinator-owned and sequential.
+
+Original writer composition follow-up (parent checkpoint `19f9daa` plus guard
+correction and test): `admitted-original-claims-db.log` and `...-db2.log`
+failed with the original child paused. `admitted-original-claims-db3.log`
+passes after additive schema `20261002000003` corrects original identity
+`bytea` JSON comparison. The proof executes the original worker after shared
+readiness, then reuses those exact claims from admitted execution without
+rewriting original identity evidence. `original-metadata-composition-db.log`
+passes all six original metadata gate tests on the same change. Both commands
+used the isolated migration runner and `--features perf-harness --test all`;
+logs are in `/private/tmp/crm-mobile005-010f3/migration/`. The existing nonfatal
+large-unwind-section linker warning remains.

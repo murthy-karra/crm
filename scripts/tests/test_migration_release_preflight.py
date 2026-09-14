@@ -94,6 +94,10 @@ class PreflightTests(unittest.TestCase):
                          "migration_admitted_metadata_preparation_work", "indisvalid AND indisready",
                          "migration_metadata_identity_claim_guard", "tgenabled IN ('O','A')",
                          "attname='unit_id'", "attname='checkpoint_id'", "attname='pause_reason'",
+                         "migration_admitted_metadata_selected_target", "migration_admitted_metadata_mapping_prepare",
+                         "'snapshot_id','uuid',true", "'source_output_revision','uuid',true",
+                         "'previous_plan_id','uuid',false", "'preparation_kind','text',true",
+                         "attnotnull=r.required", "convalidated", "LIKE '%choices%'",
                          "migration_admitted_metadata_result_unit", "indisunique AND indisvalid"]:
                 self.assertIn(name, schema)
             observed = queries[-1]

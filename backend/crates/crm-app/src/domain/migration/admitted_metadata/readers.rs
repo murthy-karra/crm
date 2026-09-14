@@ -174,7 +174,7 @@ async fn mapping_source(
     s: Scope,
     r: &PgRow,
 ) -> Result<(FrozenMapping, BTreeMap<String, String>), MigrationError> {
-    let f: FrozenMapping = open(key, s, r, "mapping")?;
+    let f = super::fidelity::mapping(c, key, s.org, s.snapshot, s.plan, r).await?;
     let fields = if r.get::<String, _>("kind") == "tag" {
         BTreeMap::from([("tag".into(), f.raw_choice.clone().unwrap_or_default())])
     } else {
@@ -216,10 +216,10 @@ async fn mapping_view(
     let qualified = f.reasons.iter().all(|v| v == "invalid_destination");
     let available = qualified
         && f.label.is_some()
-        && !f
-            .definition
-            .as_ref()
-            .is_some_and(|v| !v.creation_reasons.is_empty());
+        && !(kind == "field"
+            && f.definition
+                .as_ref()
+                .is_some_and(|v| !v.creation_reasons.is_empty()));
     Ok(
         json!({"id":id,"kind":kind,"parent_mapping_id":r.get::<Option<Uuid>,_>("parent_mapping_id"),"dependency_result_id":r.get::<Option<Uuid>,_>("dependency_result_id"),"execute_unit":r.get::<bool,_>("execute_unit"),"source_id":r.get::<String,_>("source_id"),"disposition":disposition,"qualified":qualified,"create_matching_available":available,"choice":choice,"target_id":target_id,"field_id":r.get::<Option<Uuid>,_>("target_field_id"),"reasons":f.reasons,"suggestions":[],"dependent_count":dependent.to_string(),"source":model::summary("source",&source),"added_byte_bound":(r.get::<Vec<u8>,_>("nonce").len()+r.get::<Vec<u8>,_>("ciphertext").len()+4096).to_string(),"alias_count":aliases.to_string(),"target":target_id.map(|id|target(&kind,id,r.get("target_field_id"),&f.target_baseline))}),
     )
@@ -332,6 +332,12 @@ async fn operations(
     s: Scope,
     manifest: Uuid,
 ) -> Result<Value, MigrationError> {
+    let oversized:bool=sqlx::query_scalar("SELECT oversized FROM migration_admitted_metadata_manifest WHERE id=$1 AND plan_id=$2 AND organization_id=$3").bind(manifest).bind(s.plan).bind(s.org.0).fetch_one(&mut *c).await?;
+    if oversized {
+        return Ok(
+            json!({"groups":super::fidelity::groups(c,s.org,s.plan,manifest).await?,"hold_reason":"import_item_byte_limit","details":"Operation evidence is retained; this Person exceeds the supported unit reader. Inspect the retained source and mapping evidence."}),
+        );
+    }
     let total:i64=sqlx::query_scalar("SELECT COALESCE(sum(octet_length(nonce)+octet_length(ciphertext)),0)::bigint FROM migration_admitted_metadata_operation WHERE manifest_id=$1 AND plan_id=$2 AND organization_id=$3").bind(manifest).bind(s.plan).bind(s.org.0).fetch_one(&mut *c).await?;
     if total > metadata_store::UNIT {
         return Err(MigrationError::StorageLimit);
@@ -359,6 +365,9 @@ async fn operations(
     Ok(json!(output))
 }
 fn operation_counts(operations: &Value, result: bool) -> Result<model::Counts, MigrationError> {
+    if let Some(groups) = operations.get("groups") {
+        return super::fidelity::counts(groups, result);
+    }
     let mut counts = model::Counts::default();
     for op in operations.as_array().ok_or(MigrationError::Crypto)? {
         let kind = op["kind"].as_str().ok_or(MigrationError::Crypto)?;
@@ -479,7 +488,11 @@ async fn result_view(
     let kind: String = r.get("kind");
     let disposition: String = r.get("disposition");
     let mut counts = if kind == "people" {
-        operation_counts(&data["operations"], true)?
+        if let Some(groups) = data.get("groups") {
+            super::fidelity::counts(groups, true)?
+        } else {
+            operation_counts(&data["operations"], true)?
+        }
     } else {
         let mut c = model::Counts::default();
         c.outcome(&kind, &disposition);
@@ -498,6 +511,9 @@ async fn result_view(
         )
     };
     let mut reasons = std::collections::BTreeSet::new();
+    if let Some(reason) = data["reason"].as_str() {
+        reasons.insert(reason.to_owned());
+    }
     if let Some(ops) = data["operations"].as_array() {
         for op in ops {
             if let Some(reason) = op["reason"].as_str() {

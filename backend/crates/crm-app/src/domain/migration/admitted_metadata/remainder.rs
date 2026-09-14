@@ -155,7 +155,7 @@ pub(super) async fn step(
             };
             let old_id: Uuid = old.get("id");
             let id = Uuid::new_v4();
-            let f: FrozenMapping = w::open(
+            let mut f: FrozenMapping = w::open(
                 key,
                 org,
                 snapshot,
@@ -165,6 +165,9 @@ pub(super) async fn step(
                 &old.get::<Vec<u8>, _>("nonce"),
                 &old.get::<Vec<u8>, _>("ciphertext"),
             )?;
+            if old.get::<String, _>("kind") == "option" {
+                f.definition = None;
+            }
             let encrypted = seal(key, org, snapshot, plan, id, "mapping", &f)?;
             let parent=match old.get::<Option<Uuid>,_>("parent_mapping_id"){Some(parent)=>Some(sqlx::query_scalar::<_,Uuid>("SELECT id FROM migration_admitted_metadata_mapping WHERE plan_id=$1 AND organization_id=$2 AND predecessor_mapping_id=$3").bind(plan).bind(org.0).bind(parent).fetch_one(&mut *c).await?),None=>None};
             let dependency: Option<Uuid> = old.get("retained_result");
@@ -174,7 +177,7 @@ pub(super) async fn step(
                     old.get::<String, _>("disposition").as_str(),
                     "create_matching" | "map_existing"
                 );
-            sqlx::query("INSERT INTO migration_admitted_metadata_mapping(id,import_id,plan_id,organization_id,kind,source_key,source_id,parent_mapping_id,target_id,target_field_id,disposition,nonce,ciphertext,predecessor_mapping_id,source_mapping_id,dependency_result_id,execute_unit,alias_count) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)").bind(id).bind(root).bind(plan).bind(org.0).bind(old.get::<String,_>("kind")).bind(old.get::<Vec<u8>,_>("source_key")).bind(old.get::<String,_>("source_id")).bind(parent).bind(old.get::<Option<Uuid>,_>("target_id")).bind(old.get::<Option<Uuid>,_>("target_field_id")).bind(old.get::<String,_>("disposition")).bind(encrypted.nonce).bind(encrypted.ciphertext).bind(old_id).bind(old.get::<Option<Uuid>,_>("source_mapping_id").unwrap_or(old_id)).bind(dependency).bind(execute).bind(old.get::<i64,_>("alias_count")).execute(&mut *c).await?;
+            sqlx::query("INSERT INTO migration_admitted_metadata_mapping(id,import_id,plan_id,organization_id,kind,source_key,source_id,parent_mapping_id,target_id,target_field_id,disposition,nonce,ciphertext,predecessor_mapping_id,source_mapping_id,dependency_result_id,execute_unit,alias_count,field_name_key) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)").bind(id).bind(root).bind(plan).bind(org.0).bind(old.get::<String,_>("kind")).bind(old.get::<Vec<u8>,_>("source_key")).bind(old.get::<String,_>("source_id")).bind(parent).bind(old.get::<Option<Uuid>,_>("target_id")).bind(old.get::<Option<Uuid>,_>("target_field_id")).bind(old.get::<String,_>("disposition")).bind(encrypted.nonce).bind(encrypted.ciphertext).bind(old_id).bind(old.get::<Option<Uuid>,_>("source_mapping_id").unwrap_or(old_id)).bind(dependency).bind(execute).bind(old.get::<i64,_>("alias_count")).bind(old.get::<Option<Vec<u8>>,_>("field_name_key")).execute(&mut *c).await?;
             sqlx::query("UPDATE migration_admitted_metadata_plan SET preparation_key=$2,preparation_kind=$3,fields_processed=fields_processed+1 WHERE id=$1").bind(plan).bind(old_id).bind(old.get::<String,_>("kind")).execute(c).await?;
         }
         "remainder_people" => {

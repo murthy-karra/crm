@@ -150,10 +150,15 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         }
         // Submitted work is immutable.  A later typing session remains a draft and never
         // replaces its operation ID or gets silently coalesced into it.
+        // Creation commands have no mutable resource target.  They are independent immutable
+        // actions, so a queued add-note or create-task must never block another such action just
+        // because both have a null target key.  Targeted mutations remain serialized per resource.
         require(
-            dao.operations().none {
-                it.status !in setOf("covered", "superseded") && targetKey(it.kind, JSONObject(it.envelope).getJSONObject("payload")) == targetKey
-            }
+            targetKey == null ||
+                dao.operations().none {
+                    it.status !in setOf("covered", "superseded") &&
+                        targetKey(it.kind, JSONObject(it.envelope).getJSONObject("payload")) == targetKey
+                }
         ) { "Saved draft — waiting for the previous change" }
         val row = newOperation(draft.person, draft.kind, payload)
         dao.operation(row)
@@ -360,14 +365,21 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         require(value.isNotEmpty() && value.toByteArray().size <= 1024 && value.none { it.isISOControl() })
     }
 
-    private fun validateDetailContacts(contacts: JSONArray) {
+    /** Every reconciliation contact is readable, even when an older server omits edit metadata. */
+    private fun validateContactItems(contacts: JSONArray) {
         val ids = mutableSetOf<String>()
         contacts.objects().forEach { item ->
             require(ids.add(uuid(item.getString("id"))))
-            // A complete server baseline can contain an imported legacy value that exceeds a
-            // current edit limit.  It remains readable and frozen in the baseline; only an
-            // add/edit operation is subject to detailValue's input limits.
             require(item.getString("kind") in setOf("email", "phone")); require(item.getString("value").isNotEmpty())
+        }
+    }
+
+    /** Full metadata is required only before contacts can become an editable details baseline. */
+    private fun validateDetailContacts(contacts: JSONArray) {
+        validateContactItems(contacts)
+        contacts.objects().forEach { item ->
+            // A complete server baseline can contain an imported legacy value that exceeds a
+            // current edit limit. It remains readable and frozen; only add/edit input is bounded.
             require(item.has("import_order")); Instant.parse(item.getString("created_at"))
         }
     }
@@ -697,7 +709,11 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
     fun discardProfileConflict(operationId: String) = atomic {
         requireAccess(); val op = dao.operation(operationId) ?: throw ProtocolFailure()
         require(op.kind == "update_person_details" && op.status in setOf("attention", "superseded"))
-        dao.removeProfileContext(operationId); dao.operationState(operationId, "covered", op.attempts, 0, "")
+        // Keep the immutable operation as covered audit evidence, but remove the linked
+        // proposal and comparison together so no unusable orphan draft remains in Saved work.
+        dao.removeProfileContext(operationId)
+        dao.removeProfileOperation(operationId)
+        dao.operationState(operationId, "covered", op.attempts, 0, "")
     }
 
     fun supersedeConflict(operationId: String): JSONObject = atomic {
@@ -784,7 +800,7 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
                 response.toString().toByteArray().size <= 524_288
         )
         require(section in setOf("summary", "notes", "tasks"))
-        if (section == "summary") validateDetailContacts(response.getJSONArray("items"))
+        if (section == "summary") validateContactItems(response.getJSONArray("items"))
         if (section != "summary")
             response.getJSONArray("items").objects().forEach { item ->
                 uuid(item.getString("id"))
@@ -965,7 +981,9 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
             if (
                 pending.any { it.person == old.id } ||
                     dao.drafts().any { it.person == old.id } ||
-                    dao.contactDrafts().any { it.person == old.id }
+                    dao.contactDrafts().any { it.person == old.id } ||
+                    dao.profileDrafts().any { it.person == old.id } ||
+                    dao.profileContexts().any { it.person == old.id }
             )
                 removalConflicts++
             dao.removePerson(old.id)

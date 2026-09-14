@@ -581,10 +581,11 @@ internal fun PersonScreen(
                     Text("Profile", fontWeight = FontWeight.SemiBold)
                     Text("Names and methods are saved separately from the server record until accepted. They never change call or message destinations.", style = MaterialTheme.typography.bodySmall)
                     if (profileOp != null) { Text("Pending profile proposal", color = MaterialTheme.colorScheme.primary); StatusBadge(profileOp) }
-                    Button(onClick = onProfile, enabled = row.detailsRevisionsQualified && state.profileDrafts.none { it.person == row.id && it.operation.isEmpty() && profileOp != null }, modifier = Modifier.testTag("edit-profile")) {
+                    Button(onClick = onProfile, enabled = row.detailsRevisionsQualified && state.profileEditingEnabled && state.profileDrafts.none { it.person == row.id && it.operation.isEmpty() && profileOp != null }, modifier = Modifier.testTag("edit-profile")) {
                         Text(if (profileOp == null) "Edit names and contacts" else "Save follow-up profile")
                     }
                     if (!row.detailsRevisionsQualified) Text("Profile editing needs a complete current contact baseline.", style = MaterialTheme.typography.bodySmall)
+                    else if (!state.profileEditingEnabled) Text("Profile editing is unavailable until this workspace restores its details capability. Existing saved profile work remains protected.", style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
@@ -782,7 +783,7 @@ private fun StatusBadge(row: OperationRow) {
 }
 
 @Composable
-private fun SavedWork(
+internal fun SavedWork(
     state: FieldUi,
     repository: FieldRepository,
     onDraft: (DraftRow) -> Unit,
@@ -887,7 +888,7 @@ private fun SavedWork(
                 }
             }
         }
-        items(state.operations.filter { it.kind != "log_contact_attempt" }, key = { it.id }) { row ->
+        items(state.operations.filter { it.kind !in setOf("log_contact_attempt", "update_person_details") }, key = { it.id }) { row ->
             OutlinedCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text(
@@ -1221,7 +1222,7 @@ private fun Composer(
         )
 }
 
-private data class ProfileContact(
+internal data class ProfileContact(
     val id: String?,
     val kind: String,
     val value: String,
@@ -1230,6 +1231,25 @@ private data class ProfileContact(
     val baselineValue: String? = value,
     val removed: Boolean = false,
 )
+
+@Composable
+internal fun ProfileRemovalNotice(contacts: List<ProfileContact>, index: Int) {
+    val removed = contacts[index]
+    val firstExistingId = contacts.firstOrNull { it.id != null && it.kind == removed.kind }?.id
+    if (firstExistingId != removed.id) {
+        Text("${removed.kind} will be removed.", style = MaterialTheme.typography.bodySmall)
+        return
+    }
+    val successor = contacts.drop(index + 1).firstOrNull {
+        it.id != null && !it.removed && it.kind == removed.kind
+    }
+    Text(
+        if (successor == null) "Removing the primary ${removed.kind}; no ${removed.kind} remains."
+        else "Removing the primary ${removed.kind}; ${successor.value} becomes primary.",
+        style = MaterialTheme.typography.bodySmall,
+        modifier = Modifier.testTag("profile-primary-warning-${removed.kind}"),
+    )
+}
 
 /** The editor keeps an operation list, never a replace-all contact array or local normalization. */
 @Composable
@@ -1320,14 +1340,9 @@ private fun ProfileComposer(
             contacts.forEachIndexed { index, contact ->
                 if (contact.id != null && !contact.removed) Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
                     OutlinedTextField(contact.value, { contacts[index] = contact.copy(value = it) }, label = { Text(contact.kind) }, enabled = !saving, modifier = Modifier.weight(1f).testTag("profile-contact-$index"))
-                    TextButton(onClick = { contacts[index] = contact.copy(removed = true) }, enabled = !saving) { Text("Remove") }
+                    TextButton(onClick = { contacts[index] = contact.copy(removed = true) }, enabled = !saving, modifier = Modifier.testTag("profile-remove-$index")) { Text("Remove") }
                 } else if (contact.id != null) {
-                    val primary = contacts.firstOrNull { it.id != null && !it.removed && it.kind == contact.kind }?.id == contact.id
-                    Text(
-                        if (primary) "Removing the primary ${contact.kind}; the next server-ordered ${contact.kind} becomes primary."
-                        else "${contact.kind} will be removed.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                    ProfileRemovalNotice(contacts, index)
                 }
             }
             if (contacts.any { it.id == null && !it.removed }) Text("New contact methods (the server appends them after existing methods)", fontWeight = FontWeight.SemiBold)

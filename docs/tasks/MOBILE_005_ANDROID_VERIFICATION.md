@@ -41,11 +41,12 @@ Android Studio bundled JBR.  Gradle outputs and command logs are isolated under
 | Actual installed Mobile004 → Mobile005 upgrade | passed | schema-5 seed and schema-6 probe below |
 | Native API offline save → force stop/relaunch → exact replay | passed | `mobile005-live-relaunch-final.log` |
 | Native API accepted replay, competing writer conflict, and manual replacement draft | passed | `mobile005-live-replay-conflict-final-source.log` |
-| Native Compose invalid proposal retained then explicitly discarded | passed | `mobile005-ui-discard-2.log` (19.321 s); screenshot `mobile005-ui-discarded-rejected-profile.png` |
-| Native Compose offline multi-field profile → force-stop/restart → exact replay/cover | passed | `mobile005-ui-prepare-unique.log` (93.519 s), staged `5794b1dc-e110-4dda-9a7e-5d7e5aba008b` SHA-256 `f0553c751e9ed128f8442d9059567d86e81062ce8cdf154279817b5983a583c9`, then `mobile005-ui-relaunch-unique-final.log`; screenshots offline, queued, restarted, and synced |
+| Native Compose invalid proposal retained then explicitly discarded | evidence incomplete | The cited `mobile005-ui-discard-2.log` is zero bytes; the screenshot remains but does not prove the runner result. This must be recaptured before final acceptance. |
+| Native Compose offline multi-field profile → force-stop/restart → exact replay/cover | partial/failed attempt retained | `mobile005-ui-prepare-unique.log` staged `5794b1dc-e110-4dda-9a7e-5d7e5aba008b` SHA-256 `f0553c751e9ed128f8442d9059567d86e81062ce8cdf154279817b5983a583c9`; `mobile005-ui-relaunch-unique-final.log` ends in a failure at `Mobile005UiProofTest.kt:122`. A separate later conflict/replacement pass does not convert that full restart attempt into a pass. |
 | Native Compose retained conflict/current/replacement and accepted follow-up | passed | `mobile005-ui-conflict-replacement-complete4.log` (60.768 s); conflict and replacement screenshots |
-| `Mobile005StorageTest` (8 tests, including scrambled UUID contact order) | passed | direct `adb am instrument`, 40.531 s on final source |
-| `Mobile004StorageTest` regression (7 tests) | passed | direct `adb am instrument`, 34.902 s on final source |
+| `Mobile005StorageTest` (11 tests) | passed | `mobile005-storage-final-round1.log`, direct QA instrumentation, 72.271 s; includes old-wire traversal, discard cleanup, ordering, strict receipts and protected selection removal |
+| Historical `StorageTest` broad regression (8 tests) | passed after repair | `mobile005-storage-regressions-final-round1-retry.log`, direct QA instrumentation, 72.05 s |
+| `Mobile004StorageTest` regression (7 tests) | prior direct result lacks retained stdout | Needs an auditable recapture before final acceptance; not counted as a current passing artifact. |
 | `:lintMobile005qaDebug :compileDemoDebugKotlin :compileMobile005qaDebugAndroidTestKotlin` | passed | `mobile005-final-platform-final.log` |
 
 The installed upgrade used the historical Mobile004 source archive at the requested
@@ -97,3 +98,13 @@ Two earlier harness-only failures are retained as `mobile005-ui-relaunch-unique.
 The harness now reports restore diagnostics, uses the established 60-second native startup
 bound, and waits for durable sync transitions and visible controls. Production `FLAG_SECURE`
 and release dependencies are unchanged.
+
+## Historical broad-storage disposition
+
+The earlier `mobile005-storage-regressions-final.log` ran 15 tests and failed three
+`StorageTest` cases. They were not treated as a passing narrower subset: missing old
+notes/tasks item revisions were already made readable; this follow-up fixed null target keys
+so independent immutable `add_note` actions no longer block each other; and rebuilt the
+test's real schema-1 input before exercising migrations through schema 6. The first follow-up
+run then exposed a stale test setup that began a second generation without staging its required
+pages; it is repaired and the retained retry artifact reports `OK (8 tests)`.

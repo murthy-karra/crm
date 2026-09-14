@@ -49,6 +49,7 @@ class Mobile005StorageTest {
         val op = store.submitProfileDraft(draft.id, draft.revision)
         assertThrows(Exception::class.java) { store.acknowledge(op.id, receipt(op).put("added_contact_ids", JSONArray().put(json("ordinal" to 0, "id" to UUID.randomUUID().toString())))) }
         assertThrows(Exception::class.java) { store.acknowledge(op.id, receipt(op, false)) }
+        assertThrows(Exception::class.java) { store.acknowledge(op.id, receipt(op).put("committed_revision", "9223372036854775808")) }
         store.acknowledge(op.id, receipt(op))
         store.dao.cover(op.id)
 
@@ -61,6 +62,53 @@ class Mobile005StorageTest {
     @Test fun incompleteOrOldSameBroadRevisionCannotCreateProfileBaseline() {
         val old = store.dao.person(person)!!
         store.dao.person(old.copy(summary = json("id" to person, "first_name" to "Old", "last_name" to "Cache").toString(), contacts = JSONArray().put(json("id" to email, "kind" to "email", "value" to "old@example.test", "created_at" to "2026-09-14T00:00:00Z")).toString(), detailsRevisionsQualified = false))
+        assertThrows(Exception::class.java) { store.saveProfileDraft(UUID.randomUUID().toString(), person, proposal()) }
+    }
+
+    @Test fun oldCapabilityContactPagesPromoteReadableButNeverBecomeEditableDetailsBaseline() {
+        val bootstrap = fixture("reconciliation_bootstrap").put(
+            "capabilities",
+            JSONArray(listOf("add_note", "create_task", "complete_task", "reconciliation")),
+        )
+        store = FieldStore(
+            database,
+            Binding.parse(bootstrap, bootstrap.getString("actor_user_id"), bootstrap.getString("organization_id"), bootstrap.getString("installation_id")),
+            TestClock(),
+        )
+        store.authorize("synthetic")
+        assertFalse(store.binding.supportsPersonDetails())
+        val generation = UUID.randomUUID().toString()
+        val contactId = UUID.randomUUID().toString()
+        store.beginGeneration(
+            json(
+                "context_id" to store.binding.context,
+                "generation_id" to generation,
+                "evaluated_at" to "2026-09-14T00:00:00Z",
+                "expires_at" to "2026-09-14T01:00:00Z",
+                "selected_count" to 1,
+                "complete" to true,
+                "manifest" to json("items" to JSONArray().put(json("person_id" to person, "revision" to "8")), "next_cursor" to null, "complete" to true),
+            ),
+        )
+        fun page(section: String, items: JSONArray, summary: JSONObject? = null) =
+            json("generation_id" to generation, "person_id" to person, "revision" to "8", "section" to section, "items" to items, "summary" to (summary ?: JSONObject.NULL), "next_cursor" to null, "complete" to true)
+        val oldItems = JSONArray().put(json("id" to contactId, "kind" to "email", "value" to "imported@example.test"))
+        store.stagePage(generation, person, "summary", "", page("summary", oldItems, json("id" to person, "display_name" to "Imported Person")))
+        store.stagePage(generation, person, "notes", "", page("notes", JSONArray()))
+        store.stagePage(generation, person, "tasks", "", page("tasks", JSONArray()))
+        store.promote(
+            json(
+                "context_id" to store.binding.context,
+                "generation_id" to generation,
+                "evaluated_at" to "2026-09-14T00:00:00Z",
+                "sealed_at" to "2026-09-14T00:01:00Z",
+                "selected_count" to 1,
+                "today" to json("sources" to json("status" to "complete"), "items" to JSONArray()),
+            ),
+        )
+        val promoted = requireNotNull(store.dao.person(person))
+        assertEquals(oldItems.toString(), promoted.contacts)
+        assertFalse(promoted.detailsRevisionsQualified)
         assertThrows(Exception::class.java) { store.saveProfileDraft(UUID.randomUUID().toString(), person, proposal()) }
     }
 
@@ -128,6 +176,46 @@ class Mobile005StorageTest {
         assertEquals(bytes, store.dao.operation(op.id)!!.envelope)
         assertFalse(store.dao.person(person)!!.detailsRevisionsQualified)
         assertTrue(store.dao.profileDrafts().isEmpty())
+    }
+
+    @Test fun selectionRemovalCountsProtectedProfileDraftAndContext() {
+        store.saveProfileDraft(UUID.randomUUID().toString(), person, proposal())
+        store.dao.profileContext(ProfileContextRow(UUID.randomUUID().toString(), person, "{}", "{}"))
+        val generation = UUID.randomUUID().toString()
+        store.beginGeneration(
+            json(
+                "context_id" to store.binding.context,
+                "generation_id" to generation,
+                "evaluated_at" to "2026-09-14T00:00:00Z",
+                "expires_at" to "2026-09-14T01:00:00Z",
+                "selected_count" to 0,
+                "complete" to true,
+                "manifest" to json("items" to JSONArray(), "next_cursor" to null, "complete" to true),
+            ),
+        )
+        store.promote(
+            json(
+                "context_id" to store.binding.context,
+                "generation_id" to generation,
+                "evaluated_at" to "2026-09-14T00:00:00Z",
+                "sealed_at" to "2026-09-14T00:01:00Z",
+                "selected_count" to 0,
+                "today" to json("sources" to json("status" to "complete"), "items" to JSONArray()),
+            ),
+        )
+        assertTrue(requireNotNull(store.dao.meta("coverage")).contains("1 protected saved-work conflicts"))
+        assertNotNull(store.dao.profileDrafts().single())
+        assertNotNull(store.dao.profileContexts().single())
+    }
+
+    @Test fun discardProfileProposalRemovesItsDraftAndComparisonButRetainsCoveredOperation() {
+        val draft = store.saveProfileDraft(UUID.randomUUID().toString(), person, proposal())
+        val operation = store.submitProfileDraft(draft.id, draft.revision)
+        store.dao.operationState(operation.id, "attention", 1, 0, "invalid_person_details")
+        store.discardProfileConflict(operation.id)
+        assertEquals("covered", store.dao.operation(operation.id)?.status)
+        assertTrue(store.dao.profileDrafts().isEmpty())
+        assertTrue(store.dao.profileContexts().isEmpty())
     }
 
     private fun proposal() = json("first_name" to "Changed", "contact_operations" to JSONArray().put(json("op" to "edit", "id" to email, "value" to "changed@example.test")).put(json("op" to "add", "kind" to "phone", "value" to "555-555-0100")))

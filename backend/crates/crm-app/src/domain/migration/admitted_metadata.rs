@@ -18,6 +18,7 @@ use serde_json::{json, Value};
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
+pub(crate) mod fidelity;
 mod preparation;
 mod readers;
 mod remainder;
@@ -372,21 +373,40 @@ async fn baseline(
     plan: Uuid,
     row: Uuid,
     person: Uuid,
-    reasons: &[String],
-) -> Result<crypto::Sealed, MigrationError> {
+    reasons: &mut Vec<String>,
+) -> Result<(crypto::Sealed, bool), MigrationError> {
+    let size:i64=sqlx::query_scalar("SELECT COALESCE((SELECT sum(octet_length((to_jsonb(v)-ARRAY['created_at','updated_at'])::text)+2) FROM person_custom_field_value v WHERE organization_id=$1 AND person_id=$2),0)::bigint+COALESCE((SELECT count(*)*40 FROM person_tag WHERE organization_id=$1 AND person_id=$2),0)::bigint").bind(org.0).bind(person).fetch_one(&mut *conn).await?;
+    if size > metadata_store::UNIT - 512 * 1024 {
+        reasons.push("import_item_byte_limit".into());
+        return Ok((
+            seal(
+                key,
+                org,
+                snapshot,
+                plan,
+                row,
+                "baseline",
+                &json!({"person_id":person,"tags":[],"values":[],"reasons":reasons,"omitted_native_bytes":size.to_string()}),
+            )?,
+            true,
+        ));
+    }
     let tags: Value = sqlx::query_scalar("SELECT COALESCE(jsonb_agg(tag_id ORDER BY tag_id),'[]'::jsonb) FROM person_tag WHERE organization_id=$1 AND person_id=$2")
         .bind(org.0).bind(person).fetch_one(&mut *conn).await?;
     let values: Value = sqlx::query_scalar("SELECT COALESCE(jsonb_agg(to_jsonb(v) - ARRAY['created_at','updated_at'] ORDER BY field_id),'[]'::jsonb) FROM person_custom_field_value v WHERE organization_id=$1 AND person_id=$2")
         .bind(org.0).bind(person).fetch_one(&mut *conn).await?;
-    seal(
-        key,
-        org,
-        snapshot,
-        plan,
-        row,
-        "baseline",
-        &json!({"person_id":person,"tags":tags,"values":values,"reasons":reasons}),
-    )
+    Ok((
+        seal(
+            key,
+            org,
+            snapshot,
+            plan,
+            row,
+            "baseline",
+            &json!({"person_id":person,"tags":tags,"values":values,"reasons":reasons}),
+        )?,
+        false,
+    ))
 }
 
 #[allow(clippy::too_many_arguments)] // Tenant, evidence and immutable owner scopes stay explicit.
@@ -419,9 +439,16 @@ async fn insert_mapping(
     } else {
         source_key(key, org, account, kind, raw)
     };
+    let field_name_key = if kind == "field" {
+        frozen.machine_name.as_ref().map(|name| {
+            metadata_store::source_key(key, org, account, "field-name", name.as_bytes())
+        })
+    } else {
+        None
+    };
     let sealed = seal(key, org, snapshot, plan, id, "mapping", &frozen)?;
-    sqlx::query("INSERT INTO migration_admitted_metadata_mapping(id,import_id,plan_id,organization_id,kind,source_key,source_id,parent_mapping_id,target_field_id,disposition,nonce,ciphertext) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'held',$10,$11) ON CONFLICT(plan_id,organization_id,kind,source_key) DO NOTHING")
-        .bind(id).bind(import).bind(plan).bind(org.0).bind(kind).bind(&source_key).bind(source_id).bind(parent).bind(target_field).bind(sealed.nonce).bind(sealed.ciphertext).execute(&mut *conn).await?;
+    sqlx::query("INSERT INTO migration_admitted_metadata_mapping(id,import_id,plan_id,organization_id,kind,source_key,source_id,parent_mapping_id,target_field_id,disposition,nonce,ciphertext,field_name_key) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'held',$10,$11,$12) ON CONFLICT(plan_id,organization_id,kind,source_key) DO NOTHING")
+        .bind(id).bind(import).bind(plan).bind(org.0).bind(kind).bind(&source_key).bind(source_id).bind(parent).bind(target_field).bind(sealed.nonce).bind(sealed.ciphertext).bind(field_name_key).execute(&mut *conn).await?;
     let existing: Uuid = sqlx::query_scalar("SELECT id FROM migration_admitted_metadata_mapping WHERE plan_id=$1 AND organization_id=$2 AND kind=$3 AND source_key=$4")
         .bind(plan).bind(org.0).bind(kind).bind(source_key).fetch_one(&mut *conn).await?;
     Ok(existing)

@@ -56,8 +56,8 @@ pub(super) async fn row(
             .map(|p| p.get::<String, _>("preparation_phase"))
             .as_deref()
         {
-            Some("cohort") => "cohort",
-            Some("values") => "baselines",
+            Some("cohort" | "remainder_people") => "cohort",
+            Some("values" | "extra_values" | "remainder_operations") => "baselines",
             Some("seal" | "complete") => "seal",
             _ => "fields",
         }

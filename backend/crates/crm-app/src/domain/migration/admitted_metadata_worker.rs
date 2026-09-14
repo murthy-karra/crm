@@ -89,8 +89,8 @@ pub(crate) async fn claim_equal(
         return Ok(false);
     }
     if let Some(id) = r.get::<Option<Uuid>, _>("admitted_mapping_id") {
-        let owner=sqlx::query("SELECT i.snapshot_id,m.plan_id FROM migration_admitted_metadata_mapping m JOIN migration_admitted_metadata_plan i ON i.id=m.plan_id AND i.organization_id=m.organization_id WHERE m.id=$1 AND m.organization_id=$2").bind(id).bind(org.0).fetch_one(&mut *c).await?;
-        let prior: FrozenMapping = open(
+        let owner=sqlx::query("SELECT i.snapshot_id,m.plan_id,m.parent_mapping_id FROM migration_admitted_metadata_mapping m JOIN migration_admitted_metadata_plan i ON i.id=m.plan_id AND i.organization_id=m.organization_id WHERE m.id=$1 AND m.organization_id=$2").bind(id).bind(org.0).fetch_one(&mut *c).await?;
+        let mut prior: FrozenMapping = open(
             key,
             org,
             owner.get("snapshot_id"),
@@ -100,6 +100,16 @@ pub(crate) async fn claim_equal(
             &r.get::<Vec<u8>, _>("evidence_nonce"),
             &r.get::<Vec<u8>, _>("evidence_ciphertext"),
         )?;
+        a::fidelity::resolve_definition(
+            c,
+            key,
+            org,
+            owner.get("snapshot_id"),
+            owner.get("plan_id"),
+            owner.get("parent_mapping_id"),
+            &mut prior,
+        )
+        .await?;
         if kind == "tag" {
             Ok(sqlx::query_scalar::<_, bool>(
                 "SELECT lower($1::text) IS NOT DISTINCT FROM lower($2::text)",
@@ -217,6 +227,14 @@ struct Job {
     lease: Uuid,
 }
 impl Job {
+    async fn mapping(
+        &self,
+        c: &mut PgConnection,
+        key: &RawPayloadKey,
+        r: &PgRow,
+    ) -> Result<FrozenMapping, MigrationError> {
+        a::fidelity::mapping(c, key, self.org, self.snapshot, self.plan, r).await
+    }
     fn decode<T: DeserializeOwned>(
         &self,
         key: &RawPayloadKey,
@@ -274,17 +292,25 @@ impl Job {
         if kind == "people" {
             counts.people.settled += 1;
             eligible_person=sqlx::query_scalar("SELECT disposition='eligible' FROM migration_admitted_metadata_manifest WHERE id=$1 AND plan_id=$2 AND organization_id=$3").bind(unit).bind(self.plan).bind(self.org.0).fetch_one(&mut *c).await?;
-            for op in data["operations"]
-                .as_array()
-                .ok_or(MigrationError::Crypto)?
-            {
-                counts.settled(
-                    op["kind"].as_str().ok_or(MigrationError::Crypto)?,
-                    op["planned_disposition"]
-                        .as_str()
-                        .ok_or(MigrationError::Crypto)?,
-                    op["outcome"].as_str().ok_or(MigrationError::Crypto)?,
-                );
+            if let Some(groups) = data.get("groups") {
+                for group in groups.as_array().ok_or(MigrationError::Crypto)? {
+                    let kind = group["kind"].as_str().ok_or(MigrationError::Crypto)?;
+                    let n = group["count"].as_i64().ok_or(MigrationError::Crypto)?;
+                    counts.family(kind).pending -= n;
+                }
+            } else {
+                for op in data["operations"]
+                    .as_array()
+                    .ok_or(MigrationError::Crypto)?
+                {
+                    counts.settled(
+                        op["kind"].as_str().ok_or(MigrationError::Crypto)?,
+                        op["planned_disposition"]
+                            .as_str()
+                            .ok_or(MigrationError::Crypto)?,
+                        op["outcome"].as_str().ok_or(MigrationError::Crypto)?,
+                    );
+                }
             }
         } else {
             let old:String=sqlx::query_scalar("SELECT disposition FROM migration_admitted_metadata_mapping WHERE id=$1 AND plan_id=$2 AND organization_id=$3").bind(unit).bind(self.plan).bind(self.org.0).fetch_one(&mut *c).await?;
@@ -301,7 +327,10 @@ impl Job {
         let next = serde_json::to_value(counts).map_err(|_| MigrationError::Crypto)?;
         let after:i32=sqlx::query_scalar("UPDATE migration_admitted_metadata_import SET counts=$3,settled_eligible_people=settled_eligible_people+$4,held_settled_people=held_settled_people+$5 WHERE id=$1 AND organization_id=$2 RETURNING octet_length(counts::text)").bind(self.root).bind(self.org.0).bind(next).bind(i64::from(eligible_person)).bind(i64::from(kind=="people" && outcome=="held")).fetch_one(&mut *c).await?;
         bytes += i64::from(after - cached.get::<i32, _>("bytes"));
-        sqlx::query("INSERT INTO migration_admitted_metadata_result(id,import_id,plan_id,unit_id,manifest_id,organization_id,kind,disposition,person_id,nonce,ciphertext) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)").bind(id).bind(self.root).bind(self.plan).bind(unit).bind(if kind=="people"{Some(unit)}else{None}).bind(self.org.0).bind(kind).bind(outcome).bind(person).bind(sealed.nonce).bind(sealed.ciphertext).execute(c).await?;
+        sqlx::query("INSERT INTO migration_admitted_metadata_result(id,import_id,plan_id,unit_id,manifest_id,organization_id,kind,disposition,person_id,nonce,ciphertext) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)").bind(id).bind(self.root).bind(self.plan).bind(unit).bind(if kind=="people"{Some(unit)}else{None}).bind(self.org.0).bind(kind).bind(outcome).bind(person).bind(sealed.nonce).bind(sealed.ciphertext).execute(&mut *c).await?;
+        if kind != "people" {
+            sqlx::query("UPDATE migration_admitted_metadata_mapping SET execute_unit=false WHERE id=$1 AND plan_id=$2 AND organization_id=$3").bind(unit).bind(self.plan).bind(self.org.0).execute(c).await?;
+        }
         Ok(bytes)
     }
 }
@@ -311,7 +340,7 @@ async fn mapping_ready(
     j: &Job,
     m: &PgRow,
 ) -> Result<bool, MigrationError> {
-    let f: FrozenMapping = j.decode(key, m, "mapping")?;
+    let f: FrozenMapping = j.mapping(c, key, m).await?;
     let Some(target) = m.get::<Option<Uuid>, _>("target_id") else {
         return Ok(false);
     };
@@ -359,7 +388,7 @@ async fn catalog(
     j: &Job,
     m: &PgRow,
 ) -> Result<i64, MigrationError> {
-    let f: FrozenMapping = j.decode(key, m, "mapping")?;
+    let f: FrozenMapping = j.mapping(c, key, m).await?;
     let id: Uuid = m.get("id");
     let kind: String = m.get("kind");
     let disposition: String = m.get("disposition");
@@ -483,6 +512,12 @@ async fn people(
         .bind(j.org.0)
         .fetch_optional(&mut *c)
         .await?;
+    if m.get::<bool, _>("oversized") {
+        let groups = a::fidelity::groups(c, j.org, j.plan, unit).await?;
+        let bytes=j.result(c,key,unit,"people","held",live_person,json!({"admission_result_id":m.get::<Uuid,_>("admission_result_id"),"source_person_id":m.get::<String,_>("source_person_id"),"operations":[],"groups":groups,"reason":"import_item_byte_limit","outcome":"held"})).await?;
+        sqlx::query("UPDATE migration_admitted_metadata_manifest SET disposition='settled',settled_at=clock_timestamp() WHERE id=$1 AND import_id=$2 AND organization_id=$3").bind(unit).bind(j.root).bind(j.org.0).execute(c).await?;
+        return Ok(bytes);
+    }
     let ops=sqlx::query("SELECT * FROM migration_admitted_metadata_operation WHERE manifest_id=$1 AND import_id=$2 AND plan_id=$3 AND organization_id=$4 ORDER BY id").bind(unit).bind(j.root).bind(j.plan).bind(j.org.0).fetch_all(&mut *c).await?;
     let tags: Vec<Uuid> = sqlx::query_scalar(
         "SELECT tag_id FROM person_tag WHERE person_id=$1 AND organization_id=$2 ORDER BY tag_id",
@@ -564,7 +599,7 @@ async fn people(
                             let options=sqlx::query("SELECT * FROM migration_admitted_metadata_mapping WHERE parent_mapping_id=$1 AND plan_id=$2 AND organization_id=$3 ORDER BY id").bind(map.get::<Uuid,_>("id")).bind(j.plan).bind(j.org.0).fetch_all(&mut *c).await?;
                             let mut selected = None;
                             for option in options {
-                                let frozen: FrozenMapping = j.decode(key, &option, "mapping")?;
+                                let frozen: FrozenMapping = j.mapping(c, key, &option).await?;
                                 if frozen.raw_choice.as_deref() == Some(raw.as_str())
                                     && mapping_ready(c, key, j, &option).await?
                                 {
@@ -689,7 +724,7 @@ async fn unit(
         None
     };
     let children = if let Some(m) = mapping.as_ref() {
-        let f: FrozenMapping = j.decode(key, m, "mapping")?;
+        let f: FrozenMapping = j.mapping(&mut tx, key, m).await?;
         if m.get::<String, _>("kind") == "field"
             && m.get::<String, _>("disposition") == "create_matching"
             && f.field_type.as_deref() == Some("choice")
@@ -700,7 +735,7 @@ async fn unit(
             }
             let mut ordered = Vec::with_capacity(children.len());
             for child in children {
-                let value: FrozenMapping = j.decode(key, &child, "mapping")?;
+                let value: FrozenMapping = j.mapping(&mut tx, key, &child).await?;
                 let ordinal = value
                     .definition
                     .as_ref()

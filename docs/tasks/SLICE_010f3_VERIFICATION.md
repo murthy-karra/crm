@@ -259,3 +259,63 @@ Remaining implementation/verification: actual Person fan-out bounds and visible
 oversized evidence holds, explicit undeclared custom-key and duplicate machine-name
 outcomes, new reader/remainder SQL plans at D-050 size, full budget/key/expiry/source
 variant matrix, coordinator browser acceptance and final integrated review/gates.
+
+## Final evidence bounds and source fidelity checkpoint (in verification)
+
+The additive `20261002000008` introduces the manifest's `oversized` flag and a
+32-byte blind field-name key with a scoped partial index. Preparation now checks
+capture descriptors before fetching ciphertext: captures beyond 4 MiB yield a
+visible retained evidence hold without opening the body. Missing/invalid retained
+representations remain visible; duplicate source machine names hold both field
+mappings, and undeclared custom keys become counted held value operations.
+Choice options reference their complete immutable parent definition rather than
+copying it into every option envelope; compatible claim comparisons and readers
+resolve that exact parent, retaining the original 010f1 type/choice fidelity.
+
+Native baseline size is counted with indexed row aggregates before constructing
+JSON. An oversized native baseline freezes a compact hold; oversized derived
+Person work retains its staged evidence and settles compact grouped counts with
+no native mutation. Regular Person bounds include actual baseline/operation
+bytes. Catalog bounds include option children only for an atomic create-matching
+field. The per-Person target alignment runs once after all field batches, while
+settled catalog units leave the pending execution index atomically with results.
+
+`admitted-fidelity-check1.log` and `check2.log` passed API test compilation.
+`admitted-fidelity-db1.log` passed 20 functional/recorded-plan checks and failed
+one newly added native stress seed because its 4,000-character Text value violated
+the native 500-character limit. The corrected valid 35,000-cell Unicode seed
+passes in `admitted-fidelity-db2-native-bound.log` (1 test, 63.10s), proving a
+visible >64-MiB baseline hold, exact grouped outcome counts and every native cell
+unchanged. The first pass also covers a deliberately unreadable oversized capture,
+duplicate/undeclared keys, 120-option normalized evidence, typed execution,
+original claims, atomic rollback and exact remainder.
+
+Final cardinality/SQL evidence and the expiry/current-policy/key retry regression
+are still running. The first final D-050 fixture attempt failed a test-only
+predecessor FK seed before any EXPLAIN; `admitted-fidelity-d050-final1.log` is
+retained. Cardinality envelopes are inert synthetic copies, never executed or
+reported as a billable migration run. The coordinator separately owns and has
+reported passing real browser acceptance, the outer HTTP denial matrix and
+readiness variants; those checks are not duplicated in this lane.
+
+The final functional implementation passes all 21 focused functional and
+recorded-plan checks in `admitted-fidelity-db3-functional.log` (111.08s), skipping
+only the two previously proved D-050 fixtures and the unchanged 35,000-cell
+stress test whose dedicated pass is recorded above. This includes the complete
+normalized source/mapping/operation/observation/issue/receipt/root/plan logical
+byte inventory, expired confirmation rejection with no charge, current-policy
+reduction rolling back the entire next unit and reservation release, wrong-key
+pause with no effects, and explicit retry preserving the confirmed plan verbatim.
+App all-target Clippy with warnings denied passes in
+`admitted-fidelity-clippy.log` (8.74s).
+
+`admitted-fidelity-d050-final2.log` records fifteen actual new/changed hot SQL
+plans at 25,000 People/50 members. Descriptor/name lookup, sparse pending catalog,
+native/operation bounds, filtered readers, provenance, alias and remainder use
+scoped indexes, with execution times 0.013–0.246ms. Its final assertion expected
+one particular operation-read index, but PostgreSQL correctly chose the existing
+manifest/Organization/kind/source unique index and sorted only five scoped rows
+(0.039ms); the assertion was widened to accept that valid plan. Tail-only evidence
+continues with the predecessor lookup, a nonempty late remainder-mapping probe,
+one-time seal bound and logical/physical inventory; the earlier unchanged plans
+are not repeated.

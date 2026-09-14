@@ -39,7 +39,7 @@ impl Prep {
     ) -> Result<(), MigrationError> {
         let seq: i64 = p.get("preparation_sequence");
         let ordinal: i32 = p.get("preparation_ordinal");
-        let cap=sqlx::query("SELECT * FROM migration_snapshot_capture WHERE snapshot_id=$1 AND organization_id=$2 AND stream IN ('people','custom_fields') AND sequence<=$3 AND sequence>=$4 AND (sequence>$4 OR sequence=$4 AND EXISTS(SELECT 1 FROM migration_snapshot_record r WHERE r.capture_id=migration_snapshot_capture.id AND r.organization_id=$2 AND r.ordinal>$5)) ORDER BY sequence LIMIT 1").bind(self.snapshot).bind(self.org.0).bind(self.boundary).bind(seq).bind(ordinal).fetch_optional(&mut *c).await?;
+        let cap=sqlx::query("SELECT id,sequence,stream,accepted,truncated,http_status,classification,representation,raw_byte_len,nonce,CASE WHEN raw_byte_len<=4194304 AND octet_length(ciphertext)<=4194320 THEN ciphertext END AS ciphertext FROM migration_snapshot_capture WHERE snapshot_id=$1 AND organization_id=$2 AND stream IN ('people','custom_fields') AND sequence<=$3 AND sequence>=$4 AND (sequence>$4 OR sequence=$4 AND EXISTS(SELECT 1 FROM migration_snapshot_record r WHERE r.capture_id=migration_snapshot_capture.id AND r.organization_id=$2 AND r.ordinal>$5)) ORDER BY sequence LIMIT 1").bind(self.snapshot).bind(self.org.0).bind(self.boundary).bind(seq).bind(ordinal).fetch_optional(&mut *c).await?;
         let Some(cap) = cap else {
             return self.phase(c, "fields").await;
         };
@@ -47,40 +47,85 @@ impl Prep {
         let sequence: i64 = cap.get("sequence");
         let family: String = cap.get("stream");
         let stream = Stream::parse(&family).ok_or(MigrationError::SourceNotEligible)?;
-        let raw = crypto::open_snapshot(
-            key,
-            self.org,
-            self.snapshot,
-            capture,
-            "capture",
-            &cap.get::<Vec<u8>, _>("nonce"),
-            &cap.get::<Vec<u8>, _>("ciphertext"),
-        )
-        .map_err(|_| MigrationError::Crypto)?;
-        let parsed = metadata_source::extract_page(stream, &raw)
-            .map_err(|_| MigrationError::SourceNotEligible)?;
+        let raw = match cap.get::<Option<Vec<u8>>, _>("ciphertext") {
+            Some(ciphertext) => Some(
+                crypto::open_snapshot(
+                    key,
+                    self.org,
+                    self.snapshot,
+                    capture,
+                    "capture",
+                    &cap.get::<Vec<u8>, _>("nonce"),
+                    &ciphertext,
+                )
+                .map_err(|_| MigrationError::Crypto)?,
+            ),
+            None => None,
+        };
+        let parsed = raw
+            .as_ref()
+            .and_then(|raw| metadata_source::extract_page(stream, raw).ok());
+        let page_reason = if raw.is_none() {
+            "metadata_reader_byte_limit"
+        } else {
+            "source_representation_unavailable"
+        };
         let rows=sqlx::query("SELECT * FROM migration_snapshot_record WHERE capture_id=$1 AND snapshot_id=$2 AND organization_id=$3 AND ordinal>$4 ORDER BY ordinal LIMIT 100").bind(capture).bind(self.snapshot).bind(self.org.0).bind(if sequence==seq{ordinal}else{-1}).fetch_all(&mut *c).await?;
         let mut last = -1;
         for r in rows {
             let index: i32 = r.get("ordinal");
             last = index;
-            let mut record = parsed
-                .get(usize::try_from(index).map_err(|_| MigrationError::Crypto)?)
-                .cloned()
-                .ok_or(MigrationError::Crypto)?;
-            let semantic = crypto::snapshot_hmac(
-                key,
-                self.org,
-                &format!("semantic:{}", stream.representation()),
-                &record.canonical,
-            );
+            let parsed_record = parsed
+                .as_ref()
+                .and_then(|rows| {
+                    usize::try_from(index)
+                        .ok()
+                        .and_then(|index| rows.get(index))
+                })
+                .cloned();
+            let parsed_ok = parsed_record.is_some();
+            let mut record = parsed_record.unwrap_or_else(|| Record {
+                source_id: r.get("source_id"),
+                canonical: vec![],
+                entity: Entity::Invalid,
+                reasons: vec![page_reason.into()],
+                transformations: vec![],
+                provenance: std::collections::BTreeMap::from([
+                    (
+                        "source_id".into(),
+                        r.get::<Option<String>, _>("source_id").unwrap_or_default(),
+                    ),
+                    ("capture_id".into(), capture.to_string()),
+                    ("snapshot_id".into(), self.snapshot.to_string()),
+                    (
+                        "raw_byte_len".into(),
+                        cap.get::<i64, _>("raw_byte_len").to_string(),
+                    ),
+                    ("hold_reason".into(), page_reason.into()),
+                ]),
+            });
+            let semantic = if parsed_ok {
+                crypto::snapshot_hmac(
+                    key,
+                    self.org,
+                    &format!("semantic:{}", stream.representation()),
+                    &record.canonical,
+                )
+                .to_vec()
+            } else {
+                r.get::<Vec<u8>, _>("semantic_hmac")
+            };
+            if !parsed_ok {
+                self.issues(c, &[page_reason.into()]).await?;
+            }
             let source_id: Option<String> = r.get("source_id");
-            let qualified = cap.get::<bool, _>("accepted")
+            let qualified = parsed_ok
+                && cap.get::<bool, _>("accepted")
                 && !cap.get::<bool, _>("truncated")
                 && (200..300).contains(&cap.get::<i32, _>("http_status"))
                 && cap.get::<String, _>("classification") == "success"
                 && cap.get::<String, _>("representation") == stream.representation()
-                && cap.get::<i64, _>("raw_byte_len") == raw.len() as i64
+                && cap.get::<i64, _>("raw_byte_len") == raw.as_ref().map_or(0, |v| v.len()) as i64
                 && r.get::<String, _>("family") == family
                 && r.get::<String, _>("representation") == stream.representation()
                 && record.source_id == source_id
@@ -246,7 +291,7 @@ impl Prep {
                         machine_name: f.machine_name,
                         field_type: f.field_type,
                         raw_choice: Some(raw.clone()),
-                        definition: Some(definition.clone()),
+                        definition: None,
                         target_baseline: Value::Null,
                         claim_baseline: Value::Null,
                         reasons,
@@ -382,16 +427,14 @@ impl Prep {
                 };
             }
         }
-        let mut frozen: FrozenMapping = w::open(
-            key,
-            self.org,
-            self.snapshot,
-            self.plan,
-            id,
-            "mapping",
-            &m.get::<Vec<u8>, _>("nonce"),
-            &m.get::<Vec<u8>, _>("ciphertext"),
-        )?;
+        let mut frozen =
+            super::fidelity::mapping(c, key, self.org, self.snapshot, self.plan, &m).await?;
+        if let Some(name) = m.get::<Option<Vec<u8>>, _>("field_name_key") {
+            let duplicate:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM migration_admitted_metadata_mapping WHERE plan_id=$1 AND organization_id=$2 AND field_name_key=$3 AND id<>$4)").bind(self.plan).bind(self.org.0).bind(name).bind(id).fetch_one(&mut *c).await?;
+            if duplicate {
+                frozen.reasons.push("source_field_key_collision".into());
+            }
+        }
         let parent = if let Some(parent) = m.get::<Option<Uuid>, _>("parent_mapping_id") {
             sqlx::query_scalar::<_,Option<Uuid>>("SELECT target_id FROM migration_admitted_metadata_mapping WHERE id=$1 AND plan_id=$2 AND organization_id=$3 AND disposition IN ('create_matching','map_existing')").bind(parent).bind(self.plan).bind(self.org.0).fetch_optional(&mut *c).await?.flatten()
         } else {
@@ -425,6 +468,11 @@ impl Prep {
             }
         }
         self.issues(c, &frozen.reasons).await?;
+        // An option references its immutable parent definition; retaining the
+        // full choice list in every option would multiply large source evidence.
+        if kind == "option" {
+            frozen.definition = None;
+        }
         let encrypted = seal(
             key,
             self.org,
@@ -528,8 +576,7 @@ impl Prep {
                 reasons = vec!["source_integrity".into()];
             }
         }
-        self.issues(conn, &reasons).await?;
-        let baseline = baseline(
+        let (baseline, oversized) = baseline(
             conn,
             key,
             org,
@@ -537,15 +584,19 @@ impl Prep {
             plan,
             manifest_id,
             person,
-            &reasons,
+            &mut reasons,
         )
         .await?;
+        if oversized {
+            disposition = "held";
+        }
+        self.issues(conn, &reasons).await?;
         let bound = (baseline.nonce.len() + baseline.ciphertext.len() + 256 * 1024) as i64;
         if bound > 64 * 1024 * 1024 {
             return Err(MigrationError::StorageLimit);
         }
-        sqlx::query("INSERT INTO migration_admitted_metadata_manifest(id,import_id,plan_id,organization_id,admission_result_id,person_id,source_person_id,disposition,baseline_nonce,baseline_ciphertext,item_byte_bound,expected_person_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)")
-            .bind(manifest_id).bind(import).bind(plan).bind(org.0).bind(result_id).bind(live).bind(&source_id).bind(disposition).bind(baseline.nonce).bind(baseline.ciphertext).bind(bound).bind(if person.is_nil(){None}else{Some(person)}).execute(&mut *conn).await?;
+        sqlx::query("INSERT INTO migration_admitted_metadata_manifest(id,import_id,plan_id,organization_id,admission_result_id,person_id,source_person_id,disposition,baseline_nonce,baseline_ciphertext,item_byte_bound,expected_person_id,oversized) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)")
+            .bind(manifest_id).bind(import).bind(plan).bind(org.0).bind(result_id).bind(live).bind(&source_id).bind(disposition).bind(baseline.nonce).bind(baseline.ciphertext).bind(bound).bind(if person.is_nil(){None}else{Some(person)}).bind(oversized).execute(&mut *conn).await?;
         for (mapping_id, raw) in tag_operations {
             let op_id = Uuid::new_v4();
             let op = FrozenOperation {
@@ -641,8 +692,141 @@ impl Prep {
                 }
             }
         }
-        sqlx::query("UPDATE migration_admitted_metadata_operation o SET target_id=m.target_id,disposition=CASE WHEN o.disposition='eligible' AND m.disposition='held' THEN 'held' ELSE o.disposition END FROM migration_admitted_metadata_mapping m WHERE o.manifest_id=$1 AND o.organization_id=$2 AND m.id=o.mapping_id AND m.plan_id=o.plan_id AND m.organization_id=o.organization_id").bind(manifest_id).bind(org.0).execute(&mut *conn).await?;
-        sqlx::query("UPDATE migration_admitted_metadata_plan SET preparation_parent=$2,preparation_phase=CASE WHEN $3 THEN 'cohort' ELSE 'values' END WHERE id=$1").bind(plan).bind(last).bind(complete).execute(conn).await?;
+        if complete {
+            sqlx::query("UPDATE migration_admitted_metadata_operation o SET target_id=m.target_id,disposition=CASE WHEN o.disposition='eligible' AND m.disposition='held' THEN 'held' ELSE o.disposition END FROM migration_admitted_metadata_mapping m WHERE o.manifest_id=$1 AND o.organization_id=$2 AND m.id=o.mapping_id AND m.plan_id=o.plan_id AND m.organization_id=o.organization_id").bind(manifest_id).bind(org.0).execute(&mut *conn).await?;
+        }
+        sqlx::query("UPDATE migration_admitted_metadata_plan SET preparation_parent=$2,preparation_phase=CASE WHEN $3 THEN 'extra_values' ELSE 'values' END,preparation_ordinal=CASE WHEN $3 THEN 0 ELSE preparation_ordinal END WHERE id=$1").bind(plan).bind(last).bind(complete).execute(conn).await?;
+        Ok(())
+    }
+    async fn extra_values(
+        &self,
+        c: &mut PgConnection,
+        key: &RawPayloadKey,
+        p: &PgRow,
+    ) -> Result<(), MigrationError> {
+        let manifest: Uuid = p.get("preparation_manifest");
+        let m=sqlx::query("SELECT * FROM migration_admitted_metadata_manifest WHERE id=$1 AND plan_id=$2 AND organization_id=$3").bind(manifest).bind(self.plan).bind(self.org.0).fetch_one(&mut *c).await?;
+        let source = insert_source(
+            c,
+            key,
+            self.org,
+            self.import,
+            self.plan,
+            self.snapshot,
+            self.report,
+            "people",
+            &m.get::<String, _>("source_person_id"),
+        )
+        .await?;
+        let offset: usize = p
+            .get::<i32, _>("preparation_ordinal")
+            .try_into()
+            .map_err(|_| MigrationError::Crypto)?;
+        let mut count = 0;
+        if let Some(source) = source {
+            for (name, _) in source.record.provenance.iter().skip(offset).take(50) {
+                count += 1;
+                if !name.starts_with("custom") {
+                    continue;
+                }
+                let name_key = metadata_store::source_key(
+                    key,
+                    self.org,
+                    self.account,
+                    "field-name",
+                    name.as_bytes(),
+                );
+                let declared:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM migration_admitted_metadata_mapping WHERE plan_id=$1 AND organization_id=$2 AND field_name_key=$3)").bind(self.plan).bind(self.org.0).bind(name_key).fetch_one(&mut *c).await?;
+                if declared {
+                    continue;
+                }
+                let id = Uuid::new_v4();
+                let op = FrozenOperation {
+                    source_id: m.get("source_person_id"),
+                    source_field: Some(name.clone()),
+                    source_tag: None,
+                    value: None,
+                    reasons: vec!["source_definition_unavailable".into()],
+                };
+                let encrypted = seal(
+                    key,
+                    self.org,
+                    self.snapshot,
+                    self.plan,
+                    id,
+                    "operation",
+                    &op,
+                )?;
+                let source_key = metadata_store::source_key(
+                    key,
+                    self.org,
+                    self.account,
+                    "unresolved-field",
+                    name.as_bytes(),
+                );
+                sqlx::query("INSERT INTO migration_admitted_metadata_operation(id,manifest_id,import_id,plan_id,organization_id,kind,source_key,disposition,nonce,ciphertext) VALUES($1,$2,$3,$4,$5,'value',$6,'held',$7,$8)").bind(id).bind(manifest).bind(self.import).bind(self.plan).bind(self.org.0).bind(source_key).bind(encrypted.nonce).bind(encrypted.ciphertext).execute(&mut *c).await?;
+                self.issues(c, &op.reasons).await?;
+            }
+        }
+        if count == 50 {
+            sqlx::query(
+                "UPDATE migration_admitted_metadata_plan SET preparation_ordinal=$2 WHERE id=$1",
+            )
+            .bind(self.plan)
+            .bind(i32::try_from(offset + count).map_err(|_| MigrationError::Crypto)?)
+            .execute(c)
+            .await?;
+        } else {
+            self.person_bound(c, key, &m).await?;
+            sqlx::query("UPDATE migration_admitted_metadata_plan SET preparation_phase='cohort',preparation_ordinal=-1 WHERE id=$1").bind(self.plan).execute(c).await?;
+        }
+        Ok(())
+    }
+    async fn person_bound(
+        &self,
+        c: &mut PgConnection,
+        key: &RawPayloadKey,
+        m: &PgRow,
+    ) -> Result<(), MigrationError> {
+        let id: Uuid = m.get("id");
+        let bound:i64=sqlx::query_scalar("SELECT COALESCE(sum(3*(octet_length(nonce)+octet_length(ciphertext))+512),0)::bigint FROM migration_admitted_metadata_operation WHERE manifest_id=$1 AND plan_id=$2 AND organization_id=$3").bind(id).bind(self.plan).bind(self.org.0).fetch_one(&mut *c).await?;
+        let bound = bound
+            + (m.get::<Vec<u8>, _>("baseline_nonce").len()
+                + m.get::<Vec<u8>, _>("baseline_ciphertext").len()) as i64
+            + 256 * 1024;
+        let oversized = m.get::<bool, _>("oversized") || bound > metadata_store::UNIT;
+        if oversized {
+            let mut baseline: Value = w::open(
+                key,
+                self.org,
+                self.snapshot,
+                self.plan,
+                id,
+                "baseline",
+                &m.get::<Vec<u8>, _>("baseline_nonce"),
+                &m.get::<Vec<u8>, _>("baseline_ciphertext"),
+            )?;
+            let reasons = baseline["reasons"]
+                .as_array_mut()
+                .ok_or(MigrationError::Crypto)?;
+            if !reasons.iter().any(|v| v == "import_item_byte_limit") {
+                reasons.push(json!("import_item_byte_limit"));
+                self.issues(c, &["import_item_byte_limit".into()]).await?;
+            }
+            let encrypted = seal(
+                key,
+                self.org,
+                self.snapshot,
+                self.plan,
+                id,
+                "baseline",
+                &baseline,
+            )?;
+            sqlx::query("UPDATE migration_admitted_metadata_manifest SET oversized=true,disposition='held',baseline_nonce=$4,baseline_ciphertext=$5,item_byte_bound=262144 WHERE id=$1 AND plan_id=$2 AND organization_id=$3").bind(id).bind(self.plan).bind(self.org.0).bind(encrypted.nonce).bind(encrypted.ciphertext).execute(&mut *c).await?;
+            sqlx::query("UPDATE migration_admitted_metadata_operation SET disposition='held' WHERE manifest_id=$1 AND plan_id=$2 AND organization_id=$3 AND disposition IN ('eligible','already_present')").bind(id).bind(self.plan).bind(self.org.0).execute(c).await?;
+        } else {
+            sqlx::query("UPDATE migration_admitted_metadata_manifest SET item_byte_bound=$4 WHERE id=$1 AND plan_id=$2 AND organization_id=$3").bind(id).bind(self.plan).bind(self.org.0).bind(bound).execute(c).await?;
+        }
         Ok(())
     }
     async fn finish(
@@ -671,7 +855,7 @@ impl Prep {
         }
         counts.invalid_source_ids=sqlx::query_scalar("SELECT count(*) FROM migration_admitted_metadata_observation WHERE plan_id=$1 AND organization_id=$2 AND source_row_id IS NULL").bind(self.plan).bind(self.org.0).fetch_one(&mut *c).await?;
         let value = serde_json::to_value(&counts).map_err(|_| MigrationError::Crypto)?;
-        let bound:i64=sqlx::query_scalar("SELECT GREATEST(4096,COALESCE((SELECT max(item_byte_bound) FROM migration_admitted_metadata_manifest WHERE plan_id=$1 AND organization_id=$2),0),COALESCE((SELECT max(octet_length(m.nonce)+octet_length(m.ciphertext)+4096+COALESCE((SELECT sum(octet_length(o.nonce)+octet_length(o.ciphertext)+4096) FROM migration_admitted_metadata_mapping o WHERE o.parent_mapping_id=m.id AND o.plan_id=m.plan_id AND o.organization_id=m.organization_id),0)) FROM migration_admitted_metadata_mapping m WHERE m.plan_id=$1 AND m.organization_id=$2),0))::bigint").bind(self.plan).bind(self.org.0).fetch_one(&mut *c).await?;
+        let bound:i64=sqlx::query_scalar("SELECT GREATEST(4096,COALESCE((SELECT max(item_byte_bound) FROM migration_admitted_metadata_manifest WHERE plan_id=$1 AND organization_id=$2),0),COALESCE((SELECT max(octet_length(m.nonce)+octet_length(m.ciphertext)+4096+CASE WHEN m.kind='field' AND m.disposition='create_matching' THEN COALESCE((SELECT sum(octet_length(o.nonce)+octet_length(o.ciphertext)+4096) FROM migration_admitted_metadata_mapping o WHERE o.parent_mapping_id=m.id AND o.plan_id=m.plan_id AND o.organization_id=m.organization_id),0) ELSE 0 END) FROM migration_admitted_metadata_mapping m WHERE m.plan_id=$1 AND m.organization_id=$2),0))::bigint").bind(self.plan).bind(self.org.0).fetch_one(&mut *c).await?;
         if bound > metadata_store::UNIT {
             return Err(MigrationError::StorageLimit);
         }
@@ -754,6 +938,7 @@ async fn unit(
         "choices" => j.choices(&mut tx, key, &p).await?,
         "cohort" => j.cohort(&mut tx, key, &p).await?,
         "values" => j.values(&mut tx, key, &p).await?,
+        "extra_values" => j.extra_values(&mut tx, key, &p).await?,
         "seal" => j.finish(&mut tx, key).await?,
         "remainder_mappings" | "remainder_people" | "remainder_operations" => {
             super::remainder::step(&mut tx, key, org, import, plan, &p).await?

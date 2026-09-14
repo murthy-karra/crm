@@ -442,6 +442,10 @@ async fn mobile005_profile_and_capture_overlap_preserves_both_writes(migrator_po
     .unwrap()
     .unwrap();
     assert!(updated.changed);
+    let profile_pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
     let held = f.held_id;
     let person = f.person_a;
     let link_task = tokio::spawn(async move { link(&router, &cookie, held, person, true).await });
@@ -449,8 +453,8 @@ async fn mobile005_profile_and_capture_overlap_preserves_both_writes(migrator_po
     // an arbitrary sleep to claim overlap.
     tokio::time::timeout(Duration::from_secs(2), async {
         loop {
-            let blocked: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid() AND cardinality(pg_blocking_pids(pid))>0 AND query LIKE '%FROM person%FOR UPDATE%')")
-                .fetch_one(&migrator_pool).await.unwrap();
+            let blocked: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND $1=ANY(pg_blocking_pids(pid)))")
+                .bind(profile_pid).fetch_one(&migrator_pool).await.unwrap();
             if blocked { break; }
             tokio::time::sleep(Duration::from_millis(10)).await;
         }

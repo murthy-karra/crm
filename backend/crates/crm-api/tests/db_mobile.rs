@@ -258,6 +258,11 @@ async fn atomic_replay_conflict_dependency_and_old_web_commands(pool: PgPool) {
     );
     assert_eq!(left.0, StatusCode::OK, "left: {}", left.1);
     assert_eq!(right.0, StatusCode::OK, "right: {}", right.1);
+    assert!(
+        left.1.get("added_contact_ids").is_none(),
+        "legacy receipt JSON stays unchanged"
+    );
+    assert!(right.1.get("added_contact_ids").is_none());
     assert_eq!(left.1["resource_id"], right.1["resource_id"]);
     assert_ne!(left.1["replayed"], right.1["replayed"]);
     assert_eq!(
@@ -2875,6 +2880,10 @@ async fn mobile005_details_receipts_publish_only_atomic_commits_and_hold_typed_n
     assert_eq!(status, StatusCode::OK, "{unchanged}");
     assert_eq!(unchanged["changed"], false);
     assert_eq!(unchanged["committed_revision"], "2");
+    assert_eq!(unchanged["added_contact_ids"], json!([]));
+    assert_eq!(left.1["added_contact_ids"], json!([]));
+    assert_eq!(right.1["added_contact_ids"], json!([]));
+
     assert_eq!(events.lock().await.len(), 1);
     sqlx::query("UPDATE person SET first_name='Other' WHERE id=$1")
         .bind(f.person)
@@ -2936,4 +2945,370 @@ async fn mobile005_details_receipts_publish_only_atomic_commits_and_hold_typed_n
         matches!(error,crm_api::domain::commands::CommandError::Database(ref e) if crm_api::auth::workspace::is_review_error(e))
     );
     tx.rollback().await.unwrap();
+}
+
+#[sqlx::test]
+#[ignore]
+async fn mobile005_profile_pages_bound_bytes_pin_revision_and_preserve_lease(pool: PgPool) {
+    let f = fixture(&pool).await;
+    sqlx::query("INSERT INTO contact_method(organization_id,person_id,kind,value,normalized_value,import_order,created_at) SELECT $1,$2,'email',repeat('x',8000)||n,'contact'||n||'@example.test',CASE WHEN n<=110 THEN n ELSE NULL END,now()+make_interval(secs=>n) FROM generate_series(1,151)n")
+        .bind(f.org).bind(f.person).execute(&f.app).await.unwrap();
+    let expected:Vec<Uuid>=sqlx::query_scalar("SELECT id FROM contact_method WHERE person_id=$1 ORDER BY import_order NULLS LAST,created_at,id")
+        .bind(f.person).fetch_all(&f.app).await.unwrap();
+    let lease: Value = sqlx::query_scalar("SELECT to_jsonb(c) FROM mobile_context c WHERE id=$1")
+        .bind(f.context)
+        .fetch_one(&f.app)
+        .await
+        .unwrap();
+    let base = format!("/api/mobile/v1/people/{}/details", f.person);
+    let mut cursor: Option<String> = None;
+    let mut seen = Vec::new();
+    let mut pages = 0;
+    let mut first_cursor = None;
+    let mut pinned = String::new();
+    loop {
+        let url = format!(
+            "{base}{}",
+            cursor
+                .as_ref()
+                .map(|v| format!("?cursor={v}"))
+                .unwrap_or_default()
+        );
+        let (status, page) = request(
+            &f.router,
+            &f.cookie,
+            Some(f.context),
+            "GET",
+            &url,
+            json!(null),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{page}");
+        assert!(page.to_string().len() <= 524288);
+        assert_eq!(page["person_id"], f.person.to_string());
+        assert_eq!(page["context_id"], f.context.to_string());
+        let revision = page["details_revision"].as_str().unwrap().to_owned();
+        if pages == 0 {
+            pinned = revision.clone();
+        }
+        assert_eq!(revision, pinned);
+        let items = page["items"].as_array().unwrap();
+        assert!(!items.is_empty());
+        assert!(items.len() <= 100);
+        seen.extend(items.iter().map(|item| id(item, "id")));
+        cursor = page["next_cursor"].as_str().map(str::to_owned);
+        pages += 1;
+        if pages == 1 {
+            first_cursor = cursor.clone();
+        }
+        if cursor.is_none() {
+            assert_eq!(page["complete"], true);
+            break;
+        }
+        assert_eq!(page["complete"], false);
+        assert!(pages < 5);
+    }
+    assert!(
+        pages >= 3,
+        "the byte bound must shorten pages below 100 rows"
+    );
+    assert_eq!(seen, expected);
+    let after_lease: Value =
+        sqlx::query_scalar("SELECT to_jsonb(c) FROM mobile_context c WHERE id=$1")
+            .bind(f.context)
+            .fetch_one(&f.app)
+            .await
+            .unwrap();
+    assert_eq!(lease, after_lease);
+    let generations: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM mobile_reconciliation WHERE context_id=$1")
+            .bind(f.context)
+            .fetch_one(&f.app)
+            .await
+            .unwrap();
+    assert_eq!(generations, 0, "current reads never promote a download");
+    let generation = f.gen().await;
+    let gen = id(&generation, "generation_id");
+    let summary_base = format!(
+        "/api/mobile/v1/reconciliations/{gen}/people/{}/summary",
+        f.person
+    );
+    let mut cursor: Option<String> = None;
+    let mut generation_contacts = Vec::new();
+    loop {
+        let url = format!(
+            "{summary_base}{}",
+            cursor
+                .as_ref()
+                .map(|v| format!("?cursor={v}"))
+                .unwrap_or_default()
+        );
+        let (status, page) = request(
+            &f.router,
+            &f.cookie,
+            Some(f.context),
+            "GET",
+            &url,
+            json!(null),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{page}");
+        assert!(page.to_string().len() <= 524288);
+        assert_eq!(page["summary"]["details_revision"], pinned);
+        for item in page["items"].as_array().unwrap() {
+            assert!(item.get("import_order").is_some());
+            assert!(item["created_at"].is_string());
+            generation_contacts.push(id(item, "id"));
+        }
+        cursor = page["next_cursor"].as_str().map(str::to_owned);
+        if cursor.is_none() {
+            assert_eq!(page["complete"], true);
+            break;
+        }
+    }
+    let mut ordered = expected.clone();
+    ordered.sort();
+    assert_eq!(
+        generation_contacts, ordered,
+        "legacy summary paging remains UUID ordered"
+    );
+    for section in ["notes", "tasks"] {
+        let (status, _) = request(
+            &f.router,
+            &f.cookie,
+            Some(f.context),
+            "GET",
+            &format!(
+                "/api/mobile/v1/reconciliations/{gen}/people/{}/{section}",
+                f.person
+            ),
+            json!(null),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+    }
+    assert_eq!(
+        f.post(
+            &format!("/api/mobile/v1/reconciliations/{gen}/seal"),
+            json!({})
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    // Profile edit must preserve every untouched imported value over the edit
+    // limit; the old page cursor must then conflict before exposing new rows.
+    let operation=f.operation("update_person_details",json!({"person_id":f.person,"expected_details_revision":pinned,"last_name":"Retained","contact_operations":[]}));
+    let (status, accepted) = f.post("/api/mobile/v1/operations", operation).await;
+    assert_eq!(status, StatusCode::OK, "{accepted}");
+    let retained: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM contact_method WHERE person_id=$1 AND octet_length(value)>8000",
+    )
+    .bind(f.person)
+    .fetch_one(&f.app)
+    .await
+    .unwrap();
+    assert_eq!(retained, 151);
+    let (status, conflict) = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &format!("{base}?cursor={}", first_cursor.unwrap()),
+        json!(null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(conflict["error"], "revision_conflict");
+    // One unrepresentable row is an explicit bounded error, not truncation.
+    sqlx::query("UPDATE contact_method SET value=repeat('x',525000) WHERE id=$1")
+        .bind(expected[0])
+        .execute(&f.app)
+        .await
+        .unwrap();
+    let (status, oversized) = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &base,
+        json!(null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(oversized["error"], "over_limit");
+}
+
+#[sqlx::test]
+#[ignore]
+async fn mobile005_profile_rejects_foreign_ids_and_keeps_unrelated_mutations_independent(
+    pool: PgPool,
+) {
+    let f = fixture(&pool).await;
+    let (foreign_org, _) = crate::common::create_org_with_stages_and_member(
+        &pool,
+        "Profile Foreign",
+        "profile-foreign@fixture.test",
+        "Foreign",
+        PW,
+    )
+    .await;
+    let foreign:Uuid=sqlx::query_scalar("INSERT INTO person(organization_id,stage_id,first_name) SELECT $1,id,'Foreign' FROM stage WHERE organization_id=$1 ORDER BY position LIMIT 1 RETURNING id")
+        .bind(foreign_org).fetch_one(&pool).await.unwrap();
+    let contact:Uuid=sqlx::query_scalar("INSERT INTO contact_method(organization_id,person_id,kind,value,normalized_value) VALUES($1,$2,'email','household@example.test','household@example.test') RETURNING id")
+        .bind(foreign_org).bind(foreign).fetch_one(&pool).await.unwrap();
+    let household_person:Uuid=sqlx::query_scalar("INSERT INTO person(organization_id,stage_id,first_name) SELECT $1,stage_id,'Same household' FROM person WHERE id=$2 RETURNING id")
+        .bind(f.org).bind(f.person).fetch_one(&f.app).await.unwrap();
+    sqlx::query("INSERT INTO contact_method(organization_id,person_id,kind,value,normalized_value) VALUES($1,$2,'email','household@example.test','household@example.test')")
+        .bind(f.org).bind(household_person).execute(&f.app).await.unwrap();
+    for target in [foreign, Uuid::new_v4()] {
+        let path = format!("/api/mobile/v1/people/{target}/details");
+        assert_eq!(
+            request(
+                &f.router,
+                &f.cookie,
+                Some(f.context),
+                "GET",
+                &path,
+                json!(null)
+            )
+            .await
+            .0,
+            StatusCode::NOT_FOUND
+        );
+        let operation=f.operation("update_person_details",json!({"person_id":target,"expected_details_revision":"1","first_name":"Forbidden","contact_operations":[]}));
+        assert_eq!(
+            f.post("/api/mobile/v1/operations", operation).await.0,
+            StatusCode::NOT_FOUND
+        );
+    }
+    let foreign_contact=f.operation("update_person_details",json!({"person_id":f.person,"expected_details_revision":"1","contact_operations":[{"op":"remove","id":contact}]}));
+    assert_eq!(
+        f.post("/api/mobile/v1/operations", foreign_contact).await.0,
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+    let path = format!("/api/mobile/v1/people/{}/details", f.person);
+    assert_eq!(
+        request(&f.router, "", Some(f.context), "GET", &path, json!(null))
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    // Ordinary note/task and assignment changes alter the broad generation
+    // revision, but do not stale a pending details baseline.
+    sqlx::query("INSERT INTO note(organization_id,person_id,author_user_id,body,origin,correlation_id) VALUES($1,$2,$3,'Unrelated note','web_session',gen_random_uuid())")
+        .bind(f.org).bind(f.person).bind(f.actor).execute(&f.app).await.unwrap();
+    sqlx::query("INSERT INTO task(organization_id,person_id,title,kind,created_by_user_id,assignee_user_id,origin,correlation_id) VALUES($1,$2,'Unrelated task','follow_up',$3,$3,'web_session',gen_random_uuid())")
+        .bind(f.org).bind(f.person).bind(f.actor).execute(&f.app).await.unwrap();
+    sqlx::query("UPDATE person SET assigned_user_id=$2 WHERE id=$1")
+        .bind(f.person)
+        .bind(f.other)
+        .execute(&f.app)
+        .await
+        .unwrap();
+    let tag:Uuid=sqlx::query_scalar("INSERT INTO tag(organization_id,created_by_user_id,name) VALUES($1,$2,'Unrelated tag') RETURNING id")
+        .bind(f.org).bind(f.actor).fetch_one(&f.app).await.unwrap();
+    sqlx::query("INSERT INTO person_tag(organization_id,person_id,tag_id,added_by_user_id) VALUES($1,$2,$3,$4)")
+        .bind(f.org)
+        .bind(f.person)
+        .bind(tag)
+        .bind(f.actor)
+        .execute(&f.app)
+        .await
+        .unwrap();
+    let field:Uuid=sqlx::query_scalar("INSERT INTO custom_field(organization_id,label,field_type,position,created_by_user_id) VALUES($1,'Unrelated field','text',1,$2) RETURNING id")
+        .bind(f.org).bind(f.actor).fetch_one(&f.app).await.unwrap();
+    sqlx::query("INSERT INTO person_custom_field_value(organization_id,person_id,field_id,field_type,text_value,updated_by_user_id,origin,correlation_id) VALUES($1,$2,$3,'text','Unrelated',$4,'web_session',gen_random_uuid())")
+        .bind(f.org).bind(f.person).bind(field).bind(f.actor).execute(&f.app).await.unwrap();
+    let (details, broad): (i64, i64) =
+        sqlx::query_as("SELECT details_revision,mobile_revision FROM person WHERE id=$1")
+            .bind(f.person)
+            .fetch_one(&f.app)
+            .await
+            .unwrap();
+    assert_eq!(details, 1);
+    assert!(broad > 1);
+    let household=f.operation("update_person_details",json!({"person_id":f.person,"expected_details_revision":"1","contact_operations":[{"op":"add","kind":"email","value":"household@example.test"}]}));
+    let (status, receipt) = f.post("/api/mobile/v1/operations", household).await;
+    assert_eq!(status, StatusCode::OK, "{receipt}");
+    let shared:i64=sqlx::query_scalar("SELECT count(*) FROM contact_method WHERE organization_id=$1 AND normalized_value='household@example.test'")
+        .bind(f.org).fetch_one(&f.app).await.unwrap();
+    assert_eq!(shared, 2);
+    let foreign_unchanged: String =
+        sqlx::query_scalar("SELECT value FROM contact_method WHERE id=$1")
+            .bind(contact)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(foreign_unchanged, "household@example.test");
+}
+
+#[sqlx::test]
+#[ignore]
+async fn mobile005_publish_failure_keeps_committed_receipt_and_intake_admission_precedes_person_lock(
+    pool: PgPool,
+) {
+    use crm_api::realtime::CentrifugoTransport;
+    use std::sync::Arc;
+    use std::time::Duration;
+    let mut f = fixture(&pool).await;
+    let notified = Arc::new(tokio::sync::Notify::new());
+    let signal = notified.clone();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let fake = Router::new().route(
+        "/publish",
+        axum::routing::post(move || {
+            let signal = signal.clone();
+            async move {
+                signal.notify_one();
+                StatusCode::SERVICE_UNAVAILABLE
+            }
+        }),
+    );
+    let server = tokio::spawn(async move { axum::serve(listener, fake).await.unwrap() });
+    let publisher = Publisher::Centrifugo(CentrifugoTransport::for_tests(
+        format!("http://{address}"),
+        "synthetic-only",
+    ));
+    f.router = crate::common::build_router_with_publisher(&pool, publisher).await;
+    let operation=f.operation("update_person_details",json!({"person_id":f.person,"expected_details_revision":"1","first_name":"Durable despite publisher","contact_operations":[]}));
+    let mut blocked = f.app.begin().await.unwrap();
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended('intake:' || $1::text,0))")
+        .bind(f.org.to_string())
+        .execute(&mut *blocked)
+        .await
+        .unwrap();
+    sqlx::query("SELECT id FROM person WHERE id=$1 FOR UPDATE")
+        .bind(f.person)
+        .execute(&mut *blocked)
+        .await
+        .unwrap();
+    let (status, busy) = tokio::time::timeout(
+        Duration::from_secs(1),
+        f.post("/api/mobile/v1/operations", operation.clone()),
+    )
+    .await
+    .expect("profile admission must not wait for the Person lock while intake is held");
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(busy["error"], "intake_busy");
+    blocked.rollback().await.unwrap();
+    let (status, accepted) = f.post("/api/mobile/v1/operations", operation.clone()).await;
+    assert_eq!(status, StatusCode::OK, "{accepted}");
+    assert_eq!(accepted["changed"], true);
+    tokio::time::timeout(Duration::from_secs(3), notified.notified())
+        .await
+        .expect("failed publish was actually attempted");
+    let (status, replayed) = f.post("/api/mobile/v1/operations", operation).await;
+    assert_eq!(status, StatusCode::OK, "{replayed}");
+    assert_eq!(replayed["replayed"], true);
+    assert_eq!(
+        replayed["committed_revision"],
+        accepted["committed_revision"]
+    );
+    let (name,count):(String,i64)=sqlx::query_as("SELECT first_name,(SELECT count(*) FROM mobile_operation_receipt WHERE person_id=$1) FROM person WHERE id=$1")
+        .bind(f.person).fetch_one(&f.app).await.unwrap();
+    assert_eq!(name, "Durable despite publisher");
+    assert_eq!(count, 1);
+    server.abort();
 }

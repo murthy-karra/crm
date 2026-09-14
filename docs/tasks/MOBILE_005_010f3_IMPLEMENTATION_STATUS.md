@@ -22,20 +22,20 @@ Publication, deployment, live-source migration and native distribution remain se
 
 ## Current implementation
 
-Mobile backend and native profile editing are integrated. Independent Mobile005
-review round1 returned **CHANGES REQUIRED: 13 findings**, recorded in
-[MOBILE_005_IMPLEMENTATION_REVIEW_1.md](MOBILE_005_IMPLEMENTATION_REVIEW_1.md).
-Coordinator backend/iOS corrections include stable profile reads, derived revision
-protection, deterministic added-contact order, per-kind primary fallback and bounded
-current-profile traversal. Five focused backend regressions pass. iOS passes43
-storage/model tests and both actual native journeys; installed upgrade evidence is
-retained in [MOBILE_005_IOS_VERIFICATION.md](MOBILE_005_IOS_VERIFICATION.md).
+Mobile backend and native profile editing are integrated. Independent review
+round 1's 13 findings and round 2's six findings are corrected. The targeted
+second-round assessment found no remaining actionable defect; READY still depends
+on replacement final repository gates.
+[MOBILE_005_IMPLEMENTATION_REVIEW_2.md](MOBILE_005_IMPLEMENTATION_REVIEW_2.md)
+owns the final correction assessment and source attribution.
 
-Android final checkpoint `cf68808` is integrated:26 storage,8 repository,3 Compose
-and2 JVM tests pass, along with lint/build, the installed schema5→6 upgrade and
-actual offline/restart/replay/conflict/discard/current journeys. The preserved
-store/key/envelope evidence and earlier failure dispositions are sealed in
-[MOBILE_005_ANDROID_VERIFICATION.md](MOBILE_005_ANDROID_VERIFICATION.md).
+iOS passes 47 storage/model tests. Android checkpoint `80b6c48` passes 42 storage,
+repository and Compose tests, plus two JVM tests and lint/build checks. Both
+platforms retain passing actual native journeys and installed upgrade evidence;
+reviewer-confirmed reuse preserves schema/key/envelope/UI-flow attribution.
+[MOBILE_005_IOS_VERIFICATION.md](MOBILE_005_IOS_VERIFICATION.md) and
+[MOBILE_005_ANDROID_VERIFICATION.md](MOBILE_005_ANDROID_VERIFICATION.md) own the
+sealed evidence and earlier failure dispositions.
 
 Migration backend fidelity and exact continuation are integrated through `1e9ed69`,
 with the test-only Clippy correction `839155a`. All21 final functional checks and
@@ -71,7 +71,8 @@ response-validation findings;010f3 round1 has three qualification/ownership/cove
 findings. The handover-order correction `3755623` passes its new regression.
 [Mobile round2](MOBILE_005_IMPLEMENTATION_REVIEW_2.md) and
 [migration round1](SLICE_010f3_IMPLEMENTATION_REVIEW_1.md) own the finding records.
-Coordinator/iOS, Android and migration writers are completing the bounded fixes.
+Native fixes are complete and independently assessed; the migration writer and
+coordinator are completing ownership/coverage corrections and readiness checks.
 Replacement final gates follow the corrected integrated source. Mobile005 is in
 its final second review/fix cycle;010f3 has one review remaining. No missing trust
 check or required evidence is a pass. Shared resources and stored work remain

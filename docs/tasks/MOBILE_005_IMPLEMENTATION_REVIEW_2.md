@@ -1,6 +1,6 @@
 # Mobile005 — independent implementation review round2
 
-**CHANGES REQUIRED; final correction cycle in progress.** Sol high independently
+**All six findings closed; final repository gates pending.** Sol high independently
 reviewed published base `e36c9b3` through pinned `a52a1e6`. This is round2 of D-050's
 maximum two; no third broad review is authorized or planned. The reviewer inspected
 source and retained evidence read-only, without rerunning native/DB/performance work.
@@ -35,4 +35,18 @@ assessment of these fixes remains within this second review/fix cycle.
 Coordinator iOS corrections for1,4 and shared6 now pass47 storage/model tests;
 [MOBILE_005_IOS_VERIFICATION.md](MOBILE_005_IOS_VERIFICATION.md) owns source hashes,
 new rejection/recovery cases and the retained initial fixture assertion failure.
-Android corrections and targeted independent assessment remain pending.
+Android corrections are integrated at `80b6c48`; all 42 tests pass.
+
+## Targeted correction assessment
+
+Sol high assessed only the six existing findings at pinned integrated source
+`f70a6e4c891982b579d76cc9fa1e0843ecb9f966`. **All six are closed; no remaining
+actionable defect was found in these corrections.** This is the same second
+review/fix cycle, not a third broad review. iOS 47/47 and Android 42/42 evidence
+source hashes match that tree. The Android sealed manifest SHA-256 is
+`ab896b7f7ebc7755bc1cf9c7d89d89dfa2a752cbf2fd77ef8dd84f7fbda9fcb5`.
+
+Reuse of prior actual native journeys and installed-store upgrades is justified:
+the corrections do not change schema, keys, persisted envelopes or UI flow.
+The reviewer withheld READY until migration readiness and replacement combined
+repository gates pass. No further broad Mobile005 review is required.

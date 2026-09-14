@@ -35,7 +35,9 @@ private final class NoRedirect: NSObject, URLSessionTaskDelegate, @unchecked Sen
         var permitted = url.scheme == "https"
         #if DEBUG && targetEnvironment(simulator)
         let debugPort: Int
-        #if MOBILE002_QA || MOBILE003_QA || MOBILE004_QA || MOBILE004_UPGRADE_QA
+        #if MOBILE005_QA || MOBILE005_UPGRADE_QA
+        debugPort = 3103
+        #elseif MOBILE002_QA || MOBILE003_QA || MOBILE004_QA || MOBILE004_UPGRADE_QA
         debugPort = 3102
         #else
         debugPort = 3101
@@ -54,8 +56,22 @@ private final class NoRedirect: NSObject, URLSessionTaskDelegate, @unchecked Sen
     func login(email: String, password: String) async throws {
         let (_, response) = try await raw("/api/session", method: "POST", bytes: encode(JSON.object(["email": .s(email), "password": .s(password)])))
         let headers = response.allHeaderFields.reduce(into: [String: String]()) { result, pair in if let key = pair.key as? String, let value = pair.value as? String { result[key] = value } }
-        guard let token = HTTPCookie.cookies(withResponseHeaderFields: headers, for: base).first(where: { $0.name == "crm_session" }) else { throw LocalError.invalidProtocol }
-        cookie = "crm_session=" + token.value
+        if let token = HTTPCookie.cookies(withResponseHeaderFields: headers, for: base).first(where: { $0.name == "crm_session" }) {
+            cookie = "crm_session=" + token.value; return
+        }
+        // A simulator-only loopback API intentionally uses HTTP while retaining
+        // the production Secure cookie attribute. Foundation may decline to
+        // materialize that cookie for an HTTP URL, so extract only the first
+        // server-issued crm_session token from the authenticated response.
+        #if DEBUG && targetEnvironment(simulator)
+        if base.scheme == "http", base.host == "127.0.0.1",
+           let raw = headers.first(where: { $0.key.caseInsensitiveCompare("Set-Cookie") == .orderedSame })?.value,
+           let token = raw.split(separator: ";", maxSplits: 1).first?.split(separator: "=", maxSplits: 1), token.count == 2,
+           token[0] == "crm_session", !token[1].isEmpty {
+            cookie = "crm_session=" + token[1]; return
+        }
+        #endif
+        throw LocalError.invalidProtocol
     }
     func call<T: Decodable>(_ path: String, method: String = "GET", body: JSON? = nil, context: String? = nil) async throws -> T {
         let (data, _) = try await raw("/api/mobile/v1" + path, method: method, bytes: body.map { try encode($0) }, context: context)
@@ -76,6 +92,10 @@ private final class NoRedirect: NSObject, URLSessionTaskDelegate, @unchecked Sen
     }
     func currentStage(person: String, context: String) async throws -> CurrentStageResponse {
         try await call("/people/\(person)/stage", context: context)
+    }
+    func currentDetails(person: String, cursor: String? = nil, context: String) async throws -> CurrentDetailsResponse {
+        let suffix = cursor.map { "?cursor=" + API.cursor($0) } ?? ""
+        return try await call("/people/\(person)/details\(suffix)", context: context)
     }
     func verifyAuthority(_ boot: Bootstrap) async throws {
         let (data, _) = try await raw("/api/me", method: "GET")

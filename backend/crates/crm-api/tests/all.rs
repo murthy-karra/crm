@@ -373,3 +373,6 @@ mod db_people_refresh_plans;
 mod db_people_refresh_reads;
 #[cfg(feature = "perf-harness")]
 mod db_people_refresh_ui_fixture;
+
+#[cfg(feature = "perf-harness")]
+mod db_admitted_metadata_ui_fixture;

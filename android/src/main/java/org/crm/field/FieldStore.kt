@@ -341,8 +341,9 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         person: PersonRow,
         expectedCatalogRevision: String? = dao.meta("metadata_catalog_revision"),
         expectedMetadataRevision: String? = null,
-    ): Boolean = person.metadataRevisionsQualified &&
-        runCatching {
+    ): Boolean {
+        if (!person.metadataRevisionsQualified) return false
+        return try {
             val baseline = JSONObject(person.metadata)
             val metadataRevision = baseline.getString("metadata_revision")
             val catalogRevision = baseline.getString("catalog_revision")
@@ -353,18 +354,26 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
             validateMetadataBaseline(baseline)
             // A token alone cannot make a partially persisted catalog usable.  Reuse is safe
             // only when the installed rows at that token can render every saved tag/value.
-            if (expectedCatalogRevision != null) require(catalogDescribes(baseline, expectedCatalogRevision))
-        }.isSuccess
+            if (expectedCatalogRevision != null && !catalogDescribes(baseline, expectedCatalogRevision)) return false
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
 
-    private fun catalogDescribes(metadata: JSONObject, revision: String): Boolean {
+    internal fun catalogDescribes(metadata: JSONObject, revision: String): Boolean {
         val tags = dao.metadataTags().filter { it.revision == revision }.map { it.id }.toSet()
-        if (!metadata.getJSONArray("tags").objects().all { it.getString("id") in tags }) return false
+        val currentTags = metadata.getJSONArray("tags")
+        for (index in 0 until currentTags.length()) if (currentTags.getJSONObject(index).getString("id") !in tags) return false
         val fields = dao.metadataFields().filter { it.revision == revision }.associateBy { it.id }
         val options = dao.allMetadataOptions().filter { it.revision == revision }.map { it.id }.toSet()
-        return metadata.getJSONArray("values").objects().all { value ->
-            val field = fields[value.getString("field_id")] ?: return@all false
-            field.fieldType != "choice" || value.getJSONObject("value").getString("option_id") in options
+        val values = metadata.getJSONArray("values")
+        for (index in 0 until values.length()) {
+            val value = values.getJSONObject(index)
+            val field = fields[value.getString("field_id")] ?: return false
+            if (field.fieldType == "choice" && value.getJSONObject("value").getString("option_id") !in options) return false
         }
+        return true
     }
 
     fun saveMetadataDraft(

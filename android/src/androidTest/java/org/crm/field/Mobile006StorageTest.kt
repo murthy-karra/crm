@@ -99,7 +99,11 @@ class Mobile006StorageTest {
         store.dao.meta(MetaRow("metadata_catalog_revision", "5"))
         store.dao.clearMetadataTags(); store.dao.clearMetadataFields(); store.dao.clearMetadataOptions()
         store.dao.metadataTags(listOf(MetadataTagRow(tag, "Buyer", "g2", "5")))
-        store.dao.metadataFields(listOf(MetadataFieldRow(text, "Text", "text", 1, null, "g2", "5")))
+        store.dao.metadataFields(listOf(
+            MetadataFieldRow(text, "Text", "text", 1, null, "g2", "5"),
+            MetadataFieldRow(number, "Number", "number", 2, null, "g2", "5"),
+            MetadataFieldRow(date, "Date", "date", 3, null, "g2", "5"),
+        ))
         store.dao.person(store.dao.person(person)!!.copy(revision = "10", metadata = current.toString(), metadataRevisionsQualified = true))
         val replacement = store.reviseMetadataConflict(operation.id, UUID.randomUUID().toString())
         assertEquals("superseded", store.dao.operation(operation.id)!!.status)
@@ -153,9 +157,12 @@ class Mobile006StorageTest {
 
     @Test fun matchingMetadataTokenCannotReusePersonWhenCatalogRowsAreMissing() {
         val cached = store.dao.person(person)!!
+        assertEquals(1, JSONObject(cached.metadata).getJSONArray("values").length())
         store.dao.meta(MetaRow("metadata_catalog_revision", "3"))
         assertTrue(store.metadataQualified(cached, "3", "2"))
         store.dao.clearMetadataTags(); store.dao.clearMetadataFields(); store.dao.clearMetadataOptions()
+        assertTrue(store.dao.metadataFields().isEmpty())
+        assertFalse(store.catalogDescribes(JSONObject(cached.metadata), "3"))
         assertFalse("a token without renderable typed rows must refetch", store.metadataQualified(cached, "3", "2"))
         store.dao.metadataTags(listOf(MetadataTagRow(tag, "Buyer", "g", "3")))
         store.dao.metadataFields(listOf(MetadataFieldRow(text, "Text", "text", 1, null, "g", "3")))

@@ -13,6 +13,7 @@ pub enum Purpose {
     Mapping,
     Manifest,
     Result,
+    HistoryDisplay,
 }
 impl Purpose {
     fn label(self) -> &'static str {
@@ -22,6 +23,7 @@ impl Purpose {
             Self::Mapping => "mapping",
             Self::Manifest => "manifest",
             Self::Result => "result",
+            Self::HistoryDisplay => "history-display",
         }
     }
     fn limit(self) -> usize {
@@ -29,6 +31,7 @@ impl Purpose {
             Self::Binding | Self::Mapping => 64 * 1024,
             Self::Source => 4 * 1024 * 1024,
             Self::Manifest | Self::Result => 64 * 1024 * 1024,
+            Self::HistoryDisplay => 4096,
         }
     }
 }
@@ -42,7 +45,9 @@ pub struct Scope {
 }
 impl Scope {
     fn purpose(self, purpose: Purpose) -> Result<String, MigrationError> {
-        if self.revision <= 0 {
+        if self.revision <= 0
+            || (matches!(purpose, Purpose::HistoryDisplay) && self.family != Family::History)
+        {
             return Err(MigrationError::Crypto);
         }
         Ok(format!(

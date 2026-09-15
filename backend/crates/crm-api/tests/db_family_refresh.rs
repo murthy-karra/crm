@@ -398,3 +398,43 @@ async fn shared_evidence_is_charged_once_and_reservations_roll_back(pool: PgPool
         released
     );
 }
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn history_corrections_preserve_identity_and_erase_current_date_bucket(pool: PgPool) {
+    use crate::{db_history_capture_support as capture, db_history_import_support as history};
+    let (f, parent, initial, book) = history::fixture(&pool).await;
+    let import = history::ready(&f, parent, initial).await;
+    history::confirm(&f, import).await;
+    history::drain(&f).await;
+    let (newer, _) = capture::propose(&f, parent).await;
+    capture::confirm(&f, newer).await;
+    capture::drain(&f, &book).await;
+    let (successor, _) = capture::propose(&f, parent).await;
+    capture::confirm(&f, successor).await;
+    capture::drain(&f, &book).await;
+    let mut tx = pool.begin().await.unwrap();
+    for (name, value) in [
+        ("test.family_org", f.org),
+        ("test.family_actor", f.actor),
+        ("test.family_parent", parent),
+        ("test.family_capture", newer),
+        ("test.family_successor_capture", successor),
+    ] {
+        sqlx::query("SELECT set_config($1,$2,true)")
+            .bind(name)
+            .bind(value.to_string())
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+    }
+    sqlx::raw_sql(include_str!("fixtures/family_refresh_history.sql"))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::raw_sql(include_str!("fixtures/family_refresh_byte_inventory.sql"))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+}

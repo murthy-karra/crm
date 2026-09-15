@@ -140,3 +140,30 @@ reservation, and retrying it cannot refund again. The catalog-driven
 `tests/fixtures/family_refresh_byte_inventory.sql` checks every variable-width
 column independently, so a newly added nullable column cannot silently escape the
 retained-byte inventory merely because current fixtures leave it empty.
+
+### History storage implementation checkpoint
+
+`migration_family_refresh_history_head` retains the first storage payer and the
+immutable global identity/Person/original fact. Its mutable fields are fixed-width
+current version, result, capture, semantic hash and source-created time. Bootstrap
+copies exact original/admitted fact/display provenance; equality alone cannot
+construct it. Three `fub_{event,call,text}_record_corrected` tables have scoped
+original-fact, predecessor, display, manifest and result references. A successor
+compares the current head, uses a strictly later source capture, and advances the
+head/counts/review revision in the same transaction. Counts still count identities.
+
+Each correction's `migration_family_refresh_history_display` contains at most
+4 KiB of encrypted metadata plus the AEAD tag. Its ciphertext can only transition
+to a tombstone after the global identity is erased. Erasure clears every version
+and refunds exact nonce/ciphertext bytes to each version's original plan and the
+Organization, including completed plans. Initial-display suppression decrements
+the current date bucket. Immutable facts and first ownership remain intact.
+
+This is a storage checkpoint: application roles have SELECT only on these five
+new tables. Do not enable writes until version-aware readers, full execution
+admission, capability inventory and new-identity refresh ownership are wired and
+verified. The existing app deliberately does not advertise the new capability.
+The retained-source adapter preserves the original `timeline-import-identity-v1`
+and `timeline-import-canonical-v1` purposes. Body-only canonical changes alter the
+semantic hash while leaving metadata unchanged; display AEAD has its own purpose,
+4 KiB ceiling and exact version-row binding.

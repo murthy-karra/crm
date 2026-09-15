@@ -6,7 +6,7 @@ BEGIN
  FOR column_info IN
   SELECT DISTINCT a.attname,a.atttypid
   FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid JOIN pg_namespace n ON n.oid=c.relnamespace
-  WHERE n.nspname='public' AND c.relname LIKE 'migration_family_refresh_%' AND c.relkind IN ('r','p')
+  WHERE n.nspname='public' AND (c.relname LIKE 'migration_family_refresh_%' OR c.relname IN ('fub_event_record_corrected','fub_call_record_corrected','fub_text_record_corrected')) AND c.relkind IN ('r','p')
     AND a.attnum>0 AND NOT a.attisdropped AND a.atttypid IN ('text'::regtype,'bytea'::regtype,'jsonb'::regtype)
  LOOP
   IF column_info.atttypid='bytea'::regtype THEN

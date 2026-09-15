@@ -868,7 +868,11 @@ class FieldRepository(
                         // is current. Only a server that advertises Mobile005 details must fetch
                         // the complete contact traversal to qualify that new baseline.
                         (!store.binding.supportsPersonDetails() || store.detailsQualified(it))
-                        && (!store.binding.supportsMetadata() || store.metadataQualified(it))
+                        && (!store.binding.supportsMetadata() || store.metadataQualified(
+                            it,
+                            generation.optJSONObject("metadata")?.getString("catalog_revision"),
+                            item.metadataRevision,
+                        ))
                 } == true
             ) continue
             if (vault.root.usableSpace < 16 * 1024 * 1024) throw StorageFailure()

@@ -108,6 +108,34 @@ class Mobile006StorageTest {
         assertNull(store.nextPage(generation, person, "metadata"))
     }
 
+    @Test fun catalogOnlyRevisionChangeRefetchesAndRequalifiesSamePersonRevision() {
+        val old = store.dao.person(person)!!
+        store.dao.meta(MetaRow("metadata_catalog_revision", "3"))
+        assertFalse(store.metadataQualified(old, "4", "2"))
+        val generation = "e0000000-0000-4000-8000-000000000006"
+        store.beginGeneration(json(
+            "context_id" to store.binding.context, "generation_id" to generation,
+            "evaluated_at" to "2026-09-14T01:00:00Z", "expires_at" to "2026-09-14T01:30:00Z",
+            "complete" to true, "selected_count" to 1,
+            "metadata" to json("representation" to "metadata-v1", "catalog_revision" to "4", "catalog_url" to "/api/mobile/v1/reconciliations/$generation/metadata/catalog"),
+            "manifest" to json("items" to JSONArray().put(json("person_id" to person, "revision" to "9", "metadata_revision" to "2")), "next_cursor" to null, "complete" to true),
+        ))
+        listOf("tags", "fields", "options").forEach { section ->
+            store.metadataCatalogPage(generation, section, "", json("generation_id" to generation, "section" to section, "revision" to "4", "items" to JSONArray(), "next_cursor" to null, "complete" to true))
+        }
+        fun page(section: String, summary: Any = JSONObject.NULL) =
+            json("generation_id" to generation, "person_id" to person, "revision" to "9", "section" to section, "summary" to summary, "items" to JSONArray(), "next_cursor" to null, "complete" to true)
+        store.stagePage(generation, person, "summary", "", page("summary", summary()))
+        store.stagePage(generation, person, "notes", "", page("notes"))
+        store.stagePage(generation, person, "tasks", "", page("tasks"))
+        store.stagePage(generation, person, "metadata", "", json("generation_id" to generation, "person_id" to person, "revision" to "9", "section" to "metadata", "metadata_revision" to "2", "catalog_revision" to "4", "tags" to JSONArray(), "values" to JSONArray(), "complete" to true))
+        store.promote(json("context_id" to store.binding.context, "generation_id" to generation, "evaluated_at" to "2026-09-14T01:00:00Z", "sealed_at" to "2026-09-14T01:01:00Z", "selected_count" to 1, "today" to json("sources" to json("status" to "complete"), "items" to JSONArray())))
+        val refreshed = store.dao.person(person)!!
+        assertEquals("4", JSONObject(refreshed.metadata).getString("catalog_revision"))
+        assertTrue(store.metadataQualified(refreshed, "4", "2"))
+        assertFalse(store.metadataQualified(refreshed, "3", "2"))
+    }
+
     private fun actions() = JSONArray()
         .put(json("kind" to "add_tag", "tag_id" to tag))
         .put(json("kind" to "set_field", "field_id" to text, "value" to json("text" to "Saved offline")))

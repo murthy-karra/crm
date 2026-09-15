@@ -27,6 +27,7 @@ journey are complete. Native UI boundary walk-through remains.
 | `:connectedMobile006qaDebugAndroidTest` filtered to `Mobile006StorageTest` | PASS, 4 tests | `android006-storage.log` |
 | `:testMobile006qaDebugUnitTest :connectedMobile006qaDebugAndroidTest :lintMobile006qaDebug` | PASS, 2m02s | `/private/tmp/crm-mobile006-010f4-thyhauvv/android006-final-local.log` |
 | corrected metadata parser + unit tests + `Mobile006StorageTest` | PASS, 5 emulator tests, 1m23s | `/private/tmp/crm-mobile006-010f4-thyhauvv/android006-storage-parser.log` |
+| catalog-only revision requalification regression | PASS, 6 emulator tests, 1m06s | `/private/tmp/crm-mobile006-010f4-thyhauvv/android006-r1-storage.log` |
 | historical populated schema-6 APK/test build | PASS, 41s | `/private/tmp/crm-mobile006-010f4-thyhauvv/android005-upgradeproof-build.log` |
 | current schema-8 APK/test build | PASS, 44s | `/private/tmp/crm-mobile006-010f4-thyhauvv/android006-upgradeproof-build.log` |
 | actual installed schema-6 seed | PASS, 5.681s | direct `adb shell am instrument` on `org.crm.field.mobile006upgradeproofqa.legacytest` |

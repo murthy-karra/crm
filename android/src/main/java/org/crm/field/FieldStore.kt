@@ -327,11 +327,19 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
      * catalog revision were sealed together. JSON is retained as server-shaped comparison
      * material so decimal/date strings are never parsed through a locale or floating point.
      */
-    fun metadataQualified(person: PersonRow): Boolean = person.metadataRevisionsQualified &&
+    fun metadataQualified(
+        person: PersonRow,
+        expectedCatalogRevision: String? = dao.meta("metadata_catalog_revision"),
+        expectedMetadataRevision: String? = null,
+    ): Boolean = person.metadataRevisionsQualified &&
         runCatching {
             val baseline = JSONObject(person.metadata)
-            revision(baseline.getString("metadata_revision"))
-            revision(baseline.getString("catalog_revision"))
+            val metadataRevision = baseline.getString("metadata_revision")
+            val catalogRevision = baseline.getString("catalog_revision")
+            revision(metadataRevision)
+            revision(catalogRevision)
+            if (expectedCatalogRevision != null) require(catalogRevision == expectedCatalogRevision)
+            if (expectedMetadataRevision != null) require(metadataRevision == expectedMetadataRevision)
             validateMetadataBaseline(baseline)
         }.isSuccess
 
@@ -1133,7 +1141,11 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
             val old = dao.person(item.person)
             val needsQualification = old != null &&
                 (!old.noteRevisionsQualified || !old.stageRevisionsQualified || !detailsQualified(old) ||
-                    (metadataCatalog != null && !metadataQualified(old)))
+                    (metadataCatalog != null && !metadataQualified(
+                        old,
+                        metadataCatalog.getString("catalog_revision"),
+                        item.metadataRevision,
+                    )))
             if (old == null || old.revision != item.revision || needsQualification) {
                 val summary = component(id, item.person, "summary")
                 val notes = component(id, item.person, "notes").second
@@ -1149,7 +1161,8 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
                 val metadataQualified = metadata?.let { page ->
                     val candidate = json("metadata_revision" to page.getString("metadata_revision"), "catalog_revision" to page.getString("catalog_revision"),
                         "tags" to page.getJSONArray("tags"), "values" to page.getJSONArray("values"), "complete" to page.getBoolean("complete"))
-                    candidate.getString("catalog_revision") == metadataCatalog?.getString("catalog_revision") &&
+                    candidate.getString("metadata_revision") == item.metadataRevision &&
+                        candidate.getString("catalog_revision") == metadataCatalog?.getString("catalog_revision") &&
                         runCatching { validateMetadataBaseline(candidate) }.isSuccess
                 } ?: false
                 if (catalog != null && modernSummary.has("stage_revision")) revision(modernSummary.getString("stage_revision"))

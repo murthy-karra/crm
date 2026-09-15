@@ -11,6 +11,21 @@ INSERT INTO mobile_metadata_catalog(organization_id)
   SELECT id FROM organization;
 GRANT SELECT ON mobile_metadata_catalog TO crm_app;
 
+-- App callers may read the token but never lock or update the derived row.
+-- The row lock is needed under repeatable read to reject a catalog change that
+-- committed while the advisory admission was contended.
+CREATE FUNCTION crm_mobile_metadata_catalog_revision(p_organization_id UUID) RETURNS BIGINT
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE value BIGINT;
+BEGIN
+  SELECT revision INTO value FROM public.mobile_metadata_catalog
+    WHERE organization_id=p_organization_id FOR SHARE;
+  RETURN value;
+END $$;
+REVOKE ALL ON FUNCTION crm_mobile_metadata_catalog_revision(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION crm_mobile_metadata_catalog_revision(UUID) TO crm_app;
+
 CREATE FUNCTION crm_mobile_create_metadata_catalog() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER
 SET search_path=pg_catalog,public,pg_temp AS $$

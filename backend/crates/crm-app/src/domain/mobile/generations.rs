@@ -44,11 +44,10 @@ async fn metadata_catalog_snapshot(
         crate::ids::OrganizationId::new(organization_id),
     )
     .await?;
-    let revision: i64 =
-        sqlx::query_scalar("SELECT revision FROM mobile_metadata_catalog WHERE organization_id=$1")
-            .bind(organization_id)
-            .fetch_one(&mut *conn)
-            .await?;
+    let revision: i64 = sqlx::query_scalar("SELECT crm_mobile_metadata_catalog_revision($1)")
+        .bind(organization_id)
+        .fetch_one(&mut *conn)
+        .await?;
     let tags: Vec<(Uuid, String)> =
         sqlx::query("SELECT id,name FROM tag WHERE organization_id=$1 ORDER BY id LIMIT 10001")
             .bind(organization_id)
@@ -87,13 +86,22 @@ async fn metadata_catalog_matches(
 ) -> Result<bool, MobileError> {
     crate::domain::mobile::metadata::acquire_shared(conn, crate::ids::OrganizationId::new(org))
         .await?;
-    Ok(sqlx::query_scalar::<_, i64>(
-        "SELECT revision FROM mobile_metadata_catalog WHERE organization_id=$1",
-    )
-    .bind(org)
-    .fetch_one(&mut *conn)
-    .await?
-        == expected)
+    let current = sqlx::query_scalar::<_, i64>("SELECT crm_mobile_metadata_catalog_revision($1)")
+        .bind(org)
+        .fetch_one(&mut *conn)
+        .await
+        .map_err(|error| {
+            if error
+                .as_database_error()
+                .and_then(|database| database.code())
+                .is_some_and(|code| code == "40001")
+            {
+                code(409, "generation_changed")
+            } else {
+                MobileError::Database(error)
+            }
+        })?;
+    Ok(current == expected)
 }
 struct Selection {
     entries: Vec<Entry>,
@@ -236,11 +244,7 @@ pub async fn create_generation(
     }
     request.pinned_person_ids.sort();
     request.pinned_person_ids.dedup();
-    let mut tx = if request.include_metadata {
-        begin_metadata(pool, auth, true).await?
-    } else {
-        begin(pool, auth, true).await?
-    };
+    let mut tx = begin(pool, auth, true).await?;
     admission(&mut tx, auth).await?;
     if context(&mut tx, auth, context_id, false).await? != request.installation_id {
         return Err(code(401, "unauthenticated"));
@@ -541,7 +545,7 @@ pub async fn metadata_catalog(
     if !matches!(section, "tags" | "fields" | "options") {
         return Err(missing());
     }
-    let mut tx = begin_metadata(pool, auth, true).await?;
+    let mut tx = begin(pool, auth, true).await?;
     download_slot(&mut tx, context_id).await?;
     let generation = generation(&mut tx, auth, context_id, id).await?;
     let revision = generation.metadata_catalog_revision.ok_or_else(missing)?;
@@ -610,7 +614,7 @@ pub async fn seal(
     context_id: Uuid,
     id: Uuid,
 ) -> Result<Value, MobileError> {
-    let mut tx = begin_metadata(pool, auth, true).await?;
+    let mut tx = begin(pool, auth, true).await?;
     download_slot(&mut tx, context_id).await?;
     let gen = generation(&mut tx, auth, context_id, id).await?;
     if !gen.complete {
@@ -709,11 +713,7 @@ pub async fn component(
     if !matches!(section, "summary" | "notes" | "tasks" | "metadata") {
         return Err(missing());
     }
-    let mut tx = if section == "metadata" {
-        begin_metadata(pool, auth, true).await?
-    } else {
-        begin(pool, auth, true).await?
-    };
+    let mut tx = begin(pool, auth, true).await?;
     download_slot(&mut tx, context_id).await?;
     let generation = generation(&mut tx, auth, context_id, id).await?;
     let expected: Option<i64> = sqlx::query_scalar(

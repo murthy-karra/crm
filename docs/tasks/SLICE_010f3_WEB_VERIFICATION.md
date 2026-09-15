@@ -1,8 +1,9 @@
 # Slice 010f3 — Web and browser verification
 
 **BROWSER ACCEPTANCE PASSES.** Coordinator-owned Web implementation uses the
-literal transport checkpoint in `SLICE_010f3_CONTRACT.md`. Migration fidelity and size-bound checks also pass; combined repository gates
-and independent review remain required.
+literal transport checkpoint in `SLICE_010f3_CONTRACT.md`. Migration fidelity and
+size-bound checks also pass. [Combined final gates and both independent reviews](MOBILE_005_010f3_FINAL_VERIFICATION.md)
+are PASS/READY at `ab4a362`; the final retained010 upgrade is recorded below.
 
 ## Implemented Web scope
 

@@ -1,6 +1,7 @@
 # Mobile005 — independent implementation review round2
 
-**All six findings closed; final repository gates pending.** Sol high independently
+**READY at `ab4a362a224183dd1d51acd51196b71315826fd6`.** All six findings and
+final verification requirements are closed. Sol high independently
 reviewed published base `e36c9b3` through pinned `a52a1e6`. This is round2 of D-050's
 maximum two; no third broad review is authorized or planned. The reviewer inspected
 source and retained evidence read-only, without rerunning native/DB/performance work.
@@ -28,9 +29,9 @@ The reviewer found backend command/authorization, locking, replay/receipts,
 all-writer revision, realtime, overflow/ABA and installed schema boundaries otherwise
 consistent with scope. Android sealed artifacts, iOS43-test/two-journey result bundles,
 and the D-050 pair/hot-query evidence were independently checked. The original
-combined check/SQLx passes are attributed to `a52a1e6`; correction verification and
-replacement final gates remain required before a completion verdict. Targeted
-assessment of these fixes remains within this second review/fix cycle.
+combined check/SQLx passes are attributed to `a52a1e6`; at that checkpoint,
+correction verification and replacement final gates remained required before a
+completion verdict. Targeted assessment stayed within this second review/fix cycle.
 
 Coordinator iOS corrections for1,4 and shared6 now pass47 storage/model tests;
 [MOBILE_005_IOS_VERIFICATION.md](MOBILE_005_IOS_VERIFICATION.md) owns source hashes,
@@ -48,5 +49,19 @@ source hashes match that tree. The Android sealed manifest SHA-256 is
 
 Reuse of prior actual native journeys and installed-store upgrades is justified:
 the corrections do not change schema, keys, persisted envelopes or UI flow.
-The reviewer withheld READY until migration readiness and replacement combined
-repository gates pass. No further broad Mobile005 review is required.
+At this correction checkpoint, the reviewer withheld READY until migration
+readiness and replacement combined repository gates passed.
+
+## Final evidence acceptance
+
+Sol high independently accepted the final evidence at `ab4a362` and returned
+**READY**, with no remaining actionable findings. The
+[combined final record](MOBILE_005_010f3_FINAL_VERIFICATION.md) owns passing
+`check`, `sqlx-prepare` and all 1,076 database tests, migration readiness, and
+preservation of all 74 protected artifacts and four shared listeners. The reviewer
+accepted the historical-upgrade fixture's explicit `details_revision = 1` check;
+the failed earlier gate remains retained alongside its correction and passing run.
+
+The 47 iOS and 42 Android tests still match unchanged native source. Actual native
+journey/installed-upgrade and D-050 performance evidence reuse remains valid.
+This closes the existing second review/fix cycle; no third broad review ran.

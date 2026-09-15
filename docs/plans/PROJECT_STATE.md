@@ -1,6 +1,6 @@
 # Project state
 
-Updated: 2026-09-14 (Mobile005 / 010f3 implementation started under D-082; prior release unchanged).
+Updated: 2026-09-14 (Mobile005 / 010f3 implemented and independently READY under D-082; prior release unchanged).
 Current status and live residuals only. [History](PROJECT_HISTORY.md#archived-project-state-snapshot--2026-09-13)
 preserves the previous state verbatim, including superseded instructions.
 Decisions remain authoritative; use the [reading index](../decisions/DECISION_INDEX.md).
@@ -20,12 +20,14 @@ production-cluster deployment remain separate. Shared development is Mac-hosted.
 
 ## Current slice
 
-**Implementing: Mobile005 / 010f3.** Offline Person name/contact editing and
-admitted-People tags/custom-field imports are accepted under D-082 after READY review.
+**Implemented and verified locally: Mobile005 / 010f3.** Offline Person name/contact
+editing on iOS/Android and admitted-People tags/custom-field imports are complete
+under D-082. Both independent implementation reviews are READY.
 The [coordinated plan](MOBILE_005_010f3_PARALLEL_LAUNCH.md) links both specifications,
 execution briefs and review evidence. [Implementation status](../tasks/MOBILE_005_010f3_IMPLEMENTATION_STATUS.md)
-owns current lane/resources/checks. Mobile backend starts alongside migration,
-then iOS/Android follow the verified mobile contract. Shared development is preserved.
+owns delivered behavior, retained resources and passing checks. Final tested code
+is `ab4a362`; later completion changes are documentation only. Publication and
+deployment remain separate. Shared development is preserved.
 
 **Mobile004 / 010e4 delivered within their approved synthetic scope.**
 [Mobile stage specification](../specs/MOBILE_004_OFFLINE_STAGE_CHANGES.md),
@@ -42,28 +44,31 @@ Imported workspaces retain the administrator review hold; ordinary mutations,
 Today, Operator, outbound and mobile access do not bypass it.
 
 010e4 adds subsequent core refresh for admitted People in shared development.
-Dependent-family imports remain separate; see [the admission boundary](../specs/SLICE_010e3.md#1-outcome-and-deliberate-boundary).
+010f3 adds tags/custom-field imports locally; notes/tasks and history remain
+sequential follow-ups in the [family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md).
 Full migration fidelity, mapping repair, remaining deltas and activation need
 separately specified scope. Older ladder/summary milestone banners may predate
 this release; use the latest release record for delivered status.
 
 ## Current branch
 
-`codex/mobile005-010f3-integration`; runtime backend source `ffbc9fd`, followed by release documentation and
-sanitized evidence. All six merged milestone branches and completed worktrees are
-removed. Keep the retained release recovery material, implementation evidence,
-QA databases and native demo/QA stores. Only the owned release build cache and
-smoke-test metadata were removed.
+`codex/mobile005-010f3-integration`, final tested code `ab4a362`, followed by
+completion documentation. The three completed writer worktrees and owned QA
+APIs/Web preview are retained; no active writer remains. Keep verification and
+release recovery material, QA databases and native demo/QA stores. Only inactive
+private compiler caches were removed when needed. Shared runtime remains `ffbc9fd`.
 
 ## Last accepted decision
 
 **D-082:** implement both reviewed plans and isolated synthetic verification,
 with Terra high writers and the coordinated three-worktree sequence. Local
-integration checkpoints are allowed; publication/deployment remains separate.
+integration checkpoints are allowed. Implementation and required verification are
+complete; publication/deployment remains separate.
 
 **D-081:** draft Mobile005 and 010f3 together, preserving parallel mobile/migration
 development; 2026-09-14 follow-up authorized independent review, now READY.
-Proposed contracts remain unaccepted; no new implementation or release.
+D-082 subsequently accepted the reviewed contracts and implementation. D-081's
+earlier planning-only boundary is superseded for this accepted implementation.
 
 **D-080 plus its release follow-up:** accepted both implementations, then authorized
 commit/push, cleanup and shared-development deployment. Those actions are complete.
@@ -153,6 +158,16 @@ Foundations F-01/F-02/F-03 remain proposals except where separately accepted.
 
 ## Latest verification
 
+[Mobile005 / 010f3 final evidence](../tasks/MOBILE_005_010f3_FINAL_VERIFICATION.md)
+records all required gates passing at `ab4a362`: 992 ordinary Rust, 1,076 database,
+1,264 Web, 51 preflight, five documentation and 11 email-worker tests. Native proof
+includes 47 iOS and 42 Android tests, installed upgrades and real simulator/emulator
+journeys. Readiness covers 184 incomplete-schema variants. Browser, fidelity,
+performance and preservation checks pass; both final independent reviews are READY.
+All 74 protected artifacts and four shared listeners are preserved. Failed attempts
+and corrections remain in the owning records. No physical-phone or release claim
+is made for this local implementation.
+
 [Mobile004 / 010e4 evidence](../tasks/MOBILE_004_010e4_IMPLEMENTATION_STATUS.md)
 records installed native store upgrades, offline/replay/conflict flows, desktop/
 390px refresh cancellation/remainder, exact source/byte preservation, both 25k
@@ -167,11 +182,11 @@ full-suite evidence was reused with its source attribution.
 
 ## Next recommended action
 
-Implement the accepted [Mobile005 / 010f3 pair](MOBILE_005_010f3_PARALLEL_LAUNCH.md):
-offline names/contact editing on both native platforms alongside admitted-People
-tags/custom fields. D-082 authorizes implementation and isolated verification.
-Notes/tasks and history follow in the
-[family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md); native calling follows the agreed progression.
+The [Mobile005 / 010f3 pair](MOBILE_005_010f3_PARALLEL_LAUNCH.md) is ready for
+publication and shared-development release once requested. Preserve retained QA
+and installed stores through that release. Subsequent planning covers admitted
+notes/tasks, then history, in the [family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md)
+and the next mobile slice; native calling follows the agreed progression.
 Physical-phone/design/live-source work remains deferred; complete C-gate
 erasure/restore work before real customer data. No repeat release action is needed
 for the completed Mobile004 / 010e4 milestone.

@@ -9,6 +9,26 @@ Use [PROJECT_STATE.md](PROJECT_STATE.md) for current work, live residuals and ne
 actions, and the [decision log](../decisions/DECISION_LOG.md) for authority.
 Per-slice verification/release records remain the detailed evidence.
 
+## Mobile005 / 010f3 local completion — 2026-09-14
+
+D-082 implementation completed on `codex/mobile005-010f3-integration`, with final
+tested code `ab4a362a224183dd1d51acd51196b71315826fd6` and subsequent documentation
+only. Both native clients support offline Person name/contact editing; 010f3 adds
+retained-source tags/custom-field imports for admitted People. Both independent
+implementation reviews conclude READY within the two allowed review rounds.
+The [implementation record](../tasks/MOBILE_005_010f3_IMPLEMENTATION_STATUS.md)
+owns delivered behavior; [final verification](../tasks/MOBILE_005_010f3_FINAL_VERIFICATION.md)
+owns all passing repository/native/browser/readiness/performance gates, source
+attribution, and retained failures with corrections. All 1,076 database tests pass.
+
+All 74 protected artifacts and four shared listeners were preserved. Retained
+metadata upgrade proof preserves 15 protected rowsets, both original native cells
+and exact import/snapshot/storage row hashes. QA runtimes/databases, native stores
+and three completed writer worktrees remain for release handoff; only inactive
+private compiler caches were removed. Shared development remains Mobile004/010e4.
+No push/deployment, native distribution, live FUB/customer processing, activation
+or physical-phone work occurred. Calling remains after the agreed progression.
+
 ## Mobile004 / 010e4 shared-development release — 2026-09-13
 
 Following the user's commit/push/cleanup/deploy request, main was published and

@@ -65,9 +65,12 @@ class Mobile006UiProofTest {
                     it.person == conflictDraft.person && it.operation.isEmpty()
                 }
                 val replacementCard = "metadata-draft-${replacementDraft.id}"
-                // The clickable modifier and card tag merge into one node only in the merged
-                // tree; use that actual card action when reopening an already-created draft.
-                compose.onNodeWithTag(replacementCard)
+                // The card tag is nested inside its clickable semantics node. Query that action
+                // in the unmerged tree so the test invokes the card, not an off-screen child.
+                compose.onNode(
+                    hasClickAction() and hasAnyDescendant(hasTestTag(replacementCard)),
+                    useUnmergedTree = true,
+                )
                     .performScrollTo().assertIsDisplayed().performClick()
                 replacementDraft
             }
@@ -90,7 +93,7 @@ class Mobile006UiProofTest {
             "before_editor stale=$stale dao_fields=${active().store.dao.metadataFields().size} ui_fields=${editorState.metadataFields.size} " +
                 "drafts=${editorState.metadataDrafts.size} operation=${active().store.dao.operation(stale)?.status}\n",
         )
-        compose.onRoot(useUnmergedTree = true).printToLog("Mobile006UiProof")
+        compose.onAllNodes(isRoot(), useUnmergedTree = true).onFirst().printToLog("Mobile006UiProof")
         screenshot("mobile006-ui-catalog-conflict-editor-open")
         // OutlinedTextField carries its tag in the dialog's unmerged semantics tree.
         compose.waitUntil(20_000) { compose.onAllNodesWithTag("metadata-text-d9d979a3-5015-4cc9-9252-a58e1d109548", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
@@ -98,22 +101,31 @@ class Mobile006UiProofTest {
         compose.onNodeWithTag("metadata-text-d9d979a3-5015-4cc9-9252-a58e1d109548", useUnmergedTree = true)
             .performScrollTo().assertIsDisplayed()
             .performTextReplacement("Android UI replacement ${java.util.UUID.randomUUID()}")
+        val existingMetadataOperations = active().store.dao.operations()
+            .filter { it.kind == "update_person_metadata" }
+            .map { it.id }
+            .toSet()
         compose.onNode(
             hasClickAction() and hasAnyDescendant(hasText("Save and sync")),
             useUnmergedTree = true,
         ).assertIsDisplayed().assertIsEnabled().performClick()
         compose.waitUntil(20_000) {
-            active().store.dao.operations().any { it.kind == "update_person_metadata" && it.id != stale && it.status == "queued" }
+            active().store.dao.operations().any {
+                it.kind == "update_person_metadata" && it.id !in existingMetadataOperations &&
+                    it.status in setOf("queued", "accepted", "covered")
+            }
         }
-        val replacement = active().store.dao.operations().last { it.kind == "update_person_metadata" && it.id != stale }
+        val replacement = active().store.dao.operations().single {
+            it.kind == "update_person_metadata" && it.id !in existingMetadataOperations
+        }
         screenshot("mobile006-ui-catalog-replacement-queued")
         if (repository.ui.value.paused) compose.onNodeWithText("Resume sync").assertIsEnabled().performClick()
-        repeat(90) {
-            if (active().store.dao.operation(replacement.id)?.status in setOf("accepted", "covered")) return@repeat
-            delay(1_000)
+        compose.waitUntil(90_000) {
+            active().store.dao.operation(replacement.id)?.status in setOf("accepted", "covered")
         }
         val result = active().store.dao.operation(replacement.id)!!
         assertTrue("replacement status=${result.status} error=${result.lastError}", result.status in setOf("accepted", "covered"))
+        screenshot("mobile006-ui-catalog-replacement-settled")
         File(compose.activity.filesDir, "mobile006-ui-evidence.txt").appendText(
             "catalog_conflict=$stale replacement=${replacement.id} status=${result.status}\n",
         )

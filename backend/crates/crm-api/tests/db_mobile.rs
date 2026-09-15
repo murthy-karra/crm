@@ -345,6 +345,58 @@ async fn mobile006_metadata_reader_establishes_snapshot_after_catalog_barrier(po
     assert_eq!(changed["error"], "generation_changed");
 }
 
+#[cfg(feature = "perf-harness")]
+#[sqlx::test]
+#[ignore = "coordinator-owned M6-09 isolated hot-plan run"]
+async fn mobile006_metadata_hot_query_plans(pool: PgPool) {
+    use sha2::{Digest, Sha256};
+
+    let f = fixture(&pool).await;
+    for n in 0..49 {
+        let email = format!("mobile006-plan-member-{n}@fixture.test");
+        let user = crate::common::create_user(&pool, &email, "Plan Member", PW).await;
+        crate::common::add_membership_with(
+            &pool,
+            f.org,
+            user,
+            Role::Member,
+            MembershipStatus::Active,
+        )
+        .await;
+    }
+    sqlx::query("INSERT INTO person(organization_id,first_name,stage_id,assigned_user_id) SELECT $1,'Mobile006 plan',p.stage_id,$2 FROM person p CROSS JOIN generate_series(1,24999) WHERE p.id=$3")
+        .bind(f.org).bind(f.actor).bind(f.person).execute(&f.app).await.unwrap();
+    let tag: Uuid = sqlx::query_scalar("INSERT INTO tag(organization_id,created_by_user_id,name) VALUES($1,$2,'Mobile006 plan tag') RETURNING id")
+        .bind(f.org).bind(f.actor).fetch_one(&f.app).await.unwrap();
+    let field: Uuid = sqlx::query_scalar("INSERT INTO custom_field(organization_id,label,field_type,position,created_by_user_id) VALUES($1,'Mobile006 plan field','text',1,$2) RETURNING id")
+        .bind(f.org).bind(f.actor).fetch_one(&f.app).await.unwrap();
+    let statements = [
+        ("membership", "SELECT role FROM organization_membership WHERE organization_id=$1 AND user_id=$2 AND status='active' FOR SHARE"),
+        ("person_token", "SELECT metadata_revision FROM person WHERE organization_id=$1 AND id=$2"),
+        ("catalog_token", "SELECT revision FROM mobile_metadata_catalog WHERE organization_id=$1"),
+        ("tags", "SELECT t.id,t.name FROM person_tag pt JOIN tag t ON t.id=pt.tag_id AND t.organization_id=pt.organization_id WHERE pt.organization_id=$1 AND pt.person_id=$2 ORDER BY t.id LIMIT 101"),
+        ("values", "SELECT field_id,field_type,text_value,number_value,date_value,option_id,updated_at FROM person_custom_field_value WHERE organization_id=$1 AND person_id=$2 ORDER BY field_id LIMIT 101"),
+    ];
+    let mut evidence = Vec::new();
+    for (name, sql) in statements {
+        let explain = format!("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) {sql}");
+        let plan: Value = sqlx::query_scalar(&explain)
+            .bind(f.org)
+            .bind(f.actor)
+            .bind(f.person)
+            .bind(tag)
+            .bind(field)
+            .fetch_one(&f.app)
+            .await
+            .unwrap();
+        evidence.push(json!({"name":name,"sql":sql,"sha256":format!("{:x}",Sha256::digest(sql.as_bytes())),"plan":plan}));
+    }
+    println!(
+        "MOBILE006_HOT {}",
+        json!({"people":25000,"members":50,"plans":evidence})
+    );
+}
+
 #[sqlx::test]
 #[ignore]
 async fn mobile005_details_receipt_replay_and_revision_scope(pool: PgPool) {

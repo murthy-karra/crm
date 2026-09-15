@@ -12,7 +12,7 @@ import { fetchImport, fetchImports, importAccessError, uncertainImportError } fr
 import { fetchPeopleAdmission, fetchPeopleAdmissions } from '../../api/peopleAdmissions'
 import { fetchCoreChangeReport, fetchCoreChangeReports } from '../../api/coreChangeReports'
 import { fetchSnapshot } from '../../api/snapshots'
-import { cancelAdmittedActivityImport, confirmAdmittedActivityImport, fetchAdmittedActivityImport, fetchAdmittedActivityImports, activityActive, proposeAdmittedActivityImport, replanAdmittedActivityImport, retryAdmittedActivityImport, useActivityAccess, type ActivityConfirm, type ActivityPatch, type ActivityReplan } from '../../api/admittedActivityImports'
+import { cancelAdmittedActivityImport, confirmAdmittedActivityImport, createAdmittedActivityRemainder, fetchAdmittedActivityImport, fetchAdmittedActivityImports, activityActive, proposeAdmittedActivityImport, replanAdmittedActivityImport, retryAdmittedActivityImport, useActivityAccess, type ActivityConfirm, type ActivityPatch, type ActivityReplan } from '../../api/admittedActivityImports'
 import { buttonClasses, INPUT_CLASSES } from '../../lib/controls'
 import { describeApiError } from '../../lib/errors'
 import { formatBytes, snapshotLabel, snapshotTime } from './format'
@@ -48,7 +48,7 @@ type Intent =
   | { kind: 'plan'; identity: string; body: { request_id: string; admission_id: string; report_id: string } }
   | { kind: 'replan'; identity: string; id: string; body: ActivityReplan }
   | { kind: 'confirm'; identity: string; id: string; body: ActivityConfirm }
-  | { kind: 'retry' | 'cancel'; identity: string; id: string; body: { request_id: string; expected_revision: string } }
+  | { kind: 'retry' | 'cancel' | 'remainder'; identity: string; id: string; body: { request_id: string; expected_revision: string } }
 const intent = ref<Intent | null>(null)
 const parentsKey = computed(() => [...access.prefix.value, 'parents', parentCursors.value.at(-1) ?? ''])
 const parentKey = computed(() => [...access.prefix.value, 'parent', parentId.value])
@@ -128,7 +128,7 @@ async function submit(value: Intent) {
   const valid = () => sameIdentity() && access.enabled.value && scope === access.scope.value && generation === selectionGeneration
   intent.value = value; pending.value = true; uncertain.value = false; actionError.value = ''
   try {
-    const result = value.kind === 'plan' ? await proposeAdmittedActivityImport(value.body) : value.kind === 'replan' ? await replanAdmittedActivityImport(value.id, value.body) : value.kind === 'confirm' ? await confirmAdmittedActivityImport(value.id, value.body) : value.kind === 'retry' ? await retryAdmittedActivityImport(value.id, value.body) : await cancelAdmittedActivityImport(value.id, value.body)
+    const result = value.kind === 'plan' ? await proposeAdmittedActivityImport(value.body) : value.kind === 'replan' ? await replanAdmittedActivityImport(value.id, value.body) : value.kind === 'confirm' ? await confirmAdmittedActivityImport(value.id, value.body) : value.kind === 'retry' ? await retryAdmittedActivityImport(value.id, value.body) : value.kind === 'remainder' ? await createAdmittedActivityRemainder(value.id, value.body) : await cancelAdmittedActivityImport(value.id, value.body)
     if (!valid()) { if (sameIdentity()) { uncertain.value = true; actionError.value = 'Access changed while the request was pending. Retry this same reviewed request to recover its outcome.' }; return }
     intent.value = null; uncertain.value = false; clearReview()
     // Receipts prove the request outcome; only fresh reads supply current state.
@@ -158,6 +158,7 @@ function reviewConfirm() { const c = current.value; const p = c?.latest_plan; if
 function confirm() { if (current.value && confirmation.value && canConfirm.value) void submit({ kind: 'confirm', identity: access.identity.value, id: current.value.id, body: confirmation.value }) }
 function resume() { if (current.value?.actions.retry && !busy.value) void submit({ kind: 'retry', identity: access.identity.value, id: current.value.id, body: { request_id: crypto.randomUUID(), expected_revision: current.value.revision } }) }
 function cancel() { if (current.value?.actions.cancel && !busy.value) void submit({ kind: 'cancel', identity: access.identity.value, id: current.value.id, body: { request_id: crypto.randomUUID(), expected_revision: current.value.revision } }) }
+function remainder() { if (current.value?.actions.remainder && !busy.value) void submit({ kind: 'remainder', identity: access.identity.value, id: current.value.id, body: { request_id: crypto.randomUUID(), expected_revision: current.value.revision } }) }
 </script>
 
 <template>
@@ -389,7 +390,7 @@ function cancel() { if (current.value?.actions.cancel && !busy.value) void submi
           v-if="current.state === 'cancelled'"
           class="mt-2 text-small"
         >
-          This activity import is permanently cancelled. Settled notes and tasks remain visible; another child cannot be created for this People import.
+          This activity import is permanently cancelled. Settled notes and tasks remain visible.
         </p>
         <p
           v-if="current.state === 'completed'"
@@ -472,6 +473,14 @@ function cancel() { if (current.value?.actions.cancel && !busy.value) void submi
             @click="cancelReview = true"
           >
             Cancel activity import
+          </button><button
+            v-if="current.actions.remainder"
+            type="button"
+            :class="buttonClasses('primary')"
+            :disabled="busy"
+            @click="remainder"
+          >
+            Continue never-settled remainder
           </button>
         </div>
       </Card>

@@ -650,7 +650,7 @@ function remainder() { if (current.value?.actions.remainder && !busy.value) void
     <ConfirmDialog
       :visible="cancelReview"
       title="Permanently cancel activity import"
-      message="Cancellation ends this activity import permanently. Already settled notes and tasks, results and retained source evidence remain. A replacement activity child cannot be created for this People import. The workspace stays in administrator review."
+      :message="current?.confirmed_plan_id ? 'Cancellation ends this activity import permanently. Already settled notes and tasks, results and retained source evidence remain. You can continue its never-settled remainder. The workspace stays in administrator review.' : 'Cancellation ends this unconfirmed activity plan. Its retained source evidence remains. You can prepare a new plan from the selected qualified source. The workspace stays in administrator review.'"
       confirm-label="Permanently cancel activity import"
       confirm-variant="danger"
       :is-pending="pending"

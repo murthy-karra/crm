@@ -963,8 +963,7 @@ async fn admitted_activity_http_tenants_private_permit_and_native_review_cursor_
         },
     )
     .await
-    .err()
-    .expect("ordinary admin mutation must fail");
+    .expect_err("ordinary admin mutation must fail");
     assert!(
         matches!(ordinary,note::NoteError::Database(ref e) if e.as_database_error().and_then(|e|e.code()).as_deref()==Some("P010C")),
         "admin cannot bypass workspace hold"

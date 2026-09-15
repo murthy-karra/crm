@@ -377,7 +377,10 @@ async fn mobile006_metadata_receipt_and_current_authority_gates(pool: PgPool) {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    let receipt = format!("/api/mobile/v1/operations/{}", operation["operation_id"]);
+    let receipt = format!(
+        "/api/mobile/v1/operations/{}",
+        operation["operation_id"].as_str().unwrap()
+    );
     assert_eq!(
         request(
             &f.router,

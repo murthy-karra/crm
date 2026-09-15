@@ -64,6 +64,46 @@ async fn mobile006_metadata_atomic_receipt_current_and_catalog_generation(pool: 
     assert_eq!(status, StatusCode::OK, "{current}");
     assert_eq!(current["tags"][0]["id"], tag);
     assert_eq!(current["values"][0]["value"]["number"], "123.4500");
+    // A catalog-only change conflicts before a fresh mutation, and an invalid
+    // sibling rolls the whole atomic patch back.
+    let next_metadata: i64 = current["metadata_revision"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    let stale_catalog: i64 = current["catalog_revision"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    let rollback_tag: Uuid = sqlx::query_scalar("INSERT INTO tag(organization_id,created_by_user_id,name) VALUES($1,$2,'Mobile006 rollback') RETURNING id")
+        .bind(f.org).bind(f.actor).fetch_one(&f.app).await.unwrap();
+    let stale = f.operation("update_person_metadata", json!({"person_id":f.person,"expected_metadata_revision":next_metadata.to_string(),"expected_catalog_revision":stale_catalog.to_string(),"actions":[{"kind":"add_tag","tag_id":rollback_tag}]}));
+    assert_eq!(
+        f.post("/api/mobile/v1/operations", stale).await.1["error"],
+        "catalog_revision_conflict"
+    );
+    let catalog: i64 =
+        sqlx::query_scalar("SELECT revision FROM mobile_metadata_catalog WHERE organization_id=$1")
+            .bind(f.org)
+            .fetch_one(&f.app)
+            .await
+            .unwrap();
+    let invalid = f.operation("update_person_metadata", json!({"person_id":f.person,"expected_metadata_revision":next_metadata.to_string(),"expected_catalog_revision":catalog.to_string(),"actions":[{"kind":"add_tag","tag_id":rollback_tag},{"kind":"set_field","field_id":field,"value":{"number":"1e4"}}]}));
+    assert_eq!(
+        f.post("/api/mobile/v1/operations", invalid).await.1["error"],
+        "invalid_metadata"
+    );
+    let links: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM person_tag WHERE organization_id=$1 AND person_id=$2 AND tag_id=$3",
+    )
+    .bind(f.org)
+    .bind(f.person)
+    .bind(rollback_tag)
+    .fetch_one(&f.app)
+    .await
+    .unwrap();
+    assert_eq!(links, 0);
     let (status, generation)=f.post("/api/mobile/v1/reconciliations",json!({"protocol":"mobile-v1","installation_id":f.install,"pinned_person_ids":[f.person],"include_metadata":true})).await;
     assert_eq!(status, StatusCode::OK, "{generation}");
     let generation_id = id(&generation, "generation_id");

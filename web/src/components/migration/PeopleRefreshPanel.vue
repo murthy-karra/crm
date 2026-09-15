@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import Card from '../Card.vue'
+import PeopleMappingRepair from './PeopleMappingRepair.vue'
 import ConfirmDialog from '../ConfirmDialog.vue'
 import FormField from '../FormField.vue'
 import PeopleRefreshItems from './PeopleRefreshItems.vue'
@@ -21,7 +22,7 @@ const parentId = ref(''); const reportId = ref(''); const refreshId = ref('')
 const parentPages = ref(['']); const reportPages = ref(['']); const refreshPages = ref([''])
 const listEpoch = ref(0); const outputEpoch = ref(0)
 const pending = ref(false); const uncertain = ref(false); const actionError = ref('')
-const coverageAck = ref(false); const exclusionsAck = ref(false); const removalsAck = ref(false)
+const mappingAck = ref(false); const coverageAck = ref(false); const exclusionsAck = ref(false); const removalsAck = ref(false)
 const confirmation = ref<'confirm' | 'cancel' | null>(null)
 const now = ref(Date.now()); const timer = setInterval(() => { now.value = Date.now() }, 1000)
 type Intent = { identity: string; parent: string } & (
@@ -31,7 +32,8 @@ type Intent = { identity: string; parent: string } & (
 )
 const intent = ref<Intent | null>(null)
 let disposed = false; let identityEpoch = 0; let authorityEpoch = 0; let selectionEpoch = 0
-const busy = computed(() => pending.value || intent.value !== null)
+const repairBusy = ref(false)
+const busy = computed(() => pending.value || intent.value !== null || repairBusy.value)
 const parentsKey = computed(() => [...access.prefix.value, 'parents', parentPages.value.at(-1)])
 const parentKey = computed(() => [...access.prefix.value, 'parent', parentId.value])
 const reportsKey = computed(() => [...access.prefix.value, 'reports', parentId.value, reportPages.value.at(-1), listEpoch.value])
@@ -56,9 +58,9 @@ const source = computed(() => access.enabled.value && report.data.value?.parent_
 const plan = computed(() => current.value?.plan)
 const expired = computed(() => !!plan.value && (!plan.value.expires_at || Date.parse(plan.value.expires_at) <= now.value || !Number.isFinite(Date.parse(plan.value.expires_at))))
 const canPrepare = computed(() => access.enabled.value && access.org.value?.workspace_mode === 'migration_review' && parent.data.value?.state === 'completed' && !!parent.data.value.confirmed_plan_id && !!source.value && source.value.id === reportId.value && !busy.value && !refreshId.value)
-const canConfirm = computed(() => !!current.value?.actions.confirm && !!plan.value && plan.value.counts.eligible !== '0' && !expired.value && !!source.value && coverageAck.value && exclusionsAck.value && removalsAck.value && !busy.value)
+const canConfirm = computed(() => !!current.value?.actions.confirm && !!plan.value && (plan.value.counts.eligible !== '0' || !!plan.value.mapping_repair && plan.value.mapping_repair.approval_only_count !== '0') && (!plan.value.mapping_repair || mappingAck.value) && !expired.value && !!source.value && coverageAck.value && exclusionsAck.value && removalsAck.value && !busy.value)
 const errors = computed(() => [parents.error.value, parent.error.value, reports.error.value, listing.error.value, detail.error.value, report.error.value].filter(Boolean))
-function resetAcknowledgments() { coverageAck.value = false; exclusionsAck.value = false; removalsAck.value = false; confirmation.value = null }
+function resetAcknowledgments() { mappingAck.value = false; coverageAck.value = false; exclusionsAck.value = false; removalsAck.value = false; confirmation.value = null }
 function resetLists() { firstRefreshPage.value = null; refreshPages.value = ['']; reportPages.value = ['']; listEpoch.value++ }
 function deny() { access.denied.value = true; resetAcknowledgments(); void props.refreshWorkspace().catch(() => {}) }
 watch(parents.data, value => { if (access.enabled.value && !parentId.value) parentId.value = value?.imports.find(v => v.state === 'completed' && v.confirmed_plan_id)?.id ?? '' })
@@ -114,6 +116,7 @@ function confirm() {
   try { void submit({ kind: 'confirm', identity: access.identity.value, parent: parentId.value, id: value.id, body: {
     request_id: crypto.randomUUID(), plan_id: preview.id, plan_revision: refreshInteger(preview.revision), plan_digest: preview.digest,
     acknowledged_coverage: true, acknowledged_exclusions: true,
+    ...(preview.mapping_repair ? { mapping_repair: { choices_digest: preview.mapping_repair.choices_digest, candidate_count: refreshInteger(preview.mapping_repair.candidate_count), approval_only_count: refreshInteger(preview.mapping_repair.approval_only_count), unassigned_count: refreshInteger(preview.mapping_repair.unassigned_count) } } : {}),
     acknowledged_name_clears: refreshInteger(preview.counts.name_clears), acknowledged_assignment_clears: refreshInteger(preview.counts.assignment_clears), acknowledged_contact_removals: refreshInteger(preview.counts.contact_removals),
   } }) } catch { actionError.value = 'The plan counts cannot be submitted safely. Reload the preview.' }
 }
@@ -322,7 +325,7 @@ function confirm() {
           </li>
         </ul>
         <p class="text-small text-text-muted">
-          New People, new mapping choices, notes, tasks, tags, custom fields and historical activity are excluded. Missing source records do not authorize deletion. This refresh does not establish cutover readiness.
+          New People, notes, tasks, tags, custom fields and historical activity are excluded. Mapping repairs require their own reviewed choices. Missing source records do not authorize deletion. This refresh does not establish cutover readiness.
         </p>
       </section>
       <section
@@ -336,7 +339,9 @@ function confirm() {
           v-if="current.pause_reason"
           class="text-small"
         >
-          {{ refreshLabel(current.pause_reason) }}. Resume requires the initiating administrator and current capacity and release checks.
+          {{ refreshLabel(current.pause_reason) }}.<template v-if="current.pause_reason !== 'awaiting_mapping_choices'">
+            Resume requires the initiating administrator and current capacity and release checks.
+          </template>
         </p>
         <p
           v-if="current.state === 'completed'"
@@ -350,6 +355,15 @@ function confirm() {
         >
           Further writes are cancelled. Previously committed updates and their evidence are retained.
         </p>
+        <PeopleMappingRepair
+          :owner="'original'"
+          :current="current"
+          :disabled="busy"
+          @selected="refreshId = $event"
+          @reload="reload"
+          @denied="deny"
+          @busy="repairBusy = $event"
+        />
         <template v-if="plan">
           <div class="grid gap-2 rounded border border-border p-3 text-small sm:grid-cols-2">
             <p>Eligible updates: <strong>{{ plan.counts.eligible }}</strong></p><p>Already current: {{ plan.counts.already_current }}</p><p>Held conflicts or gaps: {{ plan.counts.held }}</p><p>Excluded changes: {{ plan.counts.excluded }}</p><p>Components without a new instruction: {{ plan.counts.no_instruction }}</p><p>Plan revision {{ plan.revision }}</p>
@@ -357,6 +371,17 @@ function confirm() {
           <p class="text-small">
             Review every proposed clear or removal: <strong>{{ plan.counts.name_clears }} name fields, {{ plan.counts.assignment_clears }} assignments, {{ plan.counts.contact_removals }} contacts.</strong>
           </p>
+          <label
+            v-if="plan?.mapping_repair && current.state === 'ready'"
+            class="my-3 flex gap-2 text-small"
+          >
+            <input
+              v-model="mappingAck"
+              type="checkbox"
+              :disabled="busy"
+            >
+            I reviewed mappings for {{ plan.mapping_repair.candidate_count }} People, including {{ plan.mapping_repair.approval_only_count }} approvals with no CRM field changes, and {{ plan.mapping_repair.unassigned_count }} explicit unassigned approvals.
+          </label>
           <PeopleRefreshItems
             :key="`${access.scope.value}:${current.id}:${plan.id}:${plan.revision}:${outputEpoch}`"
             :refresh="current"
@@ -375,7 +400,7 @@ function confirm() {
             </p><p v-else>
               Preview expires {{ snapshotTime(plan.expires_at) }}.
             </p>
-            <p v-if="plan.counts.eligible === '0'">
+            <p v-if="plan.counts.eligible === '0' && (!plan.mapping_repair || plan.mapping_repair.approval_only_count === '0')">
               This plan has no native updates to confirm. Its held, excluded and already-current entries remain available for inspection.
             </p>
             <label class="flex items-start gap-2"><input
@@ -408,7 +433,7 @@ function confirm() {
         </template>
         <div class="flex flex-wrap gap-3">
           <button
-            v-if="current.actions.repreview"
+            v-if="current.actions.repreview && current.mode !== 'mapping_repair'"
             type="button"
             :class="buttonClasses()"
             :disabled="busy"
@@ -475,7 +500,7 @@ function confirm() {
     <ConfirmDialog
       :visible="confirmation !== null && access.enabled.value"
       :title="confirmation === 'cancel' ? 'Cancel People refresh?' : 'Apply this exact People plan?'"
-      :message="confirmation === 'cancel' ? 'Stop future writes. Already committed updates and retained evidence will remain.' : `Apply ${plan?.counts.eligible ?? '0'} eligible updates, including ${plan?.counts.name_clears ?? '0'} name clears, ${plan?.counts.assignment_clears ?? '0'} assignment clears and ${plan?.counts.contact_removals ?? '0'} contact removals. Local conflicts will be held. The workspace stays in migration review.`"
+      :message="confirmation === 'cancel' ? 'Stop future writes. Already committed updates and retained evidence will remain.' : `Apply ${plan?.counts.eligible ?? '0'} eligible updates, including ${plan?.counts.name_clears ?? '0'} name clears, ${plan?.counts.assignment_clears ?? '0'} assignment clears and ${plan?.counts.contact_removals ?? '0'} contact removals. ${plan?.mapping_repair ? `Also approve ${plan.mapping_repair.approval_only_count} mapping-only outcomes for this repair.` : ''} Local conflicts will be held. The workspace stays in migration review.`"
       :confirm-label="confirmation === 'cancel' ? 'Stop future refresh writes' : 'Confirm exact People plan'"
       :confirm-variant="confirmation === 'cancel' ? 'danger' : 'primary'"
       :is-pending="pending"

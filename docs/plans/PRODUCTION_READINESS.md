@@ -107,6 +107,18 @@ must not erase another feature's evidence. The implementation contract must
 record actual columns and links. This inventory extends future erasure coverage;
 it does not select retention or close C1/C2.
 
+D-088 mapping repair expands this inventory for both People refresh owners with
+`_repair_key`, `_repair_choice`, `_repair_candidate`, `_mapping_binding` and
+`_mapping_head`, plus `migration_mapping_repair_requirement`. Track encrypted
+source keys/target snapshots, inherited-choice links, anchored plan/item/Person
+identities, exact source-account keys, successful-result/predecessor bindings,
+versioned current heads, and added encrypted item mapping evidence. Root/plan
+choice digests and source anchors link immutable historical approvals to the
+retained source report/capture. Head ownership can transfer while older bindings
+stay charged to their original root. Include browser caches, receipts, encryption
+keys and backup copies. This adds inventory only; selective erasure, retention
+periods, backup deletion and the shared development key policy remain C1/C2 work.
+
 ## Core snapshot worker handoff
 
 **OPEN — source inspection, reproduction pending.** During 010d1's bounded

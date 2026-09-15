@@ -326,7 +326,7 @@ fn item_summary(
     )
 }
 fn overview(r: &sqlx::postgres::PgRow) -> Value {
-    json!({"id":r.get::<Uuid,_>("id"),"parent_import_id":r.get::<Uuid,_>("parent_import_id"),"report_id":r.get::<Uuid,_>("report_id"),"state":r.get::<String,_>("state"),"lifecycle_revision":r.get::<i64,_>("lifecycle_revision").to_string(),"newer_snapshot_id":r.get::<Uuid,_>("newer_snapshot_id"),"newer_sequence":r.get::<i64,_>("newer_sequence").to_string(),"created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),"updated_at":r.get::<chrono::DateTime<chrono::Utc>,_>("updated_at"),"completed_at":r.get::<Option<chrono::DateTime<chrono::Utc>>,_>("completed_at"),"pause_reason":r.get::<Option<String>,_>("pause_reason"),"progress":{"settled_items":r.get::<i64,_>("settled_items").to_string()},"retained_bytes":r.get::<i64,_>("retained_bytes").to_string(),"reserved_bytes":r.get::<i64,_>("reserved_bytes").to_string()})
+    json!({"confirmed_refresh_plan_id":r.get::<Option<Uuid>,_>("confirmed_refresh_plan_id"),"mode":if r.get::<Option<Uuid>,_>("repair_source_refresh_id").is_some(){"mapping_repair"}else{"refresh"},"repair_source_refresh_id":r.get::<Option<Uuid>,_>("repair_source_refresh_id"),"repair_draft_revision":r.get::<i64,_>("repair_draft_revision").to_string(),"repair_candidates_complete":r.get::<bool,_>("repair_candidates_complete"),"repair_candidate_count":r.get::<i64,_>("repair_candidate_count").to_string(),"id":r.get::<Uuid,_>("id"),"parent_import_id":r.get::<Uuid,_>("parent_import_id"),"report_id":r.get::<Uuid,_>("report_id"),"state":r.get::<String,_>("state"),"lifecycle_revision":r.get::<i64,_>("lifecycle_revision").to_string(),"newer_snapshot_id":r.get::<Uuid,_>("newer_snapshot_id"),"newer_sequence":r.get::<i64,_>("newer_sequence").to_string(),"created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),"updated_at":r.get::<chrono::DateTime<chrono::Utc>,_>("updated_at"),"completed_at":r.get::<Option<chrono::DateTime<chrono::Utc>>,_>("completed_at"),"pause_reason":r.get::<Option<String>,_>("pause_reason"),"progress":{"settled_items":r.get::<i64,_>("settled_items").to_string()},"retained_bytes":r.get::<i64,_>("retained_bytes").to_string(),"reserved_bytes":r.get::<i64,_>("reserved_bytes").to_string()})
 }
 #[tracing::instrument(skip_all, fields(organization_id=%ctx.organization_id.0))]
 pub async fn list(
@@ -413,12 +413,21 @@ pub async fn detail(
         live_plan = plan
             .get::<Option<DateTime<Utc>>, _>("expires_at")
             .is_some_and(|v| v > now);
-        eligible = plan.get::<i64, _>("eligible_count") > 0;
-        value["plan"] = json!({"id":plan.get::<Uuid,_>("id"),"revision":plan.get::<i64,_>("revision").to_string(),"digest":digest.iter().map(|v|format!("{v:02x}")).collect::<String>(),"expires_at":plan.get::<Option<DateTime<Utc>>,_>("expires_at"),"counts":{"eligible":plan.get::<i64,_>("eligible_count").to_string(),"already_current":plan.get::<i64,_>("already_current_count").to_string(),"held":plan.get::<i64,_>("held_count").to_string(),"excluded":plan.get::<i64,_>("excluded_count").to_string(),"name_clears":plan.get::<i64,_>("name_clear_count").to_string(),"assignment_clears":plan.get::<i64,_>("assignment_clear_count").to_string(),"contact_removals":plan.get::<i64,_>("contact_removal_count").to_string(),"no_instruction":plan.get::<i64,_>("no_instruction_count").to_string()}});
+        eligible = plan.get::<i64, _>("eligible_count") > 0
+            || plan.get::<i64, _>("repair_approval_only_count") > 0;
+        value["plan"] = json!({"mapping_repair":plan.get::<Option<Vec<u8>>,_>("repair_choices_digest").map(|d|json!({"choices_digest":d.iter().map(|v|format!("{v:02x}")).collect::<String>(),"candidate_count":plan.get::<i64,_>("repair_candidate_count").to_string(),"approval_only_count":plan.get::<i64,_>("repair_approval_only_count").to_string(),"unassigned_count":plan.get::<i64,_>("repair_unassigned_count").to_string()})),"id":plan.get::<Uuid,_>("id"),"revision":plan.get::<i64,_>("revision").to_string(),"digest":digest.iter().map(|v|format!("{v:02x}")).collect::<String>(),"expires_at":plan.get::<Option<DateTime<Utc>>,_>("expires_at"),"counts":{"eligible":plan.get::<i64,_>("eligible_count").to_string(),"already_current":plan.get::<i64,_>("already_current_count").to_string(),"held":plan.get::<i64,_>("held_count").to_string(),"excluded":plan.get::<i64,_>("excluded_count").to_string(),"name_clears":plan.get::<i64,_>("name_clear_count").to_string(),"assignment_clears":plan.get::<i64,_>("assignment_clear_count").to_string(),"contact_removals":plan.get::<i64,_>("contact_removal_count").to_string(),"no_instruction":plan.get::<i64,_>("no_instruction_count").to_string()}});
     }
+    let remainder = row.get::<String, _>("state") == "cancelled"
+        && row
+            .get::<Option<Uuid>, _>("repair_source_refresh_id")
+            .is_some()
+        && row
+            .get::<Option<Uuid>, _>("confirmed_refresh_plan_id")
+            .is_some();
+    value["mapping_repair_available"]=json!(sqlx::query_scalar::<_,bool>("SELECT (NOT $3 AND (EXISTS(SELECT 1 FROM migration_people_refresh_item i WHERE i.refresh_id=$1 AND i.organization_id=$2 AND i.disposition='held_mapping_gap') OR EXISTS(SELECT 1 FROM migration_people_refresh_result z WHERE z.refresh_id=$1 AND z.organization_id=$2 AND z.disposition IN ('held_stale','held_mapping_gap')))) OR ($3 AND EXISTS(SELECT 1 FROM migration_people_refresh_item i WHERE i.refresh_id=$1 AND i.organization_id=$2 AND i.plan_id=$4 AND i.settled_at IS NULL AND i.disposition IN ('eligible','already_current')))").bind(id).bind(ctx.organization_id.0).bind(remainder).bind(row.get::<Option<Uuid>,_>("confirmed_refresh_plan_id")).fetch_one(&mut *tx).await?);
     let state = row.get::<String, _>("state");
     let initiator = row.get::<Uuid, _>("initiated_by_user_id") == ctx.actor_user_id.0;
-    value["actions"] = json!({"confirm":initiator&&state=="ready"&&live_plan&&eligible,"repreview":initiator&&state=="ready","retry":initiator&&state=="paused","cancel":!matches!(state.as_str(),"completed"|"cancelled")});
+    value["actions"] = json!({"confirm":initiator&&state=="ready"&&live_plan&&eligible,"repreview":initiator&&state=="ready","retry":initiator&&state=="paused"&&row.get::<Option<String>,_>("pause_reason").as_deref()!=Some("awaiting_mapping_choices"),"cancel":!matches!(state.as_str(),"completed"|"cancelled")});
     finish(tx, value, SUMMARY_BYTES).await
 }
 pub async fn items(

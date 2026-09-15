@@ -19,6 +19,7 @@ pub const ADMITTED_METADATA_CAPABILITY: &str = "fub-admitted-metadata-v1";
 pub const ADMITTED_HISTORY_CAPABILITY: &str = "fub-admitted-history-v1";
 pub const ADMITTED_ACTIVITY_CAPABILITY: &str = "fub-admitted-activity-v1";
 const ADMITTED_ACTIVITY_PRESENT: &str = "SELECT to_regclass('public.migration_admitted_activity_import') IS NOT NULL OR to_regprocedure('public.crm_admitted_activity_insert_allowed(uuid,text,jsonb)') IS NOT NULL OR EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=to_regclass('public.migration_activity_identity') AND attname IN ('admitted_import_id','admitted_plan_id','admitted_manifest_id') AND NOT attisdropped)";
+const MAPPING_REPAIR_SCHEMA: &str = include_str!("mapping_repair_schema.sql");
 const ADMITTED_HISTORY_SCHEMA: &str = include_str!("admitted_history_schema.sql");
 const ADMITTED_HISTORY_PRESENT: &str = "SELECT to_regclass('public.migration_admitted_history_root') IS NOT NULL OR to_regprocedure('public.crm_admitted_history_fact_allowed(jsonb,text)') IS NOT NULL OR EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=to_regclass('public.migration_history_import_identity') AND attname='admitted_root_id' AND NOT attisdropped)";
 const ADMITTED_ACTIVITY_SCHEMA: &str = include_str!("admitted_activity_schema.sql");
@@ -96,6 +97,11 @@ pub async fn activity_complete_read(
 }
 
 pub async fn shared(conn: &mut PgConnection, org: OrganizationId) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "SELECT set_config('crm.mapping_repair_reader','fub-people-mapping-repair-v1',true)",
+    )
+    .execute(&mut *conn)
+    .await?;
     sqlx::query("SELECT set_config('crm.history_reader',$1,true),set_config('crm.admitted_history_reader',$2,true)").bind(HISTORY_TIMELINE_CAPABILITY).bind(ADMITTED_HISTORY_CAPABILITY).execute(&mut *conn).await?;
     sqlx::query("SELECT set_config('crm.admitted_activity_reader',$1,true)")
         .bind(ADMITTED_ACTIVITY_CAPABILITY)
@@ -108,6 +114,11 @@ pub async fn shared(conn: &mut PgConnection, org: OrganizationId) -> Result<(), 
     Ok(())
 }
 pub async fn ordinary(conn: &mut PgConnection, org: OrganizationId) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "SELECT set_config('crm.mapping_repair_reader','fub-people-mapping-repair-v1',true)",
+    )
+    .execute(&mut *conn)
+    .await?;
     sqlx::query("SELECT set_config('crm.history_reader',$1,true),set_config('crm.admitted_history_reader',$2,true)").bind(HISTORY_TIMELINE_CAPABILITY).bind(ADMITTED_HISTORY_CAPABILITY).execute(&mut *conn).await?;
     sqlx::query("SELECT set_config('crm.admitted_activity_reader',$1,true)")
         .bind(ADMITTED_ACTIVITY_CAPABILITY)
@@ -149,6 +160,11 @@ pub async fn read_check(
     actor: UserId,
     operational_only: bool,
 ) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "SELECT set_config('crm.mapping_repair_reader','fub-people-mapping-repair-v1',true)",
+    )
+    .execute(&mut *conn)
+    .await?;
     // Every caller holds an explicit read transaction. Set on this actual
     // connection, including nested SQLx readers; middleware and handlers do not
     // share a pooled connection. Transaction-local state cannot survive reuse.
@@ -265,6 +281,7 @@ pub struct ReleaseReadiness {
     admitted_metadata: bool,
     admitted_activity: bool,
     admitted_history: bool,
+    mapping_repair: bool,
 }
 impl ReleaseReadiness {
     pub async fn load_report(pool: &PgPool, path: &std::path::Path) -> Result<Self, sqlx::Error> {
@@ -307,6 +324,7 @@ impl ReleaseReadiness {
             admitted_people_refresh: admitted_people_refresh_report_ready(&report, &hash),
             admitted_metadata: admitted_metadata_report_ready(&report, &hash),
             admitted_history: admitted_history_report_ready(&report, &hash),
+            mapping_repair: mapping_repair_report_ready(&report, &hash),
             admitted_activity: report["admitted_activity_confirmation_ready"] == true
                 && report["candidates"].as_array().is_some_and(|items| {
                     items.iter().any(|v| {
@@ -390,6 +408,7 @@ impl ReleaseReadiness {
             admitted_metadata: true,
             admitted_activity: true,
             admitted_history: true,
+            mapping_repair: true,
         }
     }
 
@@ -456,6 +475,30 @@ impl ReleaseReadiness {
                 || (self.expires_at > Utc::now()
                     && self.checked_at <= Utc::now()
                     && Utc::now() - self.checked_at <= chrono::Duration::minutes(5)))
+    }
+    pub fn mapping_repair_ready(&self) -> bool {
+        self.mapping_repair
+            && (self.synthetic
+                || (self.expires_at > Utc::now()
+                    && self.checked_at <= Utc::now()
+                    && Utc::now() - self.checked_at <= chrono::Duration::minutes(5)))
+    }
+    pub async fn require_mapping_repair(&self, conn: &mut PgConnection) -> Result<(), sqlx::Error> {
+        self.require_current(conn).await?;
+        if !self.mapping_repair_ready() {
+            return Err(sqlx::Error::Protocol(
+                "mapping repair release not ready".into(),
+            ));
+        }
+        let schema: bool = sqlx::query_scalar(MAPPING_REPAIR_SCHEMA)
+            .fetch_one(conn)
+            .await?;
+        if !schema {
+            return Err(sqlx::Error::Protocol(
+                "mapping repair schema incomplete".into(),
+            ));
+        }
+        Ok(())
     }
     pub async fn require_admitted_history(
         &self,
@@ -688,6 +731,20 @@ impl ReleaseReadiness {
         }
         Ok(())
     }
+}
+
+fn mapping_repair_report_ready(report: &serde_json::Value, hash: &str) -> bool {
+    report["mapping_repair_confirmation_ready"] == true
+        && report["candidates"].as_array().is_some_and(|items| {
+            items.iter().any(|item| {
+                item["sha256"] == hash
+                    && item["gate_version"] == GATE_VERSION
+                    && matches!(item["role"].as_str(), Some("api" | "worker"))
+                    && item["capabilities"].as_array().is_some_and(|caps| {
+                        caps.iter().any(|cap| cap == "fub-people-mapping-repair-v1")
+                    })
+            })
+        })
 }
 
 fn admitted_history_report_ready(report: &serde_json::Value, hash: &str) -> bool {
@@ -963,6 +1020,16 @@ pub async fn startup_compatible(conn: &mut PgConnection) -> Result<(), sqlx::Err
             ));
         }
     }
+    let repair_present:bool=sqlx::query_scalar("SELECT to_regclass('public.migration_mapping_repair_requirement') IS NOT NULL OR to_regprocedure('public.crm_mapping_repair_owned_write()') IS NOT NULL").fetch_one(&mut *conn).await?;
+    if repair_present
+        && !sqlx::query_scalar::<_, bool>(MAPPING_REPAIR_SCHEMA)
+            .fetch_one(&mut *conn)
+            .await?
+    {
+        return Err(sqlx::Error::Protocol(
+            "mapping repair schema incompatible".into(),
+        ));
+    }
     // The global activity identity registry changes owner shape in 010f4.
     // Refuse a partial installation before an original or admitted worker can
     // claim/settle a unit with the wrong owner tuple.
@@ -1233,6 +1300,7 @@ mod history_capture_readiness_tests {
             admitted_metadata: true,
             admitted_activity: true,
             admitted_history: true,
+            mapping_repair: true,
         };
         assert!(ready.admitted_activity_ready());
         assert!(ready.history_capture_ready());

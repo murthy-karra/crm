@@ -1,8 +1,8 @@
 //! Fenced retained-only preparation/execution loop for admitted People refreshes.
 use super::{
     admitted_people_refresh_source as source, admitted_people_refresh_store as s, crypto,
-    import_source::{Entity, ExtractedRecord},
-    imports,
+    import_source::ExtractedRecord,
+    people_mapping_repair::{self as repair, Owner},
     snapshot::SnapshotPolicy,
     store, MigrationError,
 };
@@ -15,168 +15,6 @@ use uuid::Uuid;
 enum Instruction<T> {
     NoInstruction,
     Apply(T, Option<Uuid>),
-}
-
-// Frozen source/mapping evidence is intentionally passed explicitly; combining
-// it would obscure which trusted snapshot and plan authorize the lookup.
-#[allow(clippy::too_many_arguments)]
-async fn original_mapping_target(
-    conn: &mut sqlx::PgConnection,
-    key: &RawPayloadKey,
-    org: OrganizationId,
-    snapshot: Uuid,
-    plan: Uuid,
-    kind: &str,
-    source_key: Option<&str>,
-    label_hmac: Option<&[u8]>,
-) -> Result<Option<(Uuid, Option<Uuid>)>, MigrationError> {
-    let rows = if let Some(source_key) = source_key {
-        sqlx::query("SELECT * FROM migration_import_mapping WHERE plan_id=$1 AND organization_id=$2 AND kind=$3 AND source_key=$4 ORDER BY id LIMIT 2")
-            .bind(plan).bind(org.0).bind(kind).bind(source_key).fetch_all(&mut *conn).await?
-    } else {
-        sqlx::query("SELECT * FROM migration_import_mapping WHERE plan_id=$1 AND organization_id=$2 AND kind=$3 AND label_hmac=$4 ORDER BY source_key LIMIT 2")
-            .bind(plan).bind(org.0).bind(kind).bind(label_hmac.ok_or(MigrationError::Crypto)?).fetch_all(&mut *conn).await?
-    };
-    if rows.len() != 1 {
-        return Err(MigrationError::SourceNotEligible);
-    }
-    let row = &rows[0];
-    let disposition: String = row.get("disposition");
-    let target: Option<Uuid> = row.get("target_id");
-    if !row.get::<bool, _>("qualified")
-        || !matches!(
-            (kind, disposition.as_str()),
-            ("stage", "existing" | "create") | ("assignee", "member" | "unassigned")
-        )
-    {
-        return Err(MigrationError::SourceNotEligible);
-    }
-    let body: Value = imports::open(
-        key,
-        org,
-        snapshot,
-        plan,
-        row.get("id"),
-        "mapping",
-        &row.get::<Vec<u8>, _>("nonce"),
-        &row.get::<Vec<u8>, _>("ciphertext"),
-    )?;
-    match (kind, target) {
-        ("stage", Some(target)) => {
-            let name: Option<String> =
-                sqlx::query_scalar("SELECT name FROM stage WHERE organization_id=$1 AND id=$2")
-                    .bind(org.0)
-                    .bind(target)
-                    .fetch_optional(&mut *conn)
-                    .await?;
-            if body["target"]["name"] != json!(name) {
-                return Err(MigrationError::SourceNotEligible);
-            }
-        }
-        ("assignee", Some(target)) => {
-            let email: Option<String> = sqlx::query_scalar("SELECT u.email FROM organization_membership m JOIN app_user u ON u.id=m.user_id WHERE m.organization_id=$1 AND m.user_id=$2 AND m.status='active'")
-                .bind(org.0).bind(target).fetch_optional(&mut *conn).await?;
-            if body["target"]["email"] != json!(email) {
-                return Err(MigrationError::SourceNotEligible);
-            }
-        }
-        ("assignee", None) if disposition == "unassigned" => {}
-        _ => return Err(MigrationError::SourceNotEligible),
-    }
-    Ok(Some((row.get("id"), target)))
-}
-
-async fn execution_mapping_target_valid(
-    conn: &mut sqlx::PgConnection,
-    key: &RawPayloadKey,
-    org: OrganizationId,
-    refresh: &sqlx::postgres::PgRow,
-    item: &sqlx::postgres::PgRow,
-    kind: &str,
-    target: Option<Uuid>,
-) -> Result<bool, MigrationError> {
-    // The item carries an immutable original import result. Re-open approved
-    // mapping evidence and compare its frozen identity with the live target;
-    // target existence alone is insufficient at commit time.
-    let snapshot: Uuid = sqlx::query_scalar(
-        "SELECT a.original_snapshot_id FROM migration_people_admission_result ar
-          JOIN migration_people_admission_item ai ON ai.id=ar.item_id AND ai.admission_id=ar.admission_id AND ai.organization_id=ar.organization_id
-          JOIN migration_people_admission a ON a.id=ar.admission_id AND a.organization_id=ar.organization_id
-          WHERE ar.id=$1 AND ar.organization_id=$2 AND ar.disposition='settled'",
-    )
-    .bind(item.get::<Option<Uuid>, _>("admission_result_id"))
-    .bind(org.0)
-    .fetch_optional(&mut *conn)
-    .await?
-    .flatten()
-    .ok_or(MigrationError::SourceNotEligible)?;
-    let binding: Option<Uuid> = item.get(if kind == "stage" {
-        "stage_mapping_id"
-    } else {
-        "assignee_mapping_id"
-    });
-    let Some(binding) = binding else {
-        return Ok(false);
-    };
-    let mapping = sqlx::query(
-        "SELECT * FROM migration_import_mapping
-          WHERE id=$1 AND plan_id=$2 AND organization_id=$3 AND kind=$4
-            AND target_id IS NOT DISTINCT FROM $5 AND qualified=true LIMIT 1",
-    )
-    .bind(binding)
-    .bind(refresh.get::<Uuid, _>("parent_plan_id"))
-    .bind(org.0)
-    .bind(kind)
-    .bind(target)
-    .fetch_optional(&mut *conn)
-    .await?;
-    let Some(mapping) = mapping else {
-        return Ok(false);
-    };
-    let live = match (kind, target) {
-        ("stage", Some(target)) => json!(sqlx::query_scalar::<_, Option<String>>(
-            "SELECT name FROM stage WHERE organization_id=$1 AND id=$2",
-        )
-        .bind(org.0)
-        .bind(target)
-        .fetch_optional(&mut *conn)
-        .await?
-        .flatten()),
-        ("assignee", Some(target)) => json!(sqlx::query_scalar::<_, Option<String>>(
-            "SELECT u.email FROM organization_membership m
-              JOIN app_user u ON u.id=m.user_id
-              WHERE m.organization_id=$1 AND m.user_id=$2 AND m.status='active'",
-        )
-        .bind(org.0)
-        .bind(target)
-        .fetch_optional(&mut *conn)
-        .await?
-        .flatten()),
-        ("assignee", None) => Value::Null,
-        _ => return Ok(false),
-    };
-    let disposition: String = mapping.get("disposition");
-    if !matches!(
-        (kind, disposition.as_str()),
-        ("stage", "existing" | "create") | ("assignee", "member") | ("assignee", "unassigned")
-    ) {
-        return Ok(false);
-    }
-    let frozen: Value = imports::open(
-        key,
-        org,
-        snapshot,
-        refresh.get("parent_plan_id"),
-        mapping.get("id"),
-        "mapping",
-        &mapping.get::<Vec<u8>, _>("nonce"),
-        &mapping.get::<Vec<u8>, _>("ciphertext"),
-    )?;
-    Ok(if target.is_none() {
-        disposition == "unassigned" && frozen["target"].is_null()
-    } else {
-        frozen["target"][if kind == "stage" { "name" } else { "email" }] == live
-    })
 }
 
 async fn execution_evidence_valid(
@@ -250,98 +88,37 @@ async fn stage_instruction(
     conn: &mut sqlx::PgConnection,
     key: &RawPayloadKey,
     org: OrganizationId,
-    snapshot: Uuid,
-    plan: Uuid,
+    root: &sqlx::postgres::PgRow,
+    person: Uuid,
     newer: &ExtractedRecord,
 ) -> Result<Instruction<Uuid>, MigrationError> {
-    let Some(raw) = newer.provenance.get("stage") else {
+    let Some(source) = repair::stage_key(newer)? else {
         return Ok(Instruction::NoInstruction);
     };
-    let raw: Value = serde_json::from_str(raw).map_err(|_| MigrationError::Crypto)?;
-    let source_key = match raw {
-        Value::Null => Some("missing".to_owned()),
-        Value::String(label) if label.trim().is_empty() => Some("missing".to_owned()),
-        Value::String(label) if !label.contains('\0') => {
-            let label = label.trim();
-            let hmac = crypto::snapshot_hmac(key, org, "import-stage-label", label.as_bytes());
-            let target =
-                original_mapping_target(conn, key, org, snapshot, plan, "stage", None, Some(&hmac))
-                    .await?;
-            return target
-                .and_then(|(mapping, target)| {
-                    target.map(|target| Instruction::Apply(target, Some(mapping)))
-                })
-                .ok_or(MigrationError::SourceNotEligible);
-        }
-        _ => return Err(MigrationError::SourceNotEligible),
-    };
-    let target = original_mapping_target(
-        conn,
-        key,
-        org,
-        snapshot,
-        plan,
-        "stage",
-        source_key.as_deref(),
-        None,
-    )
-    .await?;
-    target
-        .and_then(|(mapping, target)| {
-            target.map(|target| Instruction::Apply(target, Some(mapping)))
-        })
-        .ok_or(MigrationError::SourceNotEligible)
+    let target = repair::select(conn, key, Owner::Admitted, org, root, person, &source)
+        .await?
+        .target_id
+        .ok_or(MigrationError::SourceNotEligible)?;
+    Ok(Instruction::Apply(target, None))
 }
-
 async fn assignment_instruction(
     conn: &mut sqlx::PgConnection,
     key: &RawPayloadKey,
     org: OrganizationId,
-    snapshot: Uuid,
-    plan: Uuid,
+    root: &sqlx::postgres::PgRow,
+    person: Uuid,
     newer: &ExtractedRecord,
 ) -> Result<Instruction<Option<Uuid>>, MigrationError> {
-    let Entity::People(person) = &newer.entity else {
-        return Err(MigrationError::SourceNotEligible);
-    };
-    let user = newer.provenance.get("assignedUserId");
-    let pond = newer.provenance.get("assignedPondId");
-    let assigned_to = newer.provenance.get("assignedTo");
-    let assigned_to_is_clear = assigned_to.is_none_or(|raw| raw == "null");
-    if !assigned_to_is_clear
-        || newer
-            .reasons
-            .iter()
-            .any(|reason| reason.starts_with("assignment_"))
-    {
-        return Err(MigrationError::SourceNotEligible);
+    if let Some(source) = repair::assignee_key(newer)? {
+        let target = repair::select(conn, key, Owner::Admitted, org, root, person, &source)
+            .await?
+            .target_id;
+        return Ok(Instruction::Apply(target, None));
     }
-    // A qualified positive reference is an instruction even when the other
-    // reference key was omitted. Both null keys are required only for a clear.
-    if let Some(source_key) = person.assignee_key.as_deref() {
-        let target = original_mapping_target(
-            conn,
-            key,
-            org,
-            snapshot,
-            plan,
-            "assignee",
-            Some(source_key),
-            None,
-        )
-        .await?;
-        let (mapping, target) = target.ok_or(MigrationError::SourceNotEligible)?;
-        return Ok(Instruction::Apply(target, Some(mapping)));
-    }
-    let (Some(user), Some(pond)) = (user, pond) else {
-        return Ok(Instruction::NoInstruction);
-    };
-    let user: Value = serde_json::from_str(user).map_err(|_| MigrationError::Crypto)?;
-    let pond: Value = serde_json::from_str(pond).map_err(|_| MigrationError::Crypto)?;
-    if user.is_null() && pond.is_null() {
+    if repair::assignment_clear(newer)? {
         Ok(Instruction::Apply(None, None))
     } else {
-        Err(MigrationError::SourceNotEligible)
+        Ok(Instruction::NoInstruction)
     }
 }
 fn preserve_owned_ids(b: &Value, n: &mut Value) -> Result<(), MigrationError> {
@@ -529,6 +306,17 @@ pub async fn run_once(
         tx.commit().await?;
         return Ok(true);
     }
+    if r.get::<Option<Uuid>,_>("repair_source_refresh_id").is_some() {
+        release.ok_or(MigrationError::ReleaseNotReady)?.require_mapping_repair(&mut tx).await.map_err(|_|MigrationError::ReleaseNotReady)?;
+    }
+    match super::people_mapping_repair_commands::source_boundary(&mut tx,Owner::Admitted,org,&r).await {
+        Ok(())=>{},
+        Err(MigrationError::Conflict)=>{
+            sqlx::query("UPDATE migration_admitted_people_refresh SET state='paused',pause_reason='source_boundary_stale',lease_token=NULL,lease_expires_at=NULL WHERE id=$1 AND organization_id=$2").bind(id).bind(org.0).execute(&mut *tx).await?;
+            tx.commit().await?;return Ok(true)
+        },
+        Err(error)=>return Err(error),
+    }
     if state == "preparing" {
         // A preparation turn owns one bounded reservation. Its exact retained
         // delta is charged atomically with the rows it made durable.
@@ -641,6 +429,12 @@ async fn prepare(
     let org = OrganizationId::new(r.get("organization_id"));
     // A recovery from the short-lived pre-direct-seal phase can only seal the
     // cohort plan already prepared; it must never traverse report groups.
+    if r.get::<Option<Uuid>, _>("repair_source_refresh_id")
+        .is_some()
+        && r.get::<Option<i64>, _>("repair_frozen_revision").is_none()
+    {
+        return repair::discover(conn, key, Owner::Admitted, r).await;
+    }
     if r.get::<String, _>("preparation_phase") == "groups" {
         return seal_prepared_plan(conn, r).await;
     }
@@ -660,7 +454,14 @@ async fn prepare(
     let checkpoint: String = r.get("preparation_checkpoint_key");
     // One descriptor is a preparation transaction. Its ciphertext remains out
     // of this descriptor scan until the exact metadata guard passes below.
-    let rows=sqlx::query("SELECT ar.id AS admission_result_id,ar.person_id,ar.source_id,ai.id AS admission_item_id,ai.source_key,ai.stage_mapping_id,ai.assignee_mapping_id,a.id AS admission_id,a.original_snapshot_id,a.parent_import_id,a.parent_plan_id FROM migration_people_admission_result ar JOIN migration_people_admission_item ai ON ai.id=ar.item_id AND ai.admission_id=ar.admission_id AND ai.organization_id=ar.organization_id JOIN migration_people_admission a ON a.id=ar.admission_id AND a.organization_id=ar.organization_id WHERE ar.admission_id=$1 AND ar.organization_id=$2 AND ar.disposition='settled' AND ar.source_id>$3 ORDER BY ar.source_id LIMIT 1").bind(r.get::<Uuid,_>("admission_id")).bind(org.0).bind(&checkpoint).fetch_all(&mut *conn).await?;
+    let rows = if r
+        .get::<Option<Uuid>, _>("repair_source_refresh_id")
+        .is_some()
+    {
+        sqlx::query("WITH candidate_page AS MATERIALIZED (SELECT source_id,person_id,successful_result_id FROM migration_admitted_people_refresh_repair_candidate WHERE refresh_id=$4 AND organization_id=$2 AND source_id>$3 ORDER BY source_id LIMIT 1) SELECT ar.id AS admission_result_id,ar.person_id,ar.source_id,ai.id AS admission_item_id,ai.source_key,ai.stage_mapping_id,ai.assignee_mapping_id,a.id AS admission_id,a.original_snapshot_id,a.parent_import_id,a.parent_plan_id FROM candidate_page cp JOIN migration_people_admission_result ar ON ar.id=cp.successful_result_id AND ar.organization_id=$2 AND ar.source_id=cp.source_id AND ar.person_id=cp.person_id JOIN migration_people_admission_item ai ON ai.id=ar.item_id AND ai.admission_id=ar.admission_id AND ai.organization_id=ar.organization_id JOIN migration_people_admission a ON a.id=ar.admission_id AND a.organization_id=ar.organization_id WHERE ar.admission_id=$1 AND ar.organization_id=$2 AND ar.disposition='settled' AND ar.source_id>$3 ORDER BY ar.source_id LIMIT 1").bind(r.get::<Uuid,_>("admission_id")).bind(org.0).bind(&checkpoint).bind(id).fetch_all(&mut *conn).await?
+    } else {
+        sqlx::query("SELECT ar.id AS admission_result_id,ar.person_id,ar.source_id,ai.id AS admission_item_id,ai.source_key,ai.stage_mapping_id,ai.assignee_mapping_id,a.id AS admission_id,a.original_snapshot_id,a.parent_import_id,a.parent_plan_id FROM migration_people_admission_result ar JOIN migration_people_admission_item ai ON ai.id=ar.item_id AND ai.admission_id=ar.admission_id AND ai.organization_id=ar.organization_id JOIN migration_people_admission a ON a.id=ar.admission_id AND a.organization_id=ar.organization_id WHERE ar.admission_id=$1 AND ar.organization_id=$2 AND ar.disposition='settled' AND ar.source_id>$3 ORDER BY ar.source_id LIMIT 1").bind(r.get::<Uuid,_>("admission_id")).bind(org.0).bind(&checkpoint).fetch_all(&mut *conn).await?
+    };
     let advanced = !rows.is_empty();
     let mut last_source = checkpoint;
     let mut eligible = 0;
@@ -961,42 +762,34 @@ async fn prepare(
             }
             Err(error) => return Err(error),
         };
-        let new_stage = match stage_instruction(
-            conn,
-            key,
-            org,
-            row.get("original_snapshot_id"),
-            r.get("parent_plan_id"),
-            &newer,
-        )
-        .await
-        {
-            Ok(instruction) => instruction,
-            Err(MigrationError::SourceNotEligible) => {
-                held += 1;
-                insert_item(
-                    conn,
-                    key,
-                    org,
-                    id,
-                    plan,
-                    item,
-                    &source_id,
-                    row.get("admission_result_id"),
-                    row.get("person_id"),
-                    "held_mapping_gap",
-                    &b,
-                    &c,
-                    &json!({}),
-                    Some(capture),
-                    Some(ordinal),
-                    &instructions,
-                )
-                .await?;
-                continue;
-            }
-            Err(error) => return Err(error),
-        };
+        let new_stage =
+            match stage_instruction(conn, key, org, r, row.get("person_id"), &newer).await {
+                Ok(instruction) => instruction,
+                Err(MigrationError::SourceNotEligible) => {
+                    held += 1;
+                    insert_item(
+                        conn,
+                        key,
+                        org,
+                        id,
+                        plan,
+                        item,
+                        &source_id,
+                        row.get("admission_result_id"),
+                        row.get("person_id"),
+                        "held_mapping_gap",
+                        &b,
+                        &c,
+                        &json!({}),
+                        Some(capture),
+                        Some(ordinal),
+                        &instructions,
+                    )
+                    .await?;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
         // A successor's B is its prior settled result, so an omitted field
         // carries no original-import mapping proof forward.
         let mut frozen_stage_mapping = if seed_baseline {
@@ -1011,42 +804,34 @@ async fn prepare(
                 frozen_stage_mapping = mapping;
             }
         }
-        let new_assignee = match assignment_instruction(
-            conn,
-            key,
-            org,
-            row.get("original_snapshot_id"),
-            r.get("parent_plan_id"),
-            &newer,
-        )
-        .await
-        {
-            Ok(instruction) => instruction,
-            Err(MigrationError::SourceNotEligible) => {
-                held += 1;
-                insert_item(
-                    conn,
-                    key,
-                    org,
-                    id,
-                    plan,
-                    item,
-                    &source_id,
-                    row.get("admission_result_id"),
-                    row.get("person_id"),
-                    "held_mapping_gap",
-                    &b,
-                    &c,
-                    &json!({}),
-                    Some(capture),
-                    Some(ordinal),
-                    &instructions,
-                )
-                .await?;
-                continue;
-            }
-            Err(error) => return Err(error),
-        };
+        let new_assignee =
+            match assignment_instruction(conn, key, org, r, row.get("person_id"), &newer).await {
+                Ok(instruction) => instruction,
+                Err(MigrationError::SourceNotEligible) => {
+                    held += 1;
+                    insert_item(
+                        conn,
+                        key,
+                        org,
+                        id,
+                        plan,
+                        item,
+                        &source_id,
+                        row.get("admission_result_id"),
+                        row.get("person_id"),
+                        "held_mapping_gap",
+                        &b,
+                        &c,
+                        &json!({}),
+                        Some(capture),
+                        Some(ordinal),
+                        &instructions,
+                    )
+                    .await?;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
         let mut frozen_assignee_mapping = if !seed_baseline || b["assigned_user_id"].is_null() {
             None
         } else {
@@ -1111,6 +896,19 @@ async fn prepare(
             .bind(item).bind(id).bind(frozen_stage_mapping).bind(frozen_assignee_mapping)
             .bind(r.get::<i64,_>("source_account_id")).bind(org.0).bind(admission_id).bind(&source_id).bind(source_semantic.as_slice())
             .execute(&mut *conn).await?;
+        if matches!(disposition, "eligible" | "already_current") {
+            repair::freeze_item(
+                conn,
+                key,
+                Owner::Admitted,
+                org,
+                r,
+                item,
+                row.get("person_id"),
+                &newer,
+            )
+            .await?;
+        }
     }
     sqlx::query("UPDATE migration_admitted_people_refresh_plan SET eligible_count=eligible_count+$3,already_current_count=already_current_count+$4,held_count=held_count+$5,no_instruction_count=no_instruction_count+$6,name_clear_count=name_clear_count+$7,assignment_clear_count=assignment_clear_count+$8,contact_removal_count=contact_removal_count+$9 WHERE id=$1 AND organization_id=$2").bind(plan).bind(org.0).bind(eligible).bind(current).bind(held).bind(no_instruction).bind(name_clears).bind(assignment_clears).bind(contact_removals).execute(&mut *conn).await?;
     if advanced {
@@ -1137,9 +935,11 @@ async fn seal_prepared_plan(
     // Every cohort identity is walked in `prepare`. There is no original-import
     // report traversal here: it would manufacture closed items for People
     // outside the one terminal admission's settled cohort.
+    sqlx::query("UPDATE migration_admitted_people_refresh_plan p SET repair_choices_revision=r.repair_frozen_revision,repair_choices_digest=r.repair_choices_digest,repair_candidate_count=r.repair_candidate_count,repair_approval_only_count=(SELECT count(*) FROM migration_admitted_people_refresh_item i WHERE i.refresh_id=p.refresh_id AND i.plan_id=p.id AND i.organization_id=p.organization_id AND i.repair_approval_only),repair_unassigned_count=(SELECT count(*) FROM migration_admitted_people_refresh_item i JOIN migration_admitted_people_refresh_repair_choice c ON c.id=i.repair_assignee_choice_id AND c.refresh_id=i.refresh_id AND c.organization_id=i.organization_id WHERE i.refresh_id=p.refresh_id AND i.plan_id=p.id AND i.organization_id=p.organization_id AND c.disposition='unassigned') FROM migration_admitted_people_refresh r WHERE p.id=$1 AND p.organization_id=$2 AND r.id=p.refresh_id AND r.organization_id=p.organization_id")
+        .bind(plan_id).bind(org.0).execute(&mut *conn).await?;
     let totals=sqlx::query("SELECT eligible_count,already_current_count,held_count,excluded_count,no_instruction_count,name_clear_count,assignment_clear_count,contact_removal_count FROM migration_admitted_people_refresh_plan WHERE id=$1 AND organization_id=$2").bind(plan_id).bind(org.0).fetch_one(&mut *conn).await?;
     let plan_digest = digest(
-        &json!({"refresh":id,"plan":plan_id,"revision":revision,"eligible":totals.get::<i64,_>("eligible_count"),"current":totals.get::<i64,_>("already_current_count"),"held":totals.get::<i64,_>("held_count"),"excluded":totals.get::<i64,_>("excluded_count"),"no_instruction":totals.get::<i64,_>("no_instruction_count"),"name_clears":totals.get::<i64,_>("name_clear_count"),"assignment_clears":totals.get::<i64,_>("assignment_clear_count"),"contact_removals":totals.get::<i64,_>("contact_removal_count")}),
+        &json!({"refresh":id,"plan":plan_id,"revision":revision,"repair_revision":r.get::<Option<i64>,_>("repair_frozen_revision"),"repair_candidates":r.get::<i64,_>("repair_candidate_count"),"eligible":totals.get::<i64,_>("eligible_count"),"current":totals.get::<i64,_>("already_current_count"),"held":totals.get::<i64,_>("held_count"),"excluded":totals.get::<i64,_>("excluded_count"),"no_instruction":totals.get::<i64,_>("no_instruction_count"),"name_clears":totals.get::<i64,_>("name_clear_count"),"assignment_clears":totals.get::<i64,_>("assignment_clear_count"),"contact_removals":totals.get::<i64,_>("contact_removal_count")}),
     );
     sqlx::query("UPDATE migration_admitted_people_refresh_plan SET prepared_bytes=prepared_bytes+$3,state='ready',digest=$4,sealed_at=clock_timestamp(),expires_at=clock_timestamp()+interval '10 minutes' WHERE id=$1 AND organization_id=$2").bind(plan_id).bind(org.0).bind(i64::try_from(plan_digest.len()).unwrap_or(i64::MAX)).bind(plan_digest.as_slice()).execute(&mut *conn).await?;
     sqlx::query("UPDATE migration_admitted_people_refresh SET state='ready',updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2").bind(id).bind(org.0).execute(conn).await?;
@@ -1244,6 +1044,13 @@ async fn execute_noop(
         sqlx::query("UPDATE migration_admitted_people_refresh SET state='completed',completed_at=clock_timestamp(),lease_token=NULL,lease_expires_at=NULL WHERE id=$1 AND organization_id=$2").bind(id).bind(org.0).execute(conn).await?;
         return Ok(0);
     };
+    sqlx::query("SELECT set_config('crm.mapping_repair_settlement',$1,true)")
+        .bind(
+            json!({"lease":r.get::<Uuid,_>("lease_token"),"item":item.get::<Uuid,_>("id")})
+                .to_string(),
+        )
+        .execute(&mut *conn)
+        .await?;
     let item_id: Uuid = item.get("id");
     let baseline: Value = s::open(
         key,
@@ -1272,7 +1079,7 @@ async fn execute_noop(
         &item.get::<Vec<u8>, _>("proposed_nonce"),
         &item.get::<Vec<u8>, _>("proposed_ciphertext"),
     )?;
-    let instructions: Vec<String> = s::open(
+    let _instructions: Vec<String> = s::open(
         key,
         org,
         id,
@@ -1333,57 +1140,18 @@ async fn execute_noop(
             let target_assignee = proposed["assigned_user_id"]
                 .as_str()
                 .and_then(|v| Uuid::parse_str(v).ok());
-            let stage_omitted = instructions
-                .iter()
-                .any(|instruction| instruction == "stage");
-            let assignee_omitted = instructions
-                .iter()
-                .any(|instruction| instruction == "assignment");
-            let successor_baseline = item.get::<Option<Uuid>, _>("baseline_result_id").is_some();
-            let stage_ok = if stage_omitted && successor_baseline {
-                sqlx::query_scalar::<_, bool>(
-                    "SELECT EXISTS(SELECT 1 FROM stage WHERE organization_id=$1 AND id=$2)",
-                )
-                .bind(org.0)
-                .bind(target_stage)
-                .fetch_one(&mut *conn)
-                .await?
-            } else {
-                execution_mapping_target_valid(
-                    conn,
-                    key,
-                    org,
-                    r,
-                    &item,
-                    "stage",
-                    Some(target_stage),
-                )
-                .await?
-            };
-            let assignee_ok = if assignee_omitted && successor_baseline {
-                match target_assignee {
-                    Some(user) => sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM organization_membership WHERE organization_id=$1 AND user_id=$2 AND status='active')")
-                        .bind(org.0).bind(user).fetch_one(&mut *conn).await?,
-                    None => true,
-                }
-            } else if target_assignee.is_some()
-                || item.get::<Option<Uuid>, _>("assignee_mapping_id").is_some()
-            {
-                execution_mapping_target_valid(
-                    conn,
-                    key,
-                    org,
-                    r,
-                    &item,
-                    "assignee",
-                    target_assignee,
-                )
-                .await?
-            } else {
-                // Explicit clear/no instruction has no selected mapping.  Its
-                // native value is still fenced by the immutable C comparison.
-                true
-            };
+            let stage_ok = repair::validate_item(
+                conn,
+                key,
+                Owner::Admitted,
+                org,
+                r,
+                &item,
+                &baseline,
+                &proposed,
+            )
+            .await?;
+            let assignee_ok = true;
             if !stage_ok || !assignee_ok {
                 disposition = "held_stale";
             }
@@ -1486,6 +1254,8 @@ async fn execute_noop(
     if disposition == "settled"
         || (disposition == "settled_noop" && planned_disposition == "already_current")
     {
+        retained_delta +=
+            repair::settle_bindings(conn, key, Owner::Admitted, org, r, &item, result).await?;
         let prior = sqlx::query(
             "SELECT refresh_id,octet_length(projection_nonce)+octet_length(projection_ciphertext) AS bytes
                FROM migration_admitted_people_refresh_baseline

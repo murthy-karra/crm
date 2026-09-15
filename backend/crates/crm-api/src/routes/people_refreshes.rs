@@ -1,4 +1,8 @@
 //! D-076 current-admin People refresh API. Values remain in bounded encrypted plan rows.
+use crate::domain::migration::{
+    people_mapping_repair::Owner, people_mapping_repair_commands as repair,
+    people_mapping_repair_queries as repair_queries,
+};
 use crate::{
     auth::OrgAdminContext,
     domain::{
@@ -82,6 +86,16 @@ pub fn router() -> Router<AppState> {
         .route(
             "/api/migrations/fub/people-refreshes/{id}/items/{item}/fields/{side}/{field}",
             get(field),
+        )
+        .route(
+            "/api/migrations/fub/people-refreshes/{id}/mapping-repairs",
+            post(prepare_repair),
+        )
+        .route(
+            "/api/migrations/fub/people-refreshes/{id}/repair-mappings",
+            get(repair_mappings)
+                .post(edit_repair_mappings)
+                .layer(DefaultBodyLimit::max(128 * 1024)),
         )
         .layer(DefaultBodyLimit::max(8192))
 }
@@ -310,6 +324,71 @@ async fn field(
             s.db.as_ref().ok_or(ApiError::Unavailable)?,
             &s.raw_payload_key,
             &CommandContext::from_auth(&a.auth),
+            path(p)?,
+            query(q)?,
+        )
+        .await
+        .map_err(error)?,
+    ))
+}
+
+async fn prepare_repair(
+    State(s): State<AppState>,
+    a: OrgAdminContext,
+    p: Result<Path<Uuid>, PathRejection>,
+    b: Result<Json<repair::Prepare>, JsonRejection>,
+) -> Result<Response, ApiError> {
+    let release = s.current_import_release().await;
+    Ok(response(
+        StatusCode::CREATED,
+        repair::prepare(
+            s.db.as_ref().ok_or(ApiError::Unavailable)?,
+            &s.raw_payload_key,
+            &s.snapshot_policy,
+            &CommandContext::from_auth(&a.auth),
+            Owner::Original,
+            path(p)?,
+            body(b)?,
+            release.as_deref(),
+        )
+        .await
+        .map_err(error)?,
+    ))
+}
+async fn edit_repair_mappings(
+    State(s): State<AppState>,
+    a: OrgAdminContext,
+    p: Result<Path<Uuid>, PathRejection>,
+    b: Result<Json<repair::EditChoices>, JsonRejection>,
+) -> Result<Response, ApiError> {
+    Ok(response(
+        StatusCode::OK,
+        repair::edit_choices(
+            s.db.as_ref().ok_or(ApiError::Unavailable)?,
+            &s.raw_payload_key,
+            &s.snapshot_policy,
+            &CommandContext::from_auth(&a.auth),
+            Owner::Original,
+            path(p)?,
+            body(b)?,
+        )
+        .await
+        .map_err(error)?,
+    ))
+}
+async fn repair_mappings(
+    State(s): State<AppState>,
+    a: OrgAdminContext,
+    p: Result<Path<Uuid>, PathRejection>,
+    q: Result<Query<repair_queries::Page>, QueryRejection>,
+) -> Result<Response, ApiError> {
+    Ok(response(
+        StatusCode::OK,
+        repair_queries::mappings(
+            s.db.as_ref().ok_or(ApiError::Unavailable)?,
+            &s.raw_payload_key,
+            &CommandContext::from_auth(&a.auth),
+            Owner::Original,
             path(p)?,
             query(q)?,
         )

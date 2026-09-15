@@ -272,7 +272,7 @@ async fn proposed_contacts(f: &Fixture, run: Uuid, source: &str) -> Vec<Value> {
     values
 }
 
-fn rich_people() -> Vec<Value> {
+pub(super) fn rich_people() -> Vec<Value> {
     vec![
         json!({"id":101,"firstName":"Original","lastName":"Family","stage":"Lead","assignedUserId":3,
         "emails":[{"value":"first@synthetic.test"},{"value":"second@synthetic.test"},{"value":"remove@synthetic.test"}],
@@ -931,6 +931,11 @@ async fn retained_integrity_failure_pauses_without_native_write_or_reservation_r
     )
     .await
     .unwrap());
+    // Controlled corruption bypasses the new evidence immutability guard only for injection.
+    sqlx::query("ALTER TABLE migration_people_refresh_item DISABLE TRIGGER mapping_repair_owned")
+        .execute(&migrator)
+        .await
+        .unwrap();
     sqlx::query(
         "UPDATE migration_people_refresh_item SET baseline_ciphertext=decode('00','hex')
           WHERE refresh_id=$1 AND plan_id=(SELECT confirmed_refresh_plan_id FROM migration_people_refresh WHERE id=$1)",
@@ -939,6 +944,10 @@ async fn retained_integrity_failure_pauses_without_native_write_or_reservation_r
     .execute(&migrator)
     .await
     .unwrap();
+    sqlx::query("ALTER TABLE migration_people_refresh_item ENABLE TRIGGER mapping_repair_owned")
+        .execute(&migrator)
+        .await
+        .unwrap();
 
     assert!(people_refresh_worker::run_once(
         &f.pool,

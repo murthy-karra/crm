@@ -376,6 +376,7 @@ async fn cancelled_confirmed_input_can_be_repreviewed_from_the_same_snapshot(mig
         &f.ctx,
         first,
         people_refresh::ConfirmPeopleRefresh {
+            mapping_repair: None,
             request_id: Uuid::new_v4(),
             plan_id: Uuid::parse_str(plan["id"].as_str().unwrap()).unwrap(),
             plan_revision: plan["revision"].as_str().unwrap().parse().unwrap(),

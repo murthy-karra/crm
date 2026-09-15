@@ -2965,3 +2965,48 @@ final gates remain necessary. Preserve shared development, retained native store
 source evidence and recovery material. Publication/deployment, native distribution,
 physical phones/cellular, live FUB/customer work, activation and calling remain
 separately scoped; the completed D-084 release is unchanged.
+
+### D-087 — Existing-People stage and agent mapping repair planning (2026-09-15)
+
+After the migration remainder was presented, the user said **“Ok lets plan
+that.”** Asked to choose scope, the user selected **“Existing People first;
+recover never-imported People next (Recommended)”**.
+
+This authorizes drafting [010e5](../specs/SLICE_010e5.md), its
+[plan](../plans/SLICE_010e5_MAPPING_REPAIR.md), execution brief and cream Lavish
+companion. Plan stage/agent mapping repair for blocked updates to successfully
+imported original and admitted People. Recovery of never-imported People follows
+as separately specified work.
+
+The selected sequence is accepted. Proposed per-Person mapping persistence,
+existing-target-only choices, full-core re-preview, settled-hold repair/source
+ordering, HTTP/persistence/permit changes and compatibility behavior remain draft
+contracts requiring review and implementation acceptance. Preserve the original
+immutable evidence, local-edit protections and administrator review hold.
+No application implementation, worker-platform redesign, live FUB/customer work,
+activation or release follows from planning authorization.
+
+### D-088 — Existing-People mapping repair implementation accepted (2026-09-15)
+
+After reviewing the Lavish plan, the user submitted **“approved. go ahead and
+execute the plan.”** The final Send & End feedback repeated that instruction.
+The user separately authorized **one reviewer sub-agent** for independent planning
+and implementation reviews.
+
+This accepts [010e5](../specs/SLICE_010e5.md), its
+[plan](../plans/SLICE_010e5_MAPPING_REPAIR.md) and
+[brief](../tasks/SLICE_010e5_IMPL.md), including the declared repair contracts,
+existing-People-only scope, per-Person/source-key successful approvals, full core
+preview with local-edit protection, existing destination choices, both original
+and admitted refresh paths and compatibility fences. The all-held ready-preview
+entry correction is necessary to the same accepted repair outcome; retain its
+atomic replacement, frozen evidence and old-plan fencing.
+
+Execute independent planning review before code, then implementation and isolated
+synthetic verification with one primary writer and the authorized reviewer.
+Compatible corrections and concrete schema/DTO details are owned implementation
+work; materially different policy still requires its own decision. Preserve shared
+development, native stores and source/recovery evidence. Never-imported People,
+worker-platform architecture, live source/customer work, activation and publication/
+deployment remain separate. The local implementation branch is
+`codex/010e5-mapping-repair`.

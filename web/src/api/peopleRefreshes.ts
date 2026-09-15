@@ -1,3 +1,4 @@
+import type { RepairSummary, RepairAck } from './peopleMappingRepairs'
 import { apiFetch } from './client'
 import { useImportAccess } from './imports'
 
@@ -8,8 +9,10 @@ export interface RefreshCounts {
   eligible: string; already_current: string; held: string; excluded: string
   name_clears: string; assignment_clears: string; contact_removals: string; no_instruction: string
 }
-export interface RefreshPlan { id: string; revision: string; digest: string; expires_at: string | null; counts: RefreshCounts }
+export interface RefreshPlan { mapping_repair?: RepairSummary | null; id: string; revision: string; digest: string; expires_at: string | null; counts: RefreshCounts }
 export interface PeopleRefresh {
+  mode?: 'refresh' | 'mapping_repair'; repair_source_refresh_id?: string | null; repair_draft_revision?: string; repair_candidates_complete?: boolean; repair_candidate_count?: string
+  confirmed_refresh_plan_id?: string | null; mapping_repair_available?: boolean
   id: string; parent_import_id: string; report_id: string; state: RefreshState; lifecycle_revision: string
   created_at: string; updated_at: string; pause_reason: string | null; progress: { settled_items: string }
   plan?: RefreshPlan; actions: { confirm: boolean; repreview: boolean; retry: boolean; cancel: boolean }
@@ -32,6 +35,7 @@ export interface RefreshContact {
 export interface RefreshResult { id: string; item_id: string; source_id: string | null; person_id: string | null; disposition: RefreshDisposition; committed_at: string }
 export interface RefreshReceipt { refresh_id: string; state: RefreshState }
 export interface RefreshConfirm {
+  mapping_repair?: RepairAck
   request_id: string; plan_id: string; plan_revision: number; plan_digest: string
   acknowledged_coverage: boolean; acknowledged_exclusions: boolean
   acknowledged_name_clears: number; acknowledged_assignment_clears: number; acknowledged_contact_removals: number
@@ -64,6 +68,7 @@ export function refreshInteger(value: string): number {
   return Number(value)
 }
 const labels: Record<string, string> = {
+  awaiting_mapping_choices: 'Save mapping choices, then prepare the full People preview', source_boundary_stale: 'Source evidence changed; prepare a new preview',
   preparing: 'Preparing preview', ready: 'Ready for review', queued: 'Queued', running: 'Applying reviewed changes', paused: 'Paused', completed: 'Completed', cancelled: 'Cancelled',
   eligible: 'Eligible update', already_current: 'Already current', held_local_change: 'Held: local changes', held_evidence_gap: 'Held: evidence gap', held_mapping_gap: 'Held: mapping gap', held_target_missing: 'Held: original target missing', held_original_hold: 'Held by original import', excluded_source_only: 'Excluded source change', not_seen_again: 'Not seen again; retained locally', settled: 'Updated', settled_noop: 'Verified without a change', held_stale: 'Held: changed after preview',
   first_name: 'First name', last_name: 'Last name', firstName: 'First name', lastName: 'Last name', emails: 'Emails', phones: 'Phones', stage: 'Stage', assignment: 'Assignment', assigned_user_id: 'Assignment', stage_id: 'Stage',

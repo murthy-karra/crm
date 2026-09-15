@@ -83,6 +83,14 @@ describe('Admitted People refresh workflow', () => {
     expect(writes()).toHaveLength(0); button('Confirm exact People plan').click(); await flushPromises()
     expect(JSON.parse(String(writes()[0]![1]?.body))).toEqual({ request_id: expect.stringMatching(/^request-\d+$/), plan_id: 'plan', plan_revision: 2, plan_digest: 'digest', acknowledged_eligible_count: 1, acknowledged_coverage: true, acknowledged_exclusions: true, acknowledged_name_clears: 1, acknowledged_assignment_clears: 1, acknowledged_contact_removals: 2 })
   })
+  it('confirms the frozen repair counts including unchanged unassigned approvals', async () => {
+    const { state } = await setup({ handle: url => url.endsWith('/confirm') ? { refresh_id: 'refresh', state: 'queued' } : undefined })
+    state.refresh.mode = 'mapping_repair'
+    state.refresh.plan!.mapping_repair = { choices_digest: 'choices', candidate_count: '2', approval_only_count: '1', unassigned_count: '1' }
+    await choose('Saved Admitted People refresh', 'refresh'); await acknowledge()
+    button('Review confirmation').click(); await flushPromises(); button('Confirm exact People plan').click(); await flushPromises()
+    expect(JSON.parse(String(writes()[0]![1]?.body)).mapping_repair).toEqual({ choices_digest: 'choices', candidate_count: 2, approval_only_count: 1, unassigned_count: 1 })
+  })
   it('replays an uncertain confirmation with identical input and request ID', async () => {
     let attempts = 0
     await setup({ handle: url => url.endsWith('/confirm') ? ++attempts === 1 ? Promise.reject(new ApiError(0, 'network_error')) : { refresh_id: 'refresh', state: 'queued' } : undefined })

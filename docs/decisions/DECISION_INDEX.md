@@ -114,6 +114,8 @@ The original decision sections, including superseded choices, remain intact.
 | [D-084](DECISION_LOG.md#d-084--mobile-006-and-admitted-people-activity-implementation-approved-2026-09-14) | Mobile006; 010f4; implementation approval/release | Mobile 006 and admitted-People activity implementation approved |
 | [D-085](DECISION_LOG.md#d-085--mobile-007-discovery-and-admitted-people-history-planning-2026-09-15) | Mobile007; 010d3; discovery; history; planning | Mobile 007 discovery and admitted-People history planning |
 | [D-086](DECISION_LOG.md#d-086--mobile-007-and-admitted-history-implementation-accepted-2026-09-15) | Mobile007; 010d3; implementation approval | Mobile 007 and admitted history implementation accepted |
+| [D-087](DECISION_LOG.md#d-087--existing-people-stage-and-agent-mapping-repair-planning-2026-09-15) | migration; 010e5; mapping repair; planning | Existing-People stage and agent mapping repair planning |
+| [D-088](DECISION_LOG.md#d-088--existing-people-mapping-repair-implementation-accepted-2026-09-15) | migration; 010e5; mapping repair; implementation/review | Existing-People mapping repair implementation accepted |
 
 ## Open-decision register (includes resolved entries)
 

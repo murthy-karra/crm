@@ -378,6 +378,7 @@ mod db_people_admission_contract;
 mod db_people_admission_execution;
 #[path = "db_people_admission_ui_fixture.rs"]
 mod db_people_admission_ui_fixture;
+mod db_people_mapping_repair;
 #[path = "db_people_refresh.rs"]
 mod db_people_refresh;
 mod db_people_refresh_accounting;

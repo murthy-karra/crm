@@ -51,7 +51,7 @@ SELECT COALESCE(
     ('migration_activity_identity')) immutable(name)
    CROSS JOIN (VALUES ('UPDATE'),('DELETE'),('TRUNCATE')) forbidden(privilege))
   AND (SELECT bool_and(EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=to_regprocedure('public.'||signature)
-      AND (md5(p.prosrc)=body_md5 OR (signature='crm_workspace_shared(uuid)' AND md5(p.prosrc)='6f71fda59fb036ca24f88cd404d978ba')) AND NOT p.prosecdef
+      AND (md5(p.prosrc)=body_md5 OR (signature='crm_workspace_shared(uuid)' AND md5(p.prosrc) IN ('6f71fda59fb036ca24f88cd404d978ba','c35c0e9aa618dcf87998215725a1b98a'))) AND NOT p.prosecdef
       AND has_function_privilege('crm_app',p.oid,'EXECUTE')
       AND NOT EXISTS(SELECT 1 FROM aclexplode(COALESCE(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE')))
     FROM (VALUES ('crm_admitted_activity_retained_size(text,jsonb)','7b2209180deaa25ae2bfe13c28b46a8e'),

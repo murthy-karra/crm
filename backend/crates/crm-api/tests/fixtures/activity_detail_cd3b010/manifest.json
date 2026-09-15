@@ -156,17 +156,17 @@
       "path": "backend/crates/crm-app/src/auth/workspace.rs",
       "function": "read_check",
       "start_line": 78,
-      "sha256": "0b71ad5813637345ad79be37f04c3b2d0f878c1303135d012e4cad28d31cfea3",
-      "shared_revision": "D-086/010d3",
-      "shared_revision_note": "010d3 adds the independent transaction-local admitted-history reader stamp to read_check on the actual read transaction, alongside the retained original-history and admitted-activity stamps. Both paired arms intentionally share this current HTTP/authentication helper. Three frozen reader bodies remain exact cd3b010; this is not a historical authentication-stack comparison."
+      "sha256": "788243492e4292843f4b2223fdb4e8c966c7a281e1e86b49f04e1c502b0c7df5",
+      "shared_revision": "D-088/010e5",
+      "shared_revision_note": "010e5 adds the independent transaction-local mapping-repair reader stamp. Both paired arms intentionally share this current HTTP/authentication helper; frozen reader bodies remain exact cd3b010. This is not a historical authentication-stack or worker-throughput comparison."
     },
     {
       "path": "backend/crates/crm-app/src/auth/workspace.rs",
       "function": "ordinary",
       "start_line": 47,
-      "sha256": "a4d7eb88e48355336a49e41bef5f949dc27d842da9e899d020e8912697dc2ed0",
-      "shared_revision": "D-086/010d3",
-      "shared_revision_note": "010d3 ordinary reads now stamp both the original-history and independent admitted-history capabilities before the retained admitted-activity stamp. Both paired arms intentionally share this current helper and current HTTP/authentication stack. Three frozen reader bodies remain exact cd3b010; this is not a historical authentication-stack comparison."
+      "sha256": "d863e053e9a9775e7db7e4100498b8f04455b3d9ee29e4e863b4e10f4f2952c9",
+      "shared_revision": "D-088/010e5",
+      "shared_revision_note": "010e5 adds the independent transaction-local mapping-repair reader stamp. Both paired arms intentionally share this current HTTP/authentication helper; frozen reader bodies remain exact cd3b010. This is not a historical authentication-stack or worker-throughput comparison."
     },
     {
       "path": "backend/crates/crm-app/src/auth/workspace.rs",

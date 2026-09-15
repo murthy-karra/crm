@@ -177,7 +177,7 @@ pub(super) async fn confirm_admission(f: &Fixture, admission: Uuid) {
     .unwrap();
 }
 
-async fn prepare(f: &Fixture, admission: Uuid, report: Uuid) -> (Uuid, Value) {
+pub(super) async fn prepare(f: &Fixture, admission: Uuid, report: Uuid) -> (Uuid, Value) {
     let request_id = Uuid::new_v4();
     let created = refresh::prepare(
         &f.pool,
@@ -237,6 +237,7 @@ async fn prepare(f: &Fixture, admission: Uuid, report: Uuid) -> (Uuid, Value) {
 fn confirmation(detail: &Value) -> refresh::ConfirmAdmittedPeopleRefresh {
     let plan = &detail["plan"];
     refresh::ConfirmAdmittedPeopleRefresh {
+        mapping_repair: None,
         request_id: Uuid::new_v4(),
         plan_id: uuid(&plan["id"]),
         plan_revision: number(&plan["revision"]),
@@ -257,6 +258,7 @@ async fn confirm(f: &Fixture, run: Uuid, command: &refresh::ConfirmAdmittedPeopl
         &f.ctx,
         run,
         refresh::ConfirmAdmittedPeopleRefresh {
+            mapping_repair: None,
             request_id: command.request_id,
             plan_id: command.plan_id,
             plan_revision: command.plan_revision,
@@ -274,7 +276,7 @@ async fn confirm(f: &Fixture, run: Uuid, command: &refresh::ConfirmAdmittedPeopl
     .unwrap()
 }
 
-async fn drain(f: &Fixture, run: Uuid) {
+pub(super) async fn drain(f: &Fixture, run: Uuid) {
     for _ in 0..100 {
         if refresh::detail(&f.pool, &f.key, &f.ctx, run).await.unwrap()["state"] == "completed" {
             return;
@@ -455,7 +457,7 @@ pub(super) async fn report(f: &Fixture, parent: Uuid, people: Vec<Value>) -> Uui
 }
 
 async fn ledger_bytes(f: &Fixture, run: Uuid) -> i64 {
-    sqlx::query_scalar("SELECT COALESCE((SELECT sum(octet_length(inputs_nonce)+octet_length(inputs_ciphertext)+COALESCE(octet_length(digest),0)) FROM migration_admitted_people_refresh_plan WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(source_key)+COALESCE(octet_length(source_id),0)+COALESCE(octet_length(source_semantic_hmac),0)+octet_length(proposed_nonce)+octet_length(proposed_ciphertext)+octet_length(baseline_nonce)+octet_length(baseline_ciphertext)+octet_length(current_nonce)+octet_length(current_ciphertext)+octet_length(instructions_nonce)+octet_length(instructions_ciphertext)) FROM migration_admitted_people_refresh_item WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(value_nonce)+octet_length(value_ciphertext)) FROM migration_admitted_people_refresh_contact WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(source_id)+octet_length(before_nonce)+octet_length(before_ciphertext)+octet_length(after_nonce)+octet_length(after_ciphertext)) FROM migration_admitted_people_refresh_result WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(before_nonce)+octet_length(before_ciphertext)+octet_length(after_nonce)+octet_length(after_ciphertext)) FROM person_admitted_refresh_provenance WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(digest)+octet_length(nonce)+octet_length(ciphertext)) FROM migration_admitted_people_refresh_receipt WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(source_id)+octet_length(projection_nonce)+octet_length(projection_ciphertext)) FROM migration_admitted_people_refresh_baseline WHERE refresh_id=$1),0) + COALESCE((SELECT octet_length(preparation_checkpoint_key) FROM migration_admitted_people_refresh WHERE id=$1),0)::bigint")
+    sqlx::query_scalar("SELECT COALESCE((SELECT sum(octet_length(inputs_nonce)+octet_length(inputs_ciphertext)+COALESCE(octet_length(digest),0)) FROM migration_admitted_people_refresh_plan WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(source_key)+COALESCE(octet_length(source_id),0)+COALESCE(octet_length(source_semantic_hmac),0)+octet_length(proposed_nonce)+octet_length(proposed_ciphertext)+octet_length(baseline_nonce)+octet_length(baseline_ciphertext)+octet_length(current_nonce)+octet_length(current_ciphertext)+octet_length(instructions_nonce)+octet_length(instructions_ciphertext)+COALESCE(octet_length(mapping_evidence_nonce),0)+COALESCE(octet_length(mapping_evidence_ciphertext),0)+COALESCE(octet_length(native_fingerprint),0)+COALESCE(octet_length(repair_stage_source_hmac),0)+COALESCE(octet_length(repair_assignee_source_hmac),0)) FROM migration_admitted_people_refresh_item WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(value_nonce)+octet_length(value_ciphertext)) FROM migration_admitted_people_refresh_contact WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(source_id)+octet_length(before_nonce)+octet_length(before_ciphertext)+octet_length(after_nonce)+octet_length(after_ciphertext)) FROM migration_admitted_people_refresh_result WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(before_nonce)+octet_length(before_ciphertext)+octet_length(after_nonce)+octet_length(after_ciphertext)) FROM person_admitted_refresh_provenance WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(digest)+octet_length(nonce)+octet_length(ciphertext)) FROM migration_admitted_people_refresh_receipt WHERE refresh_id=$1),0) + COALESCE((SELECT sum(octet_length(source_id)+octet_length(projection_nonce)+octet_length(projection_ciphertext)) FROM migration_admitted_people_refresh_baseline WHERE refresh_id=$1),0) + COALESCE((SELECT octet_length(preparation_checkpoint_key) FROM migration_admitted_people_refresh WHERE id=$1),0)::bigint")
         .bind(run).fetch_one(&f.pool).await.unwrap()
 }
 

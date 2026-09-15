@@ -45,16 +45,23 @@ native API3106 is available; the isolated browser QA processes are stopped.
 
 ## Next family boundary
 
-010e4 core refresh, 010f3 metadata and 010f4 activity are present in shared
-development. History follows in the [family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md),
-and D-085 now authorizes [Mobile007 / 010d3 planning](MOBILE_007_010d3_PLAN.md).
-D-086 accepts both specifications and declares implementation/isolated synthetic
-verification authorized. Both independent planning reviews are READY;
-the accepted implementation and all required verification gates are complete.
-[Implementation status](../tasks/MOBILE_007_010d3_IMPLEMENTATION_STATUS.md) owns progress. Remaining deltas, mapping repair,
-activation and complete migration fidelity require their own specified scope.
+010d3 implementation and shared-development release are complete alongside
+010e4 core refresh, 010f3 metadata and 010f4 activity. D-087 selects
+[010e5 stage/agent mapping repair](SLICE_010e5_MAPPING_REPAIR.md) for
+existing People first. Implementation and local verification are complete under
+D-088; [evidence](../tasks/SLICE_010e5_VERIFICATION.md) records the gates. Changes
+remain uncommitted and undeployed. Never-imported People recovery follows separately.
+Remaining family deltas, activation and complete migration fidelity retain their
+own scope in the [family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md).
 
 ## Last accepted decision
+
+**D-088:** accepts 010e5 implementation and one reviewer for independent planning/
+implementation review. Implementation is verified locally on `codex/010e5-mapping-repair`; shared
+development and release scopes remain unchanged.
+
+**D-087:** authorizes planning stage/agent mapping repair and selects existing
+People first. Proposed repair contracts require review and implementation acceptance.
 
 **D-086:** accepts Mobile007 / 010d3 contracts and implementation with isolated
 synthetic verification. The implementation, publication and shared-development
@@ -179,6 +186,10 @@ Earlier milestone results remain in [history](PROJECT_HISTORY.md) and their
 linked verification records; they are not claims about present runtime health.
 
 ## Next recommended action
+
+010e5 is implemented and verified locally. Its publication/deployment is a separate
+release step. Next migration planning: recover never-imported People, including
+identity safety and follow-on family imports. See [010e5 status](../tasks/SLICE_010e5_IMPLEMENTATION_STATUS.md).
 
 Use the [Mobile007 / 010d3 release record](../tasks/MOBILE_007_010d3_RELEASE.md)
 for shared-development runtime identity and recovery. [Final evidence](../tasks/MOBILE_007_010d3_FINAL_VERIFICATION.md)

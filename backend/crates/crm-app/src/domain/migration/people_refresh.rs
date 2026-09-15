@@ -35,6 +35,7 @@ pub struct ConfirmPeopleRefresh {
     pub acknowledged_name_clears: i64,
     pub acknowledged_assignment_clears: i64,
     pub acknowledged_contact_removals: i64,
+    pub mapping_repair: Option<super::people_mapping_repair_commands::AcknowledgeRepair>,
 }
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -180,6 +181,23 @@ pub async fn repreview(
         return Ok(v);
     }
     let r = resource(&mut tx, ctx.organization_id.0, id).await?;
+    if r.get::<Option<Uuid>, _>("repair_source_refresh_id")
+        .is_some()
+    {
+        let value = super::people_mapping_repair_commands::repreview_repair(
+            &mut tx,
+            key,
+            super::people_mapping_repair::Owner::Original,
+            ctx,
+            &r,
+            cmd.request_id,
+            cmd.expected_plan_revision,
+            &digest,
+        )
+        .await?;
+        tx.commit().await?;
+        return Ok(value);
+    }
     if r.get::<Uuid, _>("initiated_by_user_id") != ctx.actor_user_id.0
         || r.get::<String, _>("state") != "ready"
         || r.get::<i64, _>("lifecycle_revision") != cmd.expected_plan_revision
@@ -265,7 +283,18 @@ pub async fn confirm(
     {
         return Err(MigrationError::Conflict);
     }
-    if p.get::<i64, _>("eligible_count") == 0 {
+    super::people_mapping_repair_commands::confirm_guard(
+        &mut tx,
+        super::people_mapping_repair::Owner::Original,
+        ctx.organization_id,
+        &r,
+        &p,
+        cmd.mapping_repair.as_ref(),
+        release_evidence,
+    )
+    .await?;
+    if p.get::<i64, _>("eligible_count") == 0 && p.get::<i64, _>("repair_approval_only_count") == 0
+    {
         return Err(MigrationError::Conflict);
     }
     let receipt_before = s::measured_bytes(&mut tx, ctx.organization_id, id).await?;
@@ -350,6 +379,17 @@ async fn lifecycle(
         return Err(MigrationError::Conflict);
     };
     if action == "retry"
+        && (r.get::<Option<String>, _>("pause_reason").as_deref()
+            == Some("awaiting_mapping_choices")
+            || (r
+                .get::<Option<Uuid>, _>("repair_source_refresh_id")
+                .is_some()
+                && r.get::<bool, _>("repair_candidates_complete")
+                && r.get::<Option<i64>, _>("repair_frozen_revision").is_none()))
+    {
+        return Err(MigrationError::Conflict);
+    }
+    if action == "retry"
         && (r.get::<String, _>("state") != "paused"
             || r.get::<Uuid, _>("initiated_by_user_id") != ctx.actor_user_id.0)
     {
@@ -357,8 +397,13 @@ async fn lifecycle(
     };
     let state = if action == "cancel" {
         "cancelled"
-    } else {
+    } else if r
+        .get::<Option<Uuid>, _>("confirmed_refresh_plan_id")
+        .is_some()
+    {
         "queued"
+    } else {
+        "preparing"
     };
     sqlx::query("UPDATE migration_people_refresh SET state=$3,lifecycle_revision=lifecycle_revision+1,lease_token=NULL,lease_expires_at=NULL,cancelled_at=CASE WHEN $3='cancelled' THEN clock_timestamp() ELSE cancelled_at END,updated_at=clock_timestamp() WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id.0).bind(state).execute(&mut *tx).await?;
     let value = json!({"refresh_id":id,"state":state});

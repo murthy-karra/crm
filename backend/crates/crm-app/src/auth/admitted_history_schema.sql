@@ -12,7 +12,7 @@ SELECT COALESCE(
  ('migration_admitted_history_reservation'),
  ('migration_admitted_history_issue')) required(name))
  AND (SELECT bool_and(EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=to_regprocedure('public.'||signature) AND md5(p.prosrc)=body_md5)) FROM (VALUES
- ('crm_workspace_shared(uuid)','6f71fda59fb036ca24f88cd404d978ba'),
+ ('crm_workspace_shared(uuid)','c35c0e9aa618dcf87998215725a1b98a'),
  ('crm_history_complete_read(uuid)','25e6ede2e38e4ff4c34979bb1bf68658'),
  ('crm_admitted_history_write_fence()','204dca1fab619a05f1f7fc25cc635c3c'),
  ('crm_admitted_history_retained_size(jsonb)','2e016c5394e55a47bdc780b9c98dc73b'),

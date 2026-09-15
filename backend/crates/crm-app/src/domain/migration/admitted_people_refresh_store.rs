@@ -140,7 +140,7 @@ pub async fn measured_bytes(
     org: OrganizationId,
     refresh: Uuid,
 ) -> Result<i64, MigrationError> {
-    sqlx::query_scalar(
+    let base: i64 = sqlx::query_scalar(
         "SELECT
           COALESCE((SELECT sum(octet_length(inputs_nonce)+octet_length(inputs_ciphertext)+COALESCE(octet_length(digest),0)) FROM migration_admitted_people_refresh_plan WHERE refresh_id=$1 AND organization_id=$2),0)
         + COALESCE((SELECT sum(octet_length(source_key)+COALESCE(octet_length(source_id),0)+COALESCE(octet_length(source_semantic_hmac),0)+octet_length(proposed_nonce)+octet_length(proposed_ciphertext)+octet_length(baseline_nonce)+octet_length(baseline_ciphertext)+octet_length(current_nonce)+octet_length(current_ciphertext)+octet_length(instructions_nonce)+octet_length(instructions_ciphertext)) FROM migration_admitted_people_refresh_item WHERE refresh_id=$1 AND organization_id=$2),0)
@@ -155,7 +155,15 @@ pub async fn measured_bytes(
     .bind(org.0)
     .fetch_one(&mut *conn)
     .await
-    .map_err(MigrationError::from)
+    .map_err(MigrationError::from)?;
+    Ok(base
+        + super::people_mapping_repair::measured_bytes(
+            conn,
+            super::people_mapping_repair::Owner::Admitted,
+            org,
+            refresh,
+        )
+        .await?)
 }
 
 pub async fn reserve(

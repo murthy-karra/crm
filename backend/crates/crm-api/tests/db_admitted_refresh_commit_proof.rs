@@ -60,6 +60,7 @@ async fn confirm(f: &Fixture, run: Uuid, detail: &Value) {
         &f.ctx,
         run,
         refresh::ConfirmAdmittedPeopleRefresh {
+            mapping_repair: None,
             request_id: Uuid::new_v4(),
             plan_id: id(&p["id"]),
             plan_revision: count(&p["revision"]),

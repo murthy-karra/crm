@@ -8,4 +8,4 @@ type ActivityReaders = Pick<typeof original,
 const family: InjectionKey<ActivityReaders> = Symbol('activity readers')
 
 export function provideAdmittedActivityReaders() { provide(family, admitted) }
-export function useActivityReaders(): ActivityReaders { return inject(family, original) }
+export function useActivityReaders(explicitFamily?: 'admitted'): ActivityReaders { return explicitFamily === 'admitted' ? admitted : inject(family, original) }

@@ -3,10 +3,10 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { type ActivityFieldRequest } from '../../api/activityImports'
 import { useActivityReaders } from './activityFamily'
-const { fetchActivityField, useActivityAccess } = useActivityReaders()
 import { buttonClasses } from '../../lib/controls'
 import { describeApiError } from '../../lib/errors'
-const props = defineProps<{ request: ActivityFieldRequest; title: string }>()
+const props = defineProps<{ request: ActivityFieldRequest; title: string; family?: 'admitted' }>()
+const { fetchActivityField, useActivityAccess } = useActivityReaders(props.family)
 const access = useActivityAccess()
 const cursors = ref<string[]>([''])
 const branch = computed(() => [...access.prefix.value, 'field', props.request])

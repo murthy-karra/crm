@@ -46,6 +46,41 @@ async function click(text: string) { button(text).click(); await flushPromises()
 beforeEach(() => { api.mockReset(); resetWorkspace() })
 afterEach(() => { cleanup.splice(0).forEach(fn => fn()); resetWorkspace(); document.body.innerHTML = ''; vi.restoreAllMocks() })
 describe('bounded Person activity review', () => {
+  it.each(['note', 'task'] as const)('routes admitted %s provenance through its scoped family and clears it on account change', async kind => {
+    const source = { ...provenance, source_url: '/api/migrations/fub/admitted-activity-imports/child/results/result/fields/all' }
+    const delayed = deferred<{ text: string; offset: string; total_utf8_bytes: string; next_cursor: null }>()
+    const { client } = await setup(url => {
+      if (url.endsWith('/migration-review/v2')) return core()
+      if (url.includes('/fields/all')) return delayed.promise
+      if (url.endsWith('/notes/note')) return { ...full('note', 'Native admitted note'), provenance: source }
+      if (url.includes('/notes?')) return page(kind === 'note' ? [{ ...note(), provenance: source }] : [])
+      return page(kind === 'task' && url.includes('state=open') ? [{ ...task, provenance: source }] : [])
+    })
+    if (kind === 'note') { await click('Read full note'); await click('Inspect original note source') }
+    else await click('Inspect task source')
+    expect(api.mock.calls.filter(([url]) => url.includes('/fields/all')).map(([url]) => url)).toEqual([
+      '/migrations/fub/admitted-activity-imports/child/results/result/fields/all?limit=65536',
+    ])
+    client.setQueryData(queryKeys.me, identity('member', 'another-actor'))
+    await flushPromises()
+    delayed.resolve({ text: 'PRIVATE ADMITTED SOURCE', offset: '0', total_utf8_bytes: '23', next_cursor: null })
+    await flushPromises()
+    expect(document.body.textContent).not.toContain('PRIVATE ADMITTED SOURCE')
+    expect(document.body.textContent).not.toContain('Imported activity source')
+  })
+  it('does not let an unrelated admitted source URL redirect a native source read', async () => {
+    const source = { ...provenance, source_url: '/api/migrations/fub/admitted-activity-imports/foreign/results/foreign/fields/all' }
+    await setup(url => {
+      if (url.endsWith('/migration-review/v2')) return core()
+      if (url.includes('/fields/all')) return { text: 'Scoped source', offset: '0', total_utf8_bytes: '13', next_cursor: null }
+      if (url.endsWith('/notes/note')) return { ...full(), provenance: source }
+      return page(url.includes('/notes?') ? [{ ...note(), provenance: source }] : [])
+    })
+    await click('Read full note'); await click('Inspect original note source')
+    expect(api.mock.calls.filter(([url]) => url.includes('/fields/all')).map(([url]) => url)).toEqual([
+      '/migrations/fub/activity-imports/child/results/result/fields/all?limit=65536',
+    ])
+  })
   it('reviews a valid pre-child/partial-parent core without requiring a completed activity import', async () => {
     const { wrapper } = await setup(url => url.endsWith('/migration-review/v2') ? core() : page([]))
     expect(wrapper.text()).toContain('José person')

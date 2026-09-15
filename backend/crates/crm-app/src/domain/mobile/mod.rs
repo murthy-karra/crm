@@ -402,6 +402,7 @@ pub async fn current_metadata(
     let mut tx = begin(pool, auth, true).await?;
     context(&mut tx, auth, context_id, false).await?;
     authority(&mut tx, auth, false).await?;
+    metadata::acquire_shared(&mut *tx, auth.active_organization_id).await?;
     let row = sqlx::query(
         "SELECT p.mobile_revision,p.metadata_revision,
           (SELECT revision FROM mobile_metadata_catalog WHERE organization_id=p.organization_id) AS catalog_revision

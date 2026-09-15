@@ -209,6 +209,92 @@ async fn mobile006_metadata_events_and_noop_replay_are_content_free(pool: PgPool
 
 #[sqlx::test]
 #[ignore]
+async fn mobile006_metadata_catalog_change_invalidates_only_opted_generation(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let legacy = f.gen().await;
+    let legacy_id = id(&legacy, "generation_id");
+    assert!(legacy.get("metadata_catalog").is_none());
+    let (status, opted) = f
+        .post(
+            "/api/mobile/v1/reconciliations",
+            json!({"protocol":"mobile-v1","installation_id":f.install,"pinned_person_ids":[f.person],"include_metadata":true}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{opted}");
+    let opted_id = id(&opted, "generation_id");
+    assert_eq!(
+        legacy["people"]["items"][0]["revision"],
+        opted["people"]["items"][0]["revision"]
+    );
+    let metadata = format!(
+        "/api/mobile/v1/reconciliations/{opted_id}/people/{}/metadata",
+        f.person
+    );
+    assert_eq!(
+        request(
+            &f.router,
+            &f.cookie,
+            Some(f.context),
+            "GET",
+            &metadata,
+            json!(null)
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    sqlx::query("INSERT INTO tag(organization_id,created_by_user_id,name) VALUES($1,$2,'Mobile006 catalog changed')")
+        .bind(f.org)
+        .bind(f.actor)
+        .execute(&f.app)
+        .await
+        .unwrap();
+    let (status, component) = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &metadata,
+        json!(null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{component}");
+    assert_eq!(component["error"], "generation_changed");
+    let (_, sealed) = f
+        .post(
+            &format!("/api/mobile/v1/reconciliations/{opted_id}/seal"),
+            json!({}),
+        )
+        .await;
+    assert_eq!(sealed["error"], "generation_changed");
+    for section in ["summary", "notes", "tasks"] {
+        let path = format!(
+            "/api/mobile/v1/reconciliations/{legacy_id}/people/{}/{}",
+            f.person, section
+        );
+        let (status, page) = request(
+            &f.router,
+            &f.cookie,
+            Some(f.context),
+            "GET",
+            &path,
+            json!(null),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{page}");
+        assert_eq!(page["complete"], true);
+    }
+    let (status, sealed) = f
+        .post(
+            &format!("/api/mobile/v1/reconciliations/{legacy_id}/seal"),
+            json!({}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{sealed}");
+}
+
+#[sqlx::test]
+#[ignore]
 async fn mobile005_details_receipt_replay_and_revision_scope(pool: PgPool) {
     let f = fixture(&pool).await;
     assert!(f.bootstrap["capabilities"]

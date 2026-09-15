@@ -44,12 +44,11 @@ async fn metadata_catalog_snapshot(
         crate::ids::OrganizationId::new(organization_id),
     )
     .await?;
-    let revision: i64 = sqlx::query_scalar(
-        "SELECT revision FROM mobile_metadata_catalog WHERE organization_id=$1 FOR SHARE",
-    )
-    .bind(organization_id)
-    .fetch_one(&mut *conn)
-    .await?;
+    let revision: i64 =
+        sqlx::query_scalar("SELECT revision FROM mobile_metadata_catalog WHERE organization_id=$1")
+            .bind(organization_id)
+            .fetch_one(&mut *conn)
+            .await?;
     let tags: Vec<(Uuid, String)> =
         sqlx::query("SELECT id,name FROM tag WHERE organization_id=$1 ORDER BY id LIMIT 10001")
             .bind(organization_id)
@@ -86,8 +85,10 @@ async fn metadata_catalog_matches(
     org: Uuid,
     expected: i64,
 ) -> Result<bool, MobileError> {
+    crate::domain::mobile::metadata::acquire_shared(conn, crate::ids::OrganizationId::new(org))
+        .await?;
     Ok(sqlx::query_scalar::<_, i64>(
-        "SELECT revision FROM mobile_metadata_catalog WHERE organization_id=$1 FOR SHARE",
+        "SELECT revision FROM mobile_metadata_catalog WHERE organization_id=$1",
     )
     .bind(org)
     .fetch_one(&mut *conn)

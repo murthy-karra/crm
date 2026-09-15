@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, onBeforeUnmount } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import Card from '../Card.vue'
 import ConfirmDialog from '../ConfirmDialog.vue'
@@ -7,23 +7,33 @@ import FormField from '../FormField.vue'
 import { buttonClasses, INPUT_CLASSES } from '../../lib/controls'
 import { describeApiError } from '../../lib/errors'
 import { fetchPeopleAdmissions } from '../../api/peopleAdmissions'
+import { fetchImport, fetchImports } from '../../api/imports'
 import { fetchHistoryCaptures } from '../../api/historyCaptures'
 import { createAdmittedHistoryRemainder, confirmAdmittedHistory, fetchAdmittedHistoryImport, fetchAdmittedHistoryImports, fetchAdmittedHistoryPage, historyAction, historyActive, increaseAdmittedHistoryBudget, prepareAdmittedHistory, useAdmittedHistoryAccess, type Root } from '../../api/admittedHistoryImports'
-defineProps<{refreshWorkspace:()=>Promise<void>}>(); const access=useAdmittedHistoryAccess(); const admissionId=ref(''); const captureId=ref(''); const selectedId=ref(''); const pending=ref(false); const uncertain=ref(false); const error=ref(''); const confirmOpen=ref(false); const held=ref(false); const coverage=ref(false); const budget=ref(''); const mode=ref<'manifests'|'results'|'issues'>('manifests'); let epoch=0; let dead=false; let replay: (()=>Promise<void>)|null=null
-const admissions=useQuery({queryKey:computed(()=>[...access.prefix.value,'admissions']),enabled:access.enabled,retry:false,queryFn:({signal})=>access.read([],()=>[],()=>fetchPeopleAdmissions('',undefined,signal))})
-const captures=useQuery({queryKey:computed(()=>[...access.prefix.value,'history-captures']),enabled:access.enabled,retry:false,queryFn:({signal})=>access.read([],()=>[],()=>fetchHistoryCaptures(undefined,undefined,signal))})
+const props=defineProps<{refreshWorkspace:()=>Promise<void>}>(); const parentId=ref(''); const access=useAdmittedHistoryAccess(); const admissionId=ref(''); const captureId=ref(''); const selectedId=ref(''); const pending=ref(false); const uncertain=ref(false); const error=ref(''); const confirmOpen=ref(false); const held=ref(false); const coverage=ref(false); const budget=ref(''); const mode=ref<'manifests'|'results'|'issues'>('manifests'); let epoch=0; let dead=false; let replay: (()=>Promise<void>)|null=null
+const parents=useQuery({queryKey:computed(()=>[...access.prefix.value,'parents']),enabled:access.enabled,retry:false,queryFn:({signal})=>access.read([],()=>[],()=>fetchImports(undefined,signal))})
+const parent=useQuery({queryKey:computed(()=>[...access.prefix.value,'parent',parentId.value]),enabled:computed(()=>access.enabled.value&&!!parentId.value),retry:false,queryFn:({signal})=>access.read([],()=>[],()=>fetchImport(parentId.value,signal))})
+const admissions=useQuery({queryKey:computed(()=>[...access.prefix.value,'admissions',parentId.value]),enabled:computed(()=>access.enabled.value&&!!parentId.value),retry:false,queryFn:({signal})=>access.read([],()=>[],()=>fetchPeopleAdmissions(parentId.value,undefined,signal))})
+const captures=useQuery({queryKey:computed(()=>[...access.prefix.value,'history-captures',parentId.value]),enabled:computed(()=>access.enabled.value&&!!parentId.value),retry:false,queryFn:({signal})=>access.read([],()=>[],()=>fetchHistoryCaptures(parentId.value,undefined,signal))})
 const roots=useQuery({queryKey:computed(()=>[...access.prefix.value,'admitted-history',admissionId.value]),enabled:computed(()=>access.enabled.value&&!!admissionId.value),retry:false,queryFn:({signal})=>access.read([],()=>[],()=>fetchAdmittedHistoryImports(admissionId.value,undefined,signal)),refetchInterval:q=>q.state.data?.imports.some(historyActive)?2000:false,refetchOnWindowFocus:'always',refetchOnReconnect:'always'})
-const detail=useQuery({queryKey:computed(()=>[...access.prefix.value,'admitted-history-detail',selectedId.value]),enabled:computed(()=>access.enabled.value&&!!selectedId.value),retry:false,queryFn:({signal})=>access.read([],()=>[],()=>fetchAdmittedHistoryImport(selectedId.value,signal)),refetchInterval:q=>historyActive(q.state.data)?2000:false,refetchOnWindowFocus:'always',refetchOnReconnect:'always'})
+const detail=useQuery({queryKey:computed(()=>[...access.prefix.value,'admitted-history-detail',selectedId.value]),enabled:computed(()=>access.enabled.value&&!!selectedId.value),retry:false,queryFn:({signal})=>access.read([],()=>[],async()=>{const v=await fetchAdmittedHistoryImport(selectedId.value,signal);if(v.workspace_revision!==access.org.value?.workspace_revision){await props.refreshWorkspace();throw new Error('Workspace status was refreshed')}return v}),refetchInterval:q=>historyActive(q.state.data)?2000:false,refetchOnWindowFocus:'always',refetchOnReconnect:'always'})
 const current=computed(()=>detail.data.value); const plan=computed(()=>current.value?.latest_plan); const pages=useQuery({queryKey:computed(()=>[...access.prefix.value,'admitted-history-page',selectedId.value,plan.value?.id,mode.value]),enabled:computed(()=>!!selectedId.value&&!!plan.value?.id),retry:false,queryFn:({signal})=>fetchAdmittedHistoryPage(selectedId.value,plan.value!.id,mode.value,{},undefined,signal)})
-const qualified=computed(()=>captures.data.value?.captures.filter(c=>c.state==='completed_with_gaps'&&['events','calls','text_messages'].every(f=>c.streams.some(s=>s.family===f&&s.state==='completed')))||[])
-const allowedAdmission=computed(()=>admissions.data.value?.items.filter(a=>['completed','cancelled'].includes(a.state)&&BigInt(a.progress.settled_items)>0)||[])
-const canPrepare=computed(()=>!!admissionId.value&&!!captureId.value&&!pending.value); const canConfirm=computed(()=>!!current.value?.actions.confirm&&held.value&&coverage.value&&!pending.value)
-watch(allowedAdmission,v=>{if(!admissionId.value&&v?.[0])admissionId.value=v[0].id}); watch(qualified,v=>{if(!captureId.value&&v?.[0])captureId.value=v[0].id}); watch(roots.data,v=>{if(!selectedId.value&&v?.imports[0])selectedId.value=v.imports[0].id}); watch([access.identity,access.scope,admissionId,captureId,selectedId],()=>{epoch++;confirmOpen.value=false;held.value=false;coverage.value=false}); onBeforeUnmount(()=>{dead=true})
+const qualified=computed(()=>captures.data.value?.captures.filter(c=>c.parent_import_id===parentId.value&&c.state==='completed_with_gaps'&&['events','calls','text_messages'].every(f=>c.streams.some(s=>s.family===f&&s.state==='enumerated')))||[])
+const allowedAdmission=computed(()=>admissions.data.value?.items.filter(a=>a.parent_import_id===parentId.value&&['completed','cancelled'].includes(a.state)&&BigInt(a.progress.settled_items)>0)||[])
+const canPrepare=computed(()=>!!parentId.value&&parent.data.value?.state==='completed'&&!!parent.data.value.confirmed_plan_id&&!!admissionId.value&&!!captureId.value&&!pending.value&&listingReady.value); const listingReady=computed(()=>roots.isSuccess.value&&!roots.data.value?.imports.some(historyActive)); const canConfirm=computed(()=>!!current.value?.actions.confirm&&held.value&&coverage.value&&!pending.value)
+watch(parents.data,v=>{if(!parentId.value)parentId.value=v?.imports.find(p=>p.state==='completed'&&!!p.confirmed_plan_id)?.id??''}); watch(parentId,()=>{admissionId.value='';captureId.value='';selectedId.value=''}); watch(allowedAdmission,v=>{if(!admissionId.value&&v?.[0])admissionId.value=v[0].id}); watch(qualified,v=>{if(!captureId.value&&v?.[0])captureId.value=v[0].id}); watch(roots.data,v=>{if(!selectedId.value&&v?.imports[0])selectedId.value=v.imports[0].id}); watch([access.identity,access.scope,admissionId,captureId,selectedId],()=>{epoch++;confirmOpen.value=false;held.value=false;coverage.value=false}); onBeforeUnmount(()=>{dead=true})
 async function run(work:()=>Promise<{import:Root}>){const e=epoch; pending.value=true;error.value='';try{const v=await work();if(dead||e!==epoch){uncertain.value=true;return} selectedId.value=v.import.id ?? '';uncertain.value=false;void roots.refetch();void detail.refetch()}catch(x){error.value=describeApiError(x,'Could not complete admitted history action.');uncertain.value=true;replay=()=>run(work)}finally{if(e===epoch)pending.value=false}}
-function prepare(){if(canPrepare.value)run(()=>prepareAdmittedHistory({request_id:crypto.randomUUID(),admission_id:admissionId.value,history_capture_id:captureId.value}))} function confirm(){const r=current.value,p=plan.value;if(r&&p&&canConfirm.value)run(()=>confirmAdmittedHistory(r.id,{request_id:crypto.randomUUID(),plan_id:p.id,expected_revision:r.revision,acknowledge_held:true,acknowledge_coverage:true}))} function action(a:'resume'|'cancel'){const r=current.value;if(r)run(()=>historyAction(r.id,a,{request_id:crypto.randomUUID(),expected_revision:r.revision}))} function remainder(){const r=current.value;if(r?.current_attempt_id)run(()=>createAdmittedHistoryRemainder(r.id,{request_id:crypto.randomUUID(),attempt_id:r.current_attempt_id!,expected_revision:r.revision}))} function increase(){const r=current.value;if(r&&budget.value)run(()=>increaseAdmittedHistoryBudget(r.id,{request_id:crypto.randomUUID(),expected_revision:r.revision,run_byte_limit:budget.value}))}
+function prepare(){if(!canPrepare.value)return;const body={request_id:crypto.randomUUID(),admission_id:admissionId.value,history_capture_id:captureId.value};run(()=>prepareAdmittedHistory(body))}
+function confirm(){const r=current.value,p=plan.value;if(!r||!p||!canConfirm.value)return;const body={request_id:crypto.randomUUID(),plan_id:p.id,expected_revision:r.revision,acknowledge_held:true,acknowledge_coverage:true};run(()=>confirmAdmittedHistory(r.id,body))}
+function action(a:'resume'|'cancel'){const r=current.value;if(!r)return;const body={request_id:crypto.randomUUID(),expected_revision:r.revision};run(()=>historyAction(r.id,a,body))}
+function remainder(){const r=current.value;if(!r?.current_attempt_id)return;const body={request_id:crypto.randomUUID(),attempt_id:r.current_attempt_id,expected_revision:r.revision};run(()=>createAdmittedHistoryRemainder(r.id,body))}
+function increase(){const r=current.value;if(!r||!budget.value)return;const body={request_id:crypto.randomUUID(),expected_revision:r.revision,run_byte_limit:budget.value};run(()=>increaseAdmittedHistoryBudget(r.id,body))}
 </script>
 <template>
-  <Card data-testid="admitted-history-import-panel">
+  <Card
+    class="min-w-0"
+    data-testid="admitted-history-import-panel"
+  >
     <h2 class="text-section font-medium">
       Historical activity for admitted People
     </h2><p class="mt-1 text-small text-text-muted">
@@ -42,7 +52,20 @@ function prepare(){if(canPrepare.value)run(()=>prepareAdmittedHistory({request_i
       Retry the same request
     </button><template v-if="access.enabled.value">
       <div class="mt-4 grid gap-3 sm:grid-cols-2">
-        <FormField label="Terminal People admission">
+        <FormField label="Original People import">
+          <select
+            v-model="parentId"
+            :class="INPUT_CLASSES"
+          >
+            <option
+              v-for="p in parents.data.value?.imports ?? []"
+              :key="p.id"
+              :value="p.id"
+            >
+              {{ p.id }}
+            </option>
+          </select>
+        </FormField><FormField label="Terminal People admission">
           <select
             v-model="admissionId"
             :class="INPUT_CLASSES"

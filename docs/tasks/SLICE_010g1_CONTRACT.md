@@ -114,3 +114,29 @@ kind enums. 25/default, 50/max items, 512 KiB response ceiling, 4 KiB summaries 
 16 KiB UTF-8 field fragments. Cursor AEAD binds actor/Org/workspace/bundle/plan/
 revision/family/filter/endpoint/size/order. Uncertain command retries reuse the
 same request ID and body; actor/Org changes clear all private state and receipts.
+
+### Accounting implementation checkpoint
+
+Shared evidence uses bundle `shared_measured_bytes` / `shared_retained_bytes` and
+one `payer_plan_id`, assigned once before confirmation with a composite deferred
+FK. Private evidence uses each plan's corresponding counters. Head
+`storage_plan_id` remains its first payer even when the current result changes;
+the permanent requirement records its installing bundle. Native content is
+reported separately from retained evidence, as in the existing activity ledger.
+
+Reservations count against the plan, Organization and (for core families) selected
+snapshot. Each reservation includes 512 bytes for its own control-row overhead;
+control reservations start at least 8 KiB. Settlement charges actual measured
+deltas. Unit settlement refunds unused capacity; control settlement retains its
+remaining cancellation capacity until explicit release. A control reservation
+survives lease takeover, while unit settlement requires the original epoch and
+current unexpired token. Deferred application-only checks require measured and
+charged evidence to agree and reserved counters to equal owned reservation rows
+at commit. Migrator fixture construction is outside that application check.
+
+A lease takeover reclaims only an older-epoch unit reservation after proving that
+all its evidence was already settled. Reclamation cannot touch the cancellation
+reservation, and retrying it cannot refund again. The catalog-driven
+`tests/fixtures/family_refresh_byte_inventory.sql` checks every variable-width
+column independently, so a newly added nullable column cannot silently escape the
+retained-byte inventory merely because current fixtures leave it empty.

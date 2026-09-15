@@ -298,6 +298,31 @@ async fn begin<'a>(
     crate::auth::workspace::ordinary(&mut tx, auth.active_organization_id).await?;
     Ok(tx)
 }
+/// Establish the metadata advisory admission before the first query of a
+/// repeatable-read transaction. A catalog writer holds the exclusive side
+/// through its mutation, so this either observes its committed revision or
+/// keeps it from changing until the read completes.
+async fn begin_metadata<'a>(
+    pool: &'a PgPool,
+    auth: &AuthContext,
+    repeatable: bool,
+) -> Result<Transaction<'a, Postgres>, MobileError> {
+    let mut tx = pool.begin().await?;
+    if repeatable {
+        sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+            .execute(&mut *tx)
+            .await?;
+    }
+    sqlx::query("SET LOCAL lock_timeout='2000ms'")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("SET LOCAL statement_timeout='5000ms'")
+        .execute(&mut *tx)
+        .await?;
+    metadata::acquire_shared(&mut *tx, auth.active_organization_id).await?;
+    crate::auth::workspace::ordinary(&mut tx, auth.active_organization_id).await?;
+    Ok(tx)
+}
 async fn authority(
     conn: &mut PgConnection,
     auth: &AuthContext,
@@ -399,10 +424,9 @@ pub async fn current_metadata(
     context_id: Uuid,
     person_id: Uuid,
 ) -> Result<Value, MobileError> {
-    let mut tx = begin(pool, auth, true).await?;
+    let mut tx = begin_metadata(pool, auth, true).await?;
     context(&mut tx, auth, context_id, false).await?;
     authority(&mut tx, auth, false).await?;
-    metadata::acquire_shared(&mut *tx, auth.active_organization_id).await?;
     let row = sqlx::query(
         "SELECT p.mobile_revision,p.metadata_revision,
           (SELECT revision FROM mobile_metadata_catalog WHERE organization_id=p.organization_id) AS catalog_revision

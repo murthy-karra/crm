@@ -295,6 +295,58 @@ async fn mobile006_metadata_catalog_change_invalidates_only_opted_generation(poo
 
 #[sqlx::test]
 #[ignore]
+async fn mobile006_metadata_reader_establishes_snapshot_after_catalog_barrier(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let tag: Uuid = sqlx::query_scalar("INSERT INTO tag(organization_id,created_by_user_id,name) VALUES($1,$2,'Mobile006 snapshot tag') RETURNING id")
+        .bind(f.org).bind(f.actor).fetch_one(&f.app).await.unwrap();
+    let generation = f
+        .post(
+            "/api/mobile/v1/reconciliations",
+            json!({"protocol":"mobile-v1","installation_id":f.install,"pinned_person_ids":[f.person],"include_metadata":true}),
+        )
+        .await
+        .1;
+    let generation_id = id(&generation, "generation_id");
+    let component = format!(
+        "/api/mobile/v1/reconciliations/{generation_id}/people/{}/metadata",
+        f.person
+    );
+    let mut writer = f.app.begin().await.unwrap();
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended('crm-mobile-metadata-catalog:' || $1::text, 0))")
+        .bind(f.org)
+        .execute(&mut *writer)
+        .await
+        .unwrap();
+    sqlx::query(
+        "UPDATE tag SET name='Mobile006 snapshot renamed' WHERE organization_id=$1 AND id=$2",
+    )
+    .bind(f.org)
+    .bind(tag)
+    .execute(&mut *writer)
+    .await
+    .unwrap();
+    let reader = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &component,
+        json!(null),
+    );
+    tokio::pin!(reader);
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(75), &mut reader)
+            .await
+            .is_err()
+    );
+    writer.commit().await.unwrap();
+    let (status, changed) = reader.await;
+    assert_eq!(status, StatusCode::CONFLICT, "{changed}");
+    assert_eq!(changed["error"], "generation_changed");
+}
+
+#[sqlx::test]
+#[ignore]
 async fn mobile005_details_receipt_replay_and_revision_scope(pool: PgPool) {
     let f = fixture(&pool).await;
     assert!(f.bootstrap["capabilities"]

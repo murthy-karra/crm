@@ -361,7 +361,6 @@ mod db_admitted_refresh_reads;
 mod db_core_change_reports;
 #[path = "db_mobile.rs"]
 mod db_mobile;
-mod db_person_metadata;
 mod db_people_admission_adversarial;
 #[path = "db_people_admission_contract.rs"]
 mod db_people_admission_contract;
@@ -378,6 +377,7 @@ mod db_people_refresh_plans;
 mod db_people_refresh_reads;
 #[cfg(feature = "perf-harness")]
 mod db_people_refresh_ui_fixture;
+mod db_person_metadata;
 
 #[cfg(feature = "perf-harness")]
 mod db_admitted_metadata_ui_fixture;

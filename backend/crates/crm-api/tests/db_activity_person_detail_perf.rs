@@ -174,6 +174,7 @@ fn verify_sources() -> Value {
 
 struct Fixture {
     org: Uuid,
+    viewer: Uuid,
     person: Uuid,
     clock: DateTime<Utc>,
     counts: BTreeMap<String, i64>,
@@ -368,10 +369,93 @@ async fn seed(migrator: &PgPool, pool: &PgPool) -> Fixture {
     }
     Fixture {
         org,
+        viewer,
         person,
         clock,
         counts,
     }
+}
+
+/// Mobile006/010f4 optionally pairs Today on the same realistic book after
+/// Person measurements finish. Both readers are serial; this adds no load to
+/// the Person samples and requires no second fixture or historical binary.
+async fn mobile006_today_pair(pool: &PgPool, fixture: &Fixture, output: &std::path::Path) {
+    use crm_api::domain::{person::visibility::PersonVisibilityScope, today};
+    let mut samples = [Vec::<f64>::new(), Vec::<f64>::new()];
+    let mut attempts = Vec::new();
+    let mut expected = None;
+    let mut all_equal = true;
+    for round in 0..50 {
+        for baseline in if round % 2 == 0 {
+            [true, false]
+        } else {
+            [false, true]
+        } {
+            let conn = pool.acquire().await.expect("Today fixture connection");
+            let scope = PersonVisibilityScope::Organization(OrganizationId::new(fixture.org));
+            let actor = UserId::new(fixture.viewer);
+            let started = Instant::now();
+            let result = if baseline {
+                today::mobile_001_baseline::query_owned_at(conn, &scope, actor, fixture.clock).await
+            } else {
+                today::query_owned_at(conn, &scope, actor, fixture.clock).await
+            };
+            let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
+            let arm = usize::from(!baseline);
+            let (digest, bytes, items) = match result {
+                Ok(dto) => {
+                    let payload = serde_json::to_vec(&dto).expect("Today DTO serialization");
+                    let digest = sha256(&payload);
+                    if let Some(reference) = &expected {
+                        all_equal &= reference == &digest;
+                    } else {
+                        expected = Some(digest.clone());
+                    }
+                    if round >= 10 {
+                        samples[arm].push(elapsed_ms);
+                    }
+                    (Some(digest), Some(payload.len()), Some(dto.items.len()))
+                }
+                Err(_) => {
+                    all_equal = false;
+                    (None, None, None)
+                }
+            };
+            attempts.push(json!({"round":round,"baseline":baseline,"warmup":round<10,
+                "elapsed_ms":elapsed_ms,"dto_sha256":digest,"body_bytes":bytes,"items":items}));
+        }
+    }
+    for arm in &mut samples {
+        arm.sort_by(f64::total_cmp);
+    }
+    let complete = samples.iter().all(|arm| arm.len() == 40);
+    let p95 = |arm: usize| samples[arm].get(37).copied();
+    let limit = p95(0).map(|baseline| baseline + 25.0_f64.max(baseline * 0.1));
+    let latency_passed = p95(1)
+        .zip(limit)
+        .is_some_and(|(current, limit)| current <= limit);
+    let evidence = json!({
+        "protocol":"mobile006-010f4-today-pair-v1","baseline_commit":"9eaeb0a",
+        "same_build":true,"reader_role":"crm_app","concurrency":1,
+        "fixture_counts":fixture.counts,"clock":fixture.clock,"warmups_per_arm":10,
+        "samples_per_arm":40,"pair_order":"alternating AB/BA",
+        "timing":"query_owned_at duration; connection acquisition excluded",
+        "source_sha256":{
+            "baseline":sha256(include_str!("../../crm-app/src/domain/today/mobile_001_baseline.rs").as_bytes()),
+            "current":sha256(include_str!("../../crm-app/src/domain/today/mod.rs").as_bytes())},
+        "raw_attempts":attempts,"all_dtos_equal":all_equal,"complete":complete,
+        "baseline_p95_ms":p95(0),"current_p95_ms":p95(1),"allowed_current_p95_ms":limit,
+        "latency_passed":latency_passed,"passed":complete && all_equal && latency_passed
+    });
+    std::fs::write(
+        output.join("mobile006-today-paired.json"),
+        serde_json::to_vec_pretty(&evidence).unwrap(),
+    )
+    .expect("retain Today pair including failed observations");
+    assert!(
+        complete && all_equal && latency_passed,
+        "Today paired gate; see retained evidence"
+    );
 }
 
 struct Server {
@@ -693,6 +777,10 @@ async fn operational_person_detail_matches_cd3b010(migrator: PgPool) {
     .expect("write paired evidence");
     baseline_server.close().await;
     current_server.close().await;
+    if std::env::var("CRM_MOBILE006_PAIRED_TODAY").as_deref() == Ok("1") {
+        mobile006_today_pair(&pool, &fixture, &output).await;
+        assert_eq!(counts(&pool, fixture.org).await, fixture.counts);
+    }
     pool.close().await;
     assert!(
         normal_passed,

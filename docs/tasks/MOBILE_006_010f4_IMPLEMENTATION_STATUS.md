@@ -33,7 +33,9 @@ PROGRESS; this implementation does not claim or repeat that rollout.
 - Planning: independently READY, zero blocking findings per slice.
 - Mobile backend: integrated typed command composition, revision schema, receipts,
   opted-in generations and bounded metadata/catalog reads. Library checks pass;
-  focused database acceptance is pending.
+  direct command/import compatibility passes seven focused database tests.
+  Mobile HTTP event/no-op/replay passes; opted-in generation tests exposed a
+  catalog read-lock privilege failure, whose concurrency-safe repair is pending.
 - Migration: backend/Web integrated. The retained preparation/execution fixture
   passes, including four mapping roles and exclusive admitted activity identities.
   Cancellation, remainder, readiness and browser acceptance remain in progress.
@@ -46,9 +48,14 @@ metadata command; the earlier original/admitted metadata-worker barrier is now
 integrated. Isolated `cargo check -p crm-app --locked` passed in
 `logs/integration/typed-metadata-check-1.log`. Direct command tests cover capacity,
 all value types, atomic validation, no-ops, ABA, unrelated notes and current
-actor/tenant/workspace checks, but have not yet executed. The first all-test build
-found two new mobile-test UUID comparisons; fixes are integrated and its rebuild
-is pending. Failed evidence is retained.
+actor/tenant/workspace checks. These and four changed original/admitted import
+compatibility tests passed at `ec2ccdd` (seven tests, 11.568 seconds after compilation;
+total 106.43 seconds), `logs/integration/metadata-compatibility-db-1.log`.
+The first all-test build found two new mobile-test UUID comparisons; their fixed
+rebuild passed, `logs/integration/typed-metadata-test-compile-2.log`. Failed evidence
+is retained. Mobile writer `9a4cd7c` passed its content-free event/no-op/replay test
+and failed two opted-in generation cases with HTTP503; that batch is retained at
+`logs/mobile006-focused-1.log` and is not an acceptance pass.
 
 Migration checkpoint `7ff7619` passed the retained source→mapping→confirmation→
 native identity test (one test, 6.827 seconds after compilation), recorded in
@@ -62,6 +69,14 @@ Neither has been used for acceptance yet. Historical Mobile005 native source at
 `a5cb24d` is archived under the private QA root's `mobile005-source/` for the actual
 installed-store upgrade. Native API port3106 is planned and must be checked again
 before binding. Resource manifests are under `inventory/`.
+
+Historical Mobile005 iOS `build-for-testing` passed (17.924 seconds) and Android
+upgrade QA app/test APK assembly passed (48.925 seconds), recorded in
+`logs/ios-prep/historical-mobile005-build.log` and
+`logs/android-prep/historical-mobile005-build.log`. Builds use isolated outputs and
+dependency caches; neither app has been installed for this proof yet. The owned
+`crm_mobile_006_qa` database has been created but remains empty pending stable
+schema integration. No API3106 service is running yet.
 
 Publication/deployment of this pair, physical-phone/cellular tests, distribution,
 live FUB/customer work, activation and calling remain separate.

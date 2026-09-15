@@ -154,8 +154,8 @@ pub(crate) async fn metadata_rows(
     .bind(person_id)
     .fetch_one(&mut *conn)
     .await?;
-    if tags.as_array().map_or(true, |items| items.len() > 100)
-        || values.as_array().map_or(true, |items| items.len() > 100)
+    if tags.as_array().is_none_or(|items| items.len() > 100)
+        || values.as_array().is_none_or(|items| items.len() > 100)
     {
         return Err(code(422, "over_limit"));
     }
@@ -402,13 +402,13 @@ pub async fn current_metadata(
     let mut tx = begin(pool, auth, true).await?;
     context(&mut tx, auth, context_id, false).await?;
     authority(&mut tx, auth, false).await?;
-    metadata::acquire_shared(&mut *tx, auth.active_organization_id).await?;
+    metadata::acquire_shared(&mut tx, auth.active_organization_id).await?;
     let row = sqlx::query(
         "SELECT p.mobile_revision,p.metadata_revision,
           (SELECT revision FROM mobile_metadata_catalog WHERE organization_id=p.organization_id) AS catalog_revision
           FROM person p WHERE p.organization_id=$1 AND p.id=$2",
     ).bind(auth.active_organization_id.0).bind(person_id).fetch_optional(&mut *tx).await?.ok_or_else(missing)?;
-    let (tags, values) = metadata_rows(&mut *tx, auth.active_organization_id.0, person_id).await?;
+    let (tags, values) = metadata_rows(&mut tx, auth.active_organization_id.0, person_id).await?;
     let value = json!({"context_id":context_id,"person_id":person_id,"person_revision":row.get::<i64,_>("mobile_revision").to_string(),"metadata_revision":row.get::<i64,_>("metadata_revision").to_string(),"catalog_revision":row.get::<i64,_>("catalog_revision").to_string(),"tags":tags,"values":values,"complete":true});
     tx.commit().await?;
     bounded_metadata_current(value)

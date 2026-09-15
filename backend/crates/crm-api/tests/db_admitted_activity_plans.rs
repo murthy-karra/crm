@@ -229,6 +229,7 @@ async fn admitted_activity_hot_queries_25k_people_50_members(migrator: PgPool) {
     sqlx::query("INSERT INTO migration_admitted_activity_choice(id,plan_id,import_id,organization_id,kind,source_key,nonce,ciphertext) SELECT gen_random_uuid(),$1,$2,$3,a.kind,a.key,s.nonce,s.ciphertext FROM activity_mappings a CROSS JOIN LATERAL(SELECT * FROM migration_admitted_activity_choice WHERE plan_id=$1 LIMIT 1)s").bind(plan).bind(child).bind(f.org).execute(&mut *conn).await.unwrap();
     sqlx::query("UPDATE migration_admitted_activity_source s SET source_only_counts=jsonb_build_object('unknown_properties_source_only',2) FROM activity_rows a WHERE s.id=a.source AND a.n%1000=0").execute(&mut *conn).await.unwrap();
     let mut counts = serde_json::Map::new();
+    let mut storage = serde_json::Map::new();
     for table in [
         "person",
         "organization_membership",
@@ -258,6 +259,12 @@ async fn admitted_activity_hot_queries_25k_people_50_members(migrator: PgPool) {
         .await
         .unwrap();
         counts.insert(table.into(), json!(n));
+        let bytes: i64 = sqlx::query_scalar("SELECT pg_total_relation_size($1::regclass)")
+            .bind(table)
+            .fetch_one(&mut *conn)
+            .await
+            .unwrap();
+        storage.insert(table.into(), json!(bytes));
     }
     assert_eq!(counts["person"], 25000);
     assert_eq!(counts["organization_membership"], 50);
@@ -455,7 +462,7 @@ async fn admitted_activity_hot_queries_25k_people_50_members(migrator: PgPool) {
             }
         }
     }
-    let report = json!({"fixture":{"counts":counts,"bulk_rows":"inert copied ciphertext; no post-scale worker, native equality, or storage-capacity claim"},"sources":{"worker":sha(WORKER),"queries":sha(QUERIES),"remainder":sha(REMAINDER),"store":sha(STORE)},"plans":r.plans,"failures":r.failures});
+    let report = json!({"fixture":{"counts":counts,"relation_bytes":storage,"bulk_rows":"inert copied ciphertext; no post-scale worker, native equality, or storage-capacity claim"},"sources":{"worker":sha(WORKER),"queries":sha(QUERIES),"remainder":sha(REMAINDER),"store":sha(STORE)},"plans":r.plans,"failures":r.failures});
     std::fs::write(output, serde_json::to_vec_pretty(&report).unwrap()).unwrap();
     assert!(
         report["failures"].as_array().unwrap().is_empty(),

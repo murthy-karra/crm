@@ -768,7 +768,7 @@ pub async fn component(
                 today_changed: false,
             });
         }
-        let (tags, values) = metadata_rows(&mut *tx, auth.active_organization_id.0, person).await?;
+        let (tags, values) = metadata_rows(&mut tx, auth.active_organization_id.0, person).await?;
         let value = json!({"generation_id":id,"person_id":person,"section":"metadata","revision":expected.to_string(),"metadata_revision":metadata.to_string(),"catalog_revision":catalog_revision.to_string(),"tags":tags,"values":values,"complete":true});
         if serde_json::to_vec(&value).map_err(|_| invalid())?.len() > PAGE_BYTES {
             return Err(code(422, "over_limit"));

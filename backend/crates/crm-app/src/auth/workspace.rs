@@ -1164,7 +1164,9 @@ mod history_capture_readiness_tests {
             people_admission: true,
             admitted_people_refresh: true,
             admitted_metadata: true,
+            admitted_activity: true,
         };
+        assert!(ready.admitted_activity_ready());
         assert!(ready.history_capture_ready());
         assert!(ready.history_timeline_ready());
         assert!(ready.core_change_ready());

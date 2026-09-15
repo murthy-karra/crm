@@ -148,7 +148,11 @@ pub(super) async fn run(pool: &PgPool, f: Fixture) {
         };
         match query.fetch_one(&f.app).await {
             Ok(plan) => {
-                if plan[0]["Plan"]["Actual Rows"].as_u64().unwrap() > max_rows {
+                if plan[0]["Plan"]["Actual Rows"]
+                    .as_f64()
+                    .unwrap_or(f64::INFINITY)
+                    > max_rows as f64
+                {
                     failures.push(format!("{name}: output exceeded fixture bound"));
                 }
                 let mut all = Vec::new();

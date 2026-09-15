@@ -50,8 +50,10 @@ PROGRESS; this implementation does not claim or repeat that rollout.
   Both proved actual populated Mobile005 in-place upgrades. Independent review
   found additional draft/catalog/conflict issues; repairs and focused regression
   checks are in progress as recorded in the review file.
-- Combined gates, realistic query plans and the single paired Person/Today run
-  remain pending. No slice is implementation READY.
+- Migration realistic query plans passed at 25k People/50 members with zero
+  plan failures; separate storage sizing remains pending. Mobile query plans,
+  combined gates and the single paired Person/Today run remain pending.
+  No slice is implementation READY.
 
 ### Retained evidence
 
@@ -98,3 +100,11 @@ live FUB/customer work, activation and calling remain separate.
   source/handover fixes (97.29s test execution).
 - `logs/integration/web-source-reprepare-r1.log`: 54/54 focused Web tests passed;
   Web lint and typecheck also passed in their separate recorded runs.
+
+- `logs/integration/activity-hotplans-db-1.log`: realistic migration plans passed
+  (227.05s); `integration/activity-hotplans-1.json` retains exact SQL/source hashes,
+  cardinalities, plans and zero failures. Bulk scale rows are explicitly inert
+  ciphertext cardinality fixtures, not source-fidelity or capacity evidence.
+- `logs/integration/final-local-check-1.log`: preflight 51 passed; Rust Clippy
+  found five style errors and one stale readiness test initializer. Repairs are
+  under verification in the second run; this failed attempt is retained.

@@ -50,7 +50,8 @@ native API3106 is available; the isolated browser QA processes are stopped.
 [010e5 stage/agent mapping repair](SLICE_010e5_MAPPING_REPAIR.md) for
 existing People first. Implementation and local verification are complete under
 D-088; [evidence](../tasks/SLICE_010e5_VERIFICATION.md) records the gates. Commit `05abffa`
-is merged into local `main`; it has not been pushed or deployed. Never-imported People recovery follows separately.
+is merged, pushed and deployed to shared development;
+[release evidence](../tasks/SLICE_010e5_RELEASE.md) owns current runtime identity. Never-imported People recovery follows separately.
 Remaining family deltas, activation and complete migration fidelity retain their
 own scope in the [family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md).
 
@@ -187,8 +188,7 @@ linked verification records; they are not claims about present runtime health.
 
 ## Next recommended action
 
-010e5 is implemented, verified and merged locally. Remote push and deployment
-remain separate release steps. Next migration planning: recover never-imported People, including
+010e5 is implemented, verified, pushed and deployed to shared development. Next migration planning: recover never-imported People, including
 identity safety and follow-on family imports. See [010e5 status](../tasks/SLICE_010e5_IMPLEMENTATION_STATUS.md).
 
 Use the [Mobile007 / 010d3 release record](../tasks/MOBILE_007_010d3_RELEASE.md)

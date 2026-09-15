@@ -13,13 +13,13 @@ Keep the administrator review hold, full fidelity reporting and source-data gate
 | **010f3: metadata — deployed** | Tags/custom-field coverage for admitted People | [Accepted specification](../specs/SLICE_010f3.md), [final evidence](../tasks/MOBILE_005_010f3_FINAL_VERIFICATION.md); included in the [verified current release](../tasks/MOBILE_006_010f4_RELEASE.md) |
 | **010f4: activity — deployed** | Notes/open/completed tasks for admitted People | [Accepted specification](../specs/SLICE_010f4.md): qualified newer notes/detail/tasks capture, exact admission identities, explicit roles/kinds/timezone, shared activity identity and exact remainder; paired with [Mobile006](MOBILE_006_010f4_PARALLEL_LAUNCH.md) |
 | **010d3: history — implemented and verified** | [Accepted historical event/call/text metadata](../specs/SLICE_010d3.md) for admitted People | Exact captured account/cohort/sequence, identity dedupe and bounded metadata-only timeline; no native contact credit. [Implementation evidence](../tasks/MOBILE_007_010d3_IMPLEMENTATION_STATUS.md) owns current gates. |
-| **010e5: stage/agent repair — verified locally** | Repair blocked updates to existing original/admitted People | [Verification](../tasks/SLICE_010e5_VERIFICATION.md); D-088 accepted, merged locally as `05abffa`, not pushed or deployed |
+| **010e5: stage/agent repair — deployed** | Repair blocked updates to existing original/admitted People | [Verification](../tasks/SLICE_010e5_VERIFICATION.md); [Release](../tasks/SLICE_010e5_RELEASE.md), D-088 accepted |
 | **Later repair/delta/cutover scope** | Remaining coverage, deliberate mapping repair, per-family updates and activation | Separate accepted policies, final coverage/reconciliation, customer-data gates and recovery/cutoff procedure |
 
 **Current boundary — D-088:** [010e5 mapping repair](SLICE_010e5_MAPPING_REPAIR.md)
 is implemented and verified locally for existing original/admitted People.
 The user selected recovery of never-imported People next. That scope and later
-delta/cutover policies need their own accepted plans; 010e5 is not yet deployed.
+delta/cutover policies need their own accepted plans; 010e5 is deployed to shared development.
 
 Write the next family specification just in time after the preceding evidence.
 010f3's assignment/contracts are accepted under D-082. 010f4 is the accepted

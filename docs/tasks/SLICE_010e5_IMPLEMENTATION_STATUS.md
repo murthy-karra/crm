@@ -1,9 +1,10 @@
 # 010e5 — Implementation status
 
-**IMPLEMENTED AND VERIFIED LOCALLY — 2026-09-15.** D-088 accepts implementation.
+**DEPLOYED TO SHARED DEVELOPMENT — 2026-09-15.** D-088 accepts implementation.
 Implementation commit `05abffa` was fast-forward merged into local `main` on
-2026-09-15. The feature branch was deleted. Remote push and deployment remain
-separate; local Lavish artifacts and unrelated worktrees were preserved.
+2026-09-15. The feature branch was deleted. Source through `df922ee` is pushed and deployed to shared development;
+[release evidence](SLICE_010e5_RELEASE.md) owns runtime identity and checks.
+Local Lavish artifacts and unrelated worktrees were preserved.
 
 ## Outcome
 

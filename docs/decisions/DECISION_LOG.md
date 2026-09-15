@@ -3010,3 +3010,10 @@ development, native stores and source/recovery evidence. Never-imported People,
 worker-platform architecture, live source/customer work, activation and publication/
 deployment remain separate. The local implementation branch is
 `codex/010e5-mapping-repair`.
+
+**010e5 release follow-up — 2026-09-15:** After local commit/merge/cleanup,
+the user accepted the recommendation to push/deploy the merged mapping repair
+and plan never-imported People recovery with “Ok go for it.” This authorizes
+the existing shared-development release recorded in
+[010e5 release](../tasks/SLICE_010e5_RELEASE.md). Production, live FUB/customer
+processing, activation and implementation of new recovery contracts remain separate.

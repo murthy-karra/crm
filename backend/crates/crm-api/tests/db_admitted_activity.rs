@@ -188,3 +188,67 @@ async fn admitted_activity_freezes_terminal_cohort_full_source_and_global_owner(
         "native inserts own the global identities exclusively"
     );
 }
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn admitted_activity_unconfirmed_cancel_can_be_prepared_again(migrator: PgPool) {
+    let people = vec![
+        json!({"id":104,"firstName":"Admitted","lastName":"Retry","stage":"Lead","assignedUserId":3}),
+    ];
+    let (fixture, parent, admission) = fixture_with_admission(&migrator, people.clone()).await;
+    for stream in [
+        Stream::Users,
+        Stream::Notes,
+        Stream::TasksOpen,
+        Stream::TasksCompleted,
+    ] {
+        fixture.reader.set_records(stream, vec![]);
+    }
+    let selected = report(&fixture, parent, people).await;
+    let cmd = PrepareAdmittedActivityImport {
+        request_id: Uuid::new_v4(),
+        admission_id: admission,
+        report_id: selected,
+    };
+    let first = admitted_activity::prepare(
+        &fixture.pool,
+        &fixture.key,
+        &fixture.ctx,
+        cmd,
+        &fixture.policy,
+    )
+    .await
+    .expect("first prepare");
+    let root = uuid(&first["import"]["id"]);
+    admitted_activity::action(
+        &fixture.pool,
+        &fixture.key,
+        &fixture.ctx,
+        root,
+        admitted_activity::AdmittedActivityAction {
+            request_id: Uuid::new_v4(),
+            expected_revision: first["import"]["revision"]
+                .as_str()
+                .expect("revision")
+                .into(),
+        },
+        false,
+        &fixture.policy,
+    )
+    .await
+    .expect("unconfirmed cancel");
+    let second = admitted_activity::prepare(
+        &fixture.pool,
+        &fixture.key,
+        &fixture.ctx,
+        PrepareAdmittedActivityImport {
+            request_id: Uuid::new_v4(),
+            admission_id: admission,
+            report_id: selected,
+        },
+        &fixture.policy,
+    )
+    .await
+    .expect("reprepare after an unconfirmed cancellation");
+    assert_ne!(uuid(&second["import"]["id"]), root);
+}

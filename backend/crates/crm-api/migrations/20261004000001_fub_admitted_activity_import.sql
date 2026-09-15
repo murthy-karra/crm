@@ -21,7 +21,7 @@ CREATE TABLE migration_admitted_activity_import (
  source_output_revision UUID NOT NULL,
  predecessor_import_id UUID,
  UNIQUE(id,organization_id), UNIQUE(id,snapshot_id,organization_id),
- UNIQUE(admission_id,organization_id), UNIQUE(predecessor_import_id,organization_id),
+ UNIQUE(predecessor_import_id,organization_id),
  FOREIGN KEY(parent_import_id,organization_id) REFERENCES migration_import(id,organization_id),
  FOREIGN KEY(parent_plan_id,parent_import_id,organization_id) REFERENCES migration_import_plan(id,import_id,organization_id),
  FOREIGN KEY(preview_id) REFERENCES migration_snapshot_preview(id),
@@ -32,6 +32,10 @@ CREATE TABLE migration_admitted_activity_import (
  CHECK((lease_token IS NULL)=(lease_expires_at IS NULL))
 );
 CREATE INDEX migration_admitted_activity_import_page ON migration_admitted_activity_import(organization_id,id);
+CREATE UNIQUE INDEX migration_admitted_activity_one_root
+ ON migration_admitted_activity_import(organization_id,admission_id)
+ WHERE predecessor_import_id IS NULL
+   AND (state != 'cancelled' OR confirmed_plan_id IS NOT NULL);
 CREATE INDEX migration_admitted_activity_import_claim ON migration_admitted_activity_import(created_at,id) WHERE state IN ('preparing','queued','running');
 CREATE INDEX migration_admitted_activity_import_boundary ON migration_admitted_activity_import(organization_id) WHERE confirmed_plan_id IS NOT NULL;
 CREATE TABLE migration_admitted_activity_plan (

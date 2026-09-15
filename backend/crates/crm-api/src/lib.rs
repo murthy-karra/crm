@@ -295,7 +295,7 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
         let pool = pool.clone();
         let state = state.clone();
         tokio::spawn(async move {
-            let mut tick = tokio::time::interval(std::time::Duration::from_millis(200));
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
             tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
                 tick.tick().await;
@@ -324,7 +324,7 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
         let pool = pool.clone();
         let state = state.clone();
         tokio::spawn(async move {
-            let mut tick = tokio::time::interval(std::time::Duration::from_millis(200));
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
             tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
                 tick.tick().await;
@@ -353,7 +353,7 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
         let pool = pool.clone();
         let state = state.clone();
         tokio::spawn(async move {
-            let mut tick = tokio::time::interval(std::time::Duration::from_millis(200));
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
             tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
                 tick.tick().await;
@@ -382,7 +382,7 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
         let pool = pool.clone();
         let state = state.clone();
         tokio::spawn(async move {
-            let mut tick = tokio::time::interval(std::time::Duration::from_millis(200));
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
             tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
                 tick.tick().await;
@@ -412,7 +412,7 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
         let key = state.raw_payload_key.clone();
         let policy = state.snapshot_policy.clone();
         tokio::spawn(async move {
-            let mut tick = tokio::time::interval(std::time::Duration::from_millis(200));
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
             tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
                 tick.tick().await;
@@ -478,7 +478,7 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
         let state = state.clone();
         tokio::spawn(async move {
             let session = domain::migration::history_import_worker::WorkerSession::default();
-            let mut tick = tokio::time::interval(std::time::Duration::from_millis(200));
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
             tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
                 tick.tick().await;
@@ -511,7 +511,7 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
         let state = state.clone();
         tokio::spawn(async move {
             let session = domain::migration::admitted_history_worker::WorkerSession::default();
-            let mut tick = tokio::time::interval(std::time::Duration::from_millis(200));
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
             tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
                 tick.tick().await;

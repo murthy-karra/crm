@@ -5,16 +5,18 @@ Both independent planning reviews returned READY in round 1; compatible checkpoi
 notes are recorded in [planning review](MOBILE_006_010f4_PLANNING_REVIEW.md).
 [Coordinated plan](../plans/MOBILE_006_010f4_PARALLEL_LAUNCH.md) owns the acceptance
 matrix, source references and future final gates. Focused backend and Web checks
-have passed; full acceptance and independent implementation review remain open.
+have passed. Both independent implementation reviews returned NOT READY in round 1;
+[findings and repairs](MOBILE_006_010f4_IMPLEMENTATION_REVIEW.md) are authoritative
+for the remaining review work. Full acceptance and final gates remain open.
 
 ## Ownership and resources
 
 Root integration: `codex/mobile006-010f4-integration`. Mobile backend and migration
 start in separate owned worktrees; iOS and Android follow the frozen mobile
 backend. Terra high remains assigned to substantive writers. Root owns integration,
-original/admitted metadata-worker barrier patches and `.sqlx`. The migration writer
-has exclusive reassigned ownership of migration registration, workspace readiness,
-API worker/router registration, release preflight and shared Web migration navigation.
+original/admitted metadata-worker barrier patches and `.sqlx`. Root now owns migration registration, workspace readiness, API worker/router
+registration, release preflight, shared Web migration navigation, and both
+query-plan harnesses. Native writers retain their platform-only ownership.
 Each lane alone creates
 its feature migrations: Mobile006 prefix `202610030000`, 010f4 `202610040000`.
 
@@ -39,17 +41,17 @@ PROGRESS; this implementation does not claim or repeat that rollout.
   recorded batches. The catalog row-lock privilege/snapshot failure is repaired
   by a narrow read-only SECURITY DEFINER function; its blocked-writer regression
   passes. Failed attempts remain retained, not counted as passes.
-- Migration: backend/Web integrated. Preparation/execution, unconfirmed cancel,
-  and confirmed zero-write cancel → successor → execution pass. Broader adversarial
-  coverage is in progress. Root owns the controlled desktop/390px browser fixture.
-  Its first source fixture paused honestly on mismatched synthetic note detail;
-  that database is preserved while a corrected second fixture is prepared.
-- iOS and Android: active separate writer worktrees against the frozen backend.
-  Android reports local build/unit/lint and four storage instrumentation tests
-  passing; its real API journey is starting. Native release acceptance and actual
-  populated Mobile005 installed-store upgrades are still pending.
-- Combined gates, realistic query plans, the single paired Person/Today run and
-  independent implementation review: pending. No slice is implementation READY.
+- Migration: root owns all integration fixes and the expanded adversarial tests.
+  The expanded 12-selector matrix passed, including selected-source People
+  qualification, excluded coverage, old-binary handover, authorization/tenant
+  boundaries, rollback and exact remainder continuation. The corrected browser fixture is seeded; actual
+  desktop/390px acceptance remains pending.
+- iOS and Android: implementations and initial live journeys are integrated.
+  Both proved actual populated Mobile005 in-place upgrades. Independent review
+  found additional draft/catalog/conflict issues; repairs and focused regression
+  checks are in progress as recorded in the review file.
+- Combined gates, realistic query plans and the single paired Person/Today run
+  remain pending. No slice is implementation READY.
 
 ### Retained evidence
 
@@ -91,3 +93,8 @@ changing the production HTTP receipt contract or native validation.
 
 Publication/deployment of this pair, physical-phone/cellular tests, distribution,
 live FUB/customer work, activation and calling remain separate.
+
+- `logs/integration/f4-review-matrix-db-2.log`: 12/12 passed on the integrated
+  source/handover fixes (97.29s test execution).
+- `logs/integration/web-source-reprepare-r1.log`: 54/54 focused Web tests passed;
+  Web lint and typecheck also passed in their separate recorded runs.

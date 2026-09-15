@@ -142,8 +142,11 @@ pub(crate) async fn validate_binding(
     )
     .await?;
     if p.get::<Uuid, _>("admission_plan_id") != r.get::<Uuid, _>("admission_plan_id")
+        || p.get::<Uuid, _>("parent_import_id") != r.get::<Uuid, _>("parent_import_id")
+        || p.get::<Uuid, _>("parent_plan_id") != r.get::<Uuid, _>("parent_plan_id")
         || p.get::<Uuid, _>("snapshot_id") != r.get::<Uuid, _>("snapshot_id")
         || p.get::<Uuid, _>("source_report_id") != r.get::<Uuid, _>("source_report_id")
+        || p.get::<Uuid, _>("source_output_revision") != r.get::<Uuid, _>("source_output_revision")
         || p.get::<i64, _>("source_account_id") != r.get::<i64, _>("source_account_id")
         || p.get::<i64, _>("capture_sequence") != r.get::<i64, _>("capture_sequence")
         || p.get::<i64, _>("current_workspace_revision") != r.get::<i64, _>("workspace_revision")
@@ -225,6 +228,11 @@ pub(crate) async fn view(
     let storage=sqlx::query("SELECT s.run_byte_limit,s.retained_bytes,s.reserved_bytes,l.byte_limit,l.retained_bytes AS org_retained,l.reserved_bytes AS org_reserved FROM migration_snapshot s JOIN migration_snapshot_storage l ON l.organization_id=s.organization_id WHERE s.id=$1 AND s.organization_id=$2").bind(r.get::<Uuid,_>("snapshot_id")).bind(org.0).fetch_one(&mut *conn).await?;
     let cancel:i64=sqlx::query_scalar("SELECT COALESCE(sum(byte_count),0)::bigint FROM migration_admitted_activity_reservation WHERE import_id=$1 AND organization_id=$2 AND purpose='cancel'").bind(id).bind(org.0).fetch_one(&mut *conn).await?;
     let state: String = r.get("state");
+    let remainder_source = if confirmed.is_some() {
+        super::admitted_activity_remainder::copy_source(r)?
+    } else {
+        (id, latest)
+    };
     let remainder_available: bool = state == "cancelled"
         && confirmed.is_some()
         && !sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM migration_admitted_activity_import WHERE predecessor_import_id=$1 AND organization_id=$2)")
@@ -233,9 +241,9 @@ pub(crate) async fn view(
             .fetch_one(&mut *conn)
             .await?
         && sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM migration_admitted_activity_manifest m WHERE m.plan_id=$1 AND m.organization_id=$2 AND NOT EXISTS(SELECT 1 FROM migration_admitted_activity_result x WHERE x.import_id=$3 AND x.manifest_id=m.id AND x.organization_id=m.organization_id))")
-            .bind(confirmed.unwrap())
+            .bind(remainder_source.1)
             .bind(org.0)
-            .bind(id)
+            .bind(remainder_source.0)
             .fetch_one(&mut *conn)
             .await?;
     let expires: Option<DateTime<Utc>> = p.get("expires_at");

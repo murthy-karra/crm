@@ -38,6 +38,7 @@ async function setup(options: { run?: AdmittedActivityImport | null; role?: stri
     if (url === `${ROOT}?admission_id=admission&limit=20`) return { imports: state.run ? [state.run] : [], next_cursor: null } as never
     if (url === `${ROOT}/child` && !init?.method) return state.run as never
     if (url === '/migrations/fub/snapshots/snapshot') return { snapshot: { id: 'snapshot', state: options.snapshotState ?? 'completed' }, streams: ['people', 'users', 'notes', 'note_detail', 'tasks_open', 'tasks_completed'].map(stream => ({ stream, state: stream === options.missingStream ? 'paused' : 'completed' })) } as never
+    if (url.startsWith('/migrations/fub/activity-imports')) throw new Error(`Wrong import family: ${url}`)
     if (url.includes('/mappings?')) return { items: [mapping(new URL(url, 'https://local.invalid').searchParams.get('kind')!)], next_cursor: null } as never
     if (url.includes('/records?') || url.includes('/results?')) return { items: [], next_cursor: null } as never
     if (url.includes('/targets?')) return { items: [{ id: 'inactive', display_name: 'Historical author', status: 'inactive', role: 'member' }, { id: 'active', display_name: 'Current member', status: 'active', role: 'member' }], next_cursor: null } as never
@@ -54,6 +55,17 @@ async function ack(wrapper: Awaited<ReturnType<typeof setup>>['wrapper']) { for 
 beforeEach(() => { api.mockReset(); resetWorkspace(); vi.stubGlobal('crypto', { randomUUID: () => 'request-uuid' }) })
 afterEach(() => { cleanup.splice(0).forEach(fn => fn()); document.body.innerHTML = ''; vi.unstubAllGlobals(); vi.useRealTimers(); resetWorkspace() })
 describe('activity import workflow', () => {
+  it('prepares a new root after explicit unconfirmed cancellation', async () => {
+    const { state } = await setup({ run: run('cancelled'), handle: (url, init) => {
+      if (url === ROOT && init?.method === 'POST') { state.run = { ...run('preparing'), id: 'new-child' }; return { import: state.run } }
+      if (url === `${ROOT}/new-child`) return state.run
+    } })
+    expect(button('Prepare admitted notes and tasks plan').disabled).toBe(false)
+    button('Prepare admitted notes and tasks plan').click(); await flushPromises()
+    expect(JSON.parse(String(writes()[0]![1]?.body))).toEqual({ request_id: 'request-uuid', admission_id: 'admission', report_id: 'report' })
+    expect(writes('/plans')).toHaveLength(0)
+  })
+
   it('prepares only from exhausted retained streams without a metadata prerequisite or source call', async () => {
     const { state } = await setup({ run: null, handle: (url, init) => { if (url === ROOT && init?.method === 'POST') { state.run = run('preparing'); return { import: state.run } } } })
     expect(button('Prepare admitted notes and tasks plan').disabled).toBe(false); expect(writes()).toHaveLength(0)

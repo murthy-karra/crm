@@ -37,6 +37,8 @@ pub(crate) struct Counts {
     pub held_count: i64,
     pub source_only_count: i64,
     pub invalid_occurrences: i64,
+    #[serde(default)]
+    pub excluded_count: i64,
     pub unavailable_bodies: i64,
 }
 impl Counts {

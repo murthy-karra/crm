@@ -98,7 +98,14 @@ Missing/deleted/tombstoned/mismatched targets hold related records. Freeze the c
 before confirmation; subsequent admissions cannot enlarge it.
 
 Use a bounded source index/preparation walk shared across the cohort, not a complete
-source-book scan per Person. Qualified unknown/large/source-only content stays
+source-book scan per Person. The admitted source index includes the People stream;
+its observations are qualified through the same retained capture walk before
+native activity manifests become ready. Coverage manifests use `excluded` for
+out-of-cohort identities and invalid occurrences. They remain inspectable but
+never enter native execution or planned/pending/held unit totals. The decimal
+`counts.excluded_count` counts excluded identities; `invalid_occurrences` remains
+separate. Remainders retain this coverage alongside never-settled native units.
+ Qualified unknown/large/source-only content stays
 inspectable through bounded exact field reads. Do not widen the existing activity
 raw-reader limit merely because another retained feature accepts larger captures.
 The contract checkpoint pins the current supported representations/read limits and
@@ -223,6 +230,13 @@ Legacy complete Person/history/task reads holding a shared guard finish first;
 later legacy reads fail before loading activity. The predicate includes confirmed
 cancelled attempts with zero writes. Existing original confirmed predicates remain.
 This changes neither Organization-wide PersonVisibilityScope nor the review hold.
+
+The existing shared workspace database barrier also requires the transaction-local
+`crm.admitted_activity_reader = fub-admitted-activity-v1` compatibility stamp after
+first admitted confirmation. Current typed readers/workers set it before entering
+the barrier; it grants no business authority. Old binaries using the unstamped
+barrier fail closed. A read/unit holding the shared barrier finishes before the
+exclusive first-confirmation boundary, so handover cannot split its transaction.
 
 `fub-admitted-activity-v1` covers the new identity-owner shape, original and admitted
 workers, bounded readers and compatible recovery. Preparation must refuse an

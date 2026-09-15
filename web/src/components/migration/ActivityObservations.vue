@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
-import { fetchActivityObservations, useActivityAccess } from '../../api/activityImports'
+import { useActivityReaders } from './activityFamily'
+const { fetchActivityObservations, useActivityAccess } = useActivityReaders()
 import ActivityFieldViewer from './ActivityFieldViewer.vue'
 import { buttonClasses } from '../../lib/controls'
 import { describeApiError } from '../../lib/errors'

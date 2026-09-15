@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
-import { fetchActivityField, useActivityAccess, type ActivityFieldRequest } from '../../api/activityImports'
+import { type ActivityFieldRequest } from '../../api/activityImports'
+import { useActivityReaders } from './activityFamily'
+const { fetchActivityField, useActivityAccess } = useActivityReaders()
 import { buttonClasses } from '../../lib/controls'
 import { describeApiError } from '../../lib/errors'
 const props = defineProps<{ request: ActivityFieldRequest; title: string }>()

@@ -450,81 +450,14 @@ async fn mobile006_current_metadata_rejects_more_than_one_hundred_values(pool: P
 }
 
 #[cfg(feature = "perf-harness")]
+#[path = "fixtures/mobile006_plans.rs"]
+mod metadata_plans;
+
+#[cfg(feature = "perf-harness")]
 #[sqlx::test]
 #[ignore = "coordinator-owned M6-09 isolated hot-plan run"]
 async fn mobile006_metadata_hot_query_plans(pool: PgPool) {
-    use sha2::{Digest, Sha256};
-
-    let f = fixture(&pool).await;
-    for n in 0..48 {
-        let email = format!("mobile006-plan-member-{n}@fixture.test");
-        let user = crate::common::create_user(&pool, &email, "Plan Member", PW).await;
-        crate::common::add_membership_with(
-            &pool,
-            f.org,
-            user,
-            Role::Member,
-            MembershipStatus::Active,
-        )
-        .await;
-    }
-    assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM organization_membership WHERE organization_id=$1 AND status='active'").bind(f.org).fetch_one(&f.app).await.unwrap(), 50);
-    sqlx::query("INSERT INTO person(organization_id,first_name,stage_id,assigned_user_id) SELECT $1,'Mobile006 plan',p.stage_id,$2 FROM person p CROSS JOIN generate_series(1,24999) WHERE p.id=$3")
-        .bind(f.org).bind(f.actor).bind(f.person).execute(&f.app).await.unwrap();
-    let _tag: Uuid = sqlx::query_scalar("INSERT INTO tag(organization_id,created_by_user_id,name) VALUES($1,$2,'Mobile006 plan tag') RETURNING id")
-        .bind(f.org).bind(f.actor).fetch_one(&f.app).await.unwrap();
-    let _field: Uuid = sqlx::query_scalar("INSERT INTO custom_field(organization_id,label,field_type,position,created_by_user_id) VALUES($1,'Mobile006 plan field','text',1,$2) RETURNING id")
-        .bind(f.org).bind(f.actor).fetch_one(&f.app).await.unwrap();
-    sqlx::query("INSERT INTO person_tag(organization_id,person_id,tag_id,created_by_user_id) VALUES($1,$2,$3,$4)")
-        .bind(f.org).bind(f.person).bind(_tag).bind(f.actor).execute(&f.app).await.unwrap();
-    sqlx::query("INSERT INTO person_custom_field_value(organization_id,person_id,field_id,field_type,text_value,updated_by_user_id,origin,correlation_id) VALUES($1,$2,$3,'text','plan',$4,'mobile_session',gen_random_uuid())")
-        .bind(f.org).bind(f.person).bind(_field).bind(f.actor).execute(&f.app).await.unwrap();
-    let statements = [
-        ("membership", "SELECT role FROM organization_membership WHERE organization_id=$1 AND user_id=$2 AND status='active' FOR SHARE"),
-        ("person_token", "SELECT metadata_revision FROM person WHERE organization_id=$1 AND id=$2"),
-        ("catalog_token", "SELECT crm_mobile_metadata_catalog_revision($1)"),
-        ("tags", "SELECT t.id,t.name FROM person_tag pt JOIN tag t ON t.id=pt.tag_id AND t.organization_id=pt.organization_id WHERE pt.organization_id=$1 AND pt.person_id=$2 ORDER BY t.id LIMIT 101"),
-        ("values", "SELECT field_id,field_type,text_value,number_value,date_value,option_id,updated_at FROM person_custom_field_value WHERE organization_id=$1 AND person_id=$2 ORDER BY field_id LIMIT 101"),
-        ("catalog_tags", "SELECT id,name FROM tag WHERE organization_id=$1 ORDER BY id LIMIT 10001"),
-        ("catalog_fields", "SELECT id,label,field_type,position,archived_at FROM custom_field WHERE organization_id=$1 ORDER BY position,id LIMIT 10001"),
-        ("catalog_options", "SELECT id,field_id,label,position,archived_at FROM custom_field_option WHERE organization_id=$1 ORDER BY field_id,position,id LIMIT 10001"),
-    ];
-    let mut evidence = Vec::new();
-    for (name, sql) in statements {
-        let explain = format!("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) {sql}");
-        let plan: Value = match name {
-            "membership" => {
-                sqlx::query_scalar(&explain)
-                    .bind(f.org)
-                    .bind(f.actor)
-                    .fetch_one(&f.app)
-                    .await
-            }
-            "catalog_token" => {
-                sqlx::query_scalar(&explain)
-                    .bind(f.org)
-                    .fetch_one(&f.app)
-                    .await
-            }
-            _ => {
-                sqlx::query_scalar(&explain)
-                    .bind(f.org)
-                    .bind(f.person)
-                    .fetch_one(&f.app)
-                    .await
-            }
-        }
-        .unwrap();
-        let sha256: String = Sha256::digest(sql.as_bytes())
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect();
-        evidence.push(json!({"name":name,"sql":sql,"sha256":sha256,"plan":plan}));
-    }
-    println!(
-        "MOBILE006_HOT {}",
-        json!({"people":25000,"members":50,"plans":evidence})
-    );
+    metadata_plans::run(&pool, fixture(&pool).await).await;
 }
 
 #[sqlx::test]

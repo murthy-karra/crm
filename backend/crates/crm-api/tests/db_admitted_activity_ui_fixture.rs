@@ -10,10 +10,14 @@ use crm_api::{
 use serde_json::{json, Value};
 use sqlx::{postgres::PgConnectOptions, PgPool};
 use std::{io::Write, os::unix::fs::OpenOptionsExt, str::FromStr, sync::Arc};
-const UI_DIRECTORY: &str = "/private/tmp/crm-mobile006-010f4-thyhauvv/integration/activity-ui";
 #[tokio::test]
 #[ignore = "explicit synthetic API3107/browser5177 fixture"]
 async fn serve_admitted_activity_ui_fixture() {
+    let ui_directory = std::path::PathBuf::from(
+        std::env::var("CRM_ADMITTED_ACTIVITY_UI_DIR")
+            .expect("absolute owned UI evidence directory"),
+    );
+    assert!(ui_directory.is_absolute());
     assert_eq!(
         std::env::var("CRM_ADMITTED_ACTIVITY_UI_RUN").as_deref(),
         Ok("approved-synthetic")
@@ -53,18 +57,13 @@ async fn serve_admitted_activity_ui_fixture() {
         f.reader.set_records(Stream::TasksCompleted, vec![]);
         f.reader.set_raw(Stream::NoteDetail,0,200,serde_json::to_vec(&json!({"id":104,"personId":104,"body":"Frozen synthetic detail","createdById":3,"created":"2026-09-01T12:00:00Z","isHtml":false,"type":"Note"})).unwrap(),false);
         let report = execution::report(&f, parent, people).await;
-        std::fs::create_dir_all(
-            "/private/tmp/crm-mobile006-010f4-thyhauvv/integration/activity-ui",
-        )
-        .unwrap();
+        std::fs::create_dir_all(&ui_directory).unwrap();
         let mut out = std::fs::OpenOptions::new()
             .write(true)
             .create(true)
             .truncate(true)
             .mode(0o600)
-            .open(
-                "/private/tmp/crm-mobile006-010f4-thyhauvv/integration/activity-ui/ui-fixture.json",
-            )
+            .open(ui_directory.join("ui-fixture.json"))
             .unwrap();
         let email: String = sqlx::query_scalar("SELECT email FROM app_user WHERE id=$1")
             .bind(f.actor)
@@ -76,7 +75,7 @@ async fn serve_admitted_activity_ui_fixture() {
             "password":"synthetic import fixture password",
             "parent_import_id":parent,"admission_id":admission,"report_id":report,
             "api":"http://127.0.0.1:3107","web":"http://127.0.0.1:5177",
-            "worker_control":format!("{UI_DIRECTORY}/worker-units.json"),
+            "worker_control":ui_directory.join("worker-units.json"),
             "journey":"desktop then 390px: prepare qualified six streams, map all four roles, confirm, cancel, continue never-settled remainder, reconcile"})).unwrap()).unwrap();
         f.pool.close().await;
     }
@@ -87,8 +86,8 @@ async fn serve_admitted_activity_ui_fixture() {
     let mut state = AppState::for_tests(pool.clone(), &cfg, Publisher::recording())
         .with_migration_reader(retained_only_reader.clone());
     state.import_release = Some(Arc::new(ReleaseReadiness::for_tests()));
-    std::fs::create_dir_all(UI_DIRECTORY).unwrap();
-    let control = std::path::Path::new(UI_DIRECTORY).join("worker-units.json");
+    std::fs::create_dir_all(&ui_directory).unwrap();
+    let control = ui_directory.join("worker-units.json");
     if !control.exists() {
         std::fs::OpenOptions::new()
             .create_new(true)
@@ -101,7 +100,7 @@ async fn serve_admitted_activity_ui_fixture() {
     }
     let worker_state = state.clone();
     let worker = tokio::spawn(async move {
-        let stats = std::path::Path::new(UI_DIRECTORY).join("worker-stats.json");
+        let stats = ui_directory.join("worker-stats.json");
         let read = |path: &std::path::Path| {
             std::fs::read(path)
                 .ok()
@@ -125,7 +124,9 @@ async fn serve_admitted_activity_ui_fixture() {
             let failed = result.is_err();
             match result {
                 Ok(true) => completed += 1,
-                Ok(false) => continue,
+                // Consume the unused allowance when idle; a paused review must
+                // not keep polling PostgreSQL outside the coordinator slot.
+                Ok(false) => completed = allowed,
                 Err(_) => completed = allowed,
             }
             let value = json!({"completed_units":completed,"last_unit_failed":failed,

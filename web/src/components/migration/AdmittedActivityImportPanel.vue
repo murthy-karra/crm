@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { provideAdmittedActivityReaders } from './activityFamily'
 import { useQuery } from '@tanstack/vue-query'
 import Card from '../Card.vue'
 import ConfirmDialog from '../ConfirmDialog.vue'
@@ -17,6 +18,7 @@ import { buttonClasses, INPUT_CLASSES } from '../../lib/controls'
 import { describeApiError } from '../../lib/errors'
 import { formatBytes, snapshotLabel, snapshotTime } from './format'
 const props = defineProps<{ refreshWorkspace: () => Promise<void> }>()
+provideAdmittedActivityReaders()
 const access = useActivityAccess()
 const parentId = ref('')
 const admissionId = ref('')
@@ -153,7 +155,7 @@ function apply() {
   if (zoneDirty.value) body.source_timezone = zone.value.trim() || null
   void submit({ kind: 'replan', identity: access.identity.value, id: c.id, body })
 }
-function fresh() { const c = current.value; if (c?.actions.replan && !busy.value && !dirty.value) void submit({ kind: 'replan', identity: access.identity.value, id: c.id, body: { request_id: crypto.randomUUID(), expected_plan_id: c.latest_plan.id, choices: [] } }) }
+function fresh() { const c = current.value; if (sourceDirty.value && c && !c.confirmed_plan_id && c.actions.cancel && !busy.value) { cancelReview.value = true; return }; if (c?.actions.replan && !busy.value && !dirty.value) void submit({ kind: 'replan', identity: access.identity.value, id: c.id, body: { request_id: crypto.randomUUID(), expected_plan_id: c.latest_plan.id, choices: [] } }) }
 function reviewConfirm() { const c = current.value; const p = c?.latest_plan; if (!canConfirm.value || !p || !c) return; confirmation.value = { request_id: crypto.randomUUID(), plan_id: p.id, expected_revision: c.revision, acknowledge_held: p.counts.held_count, acknowledge_source_only: p.counts.source_only_count } }
 function confirm() { if (current.value && confirmation.value && canConfirm.value) void submit({ kind: 'confirm', identity: access.identity.value, id: current.value.id, body: confirmation.value }) }
 function resume() { if (current.value?.actions.retry && !busy.value) void submit({ kind: 'retry', identity: access.identity.value, id: current.value.id, body: { request_id: crypto.randomUUID(), expected_revision: current.value.revision } }) }
@@ -354,7 +356,7 @@ function remainder() { if (current.value?.actions.remainder && !busy.value) void
           This step requires a completed People import, a completed or cancelled admission with settled People, and a sealed core-change report whose People, users, notes, note detail, open-task and completed-task streams completed.
         </p>
         <button
-          v-if="!selectedId"
+          v-if="!selectedId || (current?.state === 'cancelled' && !current.confirmed_plan_id)"
           type="button"
           :class="buttonClasses('primary')"
           :disabled="!canCreate"
@@ -440,7 +442,7 @@ function remainder() { if (current.value?.actions.remainder && !busy.value) void
           </section>
         </div>
         <p class="mt-3 text-small">
-          {{ current.counts.held_count }} held records · {{ current.counts.source_only_count }} source-only components · {{ current.counts.invalid_occurrences }} invalid occurrences · {{ current.counts.unavailable_bodies }} unavailable bodies.
+          {{ current.counts.held_count }} held records · {{ current.counts.source_only_count }} source-only components · {{ current.counts.excluded_count ?? '0' }} excluded identities · {{ current.counts.invalid_occurrences }} invalid occurrences · {{ current.counts.unavailable_bodies }} unavailable bodies.
         </p>
         <p class="mt-1 text-small text-text-muted">
           Source-only components are counted across distinct retained observations. Identical observations in one representation collapse; list and detail may be complementary. These are not unique attachment or reply totals.
@@ -456,7 +458,7 @@ function remainder() { if (current.value?.actions.remainder && !busy.value) void
             :disabled="busy || dirty"
             @click="fresh"
           >
-            Prepare fresh activity plan
+            {{ sourceDirty ? 'Cancel unconfirmed plan to replace source' : 'Prepare fresh activity plan' }}
           </button><button
             v-if="current.actions.retry"
             type="button"

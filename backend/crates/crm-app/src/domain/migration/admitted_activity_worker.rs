@@ -147,7 +147,11 @@ async fn run_once_inner(pool: &PgPool, key: &RawPayloadKey) -> Result<bool, Migr
         return Ok(true);
     }
     let p = s::plan(&mut tx, org, id, j.plan).await?;
-    let result = if r.get::<Option<Uuid>, _>("confirmed_plan_id").is_some() {
+    let result = if r.get::<String, _>("phase") == "preparation"
+        && r.get::<Option<Uuid>, _>("predecessor_import_id").is_some()
+    {
+        super::admitted_activity_remainder::copy_unit(&mut tx, key, &j.ctx(), &r, &p, j.token).await
+    } else if r.get::<Option<Uuid>, _>("confirmed_plan_id").is_some() {
         execute(&mut tx, key, &j, &r, &p).await
     } else {
         prepare(&mut tx, key, &j, &p).await
@@ -388,13 +392,67 @@ fn request_fingerprint(
     ))
 }
 
+fn extract_page(stream: Stream, raw: &[u8]) -> Result<Vec<Record>, snapshot_source::ParseError> {
+    if stream != Stream::People {
+        return source::extract_page(stream, raw);
+    }
+    Ok(super::import_source::extract_page(stream, raw)?
+        .into_iter()
+        .map(|p| Record {
+            person_id: p.source_id.clone(),
+            source_id: p.source_id,
+            canonical: p.canonical,
+            stream,
+            roles: vec![],
+            source_type: None,
+            reasons: p.reasons,
+            source_only: BTreeMap::new(),
+            provenance: p.provenance,
+        })
+        .collect())
+}
+
+// The complete stream is qualified once in capture(). These point lookups use
+// its plan/family/source index and retain every observation when checking variants.
+async fn qualified_person_source(
+    conn: &mut PgConnection,
+    key: &RawPayloadKey,
+    j: &Job,
+    sid: &str,
+) -> Result<bool, MigrationError> {
+    let rows=sqlx::query("SELECT * FROM migration_admitted_activity_source WHERE plan_id=$1 AND organization_id=$2 AND family='people' AND source_id=$3 ORDER BY id LIMIT 101").bind(j.plan).bind(j.org.0).bind(sid).fetch_all(&mut *conn).await?;
+    if rows.is_empty() || rows.len() > 100 {
+        return Ok(false);
+    }
+    let first: Vec<u8> = rows[0].get("semantic_hmac");
+    for row in rows {
+        let data: CapturedRecord = s::open(
+            key,
+            j.org,
+            j.snapshot,
+            j.plan,
+            row.get("id"),
+            "source",
+            row.get("nonce"),
+            row.get("ciphertext"),
+        )?;
+        if row.get::<Vec<u8>, _>("semantic_hmac") != first
+            || !data.capture_accepted
+            || !data.record.reasons.is_empty()
+        {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
 async fn capture(
     conn: &mut PgConnection,
     key: &RawPayloadKey,
     j: &Job,
     p: &sqlx::postgres::PgRow,
 ) -> Result<(), MigrationError> {
-    let c=sqlx::query("SELECT * FROM migration_snapshot_capture WHERE snapshot_id=$1 AND organization_id=$2 AND sequence>$3 AND sequence<=$4 AND stream IN ('notes','note_detail','tasks_open','tasks_completed','users') ORDER BY sequence LIMIT 1").bind(j.snapshot).bind(j.org.0).bind(p.get::<i64,_>("checkpoint_capture")).bind(j.boundary).fetch_optional(&mut *conn).await?;
+    let c=sqlx::query("SELECT * FROM migration_snapshot_capture WHERE snapshot_id=$1 AND organization_id=$2 AND sequence>$3 AND sequence<=$4 AND stream IN ('people','notes','note_detail','tasks_open','tasks_completed','users') ORDER BY sequence LIMIT 1").bind(j.snapshot).bind(j.org.0).bind(p.get::<i64,_>("checkpoint_capture")).bind(j.boundary).fetch_optional(&mut *conn).await?;
     let Some(c) = c else {
         return phase(conn, j, "manifests").await;
     };
@@ -470,8 +528,7 @@ async fn capture(
         if c.get::<bool, _>("truncated") || !(200..300).contains(&c.get::<i32, _>("http_status")) {
             return Err(MigrationError::SourceNotEligible);
         }
-        let parsed =
-            source::extract_page(stream, &raw).map_err(|_| MigrationError::SourceNotEligible)?;
+        let parsed = extract_page(stream, &raw).map_err(|_| MigrationError::SourceNotEligible)?;
         if parsed.len() != linked.len() || linked.len() > 100 {
             return Err(MigrationError::SourceNotEligible);
         }
@@ -575,7 +632,7 @@ async fn insert_source(
         + item.stream.as_str().len() as i64
         + item.stream.representation().len() as i64
         + 32;
-    sqlx::query("INSERT INTO migration_admitted_activity_source(id,plan_id,import_id,snapshot_id,organization_id,family,source_id,record_id,capture_id,capture_sequence,ordinal,stream,representation,semantic_hmac,negative,nonce,ciphertext,source_only_counts) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)").bind(id).bind(j.plan).bind(j.id).bind(j.snapshot).bind(j.org.0).bind(item.stream.family().as_str()).bind(&item.source_id).bind(record_id).bind(c.get::<Uuid,_>("id")).bind(c.get::<i64,_>("sequence")).bind(ordinal).bind(item.stream.as_str()).bind(item.stream.representation()).bind(semantic).bind(negative).bind(a.nonce.as_slice()).bind(a.ciphertext).bind(json!(counters)).execute(conn).await?;
+    sqlx::query("INSERT INTO migration_admitted_activity_source(id,plan_id,import_id,snapshot_id,organization_id,family,source_id,record_id,capture_id,capture_sequence,ordinal,stream,representation,semantic_hmac,negative,nonce,ciphertext,source_only_counts,source_person_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)").bind(id).bind(j.plan).bind(j.id).bind(j.snapshot).bind(j.org.0).bind(item.stream.family().as_str()).bind(&item.source_id).bind(record_id).bind(c.get::<Uuid,_>("id")).bind(c.get::<i64,_>("sequence")).bind(ordinal).bind(item.stream.as_str()).bind(item.stream.representation()).bind(semantic).bind(negative).bind(a.nonce.as_slice()).bind(a.ciphertext).bind(json!(counters)).bind(&item.person_id).execute(conn).await?;
     Ok(size)
 }
 async fn parent_person(
@@ -752,11 +809,22 @@ async fn manifest(
     if parent.is_none() {
         m::mark(&mut reasons, "parent_person_unavailable")
     }
+    if let Some(sid) = record.person_id.as_deref() {
+        if !qualified_person_source(conn, key, j, sid).await? {
+            m::mark(&mut reasons, "selected_person_source_unqualified");
+        }
+    }
+    let in_cohort = if let Some(sid) = sid.as_deref() {
+        sqlx::query_scalar::<_,bool>("SELECT EXISTS(SELECT 1 FROM migration_admitted_activity_source s JOIN migration_people_admission_result ar ON ar.organization_id=s.organization_id AND ar.source_id=s.source_person_id AND ar.admission_id=$5 AND ar.disposition='settled' WHERE s.plan_id=$1 AND s.organization_id=$2 AND s.family=$3 AND s.source_id=$4)").bind(j.plan).bind(j.org.0).bind(&family).bind(sid).bind(j.admission).fetch_one(&mut *conn).await?
+    } else {
+        false
+    };
+
     let mut author = None;
     let mut creator = None;
     let mut assignee = None;
     let mut native_kind = None;
-    for role in &record.roles {
+    for role in record.roles.iter().filter(|_| in_cohort) {
         let (choice, size) = mapping(conn, key, j, &role.role, &role.source_id).await?;
         added += size;
         let target = match &choice {
@@ -784,7 +852,11 @@ async fn manifest(
             _ => return Err(MigrationError::SourceNotEligible),
         }
     }
-    if let Some(t) = record.source_type.as_ref().filter(|_| kind == "task") {
+    if let Some(t) = record
+        .source_type
+        .as_ref()
+        .filter(|_| kind == "task" && in_cohort)
+    {
         let (choice, size) = mapping(conn, key, j, "task_kind", t).await?;
         added += size;
         match choice {
@@ -844,6 +916,19 @@ async fn manifest(
             }
         }
     }
+    if !in_cohort {
+        disposition = "excluded";
+        target_id = None;
+        m::mark(
+            &mut data.reasons,
+            if sid.is_none() {
+                "invalid_activity_occurrence"
+            } else {
+                "outside_admission_cohort"
+            },
+        );
+        data.preview.reasons = data.reasons.clone();
+    }
     let id = Uuid::new_v4();
     let a = s::seal(key, j.org, j.snapshot, j.plan, id, "manifest", &data)?;
     let bound = (s::sealed_bytes(&a) * 2 + 16384).min(s::UNIT);
@@ -853,7 +938,11 @@ async fn manifest(
         + native_key.as_ref().map_or(0, |v| v.len() as i64);
     sqlx::query("INSERT INTO migration_admitted_activity_manifest(id,plan_id,import_id,organization_id,kind,source_id,source_row_id,source_person_id,admission_result_id,person_id,target_id,native_source_key,author_user_id,creator_user_id,assignee_user_id,disposition,added_byte_bound,nonce,ciphertext) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)").bind(id).bind(j.plan).bind(j.id).bind(j.org.0).bind(kind).bind(&sid).bind(chosen.get::<Uuid,_>("id")).bind(&data.record.person_id).bind(parent.map(|v|v.0)).bind(parent.map(|v|v.1)).bind(target_id).bind(&native_key).bind(author).bind(creator).bind(assignee).bind(disposition).bind(bound).bind(a.nonce.as_slice()).bind(a.ciphertext).execute(&mut *conn).await?;
     let mut counts = Counts::load(p.get("counts"))?;
-    counts.planned(kind, disposition, source_only_count);
+    if disposition != "excluded" {
+        counts.planned(kind, disposition, source_only_count);
+    } else if sid.is_some() {
+        counts.excluded_count += 1;
+    }
     if sid.is_none() {
         counts.invalid_occurrences += 1
     }
@@ -1072,7 +1161,7 @@ async fn execute(
     r: &sqlx::postgres::PgRow,
     p: &sqlx::postgres::PgRow,
 ) -> Result<(), MigrationError> {
-    let row=sqlx::query("SELECT * FROM migration_admitted_activity_manifest WHERE plan_id=$1 AND organization_id=$2 AND id>$3 ORDER BY id LIMIT 1").bind(j.plan).bind(j.org.0).bind(r.get::<Option<Uuid>,_>("checkpoint_id").unwrap_or(Uuid::nil())).fetch_optional(&mut *conn).await?;
+    let row=sqlx::query("SELECT * FROM migration_admitted_activity_manifest WHERE plan_id=$1 AND organization_id=$2 AND id>$3 AND disposition<>'excluded' ORDER BY id LIMIT 1").bind(j.plan).bind(j.org.0).bind(r.get::<Option<Uuid>,_>("checkpoint_id").unwrap_or(Uuid::nil())).fetch_optional(&mut *conn).await?;
     let Some(row) = row else {
         sqlx::query("UPDATE migration_admitted_activity_import SET state='completed',phase='complete',completed_at=now(),updated_at=now(),revision=revision+1,cancel_reservation_token=NULL WHERE id=$1 AND organization_id=$2").bind(j.id).bind(j.org.0).execute(&mut *conn).await?;
         s::release(conn, j.org, j.id, "cancel", 0).await?;

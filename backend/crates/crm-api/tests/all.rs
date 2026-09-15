@@ -383,3 +383,6 @@ mod db_person_metadata;
 
 #[cfg(feature = "perf-harness")]
 mod db_admitted_metadata_ui_fixture;
+
+#[cfg(feature = "perf-harness")]
+mod db_admitted_activity_plans;

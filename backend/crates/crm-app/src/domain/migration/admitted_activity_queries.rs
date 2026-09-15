@@ -40,9 +40,12 @@ fn validate(q: &ActivityPage, endpoint: &str) -> Result<i64, MigrationError> {
         &["note", "task"][..]
     };
     if q.kind.as_deref().is_some_and(|v| !kinds.contains(&v))
-        || q.disposition
-            .as_deref()
-            .is_some_and(|v| !matches!(v, "eligible" | "already_present" | "held" | "applied"))
+        || q.disposition.as_deref().is_some_and(|v| {
+            !matches!(
+                v,
+                "eligible" | "already_present" | "held" | "applied" | "excluded"
+            )
+        })
         || q.issue.as_deref().is_some_and(|v| {
             v.len() > 100 || !v.bytes().all(|c| c.is_ascii_lowercase() || c == b'_')
         })

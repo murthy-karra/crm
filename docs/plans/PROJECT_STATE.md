@@ -1,6 +1,6 @@
 # Project state
 
-Updated: 2026-09-15 — Mobile006 / 010f4 deployed; Mobile007 / 010d3 implemented and verified.
+Updated: 2026-09-15 — Mobile007 / 010d3 deployed to shared development.
 Current status and live residuals only. [History](PROJECT_HISTORY.md) preserves
 completed chronology. Decisions remain authoritative; use the
 [reading index](../decisions/DECISION_INDEX.md).
@@ -34,8 +34,9 @@ Mobile004/010e4 and preceding slices remain documented in history.
 
 ## Current branch and retained resources
 
-`main` contains the prior release. Mobile007 / 010d3 integration is on
-`codex/mobile007-history010d3`, with private verification services and build outputs.
+`main` contains the Mobile007 / 010d3 release. Its runtime identity and smoke
+checks are recorded in [the release record](../tasks/MOBILE_007_010d3_RELEASE.md).
+Private verification services and build outputs remain retained.
 Three previously completed writer worktrees and five milestone branches
 were removed after preserving all lane histories and the exact dirty migration
 patch in a verified private Git bundle. QA databases, installed native stores,
@@ -56,9 +57,8 @@ activation and complete migration fidelity require their own specified scope.
 ## Last accepted decision
 
 **D-086:** accepts Mobile007 / 010d3 contracts and implementation with isolated
-synthetic verification. Complete the required planning review, then implement and
-verify both tracks under the coordinated ownership plan. Publication/deployment
-and customer-facing operational work remain separate.
+synthetic verification. The implementation, publication and shared-development
+deployment are complete; customer-facing operational work remains separate.
 
 **D-085:** authorizes planning admitted-People history with the user-selected
 mobile companion, online Find and save People. Both detailed draft specifications,
@@ -180,8 +180,8 @@ linked verification records; they are not claims about present runtime health.
 
 ## Next recommended action
 
-Release the verified [Mobile007 / 010d3 pair](MOBILE_007_010d3_PLAN.md) after
-publication/deployment authorization. [Final evidence](../tasks/MOBILE_007_010d3_FINAL_VERIFICATION.md)
+Use the [Mobile007 / 010d3 release record](../tasks/MOBILE_007_010d3_RELEASE.md)
+for shared-development runtime identity and recovery. [Final evidence](../tasks/MOBILE_007_010d3_FINAL_VERIFICATION.md)
 records the passing implementation gates and retained corrections.
 The [family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md) retains the sequential
 migration scope. Native calling follows the agreed progression. Physical-phone/design/live-source work remains deferred;

@@ -701,6 +701,7 @@ struct MetadataComposerView: View {
     @State private var clears: Set<String> = []
     @State private var status = "Not yet saved"
     @State private var failed = false
+    @State private var excludedConflictActions = Set<Int>()
     init(initial: Draft) {
         _draft = State(initialValue: initial)
         let baseline = initial.baseline ?? .object([:])
@@ -750,7 +751,19 @@ struct MetadataComposerView: View {
                     metadataComparison("Your proposed changes", draft.proposal, identifier: "metadataComparison_proposed")
                     metadataComparison("Current server values", draft.current, identifier: "metadataComparison_current")
                     Button("Fetch current values") { Task { do { draft = try await model.requalifyMetadata(draft); status = "Current values fetched. Create the revised proposal when the sealed catalog revision matches."; failed = false } catch LocalError.invalidProtocol { status = "Refresh the workspace to download the catalog matching these current values, then fetch again."; failed = false } catch { fail(error) } } }
-                    Button("Prepare revised proposal against current values") { do { let revised = try model.revisedMetadataDraft(draft); draft = revised; restoreControls(revised); status = "Revised proposal saved on device"; failed = false } catch { fail(error) } }
+                    let incompatible = (try? model.invalidMetadataActionIndexes(draft)) ?? []
+                    if !incompatible.isEmpty {
+                        Text("Some saved actions no longer target the refreshed catalog. Choose each action to exclude; the original conflict remains protected until a valid replacement saves.").font(.caption).foregroundStyle(.orange)
+                        ForEach(Array(incompatible).sorted(), id: \.self) { index in
+                            Toggle("Exclude: \(metadataActionLabel(draft.proposal?["actions"].list[index] ?? .null))", isOn: conflictExclusionBinding(index))
+                                .accessibilityIdentifier("excludeMetadataAction_\(index)")
+                        }
+                    }
+                    Button("Prepare revised proposal against current values") { do {
+                        let all = draft.proposal?["actions"].list.indices ?? 0..<0
+                        let revised = try model.revisedMetadataDraft(draft, retaining: Set(all).subtracting(excludedConflictActions))
+                        draft = revised; restoreControls(revised); status = "Revised proposal saved on device"; failed = false
+                    } catch { fail(error) } }.disabled(!incompatible.isSubset(of: excludedConflictActions))
                     Button("Use current values and discard my saved proposal", role: .destructive) { do { try model.resolveUsingCurrent(draft); dismiss() } catch { fail(error) } }
                 }
             } else {
@@ -819,6 +832,26 @@ struct MetadataComposerView: View {
             }
         }
         return lines.joined(separator: "\n")
+    }
+    func metadataActionLabel(_ action: JSON) -> String {
+        let catalog: JSON
+        if let current = draft.current, !current["catalog_tags"].list.isEmpty { catalog = current }
+        else { catalog = draft.baseline ?? .null }
+        let tag = catalog["catalog_tags"].list.first(where: { $0["id"].text == action["tag_id"].text })?["name"].text ?? action["tag_id"].text
+        let field = catalog["fields"].list.first(where: { $0["id"].text == action["field_id"].text })?["label"].text ?? action["field_id"].text
+        switch action["kind"].text {
+        case "add_tag": return "add tag \(tag)"
+        case "remove_tag": return "remove tag \(tag)"
+        case "clear_field": return "clear \(field)"
+        case "set_field": return "set \(field)"
+        default: return "invalid saved action"
+        }
+    }
+    func conflictExclusionBinding(_ index: Int) -> Binding<Bool> {
+        Binding(get: { excludedConflictActions.contains(index) }, set: { selected in
+            if selected { excludedConflictActions.insert(index) }
+            else { excludedConflictActions.remove(index) }
+        })
     }
     func restoreControls(_ source: Draft) {
         let base = source.baseline ?? .object([:]); let values = MetadataEditorProjection.valueMap(base)

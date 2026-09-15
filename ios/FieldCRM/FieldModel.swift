@@ -488,7 +488,14 @@ struct StageProposal: Identifiable {
         return try save(Draft(id: UUID().uuidString.lowercased(), person: person, kind: "update_person_metadata", revision: 0,
                               expectedRevision: metadata, expectedCatalogRevision: catalog, baseline: baseline, proposal: .object(["actions": .array([])])))
     }
-    func revisedMetadataDraft(_ draft: Draft) throws -> Draft {
+    func invalidMetadataActionIndexes(_ draft: Draft) throws -> Set<Int> {
+        guard draft.isMetadata, let current = draft.current, let store,
+              let proposal = draft.proposal,
+              let qualified = try store.editableMetadata(person: draft.person),
+              qualified["catalog_revision"].text == current["catalog_revision"].text else { throw LocalError.invalidProtocol }
+        return store.invalidMetadataActionIndexes(proposal["actions"].list, baseline: qualified)
+    }
+    func revisedMetadataDraft(_ draft: Draft, retaining actionIndexes: Set<Int>? = nil) throws -> Draft {
         guard draft.isMetadata, let current = draft.current, let store else { throw LocalError.invalidProtocol }
         let metadata = current["metadata_revision"].text, catalog = current["catalog_revision"].text
         guard (try? revision(metadata)) != nil, (try? revision(catalog)) != nil else { throw LocalError.invalidProtocol }
@@ -501,8 +508,10 @@ struct StageProposal: Identifiable {
               case .object(let currentValues) = current else { throw LocalError.invalidProtocol }
         var merged = currentValues
         for key in ["catalog_tags", "fields", "options"] { merged[key] = qualified[key] }
+        let originalActions = draft.proposal?["actions"].list ?? []
+        let retainedActions = actionIndexes.map { indexes in originalActions.enumerated().compactMap { indexes.contains($0.offset) ? $0.element : nil } } ?? originalActions
         var next = Draft(id: UUID().uuidString.lowercased(), person: draft.person, kind: "update_person_metadata", revision: 0,
-                         expectedRevision: metadata, expectedCatalogRevision: catalog, baseline: .object(merged), proposal: draft.proposal, mode: "editing", predecessor: draft.predecessor)
+                         expectedRevision: metadata, expectedCatalogRevision: catalog, baseline: .object(merged), proposal: .object(["actions": .array(retainedActions)]), mode: "editing", predecessor: draft.predecessor)
         // All validation happens before the transaction that saves the
         // replacement and supersedes the old conflict.
         try store.validateMetadataProposal(next)

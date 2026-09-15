@@ -127,6 +127,7 @@ import XCTest
         XCTAssertEqual(revised.proposal, draft.proposal)
         XCTAssertEqual(try XCTUnwrap(store.queue().first { $0.id == predecessor.id }).status, "superseded")
         XCTAssertEqual(try XCTUnwrap(store.drafts().first { $0.id == revised.id }).revision, 1)
+        XCTAssertEqual(try store.drafts().filter { $0.isMetadata }.count, 1, "The predecessor remains protected until this transaction succeeds, then retires with it")
     }
     func testMobile006CatalogChangedConflictRefusesRevisionUntilMatchingCatalogIsSealed() async throws {
         let (model, _, _, boot, store) = try await setupModel()
@@ -149,6 +150,20 @@ import XCTest
         var duplicate = draft; duplicate.revision = 0; duplicate.mode = "editing"; duplicate.predecessor = predecessor.id
         XCTAssertThrowsError(try store.saveMetadataReplacement(duplicate, superseding: predecessor.id))
         XCTAssertEqual(try XCTUnwrap(store.queue().first { $0.id == predecessor.id }).status, "conflict")
+        XCTAssertEqual(try store.drafts().filter { $0.isMetadata }.count, 1)
+    }
+    func testMobile006DeletedConflictActionRequiresExplicitExclusionBeforeReplacement() async throws {
+        let (model, _, _, boot, store) = try await setupModel()
+        let person = try XCTUnwrap(store.activePeople().first?.person)
+        let fresh = try installQualifiedMetadataWorkspace(store, boot, person: person)
+        let deletedField = UUID().uuidString.lowercased(), deletedOption = UUID().uuidString.lowercased()
+        let (draft, predecessor) = try conflictedMetadataDraft(store, person: person, field: deletedField, tag: fresh.tag, option: deletedOption)
+        XCTAssertEqual(try model.invalidMetadataActionIndexes(draft), Set([1]))
+        XCTAssertThrowsError(try model.revisedMetadataDraft(draft), "The app must not silently drop a deleted target")
+        let revised = try model.revisedMetadataDraft(draft, retaining: Set([0]))
+        XCTAssertEqual(revised.proposal?["actions"].list.count, 1)
+        XCTAssertEqual(revised.proposal?["actions"].list.first?["kind"].text, "add_tag")
+        XCTAssertEqual(try XCTUnwrap(store.queue().first { $0.id == predecessor.id }).status, "superseded")
         XCTAssertEqual(try store.drafts().filter { $0.isMetadata }.count, 1)
     }
     func profilePage(_ boot: Bootstrap, _ person: String, _ items: [JSON], next: String?, broad: String = "9") -> JSON {

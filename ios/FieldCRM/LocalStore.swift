@@ -156,9 +156,12 @@ final class LocalStore {
             guard try rows("SELECT 1 FROM drafts WHERE id=?", [saved.id]).isEmpty else { throw LocalError.staleDraft }
             guard let conflicted = try queue().first(where: { $0.id == predecessor }),
                   conflicted.isMetadata, conflicted.envelope.person == saved.person,
-                  conflicted.status == "conflict" else { throw LocalError.staleDraft }
+                  conflicted.status == "conflict",
+                  let original = try draftForOperation(predecessor), original.isMetadata,
+                  original.person == saved.person else { throw LocalError.staleDraft }
             try run("INSERT INTO drafts(id,body) VALUES(?,?)", [saved.id, body])
             try run("UPDATE operations SET status='superseded',error='superseded' WHERE id=? AND status='conflict'", [predecessor])
+            try run("DELETE FROM drafts WHERE id=?", [original.id])
             return saved
         }
     }
@@ -172,6 +175,15 @@ final class LocalStore {
         let actions = proposal["actions"].list
         guard !actions.isEmpty, actions.count <= 50 else { throw LocalError.invalidInput }
         try validateMetadataActions(actions, baseline: draft.baseline)
+    }
+    /// An action may become unusable after a catalog change (for example, a
+    /// deleted tag or archived choice option). Return those rows for an
+    /// explicit user decision; this method never removes or rewrites them.
+    func invalidMetadataActionIndexes(_ actions: [JSON], baseline: JSON?) -> Set<Int> {
+        Set(actions.enumerated().compactMap { index, action in
+            do { try validateMetadataActions([action], baseline: baseline); return nil }
+            catch { return index }
+        })
     }
     @discardableResult func submit(_ draft: Draft) throws -> Envelope {
         var payload: [String: JSON] = ["person_id": .s(draft.person)]
@@ -277,14 +289,16 @@ final class LocalStore {
             switch kind {
             case "add_tag", "remove_tag":
                 guard let id = object["tag_id"]?.text, UUID(uuidString: id) != nil,
-                      object.count == 2, targets.insert("tag:" + id).inserted else { throw LocalError.invalidInput }
+                      object.count == 2, targets.insert("tag:" + id).inserted,
+                      (baseline?["catalog_tags"].list ?? []).contains(where: { $0["id"].text == id }) else { throw LocalError.invalidInput }
             case "set_field":
                 guard let id = object["field_id"]?.text, UUID(uuidString: id) != nil,
                       object.count == 3, targets.insert("field:" + id).inserted else { throw LocalError.invalidInput }
                 try validateMetadataValue(object["value"] ?? .null, fieldID: id, baseline: baseline)
             case "clear_field":
                 guard let id = object["field_id"]?.text, UUID(uuidString: id) != nil,
-                      object.count == 2, targets.insert("field:" + id).inserted else { throw LocalError.invalidInput }
+                      object.count == 2, targets.insert("field:" + id).inserted,
+                      (baseline?["fields"].list ?? []).contains(where: { $0["id"].text == id }) else { throw LocalError.invalidInput }
             default: throw LocalError.invalidInput
             }
         }

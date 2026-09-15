@@ -71,6 +71,7 @@ describe('admitted history workflow', () => {
     await flushPromises()
     expect(JSON.parse(String(writes()[0]![1]?.body))).toEqual({ request_id: 'request-uuid', admission_id: 'admission', history_capture_id: 'capture' })
     expect(wrapper.text()).toContain('Coverage:')
+    expect(wrapper.text()).not.toContain('Access or selection changed while this request was pending.')
   })
 
   it('replays the same lost confirmation request after a terminal readback', async () => {
@@ -87,5 +88,36 @@ describe('admitted history workflow', () => {
     await flushPromises()
     expect(writes('/confirm')).toHaveLength(2)
     expect(writes('/confirm')[0]![1]?.body).toBe(writes('/confirm')[1]![1]?.body)
+  })
+
+  it('shows the review summary while keeping rows unavailable during classification', async () => {
+    const { wrapper } = await setup({ handle: url => {
+      if (url === `${ROOT}/history-root`) return { ...root, latest_plan: { ...root.latest_plan, state: 'building' } }
+    } })
+    expect(wrapper.text()).toContain('Unique planned')
+    expect(wrapper.text()).toContain('Coverage: review notes')
+    expect(wrapper.text()).toContain('Review rows become available after preparation and classification finish.')
+    expect(api.mock.calls.some(([url]) => url.includes('/plans/plan/manifests'))).toBe(false)
+  })
+
+  it('passes family and outcome filters and keeps bounded next/back cursors', async () => {
+    const calls: string[] = []
+    const { wrapper } = await setup({ handle: (url, init) => {
+      if (url.startsWith(`${ROOT}/history-root/plans/plan/manifests?`)) {
+        calls.push(url)
+        return { manifests: [{ id: 'manifest-1', position: '1', family: 'events', disposition: 'held', reason: 'target_erased', person_id: null, source_created_at: null, metadata: null }], next_cursor: url.includes('cursor=next-cursor') ? null : 'next-cursor' }
+      }
+      if (url === `${ROOT}/history-root` && init?.method !== 'POST') return root
+    } })
+    const selects = wrapper.findAll('select')
+    await selects[3]!.setValue('events')
+    await selects[4]!.setValue('held')
+    await flushPromises()
+    expect(calls.some(url => url.includes('family=events') && url.includes('disposition=held'))).toBe(true)
+    expect(button('Next page').disabled).toBe(false)
+    button('Next page').click()
+    await flushPromises()
+    expect(calls.at(-1)).toContain('cursor=next-cursor')
+    expect(button('Previous page').disabled).toBe(false)
   })
 })

@@ -1,3 +1,4 @@
+pub mod discovery;
 pub mod filter;
 #[cfg(feature = "test-support")]
 pub mod filter_test_support;

@@ -9,6 +9,19 @@ Use [PROJECT_STATE.md](PROJECT_STATE.md) for current work, live residuals and ne
 actions, and the [decision log](../decisions/DECISION_LOG.md) for authority.
 Per-slice verification/release records remain the detailed evidence.
 
+## Mobile007 / 010d3 implementation — 2026-09-15
+
+D-086's Find and Save People and admitted-People history tracks are implemented
+and verified on `codex/mobile007-history010d3`. Evidence includes all 1,111 original
+DB acceptance cases across the documented initial run and targeted recovery,
+two additional migration cases, 1,303 Web tests, real desktop/390px migration
+journeys, native discovery/offline/process-restart journeys, actual installed
+Mobile006 upgrades, and complete D-050 query/paired Person/Today gates.
+
+[Integrated verification](../tasks/MOBILE_007_010d3_FINAL_VERIFICATION.md) is the
+authoritative acceptance record, including source/binary identity and retained
+failures. No publication or deployment is included in this implementation milestone.
+
 ## Mobile006 / 010f4 shared-development release — 2026-09-15
 
 D-084's authorized release merged/pushed main (`d11fccf`), then fixed the new

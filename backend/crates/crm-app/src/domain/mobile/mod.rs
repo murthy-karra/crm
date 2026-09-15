@@ -4,11 +4,13 @@
 mod generations;
 pub(crate) mod metadata;
 mod operations;
+mod search;
 pub use generations::{
     cleanup_once, component, create_generation, manifest, metadata_catalog, seal, stages,
     ReconciliationRequest,
 };
 pub use operations::{execute, lookup_receipt, Operation, Receipt};
+pub use search::{search_people, SearchPeopleRequest, SearchPeopleResponse};
 
 use crate::{auth::AuthContext, domain::admin::Role};
 use base64::{
@@ -387,7 +389,7 @@ pub async fn bootstrap(
     let expiry: DateTime<Utc> = row.get("offline_access_expires_at");
     tx.commit().await?;
     Ok(
-        json!({"protocol":PROTOCOL,"context_id":id,"installation_id":request.installation_id,"actor_user_id":auth.actor_user_id,"organization_id":auth.active_organization_id,"workspace_revision":revision.to_string(),"authorized_at":now,"offline_access_expires_at":expiry,"server_time":now,"capabilities":["add_note","create_task","complete_task","reconciliation","edit_note","update_task","note_revisions","log_contact_attempt","change_person_stage","stage_revisions","stage_catalog","update_person_details","details_revisions","update_person_metadata","metadata_revisions","metadata_catalog"],"bounds":{"selected_people":MAX_PEOPLE,"manifest_page":250,"component_rows":100,"component_bytes":PAGE_BYTES,"operation_bytes":131072,"concurrent_uploads":1,"concurrent_downloads":2,"generation_seconds":1800,"stage_catalog_page":100,"metadata_catalog_page":100,"metadata_person_tags":100,"metadata_person_values":100,"metadata_current_bytes":CURRENT_RECORD_BYTES}}),
+        json!({"protocol":PROTOCOL,"context_id":id,"installation_id":request.installation_id,"actor_user_id":auth.actor_user_id,"organization_id":auth.active_organization_id,"workspace_revision":revision.to_string(),"authorized_at":now,"offline_access_expires_at":expiry,"server_time":now,"capabilities":["add_note","create_task","complete_task","reconciliation","edit_note","update_task","note_revisions","log_contact_attempt","change_person_stage","stage_revisions","stage_catalog","update_person_details","details_revisions","update_person_metadata","metadata_revisions","metadata_catalog","people_search"],"bounds":{"selected_people":MAX_PEOPLE,"manifest_page":250,"component_rows":100,"component_bytes":PAGE_BYTES,"operation_bytes":131072,"concurrent_uploads":1,"concurrent_downloads":2,"generation_seconds":1800,"stage_catalog_page":100,"metadata_catalog_page":100,"metadata_person_tags":100,"metadata_person_values":100,"metadata_current_bytes":CURRENT_RECORD_BYTES}}),
     )
 }
 

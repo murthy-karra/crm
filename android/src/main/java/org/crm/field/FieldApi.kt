@@ -135,6 +135,7 @@ class FieldApi(
             "/api/mobile/v1/bootstrap",
             body = json("protocol" to PROTOCOL, "installation_id" to installation).toString(),
         )
+    suspend fun searchPeople(binding: Binding, term: String): JSONObject { val trimmed = term.trim(); require(trimmed.isNotEmpty() && trimmed.codePointCount(0, trimmed.length) <= 200 && trimmed.toByteArray().size <= 800); val result = call("POST", "/api/mobile/v1/people/search", binding.context, json("term" to trimmed).toString(), maximumBytes = 131_072); if (result.optString("context_id") != binding.context) throw ProtocolFailure(); val items = result.optJSONArray("items") ?: throw ProtocolFailure(); if (items.length() > 25 || !result.has("has_more")) throw ProtocolFailure(); return result }
 
     suspend fun operation(binding: Binding, row: OperationRow) =
         call("POST", "/api/mobile/v1/operations", binding.context, row.envelope)

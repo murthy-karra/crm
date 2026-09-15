@@ -11,6 +11,12 @@ struct StageProposal: Identifiable {
     var selectedID: String
 }
 
+struct RequestedPin: Identifiable, Equatable {
+    let personID: String
+    let label: String
+    var id: String { personID }
+}
+
 @MainActor final class FieldModel: ObservableObject {
     @Published var people: [Bundle] = []
     @Published var queue: [Queued] = []
@@ -27,6 +33,14 @@ struct StageProposal: Identifiable {
     @Published var connected = true
     @Published var account = ""
     @Published var selectedPerson: String?
+    @Published private(set) var organizationSearchResults: [PersonSearchItem] = []
+    @Published private(set) var organizationSearchHasMore = false
+    @Published private(set) var organizationSearching = false
+    @Published private(set) var organizationSearchMessage = ""
+    @Published private(set) var requestedPins: [RequestedPin] = []
+    @Published private(set) var pinReviewRequired = false
+    @Published private(set) var activeReasons: [String: [String]] = [:]
+    private var organizationSearchEpoch = UUID()
     private(set) var secure: SecureStorage
     private(set) var store: LocalStore?, credential: Credential?, api: API?
     private var epoch = UUID(), monitor = NWPathMonitor()
@@ -435,6 +449,7 @@ struct StageProposal: Identifiable {
     func lock(_ reason: String, persist: Bool = true) {
         epoch = UUID(); unlocked = false; store = nil; api = nil
         people = []; queue = []; drafts = []; today = .null; todayIsStale = false; selectedPerson = nil; account = ""
+        organizationSearchEpoch = UUID(); organizationSearchResults = []; organizationSearchHasMore = false; organizationSearching = false
         if persist {
             do { try secure.setLocked() }
             catch {
@@ -456,13 +471,38 @@ struct StageProposal: Identifiable {
         lock("Signed out on this device. Pending work is protected; sign in as the same account to reopen it.")
         await client?.logout()
     }
+    func clearOrganizationSearch() { organizationSearchEpoch = UUID(); organizationSearchResults = []; organizationSearchHasMore = false; organizationSearchMessage = ""; organizationSearching = false; try? rebuildRequestedPins() }
+    func searchOrganization(_ term: String) async {
+        guard unlocked, connected, let api, let credential, credential.bootstrap.capabilities.contains("people_search") else { organizationSearchMessage = unlocked ? "Organization search is unavailable. Update the app or connect to the network." : "Sign in to search the Organization."; return }
+        let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { clearOrganizationSearch(); return }
+        guard trimmed.unicodeScalars.count <= 200, trimmed.utf8.count <= 800 else { organizationSearchMessage = "Use 200 characters or fewer."; return }
+        organizationSearchEpoch = UUID(); let searchRun = organizationSearchEpoch, accountRun = epoch
+        organizationSearching = true; organizationSearchMessage = "Searching the Organization…"; organizationSearchResults = []; organizationSearchHasMore = false
+        do { let result = try await api.searchPeople(term: trimmed, context: credential.bootstrap.context_id); guard searchRun == organizationSearchEpoch, accountRun == epoch, unlocked else { return }; organizationSearchResults = result.items; organizationSearchHasMore = result.has_more; organizationSearchMessage = result.items.isEmpty ? "No matches. Search uses name fragments or an exact email or phone." : ""; try? rebuildRequestedPins() }
+        catch { guard searchRun == organizationSearchEpoch, accountRun == epoch else { return }; organizationSearchMessage = error.localizedDescription }
+        if searchRun == organizationSearchEpoch { organizationSearching = false }
+    }
     func protectedDataUnavailable() { lock("Unlock the device to reopen protected storage.", persist: false) }
     func reload() throws {
         guard let store else { return }
         people = try store.activePeople(); queue = try store.queue(); drafts = try store.drafts()
+        activeReasons = try store.activeReasons()
+        try rebuildRequestedPins()
         today = try store.meta("today").map { try decode(JSON.self, Data($0.utf8)) } ?? .null
         todayIsStale = try store.meta("today_refresh_pending") == "1"
         lastSync = try store.meta("last_sync") ?? "Never"
+    }
+    private func rebuildRequestedPins() throws {
+        guard let store else { requestedPins = []; pinReviewRequired = false; return }
+        let cached: [String: String] = Dictionary(uniqueKeysWithValues: people.compactMap { person in
+            let label = person.summary["display_name"].text
+            return label.isEmpty ? nil : (person.person, label)
+        })
+        let transient = Dictionary(uniqueKeysWithValues: organizationSearchResults.map { ($0.person_id, $0.display_name) })
+        let ids = try store.pins()
+        requestedPins = ids.map { id in RequestedPin(personID: id, label: cached[id] ?? transient[id] ?? "Person \(id.replacingOccurrences(of: "-", with: "").prefix(8))") }
+        pinReviewRequired = ids.contains { (try? store.pinFailure($0)) != nil }
     }
     func save(_ draft: Draft) throws -> Draft {
         guard validateAccess(), let store else { throw LocalError.locked }
@@ -693,9 +733,14 @@ struct StageProposal: Identifiable {
     }
     func pin(_ person: String) {
         guard validateAccess(), let store else { return }
-        do { try store.pin(person); message = "Saved for the next download."; Task { await sync(manual: true) } }
+        do { try store.pin(person); try reload(); message = "Saved for the next download."; Task { await sync(manual: true) } }
         catch { message = error.localizedDescription }
     }
+    func isPinned(_ person: String) -> Bool { guard let store else { return false }; return (try? store.pins().contains(person)) ?? false }
+    func pinNeedsReview(_ person: String) -> Bool { guard let store else { return false }; return (try? store.pinFailure(person) != nil) ?? false }
+    func selectionReason(_ person: String) -> String { let values = activeReasons[person] ?? []; return values.isEmpty ? "Unknown (legacy cache)" : values.map { $0.replacingOccurrences(of: "_", with: " ") }.joined(separator: " · ") }
+    func unpin(_ person: String) { guard validateAccess(), let store else { return }; do { try store.unpin(person); try reload(); message = "Download request cancelled."; Task { await sync(manual: true) } } catch { message = error.localizedDescription } }
+    func retryPinRequests() { guard validateAccess(), let store else { return }; do { try store.retryPinRequests(); message = "Retrying requested downloads."; Task { await sync(manual: true) } } catch { message = error.localizedDescription } }
     func sync(manual: Bool = false) async {
         guard !syncing, !paused, !updateRequired, connected, unlocked, validateAccess(), let store, let api, let credential else { return }
         syncing = true; let run = epoch; defer { syncing = false }
@@ -789,12 +834,14 @@ struct StageProposal: Identifiable {
             guard reconciliationFailures < 3 else { message = "Download changed repeatedly. Your saved workspace is retained. Tap Sync to try again."; try reload(); return }
             try await reconcile(store, api, credential.bootstrap, run)
             try current(run); try await drainCache(store, run); try reload(); message = pendingCount == 0 ? "Synced. Complete downloaded workspace is ready offline." : "Download complete. Some saved actions need attention."
+            if try store.pinSetRevision() > store.admittedPinRevision() { message = "Saved selection changed. Preparing the newest download."; Task { await self.sync() } }
             reconciliationFailures = 0
         } catch let error as APIError {
             if epoch != run { return }
             if error.status == 401 || error.status == 403 || error.code == "workspace_in_migration_review" { lock(error.localizedDescription); return }
             if error.status == 429 { try? store.setMeta("download_retry_after", String(Date().timeIntervalSince1970 + 30)) }
             if error.status == 404 || ["generation_changed", "generation_expired"].contains(error.code) { reconciliationFailures += 1; try? store.discardGeneration() }
+            if error.code == "not_found" { try? store.markPinFailure("not_found") }
             if error.code == "protocol_unsupported" { try? requireUpdate(store) }
             message = error.localizedDescription; try? reload()
         } catch { if epoch == run { message = error.localizedDescription; try? reload() } }
@@ -823,13 +870,14 @@ struct StageProposal: Identifiable {
             try store.discardGeneration(); generation = nil
         }
         if generation == nil {
-            var request: [String: JSON] = ["protocol": .s("mobile-v1"), "installation_id": .s(installation), "pinned_person_ids": .array(try store.pins().map(JSON.s))]
+            let pinStage = try store.preparePinStaging()
+            var request: [String: JSON] = ["protocol": .s("mobile-v1"), "installation_id": .s(installation), "pinned_person_ids": .array(pinStage.pins.map(JSON.s))]
             if stageCapabilitiesReady { request["include_stage_catalog"] = .bool(true) }
             if metadataCapabilitiesReady { request["include_metadata"] = .bool(true) }
             let fresh: Generation = try await api.call("/reconciliations", method: "POST", body: .object(request), context: boot.context_id)
             if stageCapabilitiesReady && fresh.stage_catalog == nil { throw LocalError.invalidProtocol }
             if metadataCapabilitiesReady && fresh.metadata == nil { throw LocalError.invalidProtocol }
-            try current(run); try store.begin(fresh); generation = fresh
+            try current(run); try store.begin(fresh, pinSetRevision: pinStage.revision); generation = fresh
         }
         guard let gen = generation else { throw LocalError.invalidProtocol }
         while let cursor = try store.meta("manifest_cursor"), !cursor.isEmpty {
@@ -839,8 +887,7 @@ struct StageProposal: Identifiable {
         let members = try store.members(gen.generation_id)
         guard members.count == gen.selected_count else { throw LocalError.invalidProtocol }
         if let catalog = gen.stage_catalog {
-            while true {
-                let cursor = try store.stageCatalogCursor() ?? ""
+            while let cursor = try store.stageCatalogCursor() {
                 let suffix = cursor.isEmpty ? "" : "?cursor=" + API.cursor(cursor)
                 let page: StagePage = try await api.call("/reconciliations/\(gen.generation_id)/stages\(suffix)", context: boot.context_id)
                 try current(run)

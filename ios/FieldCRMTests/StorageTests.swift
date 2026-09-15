@@ -294,6 +294,71 @@ final class StorageTests: XCTestCase {
         XCTAssertThrowsError(try open())
         XCTAssertTrue(FileManager.default.fileExists(atPath: directory.appendingPathComponent("store.sqlite").path))
     }
+
+    func testMobile007PinIntentMigrationRevisionStagingAndRestart() throws {
+        let legacyPin = person
+        var legacy: LocalStore? = try open(version: 9)
+        let legacyPinsJSON = "[\"\(legacyPin)\"]"
+        try legacy!.setMeta("pins", legacyPinsJSON)
+        legacy = nil
+
+        var store: LocalStore? = try open(version: 10)
+        XCTAssertEqual(try store!.rows("PRAGMA user_version")[0][0], "10")
+        XCTAssertEqual(try store!.pins(), [legacyPin])
+        XCTAssertEqual(try store!.pinSetRevision(), 1)
+        let second = "77777777-7777-4777-8777-777777777777"
+        try store!.pin(second)
+        XCTAssertEqual(try store!.pinSetRevision(), 2)
+        try store!.pin(second) // Repeating the desired state is a durable no-op.
+        XCTAssertEqual(try store!.pinSetRevision(), 2)
+        try store!.unpin(second)
+        XCTAssertEqual(try store!.pinSetRevision(), 3)
+        try store!.unpin(second)
+        XCTAssertEqual(try store!.pinSetRevision(), 3)
+
+        let staged = try store!.preparePinStaging()
+        XCTAssertEqual(staged.revision, 3)
+        XCTAssertEqual(staged.pins, [legacyPin])
+        try store!.pin(second)
+        XCTAssertEqual(try store!.pinSetRevision(), 4)
+        XCTAssertEqual(try store!.meta("staging_pin_revision"), "3")
+        XCTAssertEqual(try store!.meta("staging_pins"), legacyPinsJSON)
+        store = nil
+
+        store = try open(version: 10)
+        XCTAssertEqual(try store!.meta("staging_pin_revision"), "3", "An interrupted request retains its frozen revision")
+        XCTAssertEqual(try store!.meta("staging_pins"), legacyPinsJSON)
+        XCTAssertEqual(try store!.pinFailure(legacyPin), nil)
+        try store!.markPinFailure("not_found")
+        XCTAssertEqual(try store!.pinFailure(legacyPin), "not_found")
+        store = nil
+        store = try open(version: 10)
+        XCTAssertEqual(try store!.pinFailure(legacyPin), "not_found", "Invalid-pin review survives process restart")
+        try store!.retryPinRequests()
+        XCTAssertNil(try store!.pinFailure(legacyPin))
+        try store!.discardGeneration()
+        XCTAssertNil(try store!.meta("staging_pin_revision"))
+        XCTAssertNil(try store!.meta("staging_pins"))
+    }
+
+    func testMobile007PromotionAdmitsOnlyFrozenPinRevision() throws {
+        let store = try open(version: 10)
+        try store.pin(person)
+        let frozen = try store.preparePinStaging()
+        let gen = generation("1")
+        try store.begin(gen, pinSetRevision: frozen.revision)
+        for section in ["summary", "notes", "tasks"] {
+            try store.appendPage(Page(generation_id: gen.generation_id, person_id: person, revision: "1", section: section,
+                summary: section == "summary" ? .object(["id": .s(person), "display_name": .s("Synthetic Person")]) : nil,
+                items: [], next_cursor: nil, complete: true), expected: "1")
+        }
+        try store.finishBundle(gen.generation_id, person, "1")
+        try store.pin("77777777-7777-4777-8777-777777777777")
+        XCTAssertEqual(try store.pinSetRevision(), frozen.revision + 1)
+        try store.promote(seal(gen))
+        XCTAssertEqual(try store.admittedPinRevision(), frozen.revision)
+        XCTAssertEqual(try store.pinSetRevision(), frozen.revision + 1)
+    }
     func testMobile004StageCatalogQualificationAndAtomicProposalUpgrade() throws {
         // This represents the opaque operation row written by the installed
         // Mobile003 schema. Its old bundle is deliberately not synthesized by
@@ -330,6 +395,72 @@ final class StorageTests: XCTestCase {
         let receipt = Receipt(operation_id: op.id, outcome: "accepted", resource_type: "person_stage", resource_id: person, committed_revision: "1", person_revision: "1", accepted_at: stamp(), changed: false, replayed: false)
         try store.acknowledge(receipt); XCTAssertFalse(try XCTUnwrap(store.queue().last).overlay)
     }
+    private func installedUpgradeStore() throws -> (LocalStore, SecureStorage, URL) {
+        guard Bundle.main.bundleIdentifier == "dev.crm.FieldCRM.mobile007upgradeproof" else { throw XCTSkip("Dedicated installed-upgrade bundle only") }
+        let secure = SecureStorage(synthetic: true, testingNamespace: "mobile007-installed-upgrade")
+        let root = try SecureStorage.directory(synthetic: true)
+        let file = root.appendingPathComponent("mobile006-installed.sqlite")
+        let storedKey = try secure.key(for: identity, existingFile: FileManager.default.fileExists(atPath: file.path))
+        return (try LocalStore(url: file, key: storedKey, identity: identity, context: context), secure, root)
+    }
+    private func installedUpgradeInventory(_ store: LocalStore) throws -> Data {
+        let queries = ["SELECT person,revision,body FROM bundles ORDER BY person,revision", "SELECT id,body FROM drafts ORDER BY id", "SELECT seq,id,envelope,status,receipt,overlay,attempts,retry_at,error FROM operations ORDER BY seq", "SELECT key,value FROM metadata WHERE key IN ('pins','active','today','last_sync','update_required') ORDER BY key"]
+        return try JSONEncoder().encode(queries.map { try store.rows($0) })
+    }
+    func testMobile007SeedInstalledMobile006Store() throws {
+        let (store, secure, root) = try installedUpgradeStore()
+        XCTAssertEqual(try store.rows("PRAGMA user_version")[0][0], "9", "Seed must run with the actual Mobile006 binary")
+        guard !FileManager.default.fileExists(atPath: root.appendingPathComponent("mobile006-inventory.json").path) else { throw XCTSkip("Retain an existing seed; never reset installed work") }
+        let ids = (1...100).map { String(format: "77777777-7777-4777-8777-%012d", $0) }
+        let gen = Generation(generation_id: UUID().uuidString, context_id: context, evaluated_at: stamp(), expires_at: stamp(Date().addingTimeInterval(1800)), complete: true, selected_count: ids.count, manifest: Manifest(items: ids.map { ManifestItem(person_id: $0, revision: "1", reasons: ["assigned"]) }, next_cursor: nil, complete: true))
+        if try store.activePeople().isEmpty {
+        try store.begin(gen)
+        for id in ids {
+            for section in ["summary", "notes", "tasks"] {
+                try store.appendPage(Page(generation_id: gen.generation_id, person_id: id, revision: "1", section: section, summary: section == "summary" ? .object(["id": .s(id), "display_name": .s("Installed upgrade fixture")]) : nil, items: [], next_cursor: nil, complete: true), expected: "1")
+            }
+            try store.finishBundle(gen.generation_id, id, "1")
+        }
+        try store.promote(Seal(generation_id: gen.generation_id, context_id: context, sealed_at: stamp(), evaluated_at: gen.evaluated_at, selected_count: 100, today: .object(["items": .array([])])))
+        }
+        if try store.drafts().isEmpty { _ = try store.saveDraft(Draft(id: UUID().uuidString, person: ids[0], kind: "add_note", text: "Retained unsent draft", revision: 0)) }
+        let op = try store.queue().first?.envelope ?? store.submit(store.saveDraft(Draft(id: UUID().uuidString, person: ids[1], kind: "add_note", text: "Retained accepted note", revision: 0)))
+        try store.acknowledge(Receipt(operation_id: op.operation_id, outcome: "accepted", resource_type: "note", resource_id: UUID().uuidString, committed_revision: nil, person_revision: "1", accepted_at: stamp(), changed: true, replayed: false))
+        if try store.queue().count < 2 { _ = try store.submit(store.saveDraft(Draft(id: UUID().uuidString, person: ids[2], kind: "add_note", text: "Retained queued note", revision: 0))) }
+        try store.setMeta("pins", String(decoding: JSONEncoder().encode([ids[0]]), as: UTF8.self))
+        try store.setMeta("update_required", "1")
+        try installedUpgradeInventory(store).write(to: root.appendingPathComponent("mobile006-inventory.json"), options: .atomic)
+        try secure.write("upgrade-key-evidence", secure.key(for: identity, existingFile: true))
+        XCTAssertEqual(try store.activePeople().count, 100)
+    }
+    func testMobile007VerifyInstalledMobile006Upgrade() throws {
+        let (store, secure, root) = try installedUpgradeStore()
+        XCTAssertEqual(try store.rows("PRAGMA user_version")[0][0], "10")
+        XCTAssertEqual(try installedUpgradeInventory(store), try Data(contentsOf: root.appendingPathComponent("mobile006-inventory.json")))
+        XCTAssertEqual(try secure.read("upgrade-key-evidence"), try secure.key(for: identity, existingFile: true))
+        XCTAssertEqual(try store.activePeople().count, 100)
+        XCTAssertEqual(try store.queue().filter { $0.receipt != nil }.count, 1)
+        XCTAssertEqual(try store.queue().filter { $0.status == "pending" }.count, 1)
+        XCTAssertEqual(try store.drafts().count, 1)
+        XCTAssertEqual(try store.meta("update_required"), "1")
+        XCTAssertEqual(try store.rows("SELECT desired,intent_revision FROM pin_intents"), [["1", "1"]])
+    }
+
+    func testMobile007ResumeSkipsACompletedStageCatalog() throws {
+        var store: LocalStore? = try open("stage-resume", version: 10)
+        let id = UUID().uuidString
+        let gen = Generation(generation_id: id, context_id: context, evaluated_at: stamp(), expires_at: stamp(Date().addingTimeInterval(1800)), complete: true, selected_count: 1, manifest: Manifest(items: [ManifestItem(person_id: person, revision: "1", reasons: ["pinned"])], next_cursor: nil, complete: true), stage_catalog: StageCatalog(revision: "1", stages_url: "/api/mobile/v1/reconciliations/\(id)/stages"))
+        try store!.begin(gen)
+        XCTAssertEqual(try store!.stageCatalogCursor(), "")
+        try store!.appendStagePage(StagePage(generation_id: id, revision: "1", items: [Stage(id: UUID().uuidString, name: "Lead", position: 0)], next_cursor: "next-page", complete: false), expected: "1")
+        store = nil; store = try open("stage-resume", version: 10)
+        XCTAssertEqual(try store!.stageCatalogCursor(), "next-page")
+        try store!.appendStagePage(StagePage(generation_id: id, revision: "1", items: [], next_cursor: nil, complete: true), expected: "1")
+        store = nil; store = try open("stage-resume", version: 10)
+        XCTAssertNil(try store!.stageCatalogCursor(), "A restart during Person components must not request catalog page one again")
+        XCTAssertEqual(try store!.generation()?.generation_id, id)
+    }
+
     func testMobile004StagePagesCannotPromotePartialCatalogAndCatalogCleanupKeepsActive() throws {
         let store = try open(); let genID = UUID().uuidString.lowercased()
         let gen = Generation(generation_id: genID, context_id: context, evaluated_at: stamp(), expires_at: stamp(Date().addingTimeInterval(1800)), complete: true, selected_count: 1, manifest: Manifest(items: [ManifestItem(person_id: person, revision: "1", reasons: [])], next_cursor: nil, complete: true), stage_catalog: StageCatalog(revision: "1", stages_url: "/api/mobile/v1/reconciliations/\(genID)/stages"))

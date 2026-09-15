@@ -956,7 +956,7 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         dao.operationState(operationId, "covered", operation.attempts, 0, "")
     }
 
-    fun beginGeneration(response: JSONObject) = atomic {
+    fun beginGeneration(response: JSONObject, pinSetRevision: Long = dao.pinSetRevision()?.toLongOrNull() ?: 0L) = atomic {
         requireAccess()
         if (response.getString("context_id") != binding.context || !response.getBoolean("complete"))
             throw ProtocolFailure()
@@ -989,8 +989,49 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
             dao.removeMeta("metadata_catalog_${section}_cursor"); dao.removeMeta("metadata_catalog_${section}_complete")
         }
         dao.meta(MetaRow("generation", response.toString()))
+        dao.meta(MetaRow("staging_pin_revision", pinSetRevision.toString()))
         appendManifest(response.getString("generation_id"), response.getJSONObject("manifest"))
     }
+
+    fun setPinIntent(person: String, desired: Boolean) = atomic {
+        requireAccess(); uuid(person)
+        val current = dao.pinIntents().map { it.person }.toMutableSet()
+        if ((person in current) == desired) return@atomic
+        val next = (dao.pinSetRevision()?.toLongOrNull() ?: 0L) + 1L
+        if (desired) dao.pin(PinRow(person)) else dao.unpin(person)
+        dao.pinIntent(PinIntentRow(person, desired, next, null))
+        dao.meta(MetaRow("pin_set_revision", next.toString()))
+    }
+    fun preparePinStaging(): Pair<Long, List<String>> = atomic {
+        requireAccess()
+        val selected = requestedPins()
+        val revision = dao.pinSetRevision()?.toLongOrNull() ?: 0L
+        dao.meta(MetaRow("staging_pin_revision", revision.toString()))
+        dao.meta(MetaRow("staging_pins", JSONArray(selected).toString()))
+        revision to selected
+    }
+    fun requestedPins(): List<String> = dao.pinIntents().map { it.person }
+    fun requestedPinProjection(people: List<PersonCard>, search: List<OrganizationSearchPerson>): List<RequestedPin> {
+        val cached = people.associate { it.id to JSONObject(it.summary).optString("display_name").takeIf(String::isNotBlank) }
+        val transient = search.associate { it.id to it.displayName }
+        return dao.pinIntents().map { row ->
+            val label = cached[row.person] ?: transient[row.person] ?: "Person ${row.person.replace("-", "").take(8)}"
+            RequestedPin(row.person, label, row.person.replace("-", "").take(8))
+        }
+    }
+    fun pinReviewRequired(): Boolean = dao.pinIntents().any { !it.failure.isNullOrEmpty() }
+    fun activeReasons(): Map<String, List<String>> {
+        val encoded = dao.meta("active_reasons") ?: return emptyMap()
+        val objectValue = runCatching { JSONObject(encoded) }.getOrNull() ?: return emptyMap()
+        return objectValue.keys().asSequence().associateWith { person ->
+            runCatching {
+                val array = objectValue.optJSONArray(person) ?: return@runCatching emptyList()
+                (0 until array.length()).map { array.getString(it) }
+            }.getOrDefault(emptyList())
+        }
+    }
+    fun markPinFailure(code: String) = atomic { requireAccess(); dao.markPinFailure(code) }
+    fun retryPinRequests() = atomic { requireAccess(); dao.retryPinRequests() }
 
     fun appendManifest(generation: String, response: JSONObject) = atomic {
         requireAccess()
@@ -1004,6 +1045,7 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
                     uuid(it.getString("person_id")),
                     revision(it.getString("revision")),
                     if (it.has("metadata_revision")) revision(it.getString("metadata_revision")) else "",
+                    it.optJSONArray("reasons")?.toString() ?: "",
                 )
             }
         )
@@ -1307,6 +1349,7 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         }
         dao.meta(MetaRow("today", today.toString()))
         dao.meta(MetaRow("last_sync", seal.getString("sealed_at")))
+        dao.meta(MetaRow("pin_admitted_revision", dao.meta("staging_pin_revision") ?: "0"))
         dao.meta(
             MetaRow(
                 "coverage",
@@ -1315,7 +1358,17 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
                     "Complete selection; $removalConflicts protected saved-work conflicts; records unavailable",
             )
         )
+        // Manifest rows are staging data and are cleared below. Retain only the
+        // sealed, content-free selection reasons so the active cache can explain
+        // why a Person remains available after a later pin cancellation.
+        val sealedReasons = JSONObject()
+        manifest.forEach { row ->
+            if (row.reasons.isNotBlank()) sealedReasons.put(row.person, JSONArray(row.reasons))
+        }
+        dao.meta(MetaRow("active_reasons", sealedReasons.toString()))
         dao.removeMeta("generation")
+        dao.removeMeta("staging_pin_revision")
+        dao.removeMeta("staging_pins")
         // These are staging-only cursors. Keeping them after promotion is harmless to the
         // current downloader (which keys from generation), but it makes an accepted contact
         // receipt appear to retain pre-receipt reconciliation state after the fresh seal.

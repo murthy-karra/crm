@@ -212,7 +212,7 @@ data class OperationRow(
 )
 
 @Entity(tableName = "manifest", primaryKeys = ["generation", "person"])
-data class ManifestRow(val generation: String, val person: String, val revision: String, @ColumnInfo(defaultValue = "''") val metadataRevision: String = "")
+data class ManifestRow(val generation: String, val person: String, val revision: String, @ColumnInfo(defaultValue = "''") val metadataRevision: String = "", @ColumnInfo(defaultValue = "''") val reasons: String = "")
 
 @Entity(tableName = "pages", primaryKeys = ["generation", "person", "section", "cursor"])
 data class PageRow(
@@ -224,6 +224,7 @@ data class PageRow(
 )
 
 @Entity(tableName = "pins") data class PinRow(@PrimaryKey val person: String)
+@Entity(tableName = "pin_intents") data class PinIntentRow(@PrimaryKey val person: String, val desired: Boolean, val intentRevision: Long, val failure: String? = null)
 
 @Dao
 interface FieldDao {
@@ -424,6 +425,12 @@ interface FieldDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE) fun pin(row: PinRow)
 
     @Query("DELETE FROM pins WHERE person=:id") fun unpin(id: String)
+    @Query("SELECT * FROM pin_intents WHERE desired=1 ORDER BY person") fun pinIntents(): List<PinIntentRow>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) fun pinIntent(row: PinIntentRow)
+    @Query("UPDATE pin_intents SET failure=:failure WHERE desired=1") fun markPinFailure(failure: String)
+    @Query("UPDATE pin_intents SET failure=NULL WHERE desired=1") fun retryPinRequests()
+    @Query("SELECT value FROM metadata WHERE `key`='pin_set_revision'") fun pinSetRevision(): String?
+    @Query("SELECT value FROM metadata WHERE `key`='pin_admitted_revision'") fun admittedPinRevision(): String?
 }
 
 @Database(
@@ -441,6 +448,7 @@ interface FieldDao {
             ManifestRow::class,
             PageRow::class,
             PinRow::class,
+            PinIntentRow::class,
             EditContextRow::class,
             ProfileDraftRow::class,
             ProfileContextRow::class,
@@ -451,7 +459,7 @@ interface FieldDao {
             MetadataOptionRow::class,
             MetadataCatalogPageRow::class,
         ],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 abstract class FieldDatabase : RoomDatabase() {
@@ -544,6 +552,17 @@ abstract class FieldDatabase : RoomDatabase() {
                 }
             }
 
+        val UPGRADE_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE manifest ADD COLUMN reasons TEXT NOT NULL DEFAULT ''")
+                db.execSQL("CREATE TABLE IF NOT EXISTS pin_intents(person TEXT NOT NULL PRIMARY KEY, desired INTEGER NOT NULL, intentRevision INTEGER NOT NULL, failure TEXT)")
+                db.execSQL("INSERT OR IGNORE INTO pin_intents(person,desired,intentRevision,failure) SELECT person,1,1,NULL FROM pins")
+                db.execSQL("INSERT OR IGNORE INTO metadata(`key`,value) VALUES('pin_set_revision', CASE WHEN EXISTS(SELECT 1 FROM pins) THEN '1' ELSE '0' END)")
+                db.execSQL("INSERT OR IGNORE INTO metadata(`key`,value) VALUES('pin_admitted_revision','0')")
+                db.execSQL("INSERT OR IGNORE INTO metadata(`key`,value) VALUES('staging_pin_revision','0')")
+            }
+        }
+
         fun open(context: Context, directory: File, key: ByteArray): FieldDatabase {
             System.loadLibrary("sqlcipher")
             val db =
@@ -554,7 +573,7 @@ abstract class FieldDatabase : RoomDatabase() {
                     )
                     .openHelperFactory(SupportOpenHelperFactory(key, null, true))
                     .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                    .addMigrations(UPGRADE_1_2, UPGRADE_2_3, UPGRADE_3_4, UPGRADE_4_5, UPGRADE_5_6, UPGRADE_6_7, UPGRADE_7_8)
+                        .addMigrations(UPGRADE_1_2, UPGRADE_2_3, UPGRADE_3_4, UPGRADE_4_5, UPGRADE_5_6, UPGRADE_6_7, UPGRADE_7_8, UPGRADE_8_9)
                     .addCallback(
                         object : Callback() {
                             override fun onOpen(db: SupportSQLiteDatabase) {

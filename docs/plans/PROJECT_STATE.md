@@ -1,6 +1,6 @@
 # Project state
 
-Updated: 2026-09-15 — Mobile006 / 010f4 deployed; Mobile007 / 010d3 implementation authorized.
+Updated: 2026-09-15 — Mobile006 / 010f4 deployed; Mobile007 / 010d3 implemented and verified.
 Current status and live residuals only. [History](PROJECT_HISTORY.md) preserves
 completed chronology. Decisions remain authoritative; use the
 [reading index](../decisions/DECISION_INDEX.md).
@@ -34,7 +34,9 @@ Mobile004/010e4 and preceding slices remain documented in history.
 
 ## Current branch and retained resources
 
-`main` is published. Three completed writer worktrees and five milestone branches
+`main` contains the prior release. Mobile007 / 010d3 integration is on
+`codex/mobile007-history010d3`, with private verification services and build outputs.
+Three previously completed writer worktrees and five milestone branches
 were removed after preserving all lane histories and the exact dirty migration
 patch in a verified private Git bundle. QA databases, installed native stores,
 captures, verification artifacts and release recovery material remain. The owned
@@ -46,8 +48,9 @@ native API3106 is available; the isolated browser QA processes are stopped.
 development. History follows in the [family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md),
 and D-085 now authorizes [Mobile007 / 010d3 planning](MOBILE_007_010d3_PLAN.md).
 D-086 accepts both specifications and declares implementation/isolated synthetic
-verification authorized. Independent planning review is running before code work;
-[implementation status](../tasks/MOBILE_007_010d3_IMPLEMENTATION_STATUS.md) owns progress. Remaining deltas, mapping repair,
+verification authorized. Both independent planning reviews are READY;
+the accepted implementation and all required verification gates are complete.
+[Implementation status](../tasks/MOBILE_007_010d3_IMPLEMENTATION_STATUS.md) owns progress. Remaining deltas, mapping repair,
 activation and complete migration fidelity require their own specified scope.
 
 ## Last accepted decision
@@ -177,8 +180,9 @@ linked verification records; they are not claims about present runtime health.
 
 ## Next recommended action
 
-Complete the required planning review, then implement and verify the accepted
-[Mobile007 / 010d3 pair](MOBILE_007_010d3_PLAN.md) under D-086.
+Release the verified [Mobile007 / 010d3 pair](MOBILE_007_010d3_PLAN.md) after
+publication/deployment authorization. [Final evidence](../tasks/MOBILE_007_010d3_FINAL_VERIFICATION.md)
+records the passing implementation gates and retained corrections.
 The [family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md) retains the sequential
 migration scope. Native calling follows the agreed progression. Physical-phone/design/live-source work remains deferred;
 complete customer erasure/restore readiness before real customer data.

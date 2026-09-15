@@ -3,7 +3,12 @@ import { useImportAccess } from './imports'
 export type Family = 'events' | 'calls' | 'text_messages'
 export type Disposition = 'eligible' | 'equal_repeat' | 'excluded' | 'held' | 'imported' | 'already_present'
 export interface Plan { id:string; state:'building'|'ready'|'expired'; expires_at:string|null; counts:Record<string, string> }
-export interface Root { id:string; state:'preparing'|'ready'|'queued'|'running'|'paused'|'completed'|'cancelled'; phase:string; revision:string; admission_id:string; history_capture_id:string; workspace_revision:string; source_binding:Record<string, unknown>; coverage:{ streams:Array<{ family:Family; state:string; reported_total:string|null }> }; latest_plan:Plan; results:Record<string,string>; current_attempt_id:string|null; pause_reason:string|null; run_byte_limit:string; retained_bytes:string; reserved_bytes:string; actions:{confirm:boolean;resume:boolean;cancel:boolean;remainder:boolean} }
+export interface HistoryStream { family:Family; state:string; reported_total:string|null; occurrences?:string; unique_ids?:string; invalid_occurrences?:string; checkpoint?:string }
+export interface HistoryCoverage { streams:HistoryStream[]; warnings?:string[]; enumeration_is_complete_account_history?:boolean }
+export interface HistoryManifest { id:string; position:string; family:Family; disposition:'eligible'|'equal_repeat'|'excluded'|'held'|'pending'; reason:string|null; person_id:string|null; source_created_at:string|null; metadata:Record<string, unknown>|null; suppressed?:boolean }
+export interface HistoryResult { id:string; position:string; family:Family; disposition:'imported'|'already_present'|'equal_repeat'|'excluded'|'held'; reason:string|null; attempt_id:string; manifest_id:string; fact_id:string|null }
+export interface HistoryIssue { code:string; record_count:string }
+export interface Root { id:string; state:'preparing'|'ready'|'queued'|'running'|'paused'|'completed'|'cancelled'; phase:string; revision:string; admission_id:string; history_capture_id:string; workspace_revision:string; source_binding:Record<string, unknown>; coverage:HistoryCoverage; latest_plan:Plan; results:Record<string,string>; current_attempt_id:string|null; pause_reason:string|null; run_byte_limit:string; retained_bytes:string; reserved_bytes:string; actions:{confirm:boolean;resume:boolean;cancel:boolean;remainder:boolean} }
 export interface Envelope { import: Root }
 export interface Page<T> { manifests?:T[]; results?:T[]; issues?:T[]; next_cursor:string|null }
 const root='/migrations/fub/admitted-history-imports'; const path=(id:string)=>`${root}/${encodeURIComponent(id)}`
@@ -16,7 +21,7 @@ export const confirmAdmittedHistory=(id:string,body:{request_id:string;plan_id:s
 export const historyAction=(id:string,action:'resume'|'cancel',body:{request_id:string;expected_revision:string})=>post(`${path(id)}/${action}`,body)
 export const increaseAdmittedHistoryBudget=(id:string,body:{request_id:string;expected_revision:string;run_byte_limit:string})=>post(`${path(id)}/budget`,body)
 export const createAdmittedHistoryRemainder=(id:string,body:{request_id:string;attempt_id:string;expected_revision:string})=>post(`${path(id)}/remainder`,body)
-export const fetchAdmittedHistoryPage=(id:string,plan:string,kind:'manifests'|'results'|'issues',filters:{family?:Family;disposition?:Disposition}={},cursor?:string,signal?:AbortSignal)=>apiFetch<Page<Record<string,unknown>>>(`${path(id)}/plans/${encodeURIComponent(plan)}/${kind}${q({...filters,cursor,limit:25})}`,{signal})
+export const fetchAdmittedHistoryPage=<T extends HistoryManifest|HistoryResult|HistoryIssue>(id:string,plan:string,kind:'manifests'|'results'|'issues',filters:{family?:Family;disposition?:Disposition}={},cursor?:string,signal?:AbortSignal)=>apiFetch<Page<T>>(`${path(id)}/plans/${encodeURIComponent(plan)}/${kind}${q({...filters,cursor,limit:25})}`,{signal})
 export const fetchAdmittedHistoryRemainder=(id:string,signal?:AbortSignal)=>apiFetch<{remainder:Record<string,string>|null}>(`${path(id)}/remainder`,{signal})
 export const useAdmittedHistoryAccess=()=>useImportAccess('admitted-history-imports')
 export const historyActive=(r?:Root)=>!!r&&['preparing','queued','running'].includes(r.state)

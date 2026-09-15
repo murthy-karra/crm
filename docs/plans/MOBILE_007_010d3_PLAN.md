@@ -2,13 +2,12 @@
 
 **IMPLEMENTATION ACCEPTED — D-086, 2026-09-15.** The user accepted both plans
 and declared contracts for implementation and isolated synthetic verification.
-Independent planning review is in progress before code work. Compatible review
+Both independent planning reviews are READY. Compatible review
 corrections are owned work; materially different policy and publication/deployment
 remain separate. [Current implementation status](../tasks/MOBILE_007_010d3_IMPLEMENTATION_STATUS.md)
 owns progress and evidence; planning-era wording below does not limit D-086.
 
-**DRAFT — 2026-09-15, D-085. Planning authorized; implementation contracts not yet
-accepted.** Author source inspection complete; independent review pending.
+Originally planned under D-085; D-086 authorizes the reviewed implementation.
 
 ## Goal and deliverables
 
@@ -131,9 +130,9 @@ only changed/failed/stale checks after final gates.
 
 ## Planning completion and next gate
 
-Both draft specifications, briefs and this coordination plan are written. A
-plain-language cream Lavish companion shows the two workflows. Author checks cover
-links, diff hygiene and declared boundaries; independent planning review is still
-required before presenting contracts as ready for implementation. New HTTP/schema/
-owner/compatibility behavior requires acceptance under AGENTS §11. No code, schema,
-source operation, service restart, deployment or production activation was performed.
+Both specifications, briefs and contracts completed independent planning review
+and were accepted under D-086. A cream Lavish companion shows the two workflows.
+The [implementation status](../tasks/MOBILE_007_010d3_IMPLEMENTATION_STATUS.md) and
+[final verification record](../tasks/MOBILE_007_010d3_FINAL_VERIFICATION.md) own the
+current implementation and acceptance evidence. Publication and deployment remain
+a separate step.

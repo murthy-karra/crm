@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -449,9 +450,10 @@ private fun TodayScreen(state: FieldUi, repository: FieldRepository) {
 }
 
 @Composable
-private fun PeopleScreen(state: FieldUi, repository: FieldRepository, onError: (String) -> Unit) {
+internal fun PeopleScreen(state: FieldUi, repository: FieldRepository, onError: (String) -> Unit) {
     var search by remember { mutableStateOf("") }
     var knownId by remember { mutableStateOf("") }
+    var organizationTerm by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val filtered =
         state.people.filter {
@@ -462,6 +464,24 @@ private fun PeopleScreen(state: FieldUi, repository: FieldRepository, onError: (
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        item {
+            OutlinedTextField(organizationTerm, { organizationTerm = it }, label = { Text("Search Organization") }, placeholder = { Text("Name, exact email or phone") }, singleLine = true, modifier = Modifier.fillMaxWidth().testTag("organization-people-search"))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Button(onClick = { scope.launch { repository.searchOrganization(organizationTerm) } }, enabled = organizationTerm.isNotBlank() && !state.organizationSearching) { Text("Search") }; if (state.organizationSearchResults.isNotEmpty()) TextButton(onClick = { organizationTerm = ""; scope.launch { repository.clearOrganizationSearch() } }) { Text("Clear") }; if (state.organizationSearching) CircularProgressIndicator(Modifier.size(20.dp)) }
+            if (state.organizationSearchMessage.isNotBlank()) Text(state.organizationSearchMessage, style = MaterialTheme.typography.bodySmall)
+            if (state.organizationSearchHasMore) Text("More matches — refine your search.", style = MaterialTheme.typography.bodySmall)
+            if (state.requestedPins.isNotEmpty()) {
+                Text("Requested offline People", style = MaterialTheme.typography.titleMedium)
+                if (state.pinReviewRequired) Text("The requested set needs review. No individual Person was identified.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = { scope.launch { repository.retryPinRequests() } }) { Text("Retry requested downloads") }
+                state.requestedPins.forEach { request ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text(request.label, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { scope.launch { repository.pin(request.id, false) } }) { Text("Cancel") }
+                    }
+                }
+            }
+            state.organizationSearchResults.forEach { result -> OutlinedCard(Modifier.fillMaxWidth().testTag("organization-person-${result.id}")) { Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) { Text(result.displayName, fontWeight = FontWeight.SemiBold); result.stageName?.let { Text(it, style = MaterialTheme.typography.bodySmall) }; result.assignedName?.let { Text("Responsible: $it", style = MaterialTheme.typography.bodySmall) }; result.email?.let { Text(it, style = MaterialTheme.typography.bodySmall) }; result.phone?.let { Text(it, style = MaterialTheme.typography.bodySmall) }; if (state.people.any { it.id == result.id }) Text("Available offline", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium) else if (result.id in state.pinnedPeople) { Text("Requested for download", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium); TextButton(onClick = { scope.launch { repository.pin(result.id, false) } }) { Text("Cancel") } } else TextButton(onClick = { scope.launch { repository.pin(result.id, true) } }) { Text("Save offline") } } } }
+        }
         item {
             Text("People", style = MaterialTheme.typography.headlineMedium)
             Text("${state.people.size} complete records on this device")
@@ -501,7 +521,7 @@ private fun PeopleScreen(state: FieldUi, repository: FieldRepository, onError: (
                 Text("Request offline availability")
             }
             Text(
-                "Online name search is not available in this version. Your request becomes available only after a complete authorized download.",
+                "Search results are previews. Save a result to request its next authorized offline download.",
                 style = MaterialTheme.typography.bodySmall,
             )
         }
@@ -513,6 +533,7 @@ private fun PeopleScreen(state: FieldUi, repository: FieldRepository, onError: (
                     it.person == person.id && (it.operation.isEmpty() || it.state != "accepted")
                 },
                 state.stageCatalog,
+                state.peopleReasons[person.id] ?: emptyList(),
             ) {
                 repository.select(person.id)
             }
@@ -522,7 +543,7 @@ private fun PeopleScreen(state: FieldUi, repository: FieldRepository, onError: (
 }
 
 @Composable
-private fun PersonTile(person: PersonCard, pending: Boolean, contactPending: Boolean, catalog: List<StageCatalogRow>, open: () -> Unit) {
+private fun PersonTile(person: PersonCard, pending: Boolean, contactPending: Boolean, catalog: List<StageCatalogRow>, reasons: List<String>, open: () -> Unit) {
     val summary = JSONObject(person.summary)
     OutlinedCard(Modifier.fillMaxWidth().testTag("person-${person.id}").clickable(onClick = open)) {
         Column(Modifier.padding(16.dp)) {
@@ -532,6 +553,7 @@ private fun PersonTile(person: PersonCard, pending: Boolean, contactPending: Boo
                     ?: summary.optJSONObject("stage")?.optString("name") ?: "No stage",
                 style = MaterialTheme.typography.bodySmall,
             )
+            Text(if (reasons.isEmpty()) "Last synced reason: Unknown (legacy cache)" else "Last synced: " + reasons.joinToString(" · ") { it.replace('_', ' ') }, style = MaterialTheme.typography.bodySmall)
             if (pending)
                 Text(
                     "Saved work on device",

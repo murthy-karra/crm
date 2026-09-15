@@ -50,6 +50,14 @@ struct Bootstrap: Codable, Equatable, Sendable {
     let `protocol`: String
     var identity: String { actor_user_id + "_" + organization_id }
 }
+struct PersonSearchStage: Codable, Equatable, Sendable { let id: String; let name: String }
+struct PersonSearchUser: Codable, Equatable, Sendable { let id: String; let display_name: String }
+struct PersonSearchItem: Codable, Equatable, Identifiable, Sendable {
+    let person_id: String; let display_name: String; let stage: PersonSearchStage?
+    let assigned_user: PersonSearchUser?; let primary_email: String?; let primary_phone: String?
+    var id: String { person_id }
+}
+struct PersonSearchResponse: Codable, Equatable, Sendable { let context_id: String; let items: [PersonSearchItem]; let has_more: Bool }
 struct Envelope: Codable, Equatable, Sendable {
     let context_id: String, operation_id: String, kind: String, device_recorded_at: String
     let payload: JSON

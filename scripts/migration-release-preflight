@@ -87,10 +87,11 @@ PEOPLE_ADMISSION_CAPABILITY = "fub-people-admission-v1"
 ADMITTED_PEOPLE_REFRESH_CAPABILITY = "fub-admitted-people-refresh-v1"
 ADMITTED_METADATA_CAPABILITY = "fub-admitted-metadata-v1"
 ADMITTED_ACTIVITY_CAPABILITY = "fub-admitted-activity-v1"
+ADMITTED_HISTORY_CAPABILITY = "fub-admitted-history-v1"
 CAPABILITIES = frozenset({METADATA_CAPABILITY, ACTIVITY_CAPABILITY, HISTORY_CAPABILITY,
                         TIMELINE_CAPABILITY, CORE_CHANGE_CAPABILITY, PEOPLE_REFRESH_CAPABILITY,
                         PEOPLE_ADMISSION_CAPABILITY, ADMITTED_PEOPLE_REFRESH_CAPABILITY,
-                        ADMITTED_METADATA_CAPABILITY, ADMITTED_ACTIVITY_CAPABILITY})
+                        ADMITTED_METADATA_CAPABILITY, ADMITTED_ACTIVITY_CAPABILITY, ADMITTED_HISTORY_CAPABILITY})
 MAX_JSON_BYTES = 1024 * 1024
 MAX_ENTRIES = 4096
 MAX_AGE_SECONDS = 300
@@ -210,6 +211,10 @@ def validate_state(state):
                                 "admitted_activity_unsupported_count"}
     if admitted_activity_fields.intersection(state):
         fields |= admitted_activity_fields
+    admitted_history_fields = {"admitted_history_binding_count", "admitted_history_schema_present",
+                                "admitted_history_unsupported_count"}
+    if admitted_history_fields.intersection(state):
+        fields |= admitted_history_fields
     object_fields(state, fields)
     if (type(state.get("activity_schema_present", False)) is not bool
             or not isinstance(state.get("activity_binding_count", "0"), str)
@@ -292,6 +297,16 @@ def validate_state(state):
             or int(admitted_activity_unsupported) > int(admitted_activity_count)
             or (not state.get("admitted_activity_schema_present", False)
                 and int(admitted_activity_count) != 0)):
+        fail("database_evidence_invalid")
+    admitted_history_count = state.get("admitted_history_binding_count", "0")
+    admitted_history_unsupported = state.get("admitted_history_unsupported_count", "0")
+    if (type(state.get("admitted_history_schema_present", False)) is not bool
+            or any(not isinstance(value, str)
+                   or re.fullmatch(r"0|[1-9][0-9]{0,19}", value) is None
+                   for value in [admitted_history_count, admitted_history_unsupported])
+            or int(admitted_history_unsupported) > int(admitted_history_count)
+            or (not state.get("admitted_history_schema_present", False)
+                and int(admitted_history_count) != 0)):
         fail("database_evidence_invalid")
     count = state["binding_count"]
     if (type(state["schema_present"]) is not bool
@@ -456,6 +471,13 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
         reasons.add("admitted_activity_binding_requires_compatible_artifacts")
     if int(state.get("admitted_activity_unsupported_count", "0")) > 0:
         reasons.add("admitted_activity_engine_unsupported")
+    admitted_history_missing = any(item["role"] in {"api", "worker"}
+                                 and ADMITTED_HISTORY_CAPABILITY not in item["capabilities"]
+                                 for item in selected + processes)
+    if int(state.get("admitted_history_binding_count", "0")) > 0 and admitted_history_missing:
+        reasons.add("admitted_history_binding_requires_compatible_artifacts")
+    if int(state.get("admitted_history_unsupported_count", "0")) > 0:
+        reasons.add("admitted_history_engine_unsupported")
     launch_allowed = not reasons
     confirmation_reasons = set(reasons)
     if not state["schema_present"]:
@@ -532,6 +554,13 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
         admitted_activity_reasons.add("admitted_activity_candidate_missing")
     if not state.get("admitted_activity_schema_present", False):
         admitted_activity_reasons.add("admitted_activity_schema_missing")
+    admitted_history_reasons = set(confirmation_reasons)
+    if admitted_history_missing:
+        admitted_history_reasons.add("admitted_history_capability_missing")
+    if not any(item["role"] in {"api", "worker"} for item in selected):
+        admitted_history_reasons.add("admitted_history_candidate_missing")
+    if not state.get("admitted_history_schema_present", False):
+        admitted_history_reasons.add("admitted_history_schema_missing")
     return {
         "version": 1,
         "gate_version": GATE,
@@ -582,6 +611,10 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
         "admitted_activity_schema_present": state.get("admitted_activity_schema_present", False),
         "admitted_activity_binding_count": state.get("admitted_activity_binding_count", "0"),
         "admitted_activity_unsupported_count": state.get("admitted_activity_unsupported_count", "0"),
+        "admitted_history_confirmation_ready": not admitted_history_reasons,
+        "admitted_history_schema_present": state.get("admitted_history_schema_present", False),
+        "admitted_history_binding_count": state.get("admitted_history_binding_count", "0"),
+        "admitted_history_unsupported_count": state.get("admitted_history_unsupported_count", "0"),
         "launch_reasons": sorted(reasons),
         "confirmation_reasons": sorted(confirmation_reasons),
         "metadata_confirmation_reasons": sorted(metadata_reasons),
@@ -593,6 +626,7 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
         "people_admission_confirmation_reasons": sorted(people_admission_reasons),
         "admitted_metadata_confirmation_reasons": sorted(admitted_metadata_reasons),
         "admitted_activity_confirmation_reasons": sorted(admitted_activity_reasons),
+        "admitted_history_confirmation_reasons": sorted(admitted_history_reasons),
         "admitted_people_refresh_confirmation_reasons": sorted(admitted_people_refresh_reasons),
     }
 
@@ -812,6 +846,25 @@ def database_state():
         object_fields(observed, {"count", "unsupported_count"})
         state["admitted_activity_binding_count"] = observed["count"]
         state["admitted_activity_unsupported_count"] = observed["unsupported_count"]
+    admitted_history_schema_path = Path(__file__).resolve().parents[1] / "backend/crates/crm-app/src/auth/admitted_history_schema.sql"
+    try:
+        admitted_history_schema = admitted_history_schema_path.read_text(encoding="utf-8").strip()
+    except OSError:
+        fail("admitted_history_schema_inventory_unavailable")
+    admitted_history = sql_json("SELECT json_build_object('present',(to_regclass('public.migration_admitted_history_root') IS NOT NULL OR to_regprocedure('public.crm_admitted_history_fact_allowed(jsonb,text)') IS NOT NULL OR EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=to_regclass('public.migration_history_import_identity') AND attname='admitted_root_id' AND NOT attisdropped)), 'compatible',(" + admitted_history_schema + "))")
+    object_fields(admitted_history, {"present", "compatible"})
+    if any(type(admitted_history[key]) is not bool for key in ["present", "compatible"]):
+        fail("database_evidence_invalid")
+    if admitted_history["present"] != admitted_history["compatible"]:
+        fail("admitted_history_schema_incomplete")
+    state["admitted_history_schema_present"] = admitted_history["present"]
+    state["admitted_history_binding_count"] = "0"
+    state["admitted_history_unsupported_count"] = "0"
+    if admitted_history["present"]:
+        observed = sql_json("SELECT json_build_object('count',count(*)::text,'unsupported_count',count(*) FILTER (WHERE p.source_binding->>'interpretation_version' IS DISTINCT FROM 'fub-history-interpretation-v1' OR p.source_binding->>'identity_version' IS DISTINCT FROM 'timeline-import-identity-v1')::text) FROM public.migration_admitted_history_root r JOIN public.migration_admitted_history_plan p ON p.id=r.confirmed_plan_id AND p.organization_id=r.organization_id")
+        object_fields(observed, {"count", "unsupported_count"})
+        state["admitted_history_binding_count"] = observed["count"]
+        state["admitted_history_unsupported_count"] = observed["unsupported_count"]
     return state
 
 
@@ -845,6 +898,7 @@ def main(argv=None):
                           "admitted_people_refresh_confirmation_ready": False,
                           "admitted_metadata_confirmation_ready": False,
                           "admitted_activity_confirmation_ready": False,
+                          "admitted_history_confirmation_ready": False,
                           "error": str(error)}, sort_keys=True))
         return 2
 

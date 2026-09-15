@@ -404,14 +404,14 @@ fn candidate_sql(kind: Kind, dated: Dated, detail: bool, after: Option<&Key>) ->
         ACTOR
     };
     let (metadata, joins) = if external {
-        ("NULL::jsonb".into()," JOIN migration_history_import_identity hi ON hi.id=f.identity_id AND hi.organization_id=f.organization_id AND hi.erased_at IS NULL JOIN migration_history_import_display hd ON hd.id=f.manifest_id AND hd.organization_id=f.organization_id AND hd.plan_id=f.plan_id".into())
+        ("NULL::jsonb".into()," JOIN migration_history_import_identity hi ON hi.id=f.identity_id AND hi.organization_id=f.organization_id AND hi.erased_at IS NULL JOIN migration_history_import_display hd ON hd.id=COALESCE(f.manifest_id,f.admitted_manifest_id) AND hd.organization_id=f.organization_id AND ((f.plan_id IS NOT NULL AND hd.plan_id=f.plan_id AND hi.owner_run_id=f.attempt_id) OR (f.admitted_root_id IS NOT NULL AND hd.admitted_root_id=f.admitted_root_id AND hd.admitted_plan_id=f.admitted_plan_id AND hd.admitted_attempt_id=f.admitted_attempt_id AND hi.admitted_root_id=f.admitted_root_id AND hi.admitted_plan_id=f.admitted_plan_id AND hi.admitted_attempt_id=f.admitted_attempt_id AND hi.admitted_manifest_id=f.admitted_manifest_id)) AND hi.fact_id=f.id AND hi.person_id=f.person_id".into())
     } else {
         native_parts(kind)
     };
     let extra = if external {
-        "f.stable_position,f.plan_id,f.attempt_id,f.manifest_id,f.identity_id,f.source_time_basis"
+        "f.stable_position,COALESCE(f.plan_id,f.admitted_plan_id) AS plan_id,COALESCE(f.attempt_id,f.admitted_attempt_id) AS attempt_id,COALESCE(f.manifest_id,f.admitted_manifest_id) AS manifest_id,f.identity_id,f.source_time_basis,f.admitted_root_id"
     } else {
-        "NULL::bigint AS stable_position,NULL::uuid AS plan_id,NULL::uuid AS attempt_id,NULL::uuid AS manifest_id,NULL::uuid AS identity_id,NULL::text AS source_time_basis"
+        "NULL::bigint AS stable_position,NULL::uuid AS plan_id,NULL::uuid AS attempt_id,NULL::uuid AS manifest_id,NULL::uuid AS identity_id,NULL::text AS source_time_basis,NULL::uuid AS admitted_root_id"
     };
     let mut sql=format!("SELECT f.id,f.occurred_at,f.recorded_at,f.origin,f.correlation_id,{display} AS display_at,{actor} AS actor,CASE WHEN octet_length(m.value::text)<=16384 THEN m.value ELSE NULL END AS metadata,octet_length(m.value::text)>16384 AS metadata_overflow,{extra} FROM {} f LEFT JOIN app_user a ON a.id=f.{actor_column}{joins} CROSS JOIN LATERAL (SELECT {metadata} AS value) m WHERE f.organization_id=$1 AND f.person_id=$2",kind.table);
     if detail {
@@ -522,15 +522,28 @@ async fn value(
     }
     let external = kind.family != Family::Native;
     let metadata = if external {
-        history_import::display(
-            tx,
-            key,
-            scope.org,
-            row.try_get("plan_id")?,
-            row.try_get("manifest_id")?,
-        )
-        .await
-        .map_err(|_| ReviewError::Unavailable)?
+        let display = if let Some(root) = row.try_get::<Option<Uuid>, _>("admitted_root_id")? {
+            super::admitted_history_store::display(
+                tx,
+                key,
+                scope.org,
+                root,
+                row.try_get("plan_id")?,
+                row.try_get("attempt_id")?,
+                row.try_get("manifest_id")?,
+            )
+            .await
+        } else {
+            history_import::display(
+                tx,
+                key,
+                scope.org,
+                row.try_get("plan_id")?,
+                row.try_get("manifest_id")?,
+            )
+            .await
+        };
+        display.map_err(|_| ReviewError::Unavailable)?
     } else {
         row.try_get("metadata")?
     };
@@ -543,7 +556,7 @@ async fn value(
         result["read_revision"] = json!(scope.revision.to_string());
         result["correlation_id"] = json!(row.try_get::<Uuid, _>("correlation_id")?);
         result["provenance"] = if external {
-            json!({"plan_id":row.try_get::<Uuid,_>("plan_id")?,"attempt_id":row.try_get::<Uuid,_>("attempt_id")?,"manifest_id":row.try_get::<Uuid,_>("manifest_id")?,"identity_id":row.try_get::<Uuid,_>("identity_id")?,"source_time_basis":row.try_get::<String,_>("source_time_basis")?,"stable_position":row.try_get::<i64,_>("stable_position")?.to_string()})
+            json!({"owner_kind":if row.try_get::<Option<Uuid>,_>("admitted_root_id")?.is_some(){"admitted"}else{"original"},"admitted_root_id":row.try_get::<Option<Uuid>,_>("admitted_root_id")?,"plan_id":row.try_get::<Uuid,_>("plan_id")?,"attempt_id":row.try_get::<Uuid,_>("attempt_id")?,"manifest_id":row.try_get::<Uuid,_>("manifest_id")?,"identity_id":row.try_get::<Uuid,_>("identity_id")?,"source_time_basis":row.try_get::<String,_>("source_time_basis")?,"stable_position":row.try_get::<i64,_>("stable_position")?.to_string()})
         } else {
             Value::Null
         };

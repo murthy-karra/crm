@@ -139,6 +139,7 @@ class Binding(
             (0 until capabilities.length()).any { capabilities.getString(it) == wanted }
         }
     }
+    fun supportsPeopleSearch(): Boolean { val capabilities = JSONObject(bootstrap).getJSONArray("capabilities"); return (0 until capabilities.length()).any { capabilities.getString(it) == "people_search" } }
     companion object {
         fun parse(value: JSONObject, actor: String, org: String, installation: String): Binding {
             if (value.getString("protocol") != PROTOCOL)

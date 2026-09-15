@@ -4036,3 +4036,6 @@ async fn mobile005_publish_failure_keeps_committed_receipt_and_intake_admission_
     assert_eq!(count, 1);
     server.abort();
 }
+
+#[path = "fixtures/mobile007.rs"]
+mod mobile007;

@@ -1,7 +1,7 @@
 # Mobile007 — Search and download handoff contract
 
-D-086 accepts implementation. Checkpoint based on `d8367a7`; planning round1 is
-in progress. This file freezes compatible wire detail within the accepted
+D-086 accepts implementation. Checkpoint based on `d8367a7`; both planning
+review rounds are complete and the verdict is READY. This file freezes compatible wire detail within the accepted
 [specification](../specs/MOBILE_007_FIND_AND_SAVE_PEOPLE.md), not new product policy.
 
 ## Discovery request

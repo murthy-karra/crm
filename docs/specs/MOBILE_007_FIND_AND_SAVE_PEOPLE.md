@@ -2,13 +2,11 @@
 
 **IMPLEMENTATION ACCEPTED — D-086, 2026-09-15.** The user accepted both plans
 and declared contracts for implementation and isolated synthetic verification.
-Independent planning review is in progress before code work. Compatible review
+Both independent planning reviews are READY. Compatible review
 corrections are owned work; materially different policy and publication/deployment
 remain separate. [Current implementation status](../tasks/MOBILE_007_010d3_IMPLEMENTATION_STATUS.md)
 owns progress and evidence; planning-era wording below does not limit D-086.
 
-**DRAFT — planning authorized, 2026-09-15 (D-085).** User-selected outcome;
-new contracts and implementation remain subject to review and acceptance.
 [Brief](../tasks/MOBILE_007_IMPL.md), [paired plan](../plans/MOBILE_007_010d3_PLAN.md).
 
 ## 1. Outcome

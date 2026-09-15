@@ -21,6 +21,7 @@ pub async fn begin<'a>(
     if exclusive {
         crate::auth::workspace::exclusive(&mut tx, ctx.organization_id).await?;
     }
+    crate::auth::workspace::shared(&mut tx, ctx.organization_id).await?;
     store::require_admin(&mut tx, ctx).await?;
     store::lock_org(&mut tx, ctx.organization_id).await?;
     Ok(tx)
@@ -331,4 +332,68 @@ pub async fn display(
 }
 pub fn terminal(state: &str) -> bool {
     matches!(state, "completed" | "cancelled")
+}
+
+/// Existing global identities count as present only with a live, consistent
+/// immutable fact and an authenticated display under their original owner.
+pub(crate) async fn existing_fact(
+    conn: &mut PgConnection,
+    key: &RawPayloadKey,
+    org: OrganizationId,
+    identity: &PgRow,
+    expected: &PgRow,
+) -> Result<Option<Uuid>, MigrationError> {
+    let Some(id) = identity.get::<Option<Uuid>, _>("fact_id") else {
+        return Ok(None);
+    };
+    if identity.get::<String, _>("family") != expected.get::<String, _>("family")
+        || identity.get::<Option<Uuid>, _>("person_id")
+            != expected.get::<Option<Uuid>, _>("person_id")
+        || identity.get::<Vec<u8>, _>("semantic_hmac")
+            != expected.get::<Vec<u8>, _>("semantic_hmac")
+        || identity
+            .get::<Option<chrono::DateTime<chrono::Utc>>, _>("erased_at")
+            .is_some()
+    {
+        return Ok(None);
+    }
+    let table = source::fact_table(&expected.get::<String, _>("family"))?;
+    let fact = sqlx::query(&format!("SELECT f.* FROM {table} f JOIN person p ON p.id=f.person_id AND p.organization_id=f.organization_id WHERE f.id=$1 AND f.organization_id=$2 AND f.identity_id=$3 AND f.person_id=$4"))
+        .bind(id).bind(org.0).bind(identity.get::<Uuid,_>("id")).bind(identity.get::<Option<Uuid>,_>("person_id")).fetch_optional(&mut *conn).await?;
+    let Some(fact) = fact else { return Ok(None) };
+    let decoded = if let Some(root) = identity.get::<Option<Uuid>, _>("admitted_root_id") {
+        for field in [
+            "admitted_root_id",
+            "admitted_plan_id",
+            "admitted_attempt_id",
+            "admitted_manifest_id",
+        ] {
+            if fact.get::<Option<Uuid>, _>(field) != identity.get::<Option<Uuid>, _>(field) {
+                return Ok(None);
+            }
+        }
+        super::admitted_history_store::display(
+            conn,
+            key,
+            org,
+            root,
+            identity.get("admitted_plan_id"),
+            identity.get("admitted_attempt_id"),
+            identity.get("admitted_manifest_id"),
+        )
+        .await
+    } else {
+        if fact.get::<Option<Uuid>, _>("admitted_root_id").is_some()
+            || fact.get::<Option<Uuid>, _>("attempt_id")
+                != identity.get::<Option<Uuid>, _>("owner_run_id")
+        {
+            return Ok(None);
+        }
+        display(conn, key, org, fact.get("plan_id"), fact.get("manifest_id")).await
+    };
+    match decoded {
+        Ok(_) => Ok(Some(id)),
+        Err(MigrationError::NotFound | MigrationError::Crypto) => Ok(None),
+        Err(error) => Err(error),
+    }
 }

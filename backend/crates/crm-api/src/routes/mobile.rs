@@ -22,6 +22,10 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/mobile/v1/bootstrap", post(bootstrap))
         .route(
+            "/api/mobile/v1/people/search",
+            post(search_people).layer(DefaultBodyLimit::max(4096)),
+        )
+        .route(
             "/api/mobile/v1/operations",
             post(operation).layer(DefaultBodyLimit::max(128 * 1024)),
         )
@@ -131,6 +135,20 @@ async fn bootstrap(
 ) -> Result<Json<Value>, Error> {
     let (pool, _) = dependencies(&state)?;
     Ok(Json(mobile::bootstrap(pool, &auth, body(input)?).await?))
+}
+
+async fn search_people(
+    State(state): State<AppState>,
+    auth: AuthContext,
+    headers: HeaderMap,
+    query: Result<Query<Empty>, QueryRejection>,
+    input: Result<Json<mobile::SearchPeopleRequest>, JsonRejection>,
+) -> Result<Json<mobile::SearchPeopleResponse>, Error> {
+    query.map_err(|_| Error(MobileError::Code(400, "malformed_request")))?;
+    let (pool, _) = dependencies(&state)?;
+    Ok(Json(
+        mobile::search_people(pool, &auth, context(&headers)?, body(input)?).await?,
+    ))
 }
 async fn operation(
     State(state): State<AppState>,

@@ -315,10 +315,18 @@ mod db_metadata_import_concurrency;
 mod db_admitted_activity;
 #[cfg(feature = "perf-harness")]
 mod db_admitted_activity_ui_fixture;
+mod db_admitted_history;
+mod db_admitted_history_authority;
+#[cfg(feature = "perf-harness")]
+mod db_admitted_history_performance;
+mod db_admitted_history_ui_fixture;
 mod db_admitted_metadata;
 mod db_admitted_metadata_handover;
 mod db_admitted_metadata_http_boundary;
 mod db_admitted_metadata_readiness;
+#[cfg(feature = "perf-harness")]
+#[path = "fixtures/mobile007_plans.rs"]
+mod mobile007_plans;
 
 mod db_activity_review;
 

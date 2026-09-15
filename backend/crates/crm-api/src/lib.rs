@@ -132,6 +132,7 @@ fn build_app_with_routers_inner(
             .merge(routes::admitted_people_refreshes::router())
             .merge(routes::admitted_metadata_imports::router())
             .merge(routes::admitted_activity_imports::router())
+            .merge(routes::admitted_history_imports::router())
             .merge(routes::migration_imports::router())
             .merge(routes::metadata_imports::router())
             .merge(routes::activity_imports::router())
@@ -498,6 +499,39 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
                         Ok(false) => break,
                         Err(error) => {
                             tracing::warn!(outcome=%error,"history import sweep failed");
+                            break;
+                        }
+                    }
+                }
+            }
+        })
+    });
+    let _admitted_history_worker = state.db.as_ref().map(|pool| {
+        let pool = pool.clone();
+        let state = state.clone();
+        tokio::spawn(async move {
+            let session = domain::migration::admitted_history_worker::WorkerSession::default();
+            let mut tick = tokio::time::interval(std::time::Duration::from_millis(200));
+            tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                tick.tick().await;
+                let release = state.current_import_release().await;
+                // Each unit has a separate bounded, fenced transaction. Drain
+                // available work without paying an idle delay for every 50 rows.
+                for _ in 0..32 {
+                    match domain::migration::admitted_history_worker::run_once_with_session(
+                        &pool,
+                        &state.raw_payload_key,
+                        &state.snapshot_policy,
+                        release.as_deref(),
+                        &session,
+                    )
+                    .await
+                    {
+                        Ok(true) => tokio::task::yield_now().await,
+                        Ok(false) => break,
+                        Err(error) => {
+                            tracing::warn!(outcome=%error,"admitted history import sweep failed");
                             break;
                         }
                     }

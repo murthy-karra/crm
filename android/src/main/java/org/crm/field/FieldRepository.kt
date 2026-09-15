@@ -11,6 +11,8 @@ import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
+data class OrganizationSearchPerson(val id: String, val displayName: String, val stageName: String?, val assignedName: String?, val email: String?, val phone: String?) { companion object { fun parse(item: JSONObject): OrganizationSearchPerson { val id = uuid(item.getString("person_id")); val stage = item.optJSONObject("stage"); val assigned = item.optJSONObject("assigned_user"); require(item.getString("display_name").isNotBlank()); stage?.let { uuid(it.getString("id")); require(it.getString("name").isNotBlank()) }; assigned?.let { uuid(it.getString("id")); require(it.getString("display_name").isNotBlank()) }; return OrganizationSearchPerson(id, item.getString("display_name"), stage?.getString("name"), assigned?.getString("display_name"), item.stringOrNull("primary_email"), item.stringOrNull("primary_phone")) } } }
+data class RequestedPin(val id: String, val label: String, val shortId: String)
 
 class FieldUi(
     val locked: Boolean = true,
@@ -43,6 +45,7 @@ class FieldUi(
     val metadataFields: List<MetadataFieldRow> = emptyList(),
     val metadataOptions: List<MetadataOptionRow> = emptyList(),
     val metadataEditingEnabled: Boolean = false,
+    val pinnedPeople: Set<String> = emptySet(), val organizationSearchResults: List<OrganizationSearchPerson> = emptyList(), val organizationSearchHasMore: Boolean = false, val organizationSearching: Boolean = false, val organizationSearchMessage: String = "", val requestedPins: List<RequestedPin> = emptyList(), val pinReviewRequired: Boolean = false, val peopleReasons: Map<String, List<String>> = emptyMap(),
 )
 
 class ActiveAccount(
@@ -72,6 +75,7 @@ class FieldRepository(
     private var selected: String? = null
     private var syncJob: Job? = null
     private var automaticAttempts = 0
+    private var organizationSearchEpoch = 0L; private var organizationSearchResults: List<OrganizationSearchPerson> = emptyList(); private var organizationSearchHasMore = false; private var organizationSearching = false; private var organizationSearchMessage = ""
 
     suspend fun restore() =
         withContext(Dispatchers.IO) {
@@ -229,6 +233,7 @@ class FieldRepository(
                 epoch++
                 syncJob?.cancel()
                 selected = null
+                organizationSearchEpoch++; organizationSearchResults = emptyList(); organizationSearchHasMore = false; organizationSearching = false; organizationSearchMessage = ""
                 mutable.value =
                     FieldUi(message = message, pendingCount = registry.optInt("pending"))
                 try {
@@ -523,11 +528,13 @@ class FieldRepository(
         withContext(Dispatchers.IO) {
             val account = active ?: throw AccessLocked()
             check(account)
-            uuid(id)
-            if (value) account.store.dao.pin(PinRow(id)) else account.store.dao.unpin(id)
+            account.store.setPinIntent(id, value)
             refreshView("Offline selection will update at the next complete sync")
             requestSync(true)
         }
+    suspend fun retryPinRequests() = withContext(Dispatchers.IO) { val account = active ?: throw AccessLocked(); check(account); account.store.retryPinRequests(); refreshView("Retrying requested downloads"); requestSync(true) }
+    suspend fun clearOrganizationSearch() = withContext(Dispatchers.IO) { organizationSearchEpoch++; organizationSearchResults = emptyList(); organizationSearchHasMore = false; organizationSearchMessage = ""; organizationSearching = false; refreshView() }
+    suspend fun searchOrganization(term: String) = withContext(Dispatchers.IO) { val account = active ?: throw AccessLocked(); check(account); if (!account.store.binding.supportsPeopleSearch()) { organizationSearchMessage = "Organization search is unavailable. Update the app to use this feature."; refreshView(); return@withContext }; val trimmed = term.trim(); if (trimmed.isEmpty()) { clearOrganizationSearch(); return@withContext }; if (trimmed.codePointCount(0, trimmed.length) > 200 || trimmed.toByteArray().size > 800) { organizationSearchMessage = "Use 200 characters or fewer."; refreshView(); return@withContext }; val run = ++organizationSearchEpoch; organizationSearching = true; organizationSearchMessage = "Searching the Organization…"; organizationSearchResults = emptyList(); organizationSearchHasMore = false; refreshView(organizationSearchMessage); try { val response = account.api.searchPeople(account.store.binding, trimmed); check(account); if (run != organizationSearchEpoch) return@withContext; val items = response.getJSONArray("items"); organizationSearchResults = (0 until items.length()).map { OrganizationSearchPerson.parse(items.getJSONObject(it)) }; organizationSearchHasMore = response.getBoolean("has_more"); organizationSearchMessage = if (organizationSearchResults.isEmpty()) "No matches. Search uses name fragments or an exact email or phone." else "" } catch (error: Exception) { if (run == organizationSearchEpoch) organizationSearchMessage = error.localizedMessage ?: "Search failed." } finally { if (run == organizationSearchEpoch) organizationSearching = false; if (active === account && run == organizationSearchEpoch) refreshView(organizationSearchMessage) } }
 
     fun requestSync(manual: Boolean = false) {
         if (active == null || syncJob?.isActive == true) return
@@ -575,7 +582,7 @@ class FieldRepository(
             } catch (error: ApiFailure) {
                 // Reclaimed/expired generation rows can return404. Operation404 has a different
                 // recovery path.
-                if (error.status == 404) throw ApiFailure(409, "generation_expired")
+                if (error.status == 404 && error.code != "not_found") throw ApiFailure(409, "generation_expired")
                 throw error
             }
             account.store.dao.removeMeta("sync_retry_at")
@@ -583,6 +590,7 @@ class FieldRepository(
             account.store.dao.removeMeta("retry_mandatory")
             automaticAttempts = 0
             refreshView("Up to date. Complete cache available offline.")
+            if ((account.store.dao.pinSetRevision()?.toLongOrNull() ?: 0L) > (account.store.dao.admittedPinRevision()?.toLongOrNull() ?: 0L)) schedulePinFollowup()
         } catch (cancel: CancellationException) {
             throw cancel
         } catch (error: Exception) {
@@ -604,6 +612,14 @@ class FieldRepository(
                     )
                 else -> {
                     try {
+                        val pinReviewRequired = error is ApiFailure && error.code == "not_found"
+                        if (pinReviewRequired) {
+                            account.store.markPinFailure("not_found")
+                            // An invalid requested set is durable review state. Do not
+                            // turn it into an automatic retry loop; the user can cancel
+                            // the selected record or explicitly retry the remaining set.
+                            automaticAttempts = 3
+                        }
                         if (
                             error is ApiFailure &&
                                 error.code in listOf("generation_changed", "generation_expired")
@@ -651,6 +667,8 @@ class FieldRepository(
             if (active === account && mutable.value.busy) refreshView(mutable.value.message)
         }
     }
+
+    private fun schedulePinFollowup() { scope.launch { delay(100); this@FieldRepository.sync(manual = false) } }
 
     private suspend fun upload(account: ActiveAccount, manual: Boolean) {
         val dao = account.store.dao
@@ -812,6 +830,7 @@ class FieldRepository(
             generation = null
         }
         if (generation == null) {
+            val pinStage = store.preparePinStaging()
             val created =
                 account.api.call(
                     "POST",
@@ -820,14 +839,14 @@ class FieldRepository(
                     json(
                             "protocol" to PROTOCOL,
                             "installation_id" to store.binding.installation,
-                            "pinned_person_ids" to JSONArray(dao.pins()),
+                            "pinned_person_ids" to JSONArray(pinStage.second),
                             "include_stage_catalog" to store.binding.supportsStageChanges(),
                             "include_metadata" to store.binding.supportsMetadata(),
                         )
                         .toString(),
                 )
             check(account)
-            store.beginGeneration(created)
+            store.beginGeneration(created, pinStage.first)
             generation = created
         }
         val id = uuid(generation.getString("generation_id"))
@@ -984,6 +1003,8 @@ class FieldRepository(
                         dao.metadataFields(),
                         dao.allMetadataOptions(),
                         account.store.binding.supportsMetadata(),
+                        dao.pins().toSet(), organizationSearchResults, organizationSearchHasMore, organizationSearching, organizationSearchMessage,
+                        account.store.requestedPinProjection(people, organizationSearchResults), account.store.pinReviewRequired(), account.store.activeReasons(),
                     )
                 if (active === account) mutable.value = result
             } catch (_: Exception) {

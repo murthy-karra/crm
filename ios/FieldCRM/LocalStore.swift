@@ -7,7 +7,7 @@ final class LocalStore {
     private var db: OpaquePointer?
     let identity: String, context: String, url: URL
     private let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
-    init(url: URL, key: Data, identity: String, context: String, schemaTarget: Int = 9) throws {
+    init(url: URL, key: Data, identity: String, context: String, schemaTarget: Int = 10) throws {
         self.url = url; self.identity = identity; self.context = context
         guard sqlite3_open_v2(url.path, &db, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX, nil) == SQLITE_OK else {
             sqlite3_close(db); db = nil; throw LocalError.storage
@@ -31,7 +31,7 @@ final class LocalStore {
     deinit { sqlite3_close(db) }
     private func migrate(to target: Int) throws {
         let version = Int(try rows("PRAGMA user_version").first?.first ?? "0") ?? 0
-        guard version <= 9 else { throw LocalError.invalidProtocol }
+        guard version <= 10 else { throw LocalError.invalidProtocol }
         try transaction {
             if version < 1 {
                 for sql in [
@@ -102,6 +102,19 @@ final class LocalStore {
                 try run("CREATE TABLE metadata_components(generation TEXT NOT NULL,person TEXT NOT NULL,revision TEXT NOT NULL,body TEXT NOT NULL,PRIMARY KEY(generation,person,revision))")
                 try run("CREATE INDEX metadata_component_person ON metadata_components(person,revision)")
                 try run("PRAGMA user_version=9")
+            }
+            if version < 10 && target >= 10 {
+                try run("CREATE TABLE IF NOT EXISTS pin_intents(person TEXT PRIMARY KEY,desired INTEGER NOT NULL,intent_revision INTEGER NOT NULL,failure TEXT)")
+                try run("ALTER TABLE members ADD COLUMN reasons TEXT NOT NULL DEFAULT ''")
+                let legacy = try rows("SELECT value FROM metadata WHERE key='pins'").first?.first
+                let oldPins = legacy.flatMap { try? decode([String].self, Data($0.utf8)) } ?? []
+                for person in oldPins where UUID(uuidString: person) != nil {
+                    try run("INSERT OR IGNORE INTO pin_intents(person,desired,intent_revision,failure) VALUES(?,1,1,NULL)", [person])
+                }
+                try setMeta("pin_set_revision", oldPins.isEmpty ? "0" : "1")
+                try setMeta("pin_admitted_revision", "0")
+                try setMeta("staging_pin_revision", "0")
+                try run("PRAGMA user_version=10")
             }
         }
     }
@@ -476,11 +489,18 @@ final class LocalStore {
         guard let active = try meta("active") else { return nil }
         return try rows("SELECT b.body FROM members m JOIN bundles b ON b.person=m.person AND b.revision=m.revision WHERE m.generation=? AND m.person=?", [active, person]).first.map { try decode(Bundle.self, Data($0[0].utf8)) }
     }
+    func activeReasons() throws -> [String: [String]] {
+        guard let active = try meta("active") else { return [:] }
+        return Dictionary(uniqueKeysWithValues: try rows("SELECT person,reasons FROM members WHERE generation=?", [active]).map { row in
+            (row[0], (try? decode([String].self, Data(row[1].utf8))) ?? [])
+        })
+    }
     func generation() throws -> Generation? { try meta("staging").map { try decode(Generation.self, Data($0.utf8)) } }
-    func begin(_ generation: Generation) throws {
+    func begin(_ generation: Generation, pinSetRevision: Int64? = nil) throws {
         guard generation.context_id == context, generation.complete, generation.selected_count <= 25000 else { throw LocalError.invalidProtocol }
         try transaction {
             try setMeta("staging", try string(generation))
+            try setMeta("staging_pin_revision", String(pinSetRevision ?? (Int64(try meta("pin_set_revision") ?? "0") ?? 0)))
             try appendManifest(generation.generation_id, generation.manifest)
             if let catalog = generation.stage_catalog {
                 guard (try? revision(catalog.revision)) != nil, catalog.stages_url == "/api/mobile/v1/reconciliations/\(generation.generation_id)/stages" else { throw LocalError.invalidProtocol }
@@ -495,14 +515,29 @@ final class LocalStore {
             }
         }
     }
+    func preparePinStaging() throws -> (revision: Int64, pins: [String]) {
+        try transaction {
+            let selected = try pins()
+            let revision = try pinSetRevision()
+            try setMeta("staging_pin_revision", String(revision))
+            try setMeta("staging_pins", try string(selected))
+            return (revision, selected)
+        }
+    }
     func appendManifest(_ generation: String, _ manifest: Manifest) throws {
         guard manifest.items.count <= 250, manifest.complete == (manifest.next_cursor == nil) else { throw LocalError.invalidProtocol }
         for item in manifest.items {
             _ = try revision(item.revision)
             if let metadata = item.metadata_revision { _ = try revision(metadata) }
-            let versioned = !(try rows("PRAGMA table_info(members)").filter { $0.count > 1 && $0[1] == "metadata_revision" }).isEmpty
-            if versioned {
+            let memberColumns = try rows("PRAGMA table_info(members)").compactMap { $0.count > 1 ? $0[1] : nil }
+            let versioned = memberColumns.contains("metadata_revision")
+            let hasReasons = memberColumns.contains("reasons")
+            if versioned && hasReasons {
+                try run("INSERT INTO members(generation,person,revision,metadata_revision,reasons) VALUES(?,?,?,?,?) ON CONFLICT(generation,person) DO UPDATE SET revision=excluded.revision,metadata_revision=excluded.metadata_revision,reasons=excluded.reasons", [generation, item.person_id, item.revision, item.metadata_revision, try string(item.reasons)])
+            } else if versioned {
                 try run("INSERT INTO members(generation,person,revision,metadata_revision) VALUES(?,?,?,?) ON CONFLICT(generation,person) DO UPDATE SET revision=excluded.revision,metadata_revision=excluded.metadata_revision", [generation, item.person_id, item.revision, item.metadata_revision])
+            } else if hasReasons {
+                try run("INSERT INTO members(generation,person,revision,reasons) VALUES(?,?,?,?) ON CONFLICT(generation,person) DO UPDATE SET revision=excluded.revision,reasons=excluded.reasons", [generation, item.person_id, item.revision, try string(item.reasons)])
             } else {
                 try run("INSERT INTO members VALUES(?,?,?) ON CONFLICT(generation,person) DO UPDATE SET revision=excluded.revision", [generation, item.person_id, item.revision])
             }
@@ -664,7 +699,15 @@ final class LocalStore {
             try run("UPDATE bundle_qualification SET metadata_revisions=1 WHERE person=? AND revision=?", [component.person_id, component.revision])
         }
     }
-    func stageCatalogCursor() throws -> String? { try meta("stage_catalog_cursor") }
+    func stageCatalogCursor() throws -> String? {
+        guard let staged = try generation(), staged.stage_catalog != nil else { return nil }
+        guard let state = try rows("SELECT complete FROM stage_catalogs WHERE generation=?", [staged.generation_id]).first else { throw LocalError.invalidProtocol }
+        // A process can stop after the catalog completes but before the Person
+        // components seal. Completed catalogs must not restart at page one.
+        if state[0] == "1" { return nil }
+        guard let cursor = try meta("stage_catalog_cursor") else { throw LocalError.invalidProtocol }
+        return cursor
+    }
     func activeStages() throws -> [Stage] {
         guard let generation = try meta("active_stage_catalog") else { return [] }
         return try rows("SELECT id,name,position FROM stage_catalog_stages WHERE generation=? ORDER BY position,id", [generation]).map { Stage(id: $0[0], name: $0[1], position: Int($0[2]) ?? 0) }
@@ -799,6 +842,7 @@ final class LocalStore {
                 }
             }
             try setMeta("active", seal.generation_id); try setMeta("today", try string(seal.today)); try setMeta("last_sync", seal.sealed_at)
+            if let staged = try meta("staging_pin_revision"), Int64(staged) != nil { try setMeta("pin_admitted_revision", staged) }
             if stage.stage_catalog != nil { try setMeta("active_stage_catalog", seal.generation_id) }
             if stage.metadata != nil { try setMeta("active_metadata_catalog", seal.generation_id) }
             for op in try queue() where op.overlay && op.receipt != nil {
@@ -817,12 +861,16 @@ final class LocalStore {
             // current after a contact whose Person revision may be unchanged.
             try run("DELETE FROM metadata WHERE key='today_refresh_pending'")
             try run("DELETE FROM metadata WHERE key='staging'")
+            try run("DELETE FROM metadata WHERE key='staging_pin_revision'")
+            try run("DELETE FROM metadata WHERE key='staging_pins'")
             // Reclaim completed page copies only after the published pointer is durable in this transaction.
             try run("DELETE FROM pages WHERE generation=?", [seal.generation_id])
         }
     }
     func discardGeneration() throws {
         try run("DELETE FROM metadata WHERE key='staging'")
+        try run("DELETE FROM metadata WHERE key='staging_pin_revision'")
+        try run("DELETE FROM metadata WHERE key='staging_pins'")
         try run("DELETE FROM metadata WHERE key='stage_catalog_cursor'")
         for section in ["tags", "fields", "options"] { try run("DELETE FROM metadata WHERE key=?", ["metadata_catalog_cursor_\(section)"]) }
         try reclaimCache()
@@ -849,10 +897,28 @@ final class LocalStore {
         else { metadataRemaining = false }
         return base || metadataRemaining
     }
-    func pins() throws -> [String] { try meta("pins").map { try decode([String].self, Data($0.utf8)) } ?? [] }
+    func pins() throws -> [String] {
+        if !(try rows("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pin_intents'")).isEmpty { return try rows("SELECT person FROM pin_intents WHERE desired=1 ORDER BY person").map { $0[0] } }
+        return try meta("pins").map { try decode([String].self, Data($0.utf8)) } ?? []
+    }
     func pin(_ person: String) throws {
         guard UUID(uuidString: person) != nil else { throw LocalError.invalidInput }
-        var current = try pins(); if !current.contains(person) { current.append(person) }
-        try setMeta("pins", try string(current))
+        try transaction {
+            var current = try pins(); if current.contains(person) { return }
+            current.append(person); let next = (Int64(try meta("pin_set_revision") ?? "0") ?? 0) + 1
+            try setMeta("pins", try string(current)); try setMeta("pin_set_revision", String(next))
+            try run("INSERT INTO pin_intents(person,desired,intent_revision,failure) VALUES(?,1,?,NULL) ON CONFLICT(person) DO UPDATE SET desired=1,intent_revision=excluded.intent_revision,failure=NULL", [person, String(next)])
+        }
+    }
+    func unpin(_ person: String) throws {
+        try transaction { var current = try pins(); guard current.contains(person) else { return }; current.removeAll { $0 == person }; let next = (Int64(try meta("pin_set_revision") ?? "0") ?? 0) + 1; try setMeta("pins", try string(current)); try setMeta("pin_set_revision", String(next)); try run("INSERT INTO pin_intents(person,desired,intent_revision,failure) VALUES(?,0,?,NULL) ON CONFLICT(person) DO UPDATE SET desired=0,intent_revision=excluded.intent_revision,failure=NULL", [person, String(next)]) }
+    }
+    func pinSetRevision() throws -> Int64 { Int64(try meta("pin_set_revision") ?? "0") ?? 0 }
+    func admittedPinRevision() throws -> Int64 { Int64(try meta("pin_admitted_revision") ?? "0") ?? 0 }
+    func markPinFailure(_ code: String) throws { try run("UPDATE pin_intents SET failure=? WHERE desired=1", [code]) }
+    func retryPinRequests() throws { try run("UPDATE pin_intents SET failure=NULL WHERE desired=1") }
+    func pinFailure(_ person: String) throws -> String? {
+        guard let value = try rows("SELECT failure FROM pin_intents WHERE person=? AND desired=1", [person]).first?.first, !value.isEmpty else { return nil }
+        return value
     }
 }

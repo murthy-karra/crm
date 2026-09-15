@@ -67,6 +67,8 @@ pub async fn run_once_with_session(
             other => return Err(other),
         };
         let mut tx = pool.begin().await?;
+        crate::auth::workspace::bounded_lock_wait(&mut tx).await?;
+        crate::auth::workspace::shared(&mut tx, claim.org).await?;
         store::lock_org(&mut tx, claim.org).await?;
         let r = s::row(&mut tx, claim.org, claim.id).await?;
         if r.get::<Option<Uuid>, _>("lease_token") == Some(claim.token) {
@@ -541,13 +543,17 @@ async fn apply(
                             || old.get::<Option<Uuid>, _>("person_id") != person
                         {
                             reason = Some("identity_conflict".into());
-                        } else {
-                            fact = old.get::<Option<Uuid>, _>("fact_id");
+                        } else if let Some(existing) =
+                            s::existing_fact(conn, key, c.org, &old, &m).await?
+                        {
+                            fact = Some(existing);
                             outcome = if m.get::<String, _>("disposition") == "equal_repeat" {
                                 "equal_repeat"
                             } else {
                                 "already_imported"
                             };
+                        } else {
+                            reason = Some("identity_conflict".into());
                         }
                     } else if m.get::<String, _>("disposition") == "equal_repeat" {
                         reason = Some("identity_erased".into());

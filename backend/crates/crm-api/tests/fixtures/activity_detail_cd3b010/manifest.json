@@ -156,17 +156,17 @@
       "path": "backend/crates/crm-app/src/auth/workspace.rs",
       "function": "read_check",
       "start_line": 78,
-      "sha256": "1571cd09152241a888e044e048e5e2b6a52550fd77d8256d3b870ef4ed68f7d9",
-      "shared_revision": "3c01177",
-      "shared_revision_note": "010f4 admitted-activity reader compatibility stamp is shared by both arms under the current HTTP/authentication protocol. read_check also retains the history reader stamp. Three frozen reader bodies remain exact cd3b010; this is not a historical authentication-stack comparison."
+      "sha256": "0b71ad5813637345ad79be37f04c3b2d0f878c1303135d012e4cad28d31cfea3",
+      "shared_revision": "D-086/010d3",
+      "shared_revision_note": "010d3 adds the independent transaction-local admitted-history reader stamp to read_check on the actual read transaction, alongside the retained original-history and admitted-activity stamps. Both paired arms intentionally share this current HTTP/authentication helper. Three frozen reader bodies remain exact cd3b010; this is not a historical authentication-stack comparison."
     },
     {
       "path": "backend/crates/crm-app/src/auth/workspace.rs",
       "function": "ordinary",
       "start_line": 47,
-      "sha256": "94b51a39a3066b431953cfd7d76ee430069abe8e28017d7c100d1eef9fc3e121",
-      "shared_revision": "3c01177",
-      "shared_revision_note": "010f4 admitted-activity reader compatibility stamp is shared by both arms under the current HTTP/authentication protocol. read_check also retains the history reader stamp. Three frozen reader bodies remain exact cd3b010; this is not a historical authentication-stack comparison."
+      "sha256": "a4d7eb88e48355336a49e41bef5f949dc27d842da9e899d020e8912697dc2ed0",
+      "shared_revision": "D-086/010d3",
+      "shared_revision_note": "010d3 ordinary reads now stamp both the original-history and independent admitted-history capabilities before the retained admitted-activity stamp. Both paired arms intentionally share this current helper and current HTTP/authentication stack. Three frozen reader bodies remain exact cd3b010; this is not a historical authentication-stack comparison."
     },
     {
       "path": "backend/crates/crm-app/src/auth/workspace.rs",

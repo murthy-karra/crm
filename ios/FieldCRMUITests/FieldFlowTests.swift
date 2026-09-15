@@ -69,6 +69,97 @@ final class FieldFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["signIn"].waitForExistence(timeout: 20))
         XCTAssertFalse(app.tabBars.buttons["People"].exists)
     }
+
+    @MainActor func testMobile007RequestedIntentSurvivesClearedSearchAndRelaunch() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication(); app.launchArguments = ["--synthetic-keychain", "uiMobile007Requested"]; app.launch()
+        func tab(_ name: String) {
+            if app.buttons["Close"].exists { app.buttons["Close"].tap() }
+            if app.keyboards.buttons["Search"].exists { app.keyboards.buttons["Search"].tap() }
+            XCTAssertTrue(app.tabBars.buttons[name].waitForExistence(timeout: 20))
+            app.tabBars.buttons[name].tap()
+        }
+        func finishSync() {
+            tab("Settings")
+            XCTAssertTrue(app.switches["offlineToggle"].waitForExistence(timeout: 10))
+            setSwitch(app.switches["offlineToggle"], to: false)
+            let sync = app.buttons["sync"]
+            expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: sync)
+            waitForExpectations(timeout: 180)
+            sync.tap()
+            expectation(for: NSPredicate(format: "label BEGINSWITH 'Synced. Complete downloaded workspace'"), evaluatedWith: app.staticTexts["statusMessage"])
+            waitForExpectations(timeout: 240)
+        }
+        func filterDownloaded(_ term: String) {
+            let field = app.searchFields.firstMatch
+            for _ in 0..<8 where !field.exists { app.swipeDown() }
+            XCTAssertTrue(field.waitForExistence(timeout: 10)); field.tap()
+            if app.buttons["Clear text"].exists { app.buttons["Clear text"].tap() }
+            field.typeText(term)
+            if app.keyboards.buttons["Search"].exists { app.keyboards.buttons["Search"].tap() }
+        }
+        func searchOrganization(_ term: String) {
+            let field = app.textFields["Name, exact email or phone"]
+            for _ in 0..<8 where !field.exists { app.swipeUp() }
+            XCTAssertTrue(field.waitForExistence(timeout: 10))
+            if app.buttons["Clear"].exists { app.buttons["Clear"].tap() }
+            field.tap(); field.typeText(term)
+            app.buttons["Search"].tap()
+        }
+        XCTAssertTrue(app.staticTexts["syntheticBanner"].waitForExistence(timeout: 20))
+        if app.buttons["signIn"].exists {
+            app.textFields["email"].tap(); app.textFields["email"].typeText("agent@mobile.test")
+            app.secureTextFields["password"].tap(); app.secureTextFields["password"].typeText("Mobile-demo-only-123!")
+            app.buttons["signIn"].tap()
+        }
+        finishSync()
+        tab("People"); filterDownloaded("Remote Prospect")
+        let cancel = app.buttons["cancelRequested_676d4fbb-7cb1-43c7-980f-e8769ef68a64"]
+        if cancel.waitForExistence(timeout: 3) { cancel.tap() }
+        finishSync()
+        XCTAssertTrue(app.staticTexts["100 people available offline"].exists)
+        setSwitch(app.switches["offlineToggle"], to: true)
+        tab("People"); filterDownloaded("Remote Prospect")
+        searchOrganization("Discovery Twin")
+        XCTAssertTrue(app.staticTexts["twin.one@synthetic.test"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.staticTexts["twin.two@synthetic.test"].exists)
+        searchOrganization("twin.two@synthetic.test")
+        XCTAssertTrue(app.staticTexts["twin.two@synthetic.test"].waitForExistence(timeout: 20))
+        XCTAssertFalse(app.staticTexts["twin.one@synthetic.test"].exists)
+        searchOrganization("+12025550101")
+        XCTAssertTrue(app.staticTexts["twin.one@synthetic.test"].waitForExistence(timeout: 20))
+        XCTAssertFalse(app.staticTexts["twin.two@synthetic.test"].exists)
+        searchOrganization("Remote Prospect")
+        XCTAssertTrue(app.staticTexts["Remote Prospect"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.buttons["Save offline"].firstMatch.waitForExistence(timeout: 20))
+        app.buttons["Save offline"].firstMatch.tap(); app.buttons["Clear"].tap()
+        for _ in 0..<5 where !cancel.exists { app.swipeDown() }
+        let requestedProof = XCTAttachment(screenshot: app.screenshot()); requestedProof.name = "requested-after-clear"; requestedProof.lifetime = .keepAlways; add(requestedProof)
+        XCTAssertTrue(cancel.waitForExistence(timeout: 10))
+        app.terminate(); app.launch()
+        tab("People"); filterDownloaded("Remote Prospect")
+        XCTAssertTrue(cancel.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Person 676d4fbb"].exists)
+        app.buttons["Retry requested downloads"].tap()
+        finishSync()
+        XCTAssertTrue(app.staticTexts["101 people available offline"].exists)
+        setSwitch(app.switches["offlineToggle"], to: true)
+        tab("People"); filterDownloaded("Remote Prospect")
+        let remote = app.buttons["person_676d4fbb-7cb1-43c7-980f-e8769ef68a64"]
+        XCTAssertTrue(remote.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Last synced: pinned"].exists)
+        remote.tap(); XCTAssertTrue(app.buttons["addNote"].waitForExistence(timeout: 10))
+        app.buttons["addNote"].tap()
+        let note = "Mobile007 offline proof " + UUID().uuidString.prefix(8)
+        app.textViews["composerText"].tap(); app.textViews["composerText"].typeText(note)
+        app.buttons["saveAction"].tap()
+        tab("Saved work")
+        XCTAssertTrue(app.staticTexts[note].waitForExistence(timeout: 10))
+        app.terminate(); app.launch(); tab("Saved work")
+        XCTAssertTrue(app.staticTexts[note].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.staticTexts["queueCount"].label.contains("1 pending"))
+        let proof = XCTAttachment(screenshot: app.screenshot()); proof.name = "mobile007-downloaded-person-offline-note-after-restart"; proof.lifetime = .keepAlways; add(proof)
+    }
     @MainActor func testRepeatedReadOnlyRefreshBeyondGenerationCapacity() throws {
         continueAfterFailure = false
         let app = XCUIApplication(); app.launchArguments = ["--synthetic-keychain"]; app.launch()

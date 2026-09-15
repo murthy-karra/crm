@@ -114,7 +114,7 @@ async fn seal_admission(f: &Fixture, parent: Uuid, people: Vec<Value>) -> Uuid {
     panic!("admission did not complete")
 }
 
-async fn ready_admission(f: &Fixture, parent: Uuid, people: Vec<Value>) -> Uuid {
+pub(super) async fn ready_admission(f: &Fixture, parent: Uuid, people: Vec<Value>) -> Uuid {
     let report = db_people_admission_execution::report(f, parent, people).await;
     let prepared = people_admission::prepare(
         &f.pool,
@@ -150,7 +150,7 @@ async fn ready_admission(f: &Fixture, parent: Uuid, people: Vec<Value>) -> Uuid 
     panic!("admission did not seal")
 }
 
-async fn confirm_admission(f: &Fixture, admission: Uuid) {
+pub(super) async fn confirm_admission(f: &Fixture, admission: Uuid) {
     let detail = people_admission::detail(&f.pool, &f.key, &f.ctx, admission)
         .await
         .unwrap();

@@ -228,6 +228,62 @@ class Mobile006StorageTest {
         }
     }
 
+    @Test fun populatedSchemaSixUpgradePreservesCacheDraftOutboxAndReceipt() {
+        // This is the installed-upgrade shape: build a populated Mobile005 cache,
+        // remove only the Mobile006 tables/columns, then let the real 6->9
+        // migrations upgrade it in place. The rows below are synthetic and stay
+        // inside the isolated test directory.
+        repeat(100) { index ->
+            val id = "10000000-0000-4000-8000-%012d".format(index)
+            store.dao.person(
+                PersonRow(
+                    id, "7", json("id" to id, "display_name" to "Upgrade Person %03d".format(index)).toString(),
+                    "[]", "[]", "[]", "legacy-generation", "2026-09-14T00:00:00Z", true, true, true,
+                )
+            )
+        }
+        val submittedDraft = store.saveDraft(
+            "mobile006-populated-operation", person, "add_note",
+            json("person_id" to person, "body" to "Preserved populated upgrade draft"),
+        )
+        val legacyOperation = store.submitDraft(submittedDraft.id, submittedDraft.revision)
+        val legacyDraft = store.saveDraft(
+            "mobile006-populated-draft", person, "add_note",
+            json("person_id" to person, "body" to "Preserved populated upgrade draft"),
+        )
+        val legacyReceipt = json(
+            "operation_id" to legacyOperation.id, "outcome" to "accepted", "resource_type" to "note",
+            "resource_id" to "81000000-0000-4000-8000-000000000006", "committed_revision" to JSONObject.NULL,
+            "person_revision" to "7", "accepted_at" to "2026-09-14T00:00:00Z", "changed" to true, "replayed" to false,
+        )
+        store.acknowledge(legacyOperation.id, legacyReceipt)
+        val envelopeBytes = legacyOperation.envelope
+
+        val raw = database.openHelper.writableDatabase
+        listOf("metadata_catalog_pages", "metadata_options", "metadata_fields", "metadata_tags", "metadata_context", "metadata_drafts", "pin_intents").forEach { raw.execSQL("DROP TABLE IF EXISTS $it") }
+        raw.execSQL("ALTER TABLE people RENAME TO people_v9")
+        raw.execSQL("CREATE TABLE people (id TEXT NOT NULL PRIMARY KEY, revision TEXT NOT NULL, summary TEXT NOT NULL, contacts TEXT NOT NULL, notes TEXT NOT NULL, tasks TEXT NOT NULL, generation TEXT NOT NULL, evaluatedAt TEXT NOT NULL, noteRevisionsQualified INTEGER NOT NULL DEFAULT 0, stageRevisionsQualified INTEGER NOT NULL DEFAULT 0, detailsRevisionsQualified INTEGER NOT NULL DEFAULT 0)")
+        raw.execSQL("INSERT INTO people SELECT id,revision,summary,contacts,notes,tasks,generation,evaluatedAt,noteRevisionsQualified,stageRevisionsQualified,detailsRevisionsQualified FROM people_v9")
+        raw.execSQL("DROP TABLE people_v9")
+        raw.execSQL("ALTER TABLE manifest RENAME TO manifest_v9")
+        raw.execSQL("CREATE TABLE manifest (generation TEXT NOT NULL, person TEXT NOT NULL, revision TEXT NOT NULL, PRIMARY KEY(generation,person))")
+        raw.execSQL("INSERT INTO manifest SELECT generation,person,revision FROM manifest_v9")
+        raw.execSQL("DROP TABLE manifest_v9")
+        raw.execSQL("DROP TABLE room_master_table")
+        raw.execSQL("PRAGMA user_version=6")
+        database.close()
+        database = FieldDatabase.open(context, directory, key)
+
+        val upgraded = database.data()
+        assertEquals(9, database.openHelper.readableDatabase.query("PRAGMA user_version").use { it.moveToFirst(); it.getInt(0) })
+        assertEquals(100, upgraded.people().size)
+        assertEquals(envelopeBytes, upgraded.operation(legacyOperation.id)!!.envelope)
+        assertEquals(legacyReceipt.toString(), upgraded.operation(legacyOperation.id)!!.receipt)
+        assertEquals("Preserved populated upgrade draft", JSONObject(upgraded.draft(legacyDraft.id)!!.payload).getString("body"))
+        assertEquals("covered", upgraded.operation(legacyOperation.id)!!.status)
+        assertFalse(upgraded.person(person)!!.metadataRevisionsQualified)
+    }
+
     private fun actions() = JSONArray()
         .put(json("kind" to "add_tag", "tag_id" to tag))
         .put(json("kind" to "set_field", "field_id" to text, "value" to json("text" to "Saved offline")))

@@ -178,6 +178,7 @@ struct PeopleView: View {
     @EnvironmentObject private var model: FieldModel
     @State private var search = ""
     @State private var pin = ""
+    @State private var organizationTerm = ""
     var filtered: [Bundle] { model.people.filter { search.isEmpty || $0.summary["display_name"].text.localizedCaseInsensitiveContains(search) } }
     var body: some View {
         List {
@@ -187,8 +188,32 @@ struct PeopleView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(person.summary["display_name"].text).font(.headline)
                         Text(model.displayedStageName(person)).font(.caption).foregroundStyle(.secondary)
+                        Text("Last synced: \(model.selectionReason(person.person))").font(.caption2).foregroundStyle(.secondary)
                     }.padding(.vertical, 3)
                 }.accessibilityIdentifier("person_" + person.person)
+            }
+            if !model.requestedPins.isEmpty {
+                Section("Requested offline People") {
+                    if model.pinReviewRequired { Text("The requested set needs review. No individual Person was identified.").font(.caption).foregroundStyle(.red) }
+                    Button("Retry requested downloads") { model.retryPinRequests() }
+                    ForEach(model.requestedPins) { request in
+                        HStack {
+                            Text(request.label).accessibilityIdentifier("requested_\(request.personID)")
+                            Spacer()
+                            Button("Cancel") { model.unpin(request.personID) }.accessibilityIdentifier("cancelRequested_\(request.personID)")
+                        }
+                    }
+                }
+            }
+            Section("Search Organization") {
+                TextField("Name, exact email or phone", text: $organizationTerm).textInputAutocapitalization(.never).autocorrectionDisabled().onSubmit { Task { await model.searchOrganization(organizationTerm) } }
+                HStack { Button("Search") { Task { await model.searchOrganization(organizationTerm) } }.disabled(model.organizationSearching || organizationTerm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty); if model.organizationSearching { ProgressView().controlSize(.small) }; if !model.organizationSearchResults.isEmpty { Button("Clear") { organizationTerm = ""; model.clearOrganizationSearch() } } }
+                if !model.organizationSearchMessage.isEmpty { Text(model.organizationSearchMessage).font(.caption).foregroundStyle(.secondary) }
+                if model.organizationSearchHasMore { Text("More matches — refine your search.").font(.caption).foregroundStyle(.secondary) }
+                ForEach(model.organizationSearchResults) { result in
+                    let downloaded = model.people.contains { $0.person == result.person_id }
+                    VStack(alignment: .leading, spacing: 4) { Text(result.display_name).font(.headline); if let stage = result.stage { Text(stage.name).font(.caption).foregroundStyle(.secondary) }; if let assigned = result.assigned_user { Text("Responsible: \(assigned.display_name)").font(.caption).foregroundStyle(.secondary) }; if let email = result.primary_email { Text(email).font(.caption) }; if let phone = result.primary_phone { Text(phone).font(.caption) }; HStack { if downloaded { NavigationLink("Open") { PersonView(personID: result.person_id) }; Text("Available offline").font(.caption).foregroundStyle(.secondary) } else if model.isPinned(result.person_id) { Text("Requested offline — manage above").font(.caption).foregroundStyle(.secondary) } else { Button("Save offline") { model.pin(result.person_id) } } } }.padding(.vertical, 3)
+                }
             }
             Section("Save a known CRM record offline") {
                 TextField("Person ID", text: $pin).textInputAutocapitalization(.never).autocorrectionDisabled()

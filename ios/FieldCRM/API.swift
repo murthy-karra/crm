@@ -95,6 +95,14 @@ private final class NoRedirect: NSObject, URLSessionTaskDelegate, @unchecked Sen
     func currentStage(person: String, context: String) async throws -> CurrentStageResponse {
         try await call("/people/\(person)/stage", context: context)
     }
+    func searchPeople(term: String, context: String) async throws -> PersonSearchResponse {
+        let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.unicodeScalars.count <= 200, trimmed.utf8.count <= 800 else { throw LocalError.invalidInput }
+        let response: PersonSearchResponse = try await call("/people/search", method: "POST", body: .object(["term": .s(trimmed)]), context: context)
+        guard response.context_id == context, response.items.count <= 25 else { throw LocalError.invalidProtocol }
+        guard response.items.allSatisfy({ UUID(uuidString: $0.person_id) != nil && !$0.display_name.isEmpty }) else { throw LocalError.invalidProtocol }
+        return response
+    }
     func currentDetails(person: String, cursor: String? = nil, context: String) async throws -> CurrentDetailsResponse {
         guard cursor.map({ !$0.isEmpty && $0.utf8.count <= 2048 }) ?? true else { throw LocalError.invalidProtocol }
         let suffix = cursor.map { "?cursor=" + API.cursor($0) } ?? ""

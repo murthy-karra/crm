@@ -49,6 +49,37 @@ def check(values):
 
 
 class PreflightTests(unittest.TestCase):
+    def test_admitted_history_capability_is_independent_and_survives_zero_facts(self):
+        capability = "fub-admitted-history-v1"
+        for count in ["0", "1"]:
+            for capabilities in [[], [TIMELINE], [capability], [TIMELINE, capability]]:
+                values = fixtures("1")
+                values[3].update(admitted_history_schema_present=True,
+                                 admitted_history_binding_count=count,
+                                 admitted_history_unsupported_count="0")
+                values[0]["artifacts"][0]["capabilities"] = capabilities
+                report = check(values)
+                self.assertEqual(report["launch_allowed"], count == "0" or capability in capabilities)
+                self.assertEqual(report["admitted_history_confirmation_ready"], capability in capabilities)
+        values = fixtures("1")
+        values[3].update(admitted_history_schema_present=True,
+                         admitted_history_binding_count="1", admitted_history_unsupported_count="1")
+        values[0]["artifacts"][0]["capabilities"] = [TIMELINE, capability]
+        self.assertFalse(check(values)["launch_allowed"])
+
+    def test_admitted_history_evidence_is_typed_and_complete(self):
+        for fields in [
+            {"admitted_history_binding_count": "0"},
+            {"admitted_history_binding_count": "1", "admitted_history_schema_present": False,
+             "admitted_history_unsupported_count": "0"},
+            {"admitted_history_binding_count": "0", "admitted_history_schema_present": True,
+             "admitted_history_unsupported_count": "1"},
+        ]:
+            values = fixtures("1")
+            values[3].update(fields)
+            with self.assertRaises(EvidenceError):
+                check(values)
+
     def test_admitted_metadata_inventory_requires_guard_and_counts_ready_handover(self):
         for presence in [{"present": True, "compatible": True},
                          {"present": True, "compatible": False},
@@ -60,7 +91,7 @@ class PreflightTests(unittest.TestCase):
                     return {"present": True, "database_name": "synthetic_only"}
                 if "FROM public.migration_workspace" in query:
                     return fixtures("1")[3]
-                if "migration_admitted_activity" in query:
+                if "migration_admitted_activity" in query or "migration_admitted_history" in query:
                     return {"present": False, "compatible": False}
                 if "migration_metadata_catalog_readiness" in query:
                     if "to_regclass" in query:
@@ -373,12 +404,13 @@ class PreflightTests(unittest.TestCase):
                      {"count": "7", "unsupported_count": "0"}, {"present": True, "compatible": True},
                      {"count": "8", "unsupported_count": "0"}, {"present": True, "compatible": True},
                      {"count": "9", "unsupported_count": "0"}, {"present": True, "compatible": True},
-                     {"count": "10", "unsupported_count": "0"}][len(calls)-1]
+                     {"count": "10", "unsupported_count": "0"}, {"present": True, "compatible": True},
+                     {"count": "11", "unsupported_count": "0"}][len(calls)-1]
             return mock.Mock(returncode=0, stdout=json.dumps(value).encode())
         with mock.patch.object(MODULE["subprocess"], "run", side_effect=fake_run):
             result = MODULE["database_state"]()
         self.assertEqual(result["binding_count"], "1")
-        self.assertEqual(len(calls), 20)
+        self.assertEqual(len(calls), 22)
         self.assertEqual(result["activity_binding_count"], "2")
         self.assertIn("confirmed_plan_id IS NOT NULL", calls[3][0][-1])
         self.assertNotIn("state=", calls[3][0][-1])
@@ -407,6 +439,9 @@ class PreflightTests(unittest.TestCase):
         self.assertIn("migration_metadata_catalog_readiness WHERE state='ready'", calls[17][0][-1])
         self.assertIn("FROM public.migration_admitted_metadata_import", calls[17][0][-1])
         self.assertNotIn("confirmed_plan_id", calls[17][0][-1])
+        self.assertEqual(result["admitted_history_binding_count"], "11")
+        self.assertIn("p.id=r.confirmed_plan_id", calls[21][0][-1])
+        self.assertNotIn("state=", calls[21][0][-1])
         self.assertEqual(result["admitted_activity_binding_count"], "10")
         self.assertIn("FROM public.migration_admitted_activity_import", calls[19][0][-1])
         sql = calls[1][0][-1]
@@ -650,7 +685,7 @@ class PreflightTests(unittest.TestCase):
     def test_database_people_refresh_inventory_requires_all_guard_objects_and_engine(self):
         sql = []
         def answer(query):
-            if "migration_admitted_activity" in query:
+            if "migration_admitted_activity" in query or "migration_admitted_history" in query:
                 return {"present": False, "compatible": False}
             if "migration_metadata_catalog_readiness" in query:
                 return {"present": False, "compatible": False}
@@ -692,7 +727,7 @@ class PreflightTests(unittest.TestCase):
             {"present": True, "compatible": None},
         ]:
             def answer(query):
-                if "migration_admitted_activity" in query:
+                if "migration_admitted_activity" in query or "migration_admitted_history" in query:
                     return {"present": False, "compatible": False}
                 if "migration_metadata_catalog_readiness" in query:
                     return {"present": False, "compatible": False}
@@ -856,7 +891,7 @@ class PreflightTests(unittest.TestCase):
     def test_database_people_admission_inventory_requires_all_guard_objects_and_engine(self):
         sql = []
         def answer(query):
-            if "migration_admitted_activity" in query:
+            if "migration_admitted_activity" in query or "migration_admitted_history" in query:
                 return {"present": False, "compatible": False}
             if "migration_metadata_catalog_readiness" in query:
                 return {"present": False, "compatible": False}
@@ -900,7 +935,7 @@ class PreflightTests(unittest.TestCase):
             {"present": True, "compatible": None},
         ]:
             def answer(query):
-                if "migration_admitted_activity" in query:
+                if "migration_admitted_activity" in query or "migration_admitted_history" in query:
                     return {"present": False, "compatible": False}
                 if "migration_metadata_catalog_readiness" in query:
                     return {"present": False, "compatible": False}
@@ -927,7 +962,7 @@ class PreflightTests(unittest.TestCase):
         for compatible in [True, False]:
             queries = []
             def answer(query):
-                if "migration_admitted_activity" in query:
+                if "migration_admitted_activity" in query or "migration_admitted_history" in query:
                     return {"present": False, "compatible": False}
                 if "migration_metadata_catalog_readiness" in query:
                     return {"present": False, "compatible": False}
@@ -1059,7 +1094,7 @@ class PreflightTests(unittest.TestCase):
     def test_database_timeline_inventory_counts_every_anchor_and_checks_versions(self):
         sql = []
         def answer(query):
-            if "migration_admitted_activity" in query:
+            if "migration_admitted_activity" in query or "migration_admitted_history" in query:
                 return {"present": False, "compatible": False}
             if "migration_metadata_catalog_readiness" in query:
                 return {"present": False, "compatible": False}

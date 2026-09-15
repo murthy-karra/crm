@@ -65,7 +65,9 @@ class Mobile006UiProofTest {
                     it.person == conflictDraft.person && it.operation.isEmpty()
                 }
                 val replacementCard = "metadata-draft-${replacementDraft.id}"
-                compose.onNode(hasClickAction() and hasTestTag(replacementCard), useUnmergedTree = true)
+                // The clickable modifier and card tag merge into one node only in the merged
+                // tree; use that actual card action when reopening an already-created draft.
+                compose.onNodeWithTag(replacementCard)
                     .performScrollTo().assertIsDisplayed().performClick()
                 replacementDraft
             }

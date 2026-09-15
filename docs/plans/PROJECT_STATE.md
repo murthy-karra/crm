@@ -49,15 +49,15 @@ native API3106 is available; the isolated browser QA processes are stopped.
 010e4 core refresh, 010f3 metadata and 010f4 activity. D-087 selects
 [010e5 stage/agent mapping repair](SLICE_010e5_MAPPING_REPAIR.md) for
 existing People first. Implementation and local verification are complete under
-D-088; [evidence](../tasks/SLICE_010e5_VERIFICATION.md) records the gates. Changes
-remain uncommitted and undeployed. Never-imported People recovery follows separately.
+D-088; [evidence](../tasks/SLICE_010e5_VERIFICATION.md) records the gates. Commit `05abffa`
+is merged into local `main`; it has not been pushed or deployed. Never-imported People recovery follows separately.
 Remaining family deltas, activation and complete migration fidelity retain their
 own scope in the [family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md).
 
 ## Last accepted decision
 
 **D-088:** accepts 010e5 implementation and one reviewer for independent planning/
-implementation review. Implementation is verified locally on `codex/010e5-mapping-repair`; shared
+implementation review. Implementation is verified and merged into local `main` as `05abffa`; shared
 development and release scopes remain unchanged.
 
 **D-087:** authorizes planning stage/agent mapping repair and selects existing
@@ -187,8 +187,8 @@ linked verification records; they are not claims about present runtime health.
 
 ## Next recommended action
 
-010e5 is implemented and verified locally. Its publication/deployment is a separate
-release step. Next migration planning: recover never-imported People, including
+010e5 is implemented, verified and merged locally. Remote push and deployment
+remain separate release steps. Next migration planning: recover never-imported People, including
 identity safety and follow-on family imports. See [010e5 status](../tasks/SLICE_010e5_IMPLEMENTATION_STATUS.md).
 
 Use the [Mobile007 / 010d3 release record](../tasks/MOBILE_007_010d3_RELEASE.md)

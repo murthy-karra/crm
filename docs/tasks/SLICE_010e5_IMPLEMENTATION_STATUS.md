@@ -1,8 +1,9 @@
 # 010e5 — Implementation status
 
 **IMPLEMENTED AND VERIFIED LOCALLY — 2026-09-15.** D-088 accepts implementation.
-Branch `codex/010e5-mapping-repair`, based on main `4a01fc0`; changes remain
-uncommitted. Publication and deployment are separate.
+Implementation commit `05abffa` was fast-forward merged into local `main` on
+2026-09-15. The feature branch was deleted. Remote push and deployment remain
+separate; local Lavish artifacts and unrelated worktrees were preserved.
 
 ## Outcome
 

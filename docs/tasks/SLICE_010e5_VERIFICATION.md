@@ -125,3 +125,11 @@ Both loopback fixture servers and the Web preview were stopped; ports 3105 and
 reset. Shared services and native stores were preserved. The startup source is
 unchanged: 14 migration worker tasks remain, including the two extended People
 refresh workers; zero new startup tasks, executables or pods are introduced.
+
+## Local merge — 2026-09-15
+
+User authorized commit, merge and cleanup after verification. All 37 tested source
+hashes still matched before commit. Implementation commit `05abffa` was merged
+into local `main` with `--ff-only`; no conflict or implementation edit occurred.
+The feature branch was deleted. Remote push and deployment were not performed.
+Local Lavish artifacts and unrelated worktrees were preserved.

@@ -499,6 +499,19 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         require(metadataQualified(cached, installedCatalog, current.getString("metadata_revision"))) {
             "Refresh this Person against the current metadata catalog before preparing a replacement"
         }
+        // The matching revision marker is meaningful only when the installed sealed catalog can
+        // actually describe every retained current value.  This prevents a damaged/partial
+        // catalog table from opening an editor with no controls for an otherwise valid baseline.
+        val tags = dao.metadataTags().filter { it.revision == installedCatalog }.map { it.id }.toSet()
+        require(current.getJSONArray("tags").objects().all { it.getString("id") in tags }) {
+            "Refresh the complete metadata catalog before preparing a replacement"
+        }
+        val fields = dao.metadataFields().filter { it.revision == installedCatalog }.associateBy { it.id }
+        val options = dao.allMetadataOptions().filter { it.revision == installedCatalog }.map { it.id }.toSet()
+        require(current.getJSONArray("values").objects().all { value ->
+            val field = fields[value.getString("field_id")] ?: return@all false
+            field.fieldType != "choice" || value.getJSONObject("value").getString("option_id") in options
+        }) { "Refresh the complete metadata catalog before preparing a replacement" }
         require(dao.supersede(operationId) == 1)
         val row = MetadataDraftRow(draftId, op.person, current.toString(), context.proposal,
             revision(current.getString("metadata_revision")), revision(current.getString("catalog_revision")), 1)

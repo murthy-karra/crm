@@ -97,6 +97,9 @@ class Mobile006StorageTest {
         // Model the causally later sealed reconciliation: exact catalog and Person metadata
         // component have both been promoted before the user can create a replacement.
         store.dao.meta(MetaRow("metadata_catalog_revision", "5"))
+        store.dao.clearMetadataTags(); store.dao.clearMetadataFields(); store.dao.clearMetadataOptions()
+        store.dao.metadataTags(listOf(MetadataTagRow(tag, "Buyer", "g2", "5")))
+        store.dao.metadataFields(listOf(MetadataFieldRow(text, "Text", "text", 1, null, "g2", "5")))
         store.dao.person(store.dao.person(person)!!.copy(revision = "10", metadata = current.toString(), metadataRevisionsQualified = true))
         val replacement = store.reviseMetadataConflict(operation.id, UUID.randomUUID().toString())
         assertEquals("superseded", store.dao.operation(operation.id)!!.status)

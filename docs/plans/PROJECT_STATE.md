@@ -1,76 +1,51 @@
 # Project state
 
-Updated: 2026-09-15 (D-084 Mobile006 / 010f4 implementation; implementation verified; release in progress).
-Current status and live residuals only. [History](PROJECT_HISTORY.md#archived-project-state-snapshot--2026-09-13)
-preserves the previous state verbatim, including superseded instructions.
-Decisions remain authoritative; use the [reading index](../decisions/DECISION_INDEX.md).
+Updated: 2026-09-15 — Mobile006 / 010f4 published and deployed.
+Current status and live residuals only. [History](PROJECT_HISTORY.md) preserves
+completed chronology. Decisions remain authoritative; use the
+[reading index](../decisions/DECISION_INDEX.md).
 
 ## Current state
 
-**Mobile004 / 010e4 are implemented, verified, published and deployed to shared
-development under D-080 and its release follow-up.** Runtime backend source:
-`ffbc9fd69871bb6a3dece88dfa008228dc30cb47`; unchanged Web source `26657c8`. The
-[release record](../tasks/MOBILE_004_010e4_RELEASE.md) owns artifact/schema identity,
-backup/recovery paths, preservation, compatibility and HTTP/mobile/browser proof.
-Dated evidence does not prove present service health; recheck before operations.
+**Mobile006 / 010f4 are implemented, verified, merged to main, pushed and deployed
+to shared development under D-084 and its release follow-up.** Both native clients
+edit existing Person tags and custom fields offline with sealed catalogs, atomic
+commands and explicit conflict/replay recovery. Administrators import qualified
+retained notes/tasks for admitted People with exact cancellation remainders.
+Imported workspaces retain the administrator review hold.
 
-The native demo API3101 and installed stores are preserved. Native distribution,
-physical-phone/cellular testing, live FUB/customer work, workspace activation and
-production-cluster deployment remain separate. Shared development is Mac-hosted.
+The [release record](../tasks/MOBILE_006_010f4_RELEASE.md) owns runtime identity,
+74 schema checksums, backup/recovery, preservation, HTTP/mobile/browser proof and
+180-second observation. API source `3c080b5` matches final production Rust;
+Web source `a96b771` includes the verified narrow-label repair. Shared development
+is Mac-hosted, not the planned production cluster. Dated evidence does not prove
+future service health.
 
-## Current slice
+[Implementation status](../tasks/MOBILE_006_010f4_IMPLEMENTATION_STATUS.md) owns
+scope/resources; [final verification](../tasks/MOBILE_006_010f4_FINAL_VERIFICATION.md)
+owns acceptance. Both final implementation reviews are READY. Full DB (1,103),
+native/browser acceptance, 18/26 realistic plans and paired Person/Today gates pass.
+The final Web-only release correction passed all 1,298 Web tests again.
 
-**Implemented, implementation verified; release in progress: Mobile006 / 010f4, D-084.**
-Both native clients now support offline tags/custom-field edits. Administrators can
-import qualified retained notes/tasks for admitted People with exact cancellation
-remainders. [Implementation status](../tasks/MOBILE_006_010f4_IMPLEMENTATION_STATUS.md)
-owns scope/resources; [final verification](../tasks/MOBILE_006_010f4_FINAL_VERIFICATION.md)
-owns acceptance and passing gates. Both planning and final implementation reviews
-are READY. Full DB (1,103 tests), native/browser acceptance, realistic query plans
-and paired Person/Today performance pass. Publication and shared-development
-release are authorized and in progress.
+The live database already contained Mobile005/010f3 before this release. Its
+older unfinished release record is superseded operationally by this verified
+rollout; missing historical evidence was not inferred or recreated. Earlier
+Mobile004/010e4 and preceding slices remain documented in history.
 
+## Current branch and retained resources
 
-**Implemented and verified locally: Mobile005 / 010f3.** Offline Person name/contact
-editing on iOS/Android and admitted-People tags/custom-field imports are complete
-under D-082. Both independent implementation reviews are READY.
-The [coordinated plan](MOBILE_005_010f3_PARALLEL_LAUNCH.md) links both specifications,
-execution briefs and review evidence. [Implementation status](../tasks/MOBILE_005_010f3_IMPLEMENTATION_STATUS.md)
-owns delivered behavior, retained resources and passing checks. Final tested code
-is `ab4a362`; later completion changes are documentation only. D-082's release
-follow-up authorizes publication/deployment; the [release record](../tasks/MOBILE_005_010f3_RELEASE.md)
-is IN PROGRESS at this planning inspection. No completion or new runtime identity
-is inferred from the source checkout.
+`main` is published. Three completed writer worktrees and five milestone branches
+were removed after preserving all lane histories and the exact dirty migration
+patch in a verified private Git bundle. QA databases, installed native stores,
+captures, verification artifacts and release recovery material remain. The owned
+native API3106 is available; the isolated browser QA processes are stopped.
 
-**Mobile004 / 010e4 delivered within their approved synthetic scope.**
-[Mobile stage specification](../specs/MOBILE_004_OFFLINE_STAGE_CHANGES.md),
-[admitted-core refresh specification](../specs/SLICE_010e4.md) and
-[coordinated plan](MOBILE_004_010e4_PARALLEL_LAUNCH.md) are complete. The
-[implementation record](../tasks/MOBILE_004_010e4_IMPLEMENTATION_STATUS.md) owns
-acceptance and final gates; the [release record](../tasks/MOBILE_004_010e4_RELEASE.md)
-owns deployed artifact and preservation proof.
-Mobile 001–003 and migration assessment,
-core capture, People, metadata, notes/tasks, historical capture/timeline, change
-reporting, existing-People refresh and core-only new-Person admission are delivered
-within their approved synthetic scopes. See [prior implementation evidence](../tasks/MOBILE_003_010e3_IMPLEMENTATION_STATUS.md).
-Imported workspaces retain the administrator review hold; ordinary mutations,
-Today, Operator, outbound and mobile access do not bypass it.
+## Next family boundary
 
-010e4 adds subsequent core refresh for admitted People in shared development.
-010f3 adds tags/custom-field imports locally; 010f4 adds notes/tasks locally,
-with history next in the [family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md).
-Full migration fidelity, mapping repair, remaining deltas and activation need
-separately specified scope. Older ladder/summary milestone banners may predate
-this release; use the latest release record for delivered status.
-
-## Current branch
-
-Local implementation branch: `codex/mobile006-010f4-integration`, based on
-`a5cb24d`. Final backend source is `22c6c06`; later changes cover Android catalog repairs/checks,
-upgrade assertions and documentation. Shared API3000/Web5173 artifacts remain
-unchanged. Preserve retained writer worktrees, verification/recovery evidence,
-QA databases and installed native stores. Publication/deployment of this pair is now authorized under the D-084 release
-follow-up and [in preparation](../tasks/MOBILE_006_010f4_RELEASE.md). The prior Mobile005/010f3 release remains separately IN PROGRESS.
+010e4 core refresh, 010f3 metadata and 010f4 activity are present in shared
+development. History follows in the [family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md),
+but its next contracts and task are not assigned. Remaining deltas, mapping repair,
+activation and complete migration fidelity require their own specified scope.
 
 ## Last accepted decision
 
@@ -83,7 +58,7 @@ cleanup and shared-development deployment; other operational scope remains separ
 with Terra high writers and the coordinated three-worktree sequence. Local
 integration checkpoints are allowed. Implementation and required verification are
 complete; its subsequent release follow-up authorizes publication/deployment,
-currently recorded IN PROGRESS in the owning release document.
+its deployed schema is now included in the verified D-084 release.
 
 **D-081:** draft Mobile005 and 010f3 together, preserving parallel mobile/migration
 development; 2026-09-14 follow-up authorized independent review, now READY.
@@ -110,15 +85,15 @@ No repeat approval is pending for those completed actions.
 |---|---|
 | Development | [README](../../README.md#development); Docker restart does not restart the API; dev-bootstrap wipes data |
 | Boundaries | [Architecture map](../architecture/ARCHITECTURE_BASELINE.md); planned production differs from development |
-| Release/recovery | [Current release](../tasks/MOBILE_004_010e4_RELEASE.md), [compatibility runbook](../tasks/SLICE_010c_RELEASE_PREPARATION.md), [release prompt](../prompts/07-deploy.md) |
+| Release/recovery | [Current release](../tasks/MOBILE_006_010f4_RELEASE.md), [compatibility runbook](../tasks/SLICE_010c_RELEASE_PREPARATION.md), [release prompt](../prompts/07-deploy.md) |
 | Real data/production | [Readiness](PRODUCTION_READINESS.md); its historical release inventory predates the current release |
 | Prior checkpoints | [History/ledger](PROJECT_HISTORY.md#slice-ledger); detailed proof stays in per-slice records |
 
 Import/refresh/admission confirmation needs fresh actual-workload inventory and
-`CRM_MIGRATION_RELEASE_REPORT`. The last recorded report expired at
-`2026-09-13T19:45:18Z`; no automatic renewal exists. Ordinary CRM/retained reads
-remain available after expiry. Registered FUB system configuration was unset at
-release; no live source operation or customer activation was performed.
+`CRM_MIGRATION_RELEASE_REPORT`. The final D-084 report expires at
+`2026-09-15T08:01:58Z`; no automatic renewal exists. Ordinary CRM/retained reads
+remain available after expiry. No live source operation or customer activation
+was performed. Re-inventory actual workloads before later confirmations.
 
 ## Parked / queued tracks
 
@@ -178,61 +153,27 @@ Foundations F-01/F-02/F-03 remain proposals except where separately accepted.
 
 ## Latest verification
 
-[Mobile006 / 010f4 evidence](../tasks/MOBILE_006_010f4_FINAL_VERIFICATION.md)
-records the current final gates. Repository checks, 18 mobile and 26 migration
-query plans, desktop/390px acceptance, populated native upgrades and focused
-store/authority/fidelity checks pass. Full acceptance remains in progress.
-
-[Mobile005 / 010f3 final evidence](../tasks/MOBILE_005_010f3_FINAL_VERIFICATION.md)
-records all required gates passing at `ab4a362`: 992 ordinary Rust, 1,076 database,
-1,264 Web, 51 preflight, five documentation and 11 email-worker tests. Native proof
-includes 47 iOS and 42 Android tests, installed upgrades and real simulator/emulator
-journeys. Readiness covers 184 incomplete-schema variants. Browser, fidelity,
-performance and preservation checks pass; both final independent reviews are READY.
-All 74 protected artifacts and four shared listeners are preserved. Failed attempts
-and corrections remain in the owning records. No physical-phone or release claim
-is made for this local implementation.
-
-[Mobile004 / 010e4 evidence](../tasks/MOBILE_004_010e4_IMPLEMENTATION_STATUS.md)
-records installed native store upgrades, offline/replay/conflict flows, desktop/
-390px refresh cancellation/remainder, exact source/byte preservation, both 25k
-performance gates and all final checks: 989 ordinary Rust, 1,034 DB, 1,238 Web,
-48 preflight, five documentation and 11 email-worker tests. Native acceptance is
-simulator/emulator only. Failed attempts and corrections remain in the owning
-verification records. The [current release](../tasks/MOBILE_004_010e4_RELEASE.md)
-adds exact 151→161 rowset preservation, 56 schema checksums, HTTP/browser/mobile
-checks and 188s observation. Release fixed one missing no-store header on early
-member denials; all nine affected refresh/workspace tests passed. The original
-full-suite evidence was reused with its source attribution.
+[Mobile006 / 010f4 evidence](../tasks/MOBILE_006_010f4_FINAL_VERIFICATION.md) records
+all implementation gates passing and both final review verdicts READY. The
+[release record](../tasks/MOBILE_006_010f4_RELEASE.md) adds exact old-field/new-default
+preservation, five additive migrations, 75 HTTP checks, real desktop/narrow UI,
+73 matching public assets, tunnel checks, cleanup and final stable observation.
+Failed setup/check attempts and their corrections remain in the owning evidence.
+Earlier milestone results remain in [history](PROJECT_HISTORY.md) and their
+linked verification records; they are not claims about present runtime health.
 
 ## Next recommended action
 
-Finish the remaining [Mobile006/010f4 acceptance gates](../tasks/MOBILE_006_010f4_FINAL_VERIFICATION.md)
-and obtain both final independent review verdicts within the existing second round.
-The Mobile005/010f3 release is already authorized and tracked in its
-[release record](../tasks/MOBILE_005_010f3_RELEASE.md); do not request repeat
-authorization or start a duplicate rollout. Preserve retained QA and installed
-stores. History follows notes/tasks in the
-[family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md); native calling follows the agreed progression.
-Physical-phone/design/live-source work remains deferred; complete C-gate
-erasure/restore work before real customer data. No repeat release action is needed
-for the completed Mobile004 / 010e4 milestone.
+Plan the admitted-People history family when assigned, following the
+[family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md). Native calling follows the
+agreed progression. Physical-phone/design/live-source work remains deferred;
+complete customer erasure/restore readiness before real customer data.
+No repeat implementation or release action is pending for Mobile006/010f4.
 
 ## Approval currently required
 
-D-083 authorizes the next pair's drafts only. Mobile006's metadata/catalog conflict,
-representation and atomic-edit contracts and 010f4's source/cohort/identity-owner/
-lifetime/reader contracts remain proposals pending independent review and acceptance.
-
-D-082 accepts Mobile005's input/revision/contact-operation/realtime and 010f3's
-source/catalog-handover/lifetime contracts. No repeat implementation approval is
-needed; materially different scope/authority/policy requires its own decision.
-Publication/deployment of Mobile005/010f3 are already authorized by D-082's release
-follow-up; native distribution remains separate. The next pair has no release authority.
-
-D-080 implementation, publication, cleanup and shared-development release are
-complete; no repeat approval is pending. Completed D-078 release also needs no
-repeated approval.
+None for the completed D-084 implementation, publication, cleanup and shared-
+development release. D-084 superseded D-083's planning-only boundary.
 New shared contracts, native distribution, live FUB/customer processing, activation
 and production deployment retain their own scope and gates. Recovery targets,
 retention/erasure, support access, outbound/recording consent and agent-departure

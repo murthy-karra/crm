@@ -9,6 +9,22 @@ Use [PROJECT_STATE.md](PROJECT_STATE.md) for current work, live residuals and ne
 actions, and the [decision log](../decisions/DECISION_LOG.md) for authority.
 Per-slice verification/release records remain the detailed evidence.
 
+## Mobile006 / 010f4 shared-development release — 2026-09-15
+
+D-084's authorized release merged/pushed main (`d11fccf`), then fixed the new
+preparation label's narrow-screen wrapping (`a96b771`) with all Web tests/build
+and real browser checks passing. API/worker/admin/migrator artifacts built at
+`3c080b5` match final production Rust; Web runs `a96b771`. The actual database
+already had the prior pair's 69 migrations. Five additive migrations brought it
+to 74, preserving older data fields and verifying new metadata defaults. The
+[release record](../tasks/MOBILE_006_010f4_RELEASE.md) owns backup, exact rowset/
+artifact hashes, 75 HTTP checks, five revoked smoke sessions, guarded mobile
+cleanup, all 73 public assets, tunnel routing and 180.21s final observation.
+Three worktrees and five milestone branches were removed after preserving lane
+histories and the exact dirty patch in a verified bundle. Native QA runtime/stores,
+QA databases, evidence and recovery artifacts remain. No live customer/source,
+activation, native distribution, physical phone or production-cluster work occurred.
+
 ## Mobile006 / 010f4 local completion — 2026-09-15
 
 D-084 implementation and synthetic acceptance completed at `4bf6053` (last

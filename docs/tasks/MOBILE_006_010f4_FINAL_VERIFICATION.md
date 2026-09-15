@@ -84,13 +84,22 @@ DB gate now passes and covers the current Rust implementation.
 
 ## Preserved resources and limits
 
-Protected shared API3000/Web5173 processes and artifact hashes are unchanged;
-`inventory/protected-artifacts-final.json` records the comparison. All verification
-build outputs are separate. Owned native API3106 was resumed after the paired gate. Browser QA processes
-stopped during the earlier interruption; their databases, installed native stores,
-source captures, outputs and failed attempts remain retained.
+During implementation, protected shared API3000/Web5173 artifacts were preserved;
+`inventory/protected-artifacts-final.json` records that comparison. Verification
+outputs were isolated. The subsequent authorized [release](MOBILE_006_010f4_RELEASE.md)
+owns their replacement and all publication/cleanup/deployment evidence.
 
-This verification contains no publication/deployment, native distribution,
-physical-phone/cellular, live FUB/customer, activation or calling evidence. The
-prior Mobile005/010f3 release remains separately recorded IN PROGRESS and is not
-repeated by this implementation.
+Native API3106 was resumed after the paired gate. Browser QA processes stopped
+during the earlier interruption; their databases, installed native stores, source
+captures, outputs and failed attempts remain retained. Completed writer branches
+and worktrees were archived and removed during release cleanup.
+
+Release verification then fixed one narrow preparation-button label with responsive
+classes only (`a96b771`). Web lint/typecheck, all 1,298 tests, isolated build and
+actual deployed desktop/390px checks passed again. Backend/native/performance
+code did not change; their executed evidence remains applicable. No additional
+implementation review round or paired timing run was opened.
+
+Native distribution, physical-phone/cellular, live FUB/customer, activation and
+calling remain separate. The older Mobile005/010f3 operational record is superseded
+by the verified current release, without retroactively inventing earlier evidence.

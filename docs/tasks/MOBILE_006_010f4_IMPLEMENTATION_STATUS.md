@@ -26,23 +26,23 @@ contract changes; no additional policy was invented.
 
 ## Source and retained resources
 
-- Local branch: `codex/mobile006-010f4-integration`; final backend repair `22c6c06`.
+- Published on `main`; final backend repair `22c6c06`.
   Later commits contain Android catalog repairs/checks, an upgrade assertion and
   documentation.
 - Private QA root: `/private/tmp/crm-mobile006-010f4-thyhauvv`. Root serializes all
   DB/API/performance work; Cargo, SQLx, Web, Xcode and Gradle outputs are isolated.
-- Protected shared API3000/Web5173 binaries and processes remain unchanged.
+- Implementation checks preserved the original shared API3000/Web5173. Their
+  subsequent verified replacements are owned by the release record.
 - Native API3106 uses frozen `82d081e` and owned `crm_mobile_006_qa`; iOS simulator
   `32978562-0A51-4E84-B55A-179BC5B28738` and Android `CRM_Mobile006_QA` retain their
   stores. Populated historical Mobile005 upgrade evidence is preserved separately.
 - Browser acceptance used backend `22c6c06` and owned `crm_010f4_qa` with isolated
   Web5177. Those QA processes stopped during an interruption; database, outputs,
   retained captures, row inventories and screenshots remain.
-- The three writer worktrees and their evidence remain available for handoff.
+- Three completed writer worktrees and five milestone branches were cleaned up
+  after verified archival; QA evidence and native stores remain.
 
-The user subsequently authorized commit/merge/push, cleanup and shared-development
-deployment; the [release record](MOBILE_006_010f4_RELEASE.md) owns that execution.
-Native distribution, physical phones/cellular, live FUB/customer processing,
-activation and calling remain separate. The prior
-[Mobile005 / 010f3 release](MOBILE_005_010f3_RELEASE.md) remains recorded IN PROGRESS;
-this work neither repeats that rollout nor claims it completed.
+The user's subsequent commit/merge/push/cleanup/shared-development release request
+is complete; the [release record](MOBILE_006_010f4_RELEASE.md) owns deployment,
+recovery and preservation evidence. Native distribution, physical phones/cellular,
+live FUB/customer processing, activation and calling remain separate.

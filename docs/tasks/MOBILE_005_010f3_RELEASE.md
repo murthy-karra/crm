@@ -1,6 +1,12 @@
 # Mobile005 / 010f3 — Shared-development release
 
-**IN PROGRESS — 2026-09-14.** The user's explicit commit/push/merge/cleanup/deploy
+**SUPERSEDED OPERATIONALLY — 2026-09-15.** The verified
+[Mobile006/010f4 release](MOBILE_006_010f4_RELEASE.md) found this pair's 69-migration
+schema already installed and includes it in the current deployed runtime. This
+older runbook did not receive a final historical execution record; its original
+plan is retained below without inventing missing evidence.
+
+**Original authorized plan — 2026-09-14.** The user's explicit commit/push/merge/cleanup/deploy
 request and D-082 release follow-up authorize this release to existing Mac-hosted
 shared development at [app.tarams.org](https://app.tarams.org/manage/migration).
 Candidate code is the verified `ab4a362`; subsequent documentation does not change

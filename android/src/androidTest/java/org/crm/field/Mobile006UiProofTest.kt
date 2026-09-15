@@ -1,7 +1,6 @@
 package org.crm.field
 
 import android.view.WindowManager
-import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
@@ -42,17 +41,35 @@ class Mobile006UiProofTest {
         compose.onNodeWithTag("nav-Saved work").performClick()
         compose.waitUntil(20_000) { active().store.dao.metadataContext(stale)?.current?.isNotEmpty() == true }
         screenshot("mobile006-ui-catalog-conflict")
-        val metadataDraft = repository.ui.value.metadataDrafts.single { it.operation == stale }
+        val conflictDraft = repository.ui.value.metadataDrafts.single { it.operation == stale }
+        val original = active().store.dao.operation(stale)!!
+        val metadataDraft =
+            if (original.status == "attention") {
+                val metadataCard = "metadata-draft-${conflictDraft.id}"
+                // Saved work can also contain a profile conflict with an identically labelled action.
+                // The proof must exercise the metadata operation that the staged server conflict named.
+                val review = compose.onNode(
+                    hasClickAction() and
+                        hasAnyAncestor(hasTestTag(metadataCard)) and
+                        hasAnyDescendant(hasText("Review and replace")),
+                    useUnmergedTree = true,
+                )
+                review.performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
+                conflictDraft
+            } else {
+                // A test diagnostic can stop after the local atomic supersession but before the
+                // editor gesture. Resume that exact replacement; never regenerate it or discard
+                // the protected original proposal.
+                assertEquals("superseded", original.status)
+                val replacementDraft = repository.ui.value.metadataDrafts.single {
+                    it.person == conflictDraft.person && it.operation.isEmpty()
+                }
+                val replacementCard = "metadata-draft-${replacementDraft.id}"
+                compose.onNode(hasClickAction() and hasTestTag(replacementCard), useUnmergedTree = true)
+                    .performScrollTo().assertIsDisplayed().performClick()
+                replacementDraft
+            }
         val metadataCard = "metadata-draft-${metadataDraft.id}"
-        // Saved work can also contain a profile conflict with an identically labelled action.
-        // The proof must exercise the metadata operation that the staged server conflict named.
-        val review = compose.onNode(
-            hasClickAction() and
-                hasAnyAncestor(hasTestTag(metadataCard)) and
-                hasAnyDescendant(hasText("Review and replace")),
-            useUnmergedTree = true,
-        )
-        review.performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
         delay(1_500)
         recordEditorDiagnostic("after_metadata_review_click", stale, metadataCard)
         // Retain the exact projection and dialog state before asserting individual controls;
@@ -117,7 +134,11 @@ class Mobile006UiProofTest {
         compose.runOnUiThread { compose.activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
         compose.waitForIdle()
         val file = File(compose.activity.getExternalFilesDir(null), "$name.png")
-        compose.onRoot().captureToImage().asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, file.outputStream())
+        // AlertDialog owns a second Compose root. UiAutomation captures the actual displayed
+        // window stack and cannot fail on the root ambiguity that a Compose-only capture has.
+        val bitmap = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+        file.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        bitmap.recycle()
     }
 
     private fun recordEditorDiagnostic(phase: String, stale: String, metadataCard: String) {
@@ -135,7 +156,9 @@ class Mobile006UiProofTest {
                 "operation=${account.store.dao.operation(stale)?.status} error=${account.store.dao.operation(stale)?.lastError} " +
                 "save_controls=$saveControls protected_notice=$protectedNotice\n",
         )
-        compose.onRoot(useUnmergedTree = true).printToLog("Mobile006UiProof-$phase")
         screenshot("mobile006-ui-$phase")
+        // Dialogs add a second semantics root. Keep the app-root tree in the log while the
+        // screenshot captures the composed dialog as well.
+        compose.onAllNodes(isRoot(), useUnmergedTree = true).onFirst().printToLog("Mobile006UiProof-$phase")
     }
 }

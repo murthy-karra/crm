@@ -4,8 +4,8 @@
 Both independent planning reviews returned READY in round 1; compatible checkpoint
 notes are recorded in [planning review](MOBILE_006_010f4_PLANNING_REVIEW.md).
 [Coordinated plan](../plans/MOBILE_006_010f4_PARALLEL_LAUNCH.md) owns the acceptance
-matrix, source references and future final gates. No implementation acceptance
-checks have passed yet.
+matrix, source references and future final gates. Focused backend and Web checks
+have passed; full acceptance and independent implementation review remain open.
 
 ## Ownership and resources
 
@@ -31,15 +31,30 @@ PROGRESS; this implementation does not claim or repeat that rollout.
 ## Current checkpoints
 
 - Planning: independently READY, zero blocking findings per slice.
-- Mobile backend contract/code/verification: pending.
-- Migration contract/backend/Web/verification: pending.
+- Mobile backend: integrated typed command composition, revision schema, receipts,
+  opted-in generations and bounded metadata/catalog reads. Library checks pass;
+  focused database acceptance is pending.
+- Migration: backend/Web integrated. The retained preparation/execution fixture
+  passes, including four mapping roles and exclusive admitted activity identities.
+  Cancellation, remainder, readiness and browser acceptance remain in progress.
 - iOS and Android: wait for integrated mobile contract.
 - Combined gates, installed upgrades, browser/native acceptance and independent
   implementation review: pending.
 
-Root checkpoint `9d1775a` adds the original/admitted metadata-worker catalog barrier;
-it awaits the mobile helper implementation before compilation. No compilation or
-acceptance result is claimed for that checkpoint alone.
+Root checkpoint `67086d6` composes ordinary typed tag/value helpers into the atomic
+metadata command; the earlier original/admitted metadata-worker barrier is now
+integrated. Isolated `cargo check -p crm-app --locked` passed in
+`logs/integration/typed-metadata-check-1.log`. Direct command tests cover capacity,
+all value types, atomic validation, no-ops, ABA, unrelated notes and current
+actor/tenant/workspace checks, but have not yet executed. The first all-test build
+found two new mobile-test UUID comparisons; fixes are integrated and its rebuild
+is pending. Failed evidence is retained.
+
+Migration checkpoint `7ff7619` passed the retained source→mapping→confirmation→
+native identity test (one test, 6.827 seconds after compilation), recorded in
+`logs/activity/db-admitted-activity-execution-r1.log`. Its earlier focused Web/API
+suite passed 28 tests and release-preflight suite passed 51 tests. These are
+development checkpoints on the writer revision, not final-tree acceptance.
 
 Native QA now has a newly owned iOS simulator `32978562-0A51-4E84-B55A-179BC5B28738`
 (`CRM-Mobile006-QA`, iOS26.5) and Android AVD `CRM_Mobile006_QA` (API37 ARM64).

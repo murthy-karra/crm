@@ -120,6 +120,17 @@ fn bounded_current(value: Value) -> Result<Value, MobileError> {
     Ok(value)
 }
 
+fn bounded_metadata_current(value: Value) -> Result<Value, MobileError> {
+    if serde_json::to_vec(&value)
+        .map_err(|_| code(503, "unavailable"))?
+        .len()
+        > CURRENT_RECORD_BYTES
+    {
+        return Err(code(422, "over_limit"));
+    }
+    Ok(value)
+}
+
 /// Read a complete metadata section only after bounded admission.  A Person can
 /// retain values for archived fields, so the custom-value side cannot rely on
 /// the catalog's live-field limit.  Do not aggregate an unbounded section and
@@ -376,7 +387,7 @@ pub async fn bootstrap(
     let expiry: DateTime<Utc> = row.get("offline_access_expires_at");
     tx.commit().await?;
     Ok(
-        json!({"protocol":PROTOCOL,"context_id":id,"installation_id":request.installation_id,"actor_user_id":auth.actor_user_id,"organization_id":auth.active_organization_id,"workspace_revision":revision.to_string(),"authorized_at":now,"offline_access_expires_at":expiry,"server_time":now,"capabilities":["add_note","create_task","complete_task","reconciliation","edit_note","update_task","note_revisions","log_contact_attempt","change_person_stage","stage_revisions","stage_catalog","update_person_details","details_revisions","update_person_metadata","metadata_revisions","metadata_catalog"],"bounds":{"selected_people":MAX_PEOPLE,"manifest_page":250,"component_rows":100,"component_bytes":PAGE_BYTES,"operation_bytes":131072,"concurrent_uploads":1,"concurrent_downloads":2,"generation_seconds":1800,"stage_catalog_page":100,"metadata_catalog_page":100}}),
+        json!({"protocol":PROTOCOL,"context_id":id,"installation_id":request.installation_id,"actor_user_id":auth.actor_user_id,"organization_id":auth.active_organization_id,"workspace_revision":revision.to_string(),"authorized_at":now,"offline_access_expires_at":expiry,"server_time":now,"capabilities":["add_note","create_task","complete_task","reconciliation","edit_note","update_task","note_revisions","log_contact_attempt","change_person_stage","stage_revisions","stage_catalog","update_person_details","details_revisions","update_person_metadata","metadata_revisions","metadata_catalog"],"bounds":{"selected_people":MAX_PEOPLE,"manifest_page":250,"component_rows":100,"component_bytes":PAGE_BYTES,"operation_bytes":131072,"concurrent_uploads":1,"concurrent_downloads":2,"generation_seconds":1800,"stage_catalog_page":100,"metadata_catalog_page":100,"metadata_person_tags":100,"metadata_person_values":100,"metadata_current_bytes":CURRENT_RECORD_BYTES}}),
     )
 }
 
@@ -399,7 +410,7 @@ pub async fn current_metadata(
     let (tags, values) = metadata_rows(&mut *tx, auth.active_organization_id.0, person_id).await?;
     let value = json!({"context_id":context_id,"person_id":person_id,"person_revision":row.get::<i64,_>("mobile_revision").to_string(),"metadata_revision":row.get::<i64,_>("metadata_revision").to_string(),"catalog_revision":row.get::<i64,_>("catalog_revision").to_string(),"tags":tags,"values":values,"complete":true});
     tx.commit().await?;
-    bounded_current(value)
+    bounded_metadata_current(value)
 }
 
 /// Bounded live edit baseline. This is intentionally separate from a sealed

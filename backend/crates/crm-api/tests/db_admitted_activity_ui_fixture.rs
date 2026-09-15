@@ -10,6 +10,7 @@ use crm_api::{
 use serde_json::{json, Value};
 use sqlx::{postgres::PgConnectOptions, PgPool};
 use std::{io::Write, os::unix::fs::OpenOptionsExt, str::FromStr, sync::Arc};
+const UI_DIRECTORY: &str = "/private/tmp/crm-mobile006-010f4-thyhauvv/integration/activity-ui";
 #[tokio::test]
 #[ignore = "explicit synthetic API3107/browser5177 fixture"]
 async fn serve_admitted_activity_ui_fixture() {
@@ -59,15 +60,84 @@ async fn serve_admitted_activity_ui_fixture() {
                 "/private/tmp/crm-mobile006-010f4-thyhauvv/integration/activity-ui/ui-fixture.json",
             )
             .unwrap();
-        out.write_all(&serde_json::to_vec_pretty(&json!({"synthetic_only":true,"parent_import_id":parent,"admission_id":admission,"report_id":report,"api":"http://127.0.0.1:3107","web":"http://127.0.0.1:5177","journey":"desktop then 390px: prepare qualified six streams, map all four roles, confirm, cancel, continue never-settled remainder, reconcile"})).unwrap()).unwrap();
+        let email: String = sqlx::query_scalar("SELECT email FROM app_user WHERE id=$1")
+            .bind(f.actor)
+            .fetch_one(&f.pool)
+            .await
+            .unwrap();
+        out.write_all(&serde_json::to_vec_pretty(&json!({"synthetic_only":true,
+            "organization_id":f.org,"actor_id":f.actor,"email":email,
+            "password":"synthetic import fixture password",
+            "parent_import_id":parent,"admission_id":admission,"report_id":report,
+            "api":"http://127.0.0.1:3107","web":"http://127.0.0.1:5177",
+            "worker_control":format!("{UI_DIRECTORY}/worker-units.json"),
+            "journey":"desktop then 390px: prepare qualified six streams, map all four roles, confirm, cancel, continue never-settled remainder, reconcile"})).unwrap()).unwrap();
         f.pool.close().await;
     }
     let pool = common::connect_as_app(&migrator).await;
     let mut cfg = common::test_config();
     cfg.cors_allowed_origin = Some("http://127.0.0.1:5177".into());
+    let retained_only_reader = Arc::new(import_support::Book::new(vec![]));
     let mut state = AppState::for_tests(pool.clone(), &cfg, Publisher::recording())
-        .with_migration_reader(Arc::new(import_support::Book::new(vec![])));
+        .with_migration_reader(retained_only_reader.clone());
     state.import_release = Some(Arc::new(ReleaseReadiness::for_tests()));
+    std::fs::create_dir_all(UI_DIRECTORY).unwrap();
+    let control = std::path::Path::new(UI_DIRECTORY).join("worker-units.json");
+    if !control.exists() {
+        std::fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .mode(0o600)
+            .open(&control)
+            .unwrap()
+            .write_all(b"{\"allowed_units\":0}\n")
+            .unwrap();
+    }
+    let worker_state = state.clone();
+    let worker = tokio::spawn(async move {
+        let stats = std::path::Path::new(UI_DIRECTORY).join("worker-stats.json");
+        let read = |path: &std::path::Path| {
+            std::fs::read(path)
+                .ok()
+                .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+                .unwrap_or(Value::Null)
+        };
+        let mut completed = read(&stats)["completed_units"].as_u64().unwrap_or(0);
+        let mut tick = tokio::time::interval(std::time::Duration::from_millis(200));
+        loop {
+            tick.tick().await;
+            let allowed = read(&control)["allowed_units"].as_u64().unwrap_or(0);
+            if completed >= allowed {
+                continue;
+            }
+            let result = admitted_activity_worker::run_once(
+                worker_state.db.as_ref().unwrap(),
+                &worker_state.raw_payload_key,
+                &worker_state.snapshot_policy,
+            )
+            .await;
+            let failed = result.is_err();
+            match result {
+                Ok(true) => completed += 1,
+                Ok(false) => continue,
+                Err(_) => completed = allowed,
+            }
+            let value = json!({"completed_units":completed,"last_unit_failed":failed,
+                "source_reader_calls":retained_only_reader.calls()});
+            let temporary = stats.with_extension("new");
+            let mut file = std::fs::OpenOptions::new()
+                .create(true)
+                .truncate(true)
+                .write(true)
+                .mode(0o600)
+                .open(&temporary)
+                .unwrap();
+            file.write_all(&serde_json::to_vec(&value).unwrap())
+                .unwrap();
+            file.sync_all().unwrap();
+            std::fs::rename(temporary, &stats).unwrap();
+        }
+    });
     eprintln!("010f4 synthetic API http://127.0.0.1:3107; start Web at http://127.0.0.1:5177; execute desktop and 390px prepare/map/confirm/cancel/remainder journey.");
     axum::serve(listener, crm_api::build_app(state))
         .with_graceful_shutdown(async {
@@ -75,6 +145,8 @@ async fn serve_admitted_activity_ui_fixture() {
         })
         .await
         .unwrap();
+    worker.abort();
+    let _ = worker.await;
     pool.close().await;
     migrator.close().await;
 }

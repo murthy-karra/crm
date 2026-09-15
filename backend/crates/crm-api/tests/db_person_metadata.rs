@@ -675,7 +675,7 @@ async fn metadata_tag_delete_waits_for_shared_command_then_advances_both_tokens(
         tokio::spawn(async move { tag::delete_tag(&pool, &ctx, tag::DeleteTag { tag_id }).await });
     tokio::time::timeout(Duration::from_secs(2),async {
         loop {
-            let blocked:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event='advisory')")
+            let blocked:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_locks WHERE locktype='advisory' AND NOT granted AND database=(SELECT oid FROM pg_database WHERE datname=current_database()))")
                 .fetch_one(&migrator).await.unwrap();
             if blocked { break; }
             tokio::time::sleep(Duration::from_millis(10)).await;

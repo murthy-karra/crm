@@ -2,7 +2,8 @@
 
 Status: **IN PROGRESS** — local encrypted-store checks, the populated
 schema-6 installed-store upgrade, and the serialized API3106 offline/restart
-journey are complete. Native UI boundary walk-through remains.
+journey are complete. The catalog-conflict review created its protected local
+replacement draft; its native edit, submit, and receipt continuation remains.
 
 ## Environment
 
@@ -30,6 +31,7 @@ journey are complete. Native UI boundary walk-through remains.
 | catalog-only revision requalification regression | PASS, 6 emulator tests, 1m06s | `/private/tmp/crm-mobile006-010f4-thyhauvv/android006-r1-storage.log` |
 | archived/deleted catalog, key-loss, access-expiry and late-identity metadata boundaries | PASS, 9 emulator tests, 1m24s | `/private/tmp/crm-mobile006-010f4-thyhauvv/android006-storage-boundary-final.log` |
 | replacement waits for a matching sealed catalog/metadata baseline, then CAS recovery | PASS, 9 emulator tests, 1m20s | `/private/tmp/crm-mobile006-010f4-thyhauvv/android006-r2-catalog-replacement-retry.log` |
+| metadata catalog-reuse integrity, including recovery after incomplete cached rows | PASS, 10 direct emulator tests, 48.744s | `/private/tmp/crm-mobile006-010f4-thyhauvv/android006-catalog-reuse-direct-pass.log` |
 | historical populated schema-6 APK/test build | PASS, 41s | `/private/tmp/crm-mobile006-010f4-thyhauvv/android005-upgradeproof-build.log` |
 | current schema-8 APK/test build | PASS, 44s | `/private/tmp/crm-mobile006-010f4-thyhauvv/android006-upgradeproof-build.log` |
 | actual installed schema-6 seed | PASS, 5.681s | direct `adb shell am instrument` on `org.crm.field.mobile006upgradeproofqa.legacytest` |
@@ -64,15 +66,35 @@ revision matches the authorized current-metadata response and a Person component
 qualified against that exact metadata revision. A conflict read alone preserves
 the immutable proposal and cannot expose stale labels/options for replacement.
 
+The direct 10-test run used matched installed APKs (target
+`7705977de274ca794b100bea63a6a62f2f3e6859d15e81d40bc30b93fab75268`, test
+`94ae0ccde2a31f988991c383d1469648a75f543e01c112de78437122d70d64e5`) and
+`adb install -r`; it did not clear the staged QA package or alter the separate
+upgrade-proof package. Earlier UI attempts with a newly built test APK and a
+stale target APK failed with `NoSuchMethodError`; those observations are a
+harness mismatch, not evidence of catalog loss.
+
+The scoped catalog-conflict diagnostic then proved the currently installed
+catalog projection is intact: the exact metadata card existed with four DAO
+metadata fields, four `FieldUi` fields and two metadata contexts while the
+original operation remained `attention/catalog_revision_conflict`. Its complete
+semantics dump places the metadata review action at y=3027–3133 while the
+device viewport ends at y=2424. The initial Compose test therefore issued an
+off-screen action and did not call the product callback. A scroll-aware action
+subsequently opened the native `AlertDialog` and atomically superseded the
+protected original into a replacement draft. The test then stopped in an
+ambiguous multi-root diagnostic before editing or submitting. Evidence:
+`/private/tmp/crm-mobile006-010f4-thyhauvv/android006-ui-diagnostic-artifacts/`,
+`android006-ui-metadata-card-diagnostic.log`, and
+`android006-ui-metadata-card-continuation.log`. No replacement request or
+receipt was generated in those failed harness attempts.
+
 ## Remaining required evidence
 
-1. Serialized API3106 login, opted-in reconciliation, complete catalog/component
-   traversal, seal, offline mixed edit, forced process relaunch and one upload
-   are PASS. Lost-response exact replay remains to be observed separately.
-2. Two-client metadata and catalog conflict walk-through, including unrelated
-   profile/stage/note/task edit boundaries, archived clear and deleted target.
-3. UI screenshots/inventory plus storage/key failure, access-expiry and late
-   identity/account boundary checks.
+1. Finish the retained two-client catalog-conflict draft through the native
+   editor, submit it, and record the accepted/covered receipt plus screenshots.
+2. Record the staged lost-response replay and remaining two-client conflict UI
+   result in this verifier after the final continuation.
 
 No physical device, distribution, production API, customer data or retained demo
 package was used.

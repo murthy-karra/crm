@@ -2468,8 +2468,16 @@ async fn admitted_metadata_fidelity_oversized_native_baseline_settles_as_compact
     migrator: PgPool,
 ) {
     let (f, root, plan, person) = prepared_typed(&migrator).await;
-    sqlx::query("INSERT INTO custom_field(id,organization_id,label,field_type,position,created_by_user_id) SELECT gen_random_uuid(),$1,'Bound field '||n,'text',n,$2 FROM generate_series(1,35000) n").bind(f.org).bind(f.actor).execute(&migrator).await.unwrap();
-    sqlx::query("INSERT INTO person_custom_field_value(organization_id,person_id,field_id,field_type,text_value,updated_by_user_id,origin,correlation_id) SELECT $1,$2,id,'text',repeat('🟦',500),$3,'web_session',$4 FROM custom_field WHERE organization_id=$1 AND label LIKE 'Bound field %'").bind(f.org).bind(person).bind(f.actor).bind(Uuid::new_v4()).execute(&migrator).await.unwrap();
+    // This deliberately oversized fixture tests compact held-unit handling,
+    // not bulk-writer throughput. Keep all production revision triggers active,
+    // but commit bounded setup batches so one catalog/Person row does not retain
+    // 35,000 successive tuple versions in a single transaction.
+    let correlation = Uuid::new_v4();
+    for first in (1..=35000).step_by(500) {
+        let last = first + 499;
+        sqlx::query("INSERT INTO custom_field(id,organization_id,label,field_type,position,created_by_user_id) SELECT gen_random_uuid(),$1,'Bound field '||n,'text',n,$2 FROM generate_series($3::int,$4::int) n").bind(f.org).bind(f.actor).bind(first).bind(last).execute(&migrator).await.unwrap();
+        sqlx::query("INSERT INTO person_custom_field_value(organization_id,person_id,field_id,field_type,text_value,updated_by_user_id,origin,correlation_id) SELECT $1,$2,id,'text',repeat('🟦',500),$3,'web_session',$4 FROM custom_field WHERE organization_id=$1 AND label LIKE 'Bound field %' AND position BETWEEN $5 AND $6").bind(f.org).bind(person).bind(f.actor).bind(correlation).bind(first).bind(last).execute(&migrator).await.unwrap();
+    }
     let current = approve_all(&f, root, plan).await;
     assert!(sqlx::query_scalar::<_,bool>("SELECT oversized AND disposition='held' AND item_byte_bound<=67108864 FROM migration_admitted_metadata_manifest WHERE plan_id=$1").bind(current).fetch_one(&f.pool).await.unwrap());
     let records =

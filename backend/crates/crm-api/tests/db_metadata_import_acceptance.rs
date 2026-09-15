@@ -558,7 +558,7 @@ async fn metadata_acceptance_tombstoned_parent_person_cannot_regain_metadata_or_
             .rows_affected(),
         1
     );
-    let before = native_history(&f, parent).await;
+    let mut before = native_history(&f, parent).await;
     assert_eq!(before["person"].as_array().unwrap().len(), 1);
     assert_eq!(before["inquiry"], json!([]));
     assert_eq!(before["person_imported"].as_array().unwrap().len(), 2);
@@ -573,6 +573,14 @@ async fn metadata_acceptance_tombstoned_parent_person_cannot_regain_metadata_or_
     assert_eq!(evidence["operations"], json!([]));
     assert_eq!(ready["latest_plan"]["counts"]["people"]["excluded"], "1");
     execute(&f, child, &ready).await;
+    // Mobile006 advances both derived tokens for the live Person's one tag
+    // link and one field value. Every other Person field and all retained
+    // parent/immutable history must remain byte-for-byte equivalent.
+    let survivor = &mut before["person"][0];
+    assert_eq!(survivor["id"], json!(live));
+    for revision in ["mobile_revision", "metadata_revision"] {
+        survivor[revision] = json!(survivor[revision].as_i64().unwrap() + 2);
+    }
     assert_eq!(
         native_history(&f, parent).await,
         before,

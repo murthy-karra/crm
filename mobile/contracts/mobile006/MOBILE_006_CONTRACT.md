@@ -39,18 +39,24 @@ shape: `{"text":"..."}`, `{"number":"12.3400"}`, `{"date":"2026-09-14"}`, or
 `{"option_id":"uuid"}`. Decimal and date values are strings.
 
 `GET /api/mobile/v1/people/{person_id}/metadata` returns the same current tags and
-values plus `context_id`, `person_revision`, `metadata_revision`, and
-`catalog_revision`. It is a no-store review read and cannot seal or replace a
-generation.
+values plus `context_id`, `person_revision`, `metadata_revision`,
+`catalog_revision`, and `complete:true`. It is a no-store review read and cannot
+seal or replace a generation.
 
 ## Bounds and failures
 
-Every operation body is at most 128 KiB. Catalog and normal component pages contain
-at most 100 rows and serialize to at most 512 KiB. Snapshot admission reads at most
-10,001 tags, fields, or options per class and rejects a catalog whose measured
-temporary JSON representation exceeds 8 MiB with `422 over_limit`; it never clips
-a catalog and calls it complete. A single oversize catalog page/component returns
-the same closed `over_limit` response.
+Every operation body is at most 128 KiB. Catalog pages contain at most 100 rows
+and serialize to at most 512 KiB. A complete metadata Person section admits at
+most 100 tags and 100 values, and its serialized current read admits at most 128
+KiB while its generation component admits at most 512 KiB. The server reads no
+more than 101 rows of either Person collection before it decides admission; it
+returns `422 over_limit` if the 101st row exists or the result exceeds its byte
+limit. It never silently truncates a section and calls it complete.
+
+Snapshot admission reads at most 10,001 tags, fields, or options per class and
+rejects a catalog whose measured temporary JSON representation exceeds 8 MiB with
+`422 over_limit`; it never clips a catalog and calls it complete. A single oversize
+catalog page/component returns the same closed `over_limit` response.
 
 Fresh Person-token mismatches return `409 revision_conflict`; fresh catalog-token
 mismatches return `409 catalog_revision_conflict`; changed catalog/generation

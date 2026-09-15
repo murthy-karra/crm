@@ -1,0 +1,14 @@
+{
+  "context_id": "11111111-1111-1111-1111-111111111111",
+  "person_id": "33333333-3333-3333-3333-333333333333",
+  "person_revision": "3",
+  "metadata_revision": "3",
+  "catalog_revision": "4",
+  "tags": [
+    {"id": "44444444-4444-4444-4444-444444444444", "name": "Seller"}
+  ],
+  "values": [
+    {"field_id": "55555555-5555-5555-5555-555555555555", "field_type": "number", "value": {"number": "123.4500"}, "updated_at": "2026-09-14T00:00:00Z"}
+  ],
+  "complete": true
+}

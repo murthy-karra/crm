@@ -1,0 +1,15 @@
+{
+  "generation_id": "66666666-6666-6666-6666-666666666666",
+  "person_id": "33333333-3333-3333-3333-333333333333",
+  "section": "metadata",
+  "revision": "3",
+  "metadata_revision": "3",
+  "catalog_revision": "4",
+  "tags": [
+    {"id": "44444444-4444-4444-4444-444444444444", "name": "Seller"}
+  ],
+  "values": [
+    {"field_id": "55555555-5555-5555-5555-555555555555", "field_type": "number", "value": {"number": "123.4500"}, "updated_at": "2026-09-14T00:00:00Z"}
+  ],
+  "complete": true
+}

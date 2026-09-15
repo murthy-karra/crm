@@ -120,6 +120,37 @@ fn bounded_current(value: Value) -> Result<Value, MobileError> {
     Ok(value)
 }
 
+/// Read a complete metadata section only after bounded admission.  A Person can
+/// retain values for archived fields, so the custom-value side cannot rely on
+/// the catalog's live-field limit.  Do not aggregate an unbounded section and
+/// reject it after PostgreSQL has already allocated the result.
+pub(crate) async fn metadata_rows(
+    conn: &mut PgConnection,
+    organization_id: Uuid,
+    person_id: Uuid,
+) -> Result<(Value, Value), MobileError> {
+    let tags: Value = sqlx::query_scalar(
+        "SELECT COALESCE(jsonb_agg(jsonb_build_object('id',id,'name',name) ORDER BY id),'[]'::jsonb) FROM (SELECT t.id,t.name FROM person_tag pt JOIN tag t ON t.id=pt.tag_id AND t.organization_id=pt.organization_id WHERE pt.organization_id=$1 AND pt.person_id=$2 ORDER BY t.id LIMIT 101) AS bounded_tags",
+    )
+    .bind(organization_id)
+    .bind(person_id)
+    .fetch_one(&mut *conn)
+    .await?;
+    let values: Value = sqlx::query_scalar(
+        "SELECT COALESCE(jsonb_agg(jsonb_build_object('field_id',field_id,'field_type',field_type,'value',CASE field_type WHEN 'text' THEN jsonb_build_object('text',text_value) WHEN 'number' THEN jsonb_build_object('number',number_value::text) WHEN 'date' THEN jsonb_build_object('date',date_value::text) ELSE jsonb_build_object('option_id',option_id) END,'updated_at',updated_at) ORDER BY field_id),'[]'::jsonb) FROM (SELECT field_id,field_type,text_value,number_value,date_value,option_id,updated_at FROM person_custom_field_value WHERE organization_id=$1 AND person_id=$2 ORDER BY field_id LIMIT 101) AS bounded_values",
+    )
+    .bind(organization_id)
+    .bind(person_id)
+    .fetch_one(&mut *conn)
+    .await?;
+    if tags.as_array().map_or(true, |items| items.len() > 100)
+        || values.as_array().map_or(true, |items| items.len() > 100)
+    {
+        return Err(code(422, "over_limit"));
+    }
+    Ok((tags, values))
+}
+
 #[derive(Clone)]
 pub struct ReceiptKeys(Vec<(String, [u8; 32])>);
 impl std::fmt::Debug for ReceiptKeys {
@@ -362,12 +393,11 @@ pub async fn current_metadata(
     authority(&mut tx, auth, false).await?;
     let row = sqlx::query(
         "SELECT p.mobile_revision,p.metadata_revision,
-          (SELECT revision FROM mobile_metadata_catalog WHERE organization_id=p.organization_id) AS catalog_revision,
-          COALESCE((SELECT jsonb_agg(jsonb_build_object('id',t.id,'name',t.name) ORDER BY t.id) FROM person_tag pt JOIN tag t ON t.id=pt.tag_id AND t.organization_id=pt.organization_id WHERE pt.organization_id=p.organization_id AND pt.person_id=p.id),'[]'::jsonb) AS tags,
-          COALESCE((SELECT jsonb_agg(jsonb_build_object('field_id',v.field_id,'field_type',v.field_type,'value',CASE v.field_type WHEN 'text' THEN jsonb_build_object('text',v.text_value) WHEN 'number' THEN jsonb_build_object('number',v.number_value::text) WHEN 'date' THEN jsonb_build_object('date',v.date_value::text) ELSE jsonb_build_object('option_id',v.option_id) END,'updated_at',v.updated_at) ORDER BY v.field_id) FROM person_custom_field_value v WHERE v.organization_id=p.organization_id AND v.person_id=p.id),'[]'::jsonb) AS values
+          (SELECT revision FROM mobile_metadata_catalog WHERE organization_id=p.organization_id) AS catalog_revision
           FROM person p WHERE p.organization_id=$1 AND p.id=$2",
     ).bind(auth.active_organization_id.0).bind(person_id).fetch_optional(&mut *tx).await?.ok_or_else(missing)?;
-    let value = json!({"context_id":context_id,"person_id":person_id,"person_revision":row.get::<i64,_>("mobile_revision").to_string(),"metadata_revision":row.get::<i64,_>("metadata_revision").to_string(),"catalog_revision":row.get::<i64,_>("catalog_revision").to_string(),"tags":row.get::<Value,_>("tags"),"values":row.get::<Value,_>("values")});
+    let (tags, values) = metadata_rows(&mut *tx, auth.active_organization_id.0, person_id).await?;
+    let value = json!({"context_id":context_id,"person_id":person_id,"person_revision":row.get::<i64,_>("mobile_revision").to_string(),"metadata_revision":row.get::<i64,_>("metadata_revision").to_string(),"catalog_revision":row.get::<i64,_>("catalog_revision").to_string(),"tags":tags,"values":values,"complete":true});
     tx.commit().await?;
     bounded_current(value)
 }

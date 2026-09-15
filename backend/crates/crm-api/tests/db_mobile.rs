@@ -62,7 +62,7 @@ async fn mobile006_metadata_atomic_receipt_current_and_catalog_generation(pool: 
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{current}");
-    assert_eq!(current["tags"][0]["id"], tag);
+    assert_eq!(current["tags"][0]["id"], json!(tag));
     assert_eq!(current["values"][0]["value"]["number"], "123.4500");
     // A catalog-only change conflicts before a fresh mutation, and an invalid
     // sibling rolls the whole atomic patch back.
@@ -122,7 +122,25 @@ async fn mobile006_metadata_atomic_receipt_current_and_catalog_generation(pool: 
         .as_array()
         .unwrap()
         .iter()
-        .any(|v| v["id"] == field));
+        .any(|v| v["id"] == json!(field)));
+    let component_path = format!(
+        "/api/mobile/v1/reconciliations/{generation_id}/people/{}/metadata",
+        f.person
+    );
+    let (status, component) = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &component_path,
+        json!(null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{component}");
+    assert_eq!(component["section"], "metadata");
+    assert_eq!(component["metadata_revision"], current["metadata_revision"]);
+    assert_eq!(component["catalog_revision"], json!(catalog.to_string()));
+    assert_eq!(component["complete"], true);
 }
 
 #[sqlx::test]

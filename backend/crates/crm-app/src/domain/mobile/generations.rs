@@ -759,10 +759,7 @@ pub async fn component(
                 today_changed: false,
             });
         }
-        let tags: Value = sqlx::query_scalar("SELECT COALESCE(jsonb_agg(jsonb_build_object('id',t.id,'name',t.name) ORDER BY t.id),'[]'::jsonb) FROM person_tag pt JOIN tag t ON t.id=pt.tag_id AND t.organization_id=pt.organization_id WHERE pt.organization_id=$1 AND pt.person_id=$2")
-            .bind(auth.active_organization_id.0).bind(person).fetch_one(&mut *tx).await?;
-        let values: Value = sqlx::query_scalar("SELECT COALESCE(jsonb_agg(jsonb_build_object('field_id',field_id,'field_type',field_type,'value',CASE field_type WHEN 'text' THEN jsonb_build_object('text',text_value) WHEN 'number' THEN jsonb_build_object('number',number_value::text) WHEN 'date' THEN jsonb_build_object('date',date_value::text) ELSE jsonb_build_object('option_id',option_id) END,'updated_at',updated_at) ORDER BY field_id),'[]'::jsonb) FROM person_custom_field_value WHERE organization_id=$1 AND person_id=$2")
-            .bind(auth.active_organization_id.0).bind(person).fetch_one(&mut *tx).await?;
+        let (tags, values) = metadata_rows(&mut *tx, auth.active_organization_id.0, person).await?;
         let value = json!({"generation_id":id,"person_id":person,"section":"metadata","revision":expected.to_string(),"metadata_revision":metadata.to_string(),"catalog_revision":catalog_revision.to_string(),"tags":tags,"values":values,"complete":true});
         if serde_json::to_vec(&value).map_err(|_| invalid())?.len() > PAGE_BYTES {
             return Err(code(422, "over_limit"));

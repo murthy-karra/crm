@@ -685,6 +685,9 @@ async fn unit(
         return Err(MigrationError::Forbidden);
     }
     super::store::lock_org(&mut tx, org).await?;
+    // Serialize catalog/Person writes with ordinary and offline metadata edits
+    // before ledger, root and native-row locks are acquired.
+    crate::domain::mobile::metadata::acquire_exclusive(&mut tx, org).await?;
     // All child writers serialize at the Org barrier before ledger/root locks.
     sqlx::query("SELECT s.id FROM migration_snapshot s JOIN migration_snapshot_storage l ON l.organization_id=s.organization_id WHERE s.id=$1 AND s.organization_id=$2 FOR UPDATE OF s,l").bind(candidate.get::<Uuid,_>("snapshot_id")).bind(org.0).fetch_one(&mut *tx).await?;
     let r=sqlx::query("SELECT * FROM migration_admitted_metadata_import WHERE id=$1 AND organization_id=$2 FOR UPDATE").bind(root).bind(org.0).fetch_one(&mut *tx).await?;

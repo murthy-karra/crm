@@ -89,6 +89,10 @@ async fn worker_tx(
         m.get::<String, _>("role") == "admin" && m.get::<String, _>("status") == "active"
     });
     super::store::lock_org(&mut tx, org).await?;
+    // Import units may create catalog rows or apply their Person values. Enter
+    // the same catalog barrier as ordinary/mobile metadata writers before any
+    // of those rows are locked, so catalog cascades cannot invert Person locks.
+    crate::domain::mobile::metadata::acquire_exclusive(&mut tx, org).await?;
     Ok((tx, active))
 }
 #[tracing::instrument(name = "migration.metadata_import.unit", skip_all)]

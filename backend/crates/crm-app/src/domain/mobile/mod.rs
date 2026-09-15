@@ -2,9 +2,11 @@
 //! independent business mutation path. Request/content types deliberately do
 //! not implement Debug, so logs cannot accidentally format customer input.
 mod generations;
+pub(crate) mod metadata;
 mod operations;
 pub use generations::{
-    cleanup_once, component, create_generation, manifest, seal, stages, ReconciliationRequest,
+    cleanup_once, component, create_generation, manifest, metadata_catalog, seal, stages,
+    ReconciliationRequest,
 };
 pub use operations::{execute, lookup_receipt, Operation, Receipt};
 
@@ -116,6 +118,48 @@ fn bounded_current(value: Value) -> Result<Value, MobileError> {
         return Err(code(503, "unavailable"));
     }
     Ok(value)
+}
+
+fn bounded_metadata_current(value: Value) -> Result<Value, MobileError> {
+    if serde_json::to_vec(&value)
+        .map_err(|_| code(503, "unavailable"))?
+        .len()
+        > CURRENT_RECORD_BYTES
+    {
+        return Err(code(422, "over_limit"));
+    }
+    Ok(value)
+}
+
+/// Read a complete metadata section only after bounded admission.  A Person can
+/// retain values for archived fields, so the custom-value side cannot rely on
+/// the catalog's live-field limit.  Do not aggregate an unbounded section and
+/// reject it after PostgreSQL has already allocated the result.
+pub(crate) async fn metadata_rows(
+    conn: &mut PgConnection,
+    organization_id: Uuid,
+    person_id: Uuid,
+) -> Result<(Value, Value), MobileError> {
+    let tags: Value = sqlx::query_scalar(
+        "SELECT COALESCE(jsonb_agg(jsonb_build_object('id',id,'name',name) ORDER BY id),'[]'::jsonb) FROM (SELECT t.id,t.name FROM person_tag pt JOIN tag t ON t.id=pt.tag_id AND t.organization_id=pt.organization_id WHERE pt.organization_id=$1 AND pt.person_id=$2 ORDER BY t.id LIMIT 101) AS bounded_tags",
+    )
+    .bind(organization_id)
+    .bind(person_id)
+    .fetch_one(&mut *conn)
+    .await?;
+    let values: Value = sqlx::query_scalar(
+        "SELECT COALESCE(jsonb_agg(jsonb_build_object('field_id',field_id,'field_type',field_type,'value',CASE field_type WHEN 'text' THEN jsonb_build_object('text',text_value) WHEN 'number' THEN jsonb_build_object('number',number_value::text) WHEN 'date' THEN jsonb_build_object('date',date_value::text) ELSE jsonb_build_object('option_id',option_id) END,'updated_at',updated_at) ORDER BY field_id),'[]'::jsonb) FROM (SELECT field_id,field_type,text_value,number_value,date_value,option_id,updated_at FROM person_custom_field_value WHERE organization_id=$1 AND person_id=$2 ORDER BY field_id LIMIT 101) AS bounded_values",
+    )
+    .bind(organization_id)
+    .bind(person_id)
+    .fetch_one(&mut *conn)
+    .await?;
+    if tags.as_array().is_none_or(|items| items.len() > 100)
+        || values.as_array().is_none_or(|items| items.len() > 100)
+    {
+        return Err(code(422, "over_limit"));
+    }
+    Ok((tags, values))
 }
 
 #[derive(Clone)]
@@ -343,8 +387,31 @@ pub async fn bootstrap(
     let expiry: DateTime<Utc> = row.get("offline_access_expires_at");
     tx.commit().await?;
     Ok(
-        json!({"protocol":PROTOCOL,"context_id":id,"installation_id":request.installation_id,"actor_user_id":auth.actor_user_id,"organization_id":auth.active_organization_id,"workspace_revision":revision.to_string(),"authorized_at":now,"offline_access_expires_at":expiry,"server_time":now,"capabilities":["add_note","create_task","complete_task","reconciliation","edit_note","update_task","note_revisions","log_contact_attempt","change_person_stage","stage_revisions","stage_catalog","update_person_details","details_revisions"],"bounds":{"selected_people":MAX_PEOPLE,"manifest_page":250,"component_rows":100,"component_bytes":PAGE_BYTES,"operation_bytes":131072,"concurrent_uploads":1,"concurrent_downloads":2,"generation_seconds":1800,"stage_catalog_page":100}}),
+        json!({"protocol":PROTOCOL,"context_id":id,"installation_id":request.installation_id,"actor_user_id":auth.actor_user_id,"organization_id":auth.active_organization_id,"workspace_revision":revision.to_string(),"authorized_at":now,"offline_access_expires_at":expiry,"server_time":now,"capabilities":["add_note","create_task","complete_task","reconciliation","edit_note","update_task","note_revisions","log_contact_attempt","change_person_stage","stage_revisions","stage_catalog","update_person_details","details_revisions","update_person_metadata","metadata_revisions","metadata_catalog"],"bounds":{"selected_people":MAX_PEOPLE,"manifest_page":250,"component_rows":100,"component_bytes":PAGE_BYTES,"operation_bytes":131072,"concurrent_uploads":1,"concurrent_downloads":2,"generation_seconds":1800,"stage_catalog_page":100,"metadata_catalog_page":100,"metadata_person_tags":100,"metadata_person_values":100,"metadata_current_bytes":CURRENT_RECORD_BYTES}}),
     )
+}
+
+/// Current metadata is a transient conflict-review traversal. It never seals a
+/// generation or upgrades a partially downloaded catalog.
+pub async fn current_metadata(
+    pool: &PgPool,
+    auth: &AuthContext,
+    context_id: Uuid,
+    person_id: Uuid,
+) -> Result<Value, MobileError> {
+    let mut tx = begin(pool, auth, true).await?;
+    context(&mut tx, auth, context_id, false).await?;
+    authority(&mut tx, auth, false).await?;
+    metadata::acquire_shared(&mut tx, auth.active_organization_id).await?;
+    let row = sqlx::query(
+        "SELECT p.mobile_revision,p.metadata_revision,
+          (SELECT revision FROM mobile_metadata_catalog WHERE organization_id=p.organization_id) AS catalog_revision
+          FROM person p WHERE p.organization_id=$1 AND p.id=$2",
+    ).bind(auth.active_organization_id.0).bind(person_id).fetch_optional(&mut *tx).await?.ok_or_else(missing)?;
+    let (tags, values) = metadata_rows(&mut tx, auth.active_organization_id.0, person_id).await?;
+    let value = json!({"context_id":context_id,"person_id":person_id,"person_revision":row.get::<i64,_>("mobile_revision").to_string(),"metadata_revision":row.get::<i64,_>("metadata_revision").to_string(),"catalog_revision":row.get::<i64,_>("catalog_revision").to_string(),"tags":tags,"values":values,"complete":true});
+    tx.commit().await?;
+    bounded_metadata_current(value)
 }
 
 /// Bounded live edit baseline. This is intentionally separate from a sealed

@@ -24,6 +24,9 @@ data class PersonRow(
     @ColumnInfo(defaultValue = "0") val stageRevisionsQualified: Boolean = false,
     /** A v5 cache has no complete contact/details baseline even at the same broad revision. */
     @ColumnInfo(defaultValue = "0") val detailsRevisionsQualified: Boolean = false,
+    /** A schema-6 cache has no complete tags/typed-values baseline. */
+    @ColumnInfo(defaultValue = "0") val metadataRevisionsQualified: Boolean = false,
+    @ColumnInfo(defaultValue = "''") val metadata: String = "",
 )
 
 data class PersonCard(val id: String, val revision: String, val summary: String)
@@ -140,6 +143,60 @@ data class ProfileContextRow(
     val editorRevision: Long = 0,
 )
 
+/** Immutable metadata proposal state. The operation envelope is created only at submit time. */
+@Entity(tableName = "metadata_drafts")
+data class MetadataDraftRow(
+    @PrimaryKey val id: String,
+    val person: String,
+    val baseline: String,
+    val proposal: String,
+    val metadataRevision: String,
+    val catalogRevision: String,
+    val revision: Long,
+    val operation: String = "",
+    val state: String = "draft",
+    @ColumnInfo(defaultValue = "''") val lastError: String = "",
+)
+
+/** Current conflict response is protected comparison material, never a cache promotion. */
+@Entity(tableName = "metadata_context")
+data class MetadataContextRow(
+    @PrimaryKey val operation: String,
+    val person: String,
+    val baseline: String,
+    val proposal: String,
+    val current: String = "",
+    val editorRevision: Long = 0,
+)
+
+@Entity(tableName = "metadata_tags")
+data class MetadataTagRow(@PrimaryKey val id: String, val name: String, val generation: String, val revision: String)
+
+@Entity(tableName = "metadata_fields")
+data class MetadataFieldRow(
+    @PrimaryKey val id: String,
+    val label: String,
+    val fieldType: String,
+    val position: Int,
+    val archivedAt: String?,
+    val generation: String,
+    val revision: String,
+)
+
+@Entity(tableName = "metadata_options")
+data class MetadataOptionRow(
+    @PrimaryKey val id: String,
+    val fieldId: String,
+    val label: String,
+    val position: Int,
+    val archivedAt: String?,
+    val generation: String,
+    val revision: String,
+)
+
+@Entity(tableName = "metadata_catalog_pages", primaryKeys = ["generation", "section", "cursor"])
+data class MetadataCatalogPageRow(val generation: String, val section: String, val cursor: String, val body: String)
+
 @Entity(tableName = "operations")
 data class OperationRow(
     @PrimaryKey val id: String,
@@ -155,7 +212,7 @@ data class OperationRow(
 )
 
 @Entity(tableName = "manifest", primaryKeys = ["generation", "person"])
-data class ManifestRow(val generation: String, val person: String, val revision: String)
+data class ManifestRow(val generation: String, val person: String, val revision: String, @ColumnInfo(defaultValue = "''") val metadataRevision: String = "")
 
 @Entity(tableName = "pages", primaryKeys = ["generation", "person", "section", "cursor"])
 data class PageRow(
@@ -275,6 +332,33 @@ interface FieldDao {
     @Query("UPDATE profile_context SET current=:current,editorRevision=:editorRevision WHERE operation=:operation") fun currentProfileContext(operation: String, current: String, editorRevision: Long)
     @Query("DELETE FROM profile_context WHERE operation=:operation") fun removeProfileContext(operation: String)
 
+    @Query("SELECT * FROM metadata_drafts WHERE id=:id") fun metadataDraft(id: String): MetadataDraftRow?
+    @Query("SELECT * FROM metadata_drafts ORDER BY id") fun metadataDrafts(): List<MetadataDraftRow>
+    @Insert(onConflict = OnConflictStrategy.ABORT) fun insertMetadataDraft(row: MetadataDraftRow)
+    @Query("UPDATE metadata_drafts SET proposal=:proposal,revision=:revision,state='draft',lastError='' WHERE id=:id AND revision=:expectedRevision AND operation='' ") fun updateMetadataDraft(id: String, proposal: String, revision: Long, expectedRevision: Long): Int
+    @Query("UPDATE metadata_drafts SET operation=:operation,state='saved',lastError='' WHERE id=:id AND operation='' ") fun saveMetadataOperation(id: String, operation: String): Int
+    @Query("UPDATE metadata_drafts SET state=:state,lastError=:error WHERE operation=:operation") fun metadataState(operation: String, state: String, error: String)
+    @Query("DELETE FROM metadata_drafts WHERE operation=:operation") fun removeMetadataOperation(operation: String)
+    @Query("SELECT * FROM metadata_context WHERE operation=:operation") fun metadataContext(operation: String): MetadataContextRow?
+    @Query("SELECT * FROM metadata_context ORDER BY operation") fun metadataContexts(): List<MetadataContextRow>
+    @Insert(onConflict = OnConflictStrategy.ABORT) fun metadataContext(row: MetadataContextRow)
+    @Query("UPDATE metadata_context SET current=:current,editorRevision=:editorRevision WHERE operation=:operation") fun currentMetadataContext(operation: String, current: String, editorRevision: Long)
+    @Query("DELETE FROM metadata_context WHERE operation=:operation") fun removeMetadataContext(operation: String)
+
+    @Query("SELECT * FROM metadata_tags ORDER BY name,id") fun metadataTags(): List<MetadataTagRow>
+    @Query("SELECT * FROM metadata_fields ORDER BY position,id") fun metadataFields(): List<MetadataFieldRow>
+    @Query("SELECT * FROM metadata_options WHERE fieldId=:field ORDER BY position,id") fun metadataOptions(field: String): List<MetadataOptionRow>
+    @Query("SELECT * FROM metadata_options ORDER BY fieldId,position,id") fun allMetadataOptions(): List<MetadataOptionRow>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) fun metadataTags(rows: List<MetadataTagRow>)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) fun metadataFields(rows: List<MetadataFieldRow>)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) fun metadataOptions(rows: List<MetadataOptionRow>)
+    @Query("DELETE FROM metadata_tags") fun clearMetadataTags()
+    @Query("DELETE FROM metadata_fields") fun clearMetadataFields()
+    @Query("DELETE FROM metadata_options") fun clearMetadataOptions()
+    @Query("SELECT * FROM metadata_catalog_pages WHERE generation=:generation AND section=:section") fun metadataCatalogPages(generation: String, section: String): List<MetadataCatalogPageRow>
+    @Insert(onConflict = OnConflictStrategy.ABORT) fun metadataCatalogPage(row: MetadataCatalogPageRow)
+    @Query("DELETE FROM metadata_catalog_pages") fun clearMetadataCatalogPages()
+
     @Insert(onConflict = OnConflictStrategy.ABORT) fun operation(row: OperationRow)
 
     @Query("SELECT * FROM operations ORDER BY createdAt,id") fun operations(): List<OperationRow>
@@ -360,8 +444,14 @@ interface FieldDao {
             EditContextRow::class,
             ProfileDraftRow::class,
             ProfileContextRow::class,
+            MetadataDraftRow::class,
+            MetadataContextRow::class,
+            MetadataTagRow::class,
+            MetadataFieldRow::class,
+            MetadataOptionRow::class,
+            MetadataCatalogPageRow::class,
         ],
-    version = 6,
+    version = 8,
     exportSchema = true,
 )
 abstract class FieldDatabase : RoomDatabase() {
@@ -431,6 +521,29 @@ abstract class FieldDatabase : RoomDatabase() {
                 }
             }
 
+        /** Mobile006 is additive: rows and encrypted payload bytes from Mobile005 are untouched. */
+        val UPGRADE_6_7 =
+            object : Migration(6, 7) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE people ADD COLUMN metadataRevisionsQualified INTEGER NOT NULL DEFAULT 0")
+                    db.execSQL("ALTER TABLE people ADD COLUMN metadata TEXT NOT NULL DEFAULT ''")
+                    db.execSQL("CREATE TABLE IF NOT EXISTS metadata_drafts (id TEXT NOT NULL, person TEXT NOT NULL, baseline TEXT NOT NULL, proposal TEXT NOT NULL, metadataRevision TEXT NOT NULL, catalogRevision TEXT NOT NULL, revision INTEGER NOT NULL, operation TEXT NOT NULL DEFAULT '', state TEXT NOT NULL DEFAULT 'draft', lastError TEXT NOT NULL DEFAULT '', PRIMARY KEY(id))")
+                    db.execSQL("CREATE TABLE IF NOT EXISTS metadata_context (operation TEXT NOT NULL, person TEXT NOT NULL, baseline TEXT NOT NULL, proposal TEXT NOT NULL, current TEXT NOT NULL DEFAULT '', editorRevision INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(operation))")
+                    db.execSQL("CREATE TABLE IF NOT EXISTS metadata_tags (id TEXT NOT NULL, name TEXT NOT NULL, generation TEXT NOT NULL, revision TEXT NOT NULL, PRIMARY KEY(id))")
+                    db.execSQL("CREATE TABLE IF NOT EXISTS metadata_fields (id TEXT NOT NULL, label TEXT NOT NULL, fieldType TEXT NOT NULL, position INTEGER NOT NULL, archivedAt TEXT, generation TEXT NOT NULL, revision TEXT NOT NULL, PRIMARY KEY(id))")
+                    db.execSQL("CREATE TABLE IF NOT EXISTS metadata_options (id TEXT NOT NULL, fieldId TEXT NOT NULL, label TEXT NOT NULL, position INTEGER NOT NULL, archivedAt TEXT, generation TEXT NOT NULL, revision TEXT NOT NULL, PRIMARY KEY(id))")
+                    db.execSQL("CREATE TABLE IF NOT EXISTS metadata_catalog_pages (generation TEXT NOT NULL, section TEXT NOT NULL, cursor TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(generation,section,cursor))")
+                }
+            }
+
+        /** The staging manifest now pins the Person metadata component to its own revision. */
+        val UPGRADE_7_8 =
+            object : Migration(7, 8) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE manifest ADD COLUMN metadataRevision TEXT NOT NULL DEFAULT ''")
+                }
+            }
+
         fun open(context: Context, directory: File, key: ByteArray): FieldDatabase {
             System.loadLibrary("sqlcipher")
             val db =
@@ -441,7 +554,7 @@ abstract class FieldDatabase : RoomDatabase() {
                     )
                     .openHelperFactory(SupportOpenHelperFactory(key, null, true))
                     .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                    .addMigrations(UPGRADE_1_2, UPGRADE_2_3, UPGRADE_3_4, UPGRADE_4_5, UPGRADE_5_6)
+                    .addMigrations(UPGRADE_1_2, UPGRADE_2_3, UPGRADE_3_4, UPGRADE_4_5, UPGRADE_5_6, UPGRADE_6_7, UPGRADE_7_8)
                     .addCallback(
                         object : Callback() {
                             override fun onOpen(db: SupportSQLiteDatabase) {

@@ -7,7 +7,7 @@ final class LocalStore {
     private var db: OpaquePointer?
     let identity: String, context: String, url: URL
     private let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
-    init(url: URL, key: Data, identity: String, context: String, schemaTarget: Int = 8) throws {
+    init(url: URL, key: Data, identity: String, context: String, schemaTarget: Int = 9) throws {
         self.url = url; self.identity = identity; self.context = context
         guard sqlite3_open_v2(url.path, &db, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX, nil) == SQLITE_OK else {
             sqlite3_close(db); db = nil; throw LocalError.storage
@@ -31,7 +31,7 @@ final class LocalStore {
     deinit { sqlite3_close(db) }
     private func migrate(to target: Int) throws {
         let version = Int(try rows("PRAGMA user_version").first?.first ?? "0") ?? 0
-        guard version <= 8 else { throw LocalError.invalidProtocol }
+        guard version <= 9 else { throw LocalError.invalidProtocol }
         try transaction {
             if version < 1 {
                 for sql in [
@@ -91,6 +91,18 @@ final class LocalStore {
                 try run("ALTER TABLE bundle_qualification ADD COLUMN details_revisions INTEGER NOT NULL DEFAULT 0")
                 try run("PRAGMA user_version=8")
             }
+            // Mobile006 stores metadata snapshots and catalog pages independently
+            // from bundles.  The old protected rows are deliberately never decoded
+            // or re-encoded during an installed-app upgrade.
+            if version < 9 && target >= 9 {
+                try run("ALTER TABLE bundle_qualification ADD COLUMN metadata_revisions INTEGER NOT NULL DEFAULT 0")
+                try run("ALTER TABLE members ADD COLUMN metadata_revision TEXT")
+                try run("CREATE TABLE metadata_catalogs(generation TEXT PRIMARY KEY,revision TEXT NOT NULL,complete INTEGER NOT NULL DEFAULT 0)")
+                try run("CREATE TABLE metadata_catalog_rows(generation TEXT NOT NULL,section TEXT NOT NULL,id TEXT NOT NULL,body TEXT NOT NULL,PRIMARY KEY(generation,section,id))")
+                try run("CREATE TABLE metadata_components(generation TEXT NOT NULL,person TEXT NOT NULL,revision TEXT NOT NULL,body TEXT NOT NULL,PRIMARY KEY(generation,person,revision))")
+                try run("CREATE INDEX metadata_component_person ON metadata_components(person,revision)")
+                try run("PRAGMA user_version=9")
+            }
         }
     }
     @discardableResult func rows(_ sql: String, _ args: [String?] = []) throws -> [[String]] {
@@ -133,9 +145,57 @@ final class LocalStore {
             return saved
         }
     }
+    /// Persist the replacement before superseding its conflicted predecessor.
+    /// Both writes share one transaction so a storage failure cannot strand a
+    /// proposal behind an irreversible supersession.
+    @discardableResult func saveMetadataReplacement(_ draft: Draft, superseding predecessor: String?) throws -> Draft {
+        guard draft.isMetadata, draft.revision == 0, let predecessor else { throw LocalError.invalidInput }
+        var saved = draft; saved.revision = 1
+        let body = try string(saved) // encode/validate before mutating either row
+        return try transaction {
+            guard try rows("SELECT 1 FROM drafts WHERE id=?", [saved.id]).isEmpty else { throw LocalError.staleDraft }
+            guard let conflicted = try queue().first(where: { $0.id == predecessor }),
+                  conflicted.isMetadata, conflicted.envelope.person == saved.person,
+                  conflicted.status == "conflict",
+                  let original = try draftForOperation(predecessor), original.isMetadata,
+                  original.person == saved.person else { throw LocalError.staleDraft }
+            try run("INSERT INTO drafts(id,body) VALUES(?,?)", [saved.id, body])
+            try run("UPDATE operations SET status='superseded',error='superseded' WHERE id=? AND status='conflict'", [predecessor])
+            try run("DELETE FROM drafts WHERE id=?", [original.id])
+            return saved
+        }
+    }
+    /// Validate the revised proposal before its conflicted predecessor may be
+    /// superseded. The same validator is used again when the user submits.
+    func validateMetadataProposal(_ draft: Draft) throws {
+        guard draft.isMetadata, let expected = draft.expectedRevision,
+              let catalog = draft.expectedCatalogRevision,
+              (try? revision(expected)) != nil, (try? revision(catalog)) != nil,
+              let proposal = draft.proposal else { throw LocalError.invalidInput }
+        let actions = proposal["actions"].list
+        guard !actions.isEmpty, actions.count <= 50 else { throw LocalError.invalidInput }
+        try validateMetadataActions(actions, baseline: draft.baseline)
+    }
+    /// An action may become unusable after a catalog change (for example, a
+    /// deleted tag or archived choice option). Return those rows for an
+    /// explicit user decision; this method never removes or rewrites them.
+    func invalidMetadataActionIndexes(_ actions: [JSON], baseline: JSON?) -> Set<Int> {
+        Set(actions.enumerated().compactMap { index, action in
+            do { try validateMetadataActions([action], baseline: baseline); return nil }
+            catch { return index }
+        })
+    }
     @discardableResult func submit(_ draft: Draft) throws -> Envelope {
         var payload: [String: JSON] = ["person_id": .s(draft.person)]
-        if draft.kind == "update_person_details" {
+        if draft.kind == "update_person_metadata" {
+            try validateMetadataProposal(draft)
+            guard let expected = draft.expectedRevision, let catalog = draft.expectedCatalogRevision,
+                  let proposal = draft.proposal else { throw LocalError.invalidInput }
+            let actions = proposal["actions"].list
+            payload["expected_metadata_revision"] = .s(expected)
+            payload["expected_catalog_revision"] = .s(catalog)
+            payload["actions"] = .array(actions)
+        } else if draft.kind == "update_person_details" {
             guard let expected = draft.expectedRevision, (try? revision(expected)) != nil,
                   let proposal = draft.proposal, case .object(let edits) = proposal,
                   !edits.isEmpty else { throw LocalError.invalidInput }
@@ -175,7 +235,7 @@ final class LocalStore {
                 _ = try revision(expected); payload["task_id"] = .s(target); payload["expected_revision"] = .s(expected)
             } else { payload["assignee_user_id"] = .null }
         }
-        let earlier = draft.kind == "change_person_stage" || draft.kind == "update_person_details"
+        let earlier = draft.kind == "change_person_stage" || draft.kind == "update_person_details" || draft.kind == "update_person_metadata"
             ? try unresolvedOperation(person: draft.person, target: draft.person)
             : draft.targetID.flatMap { try? unresolvedOperation(person: draft.person, target: $0) }
         if let earlier {
@@ -192,7 +252,7 @@ final class LocalStore {
             guard let row = try rows("SELECT body FROM drafts WHERE id=?", [draft.id]).first,
                   let stored = try? decode(Draft.self, Data(row[0].utf8)), stored.revision == draft.revision else { throw LocalError.staleDraft }
             let envelope = try insertEnvelope(kind: draft.kind, payload: .object(payload), deviceRecordedAt: draft.kind == "log_contact_attempt" ? stamp() : draft.deviceRecordedAt)
-            if draft.isEdit || draft.isDetails {
+            if draft.isEdit || draft.isDetails || draft.isMetadata {
                 var protected = stored; protected.mode = "submitted"; protected.predecessor = envelope.operation_id; protected.revision += 1
                 try run("UPDATE drafts SET body=? WHERE id=?", [try string(protected), protected.id])
             } else { try run("DELETE FROM drafts WHERE id=?", [draft.id]) }
@@ -219,6 +279,48 @@ final class LocalStore {
                 default: throw LocalError.invalidInput
                 }
             }
+        }
+    }
+    private func validateMetadataActions(_ actions: [JSON], baseline: JSON?) throws {
+        var targets = Set<String>()
+        for action in actions {
+            guard case .object(let object) = action else { throw LocalError.invalidInput }
+            let kind = object["kind"]?.text ?? ""
+            switch kind {
+            case "add_tag", "remove_tag":
+                guard let id = object["tag_id"]?.text, UUID(uuidString: id) != nil,
+                      object.count == 2, targets.insert("tag:" + id).inserted,
+                      (baseline?["catalog_tags"].list ?? []).contains(where: { $0["id"].text == id }) else { throw LocalError.invalidInput }
+            case "set_field":
+                guard let id = object["field_id"]?.text, UUID(uuidString: id) != nil,
+                      object.count == 3, targets.insert("field:" + id).inserted else { throw LocalError.invalidInput }
+                try validateMetadataValue(object["value"] ?? .null, fieldID: id, baseline: baseline)
+            case "clear_field":
+                guard let id = object["field_id"]?.text, UUID(uuidString: id) != nil,
+                      object.count == 2, targets.insert("field:" + id).inserted,
+                      (baseline?["fields"].list ?? []).contains(where: { $0["id"].text == id }) else { throw LocalError.invalidInput }
+            default: throw LocalError.invalidInput
+            }
+        }
+    }
+    private func validateMetadataValue(_ value: JSON, fieldID: String, baseline: JSON?) throws {
+        guard case .object(let object) = value, object.count == 1,
+              let kind = object.keys.first, let raw = object[kind]?.text else { throw LocalError.invalidInput }
+        let fields = baseline?["fields"].list ?? []
+        guard let field = fields.first(where: { $0["id"].text == fieldID }), field["archived_at"] == .null else { throw LocalError.invalidInput }
+        switch (field["field_type"].text, kind) {
+        case ("text", "text"):
+            guard !raw.isEmpty, raw.unicodeScalars.count <= 500 else { throw LocalError.invalidInput }
+        case ("number", "number"):
+            guard raw.range(of: "^-?(?:0|[1-9][0-9]{0,14})(?:\\.[0-9]{1,4})?$", options: .regularExpression) != nil else { throw LocalError.invalidInput }
+        case ("date", "date"):
+            let f = DateFormatter(); f.calendar = Calendar(identifier: .gregorian); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(secondsFromGMT: 0); f.dateFormat = "yyyy-MM-dd"
+            guard raw.range(of: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$", options: .regularExpression) != nil,
+                  let year = Int(raw.prefix(4)), (1900...2200).contains(year),
+                  let parsed = f.date(from: raw), f.string(from: parsed) == raw else { throw LocalError.invalidInput }
+        case ("choice", "option_id"):
+            guard let option = (baseline?["options"].list ?? []).first(where: { $0["id"].text == raw }), option["field_id"].text == fieldID, option["archived_at"] == .null, UUID(uuidString: raw) != nil else { throw LocalError.invalidInput }
+        default: throw LocalError.invalidInput
         }
     }
     private func validateDetailName(_ value: JSON) throws {
@@ -325,7 +427,7 @@ final class LocalStore {
             guard UUID(uuidString: receipt.operation_id) != nil, UUID(uuidString: receipt.resource_id) != nil,
                   (try? date(receipt.accepted_at)) != nil else { throw LocalError.invalidProtocol }
             let expected: String
-            switch op.envelope.kind { case "add_note", "edit_note": expected = "note"; case "create_task", "update_task", "complete_task": expected = "task"; case "log_contact_attempt": expected = "contact_attempt"; case "change_person_stage": expected = "person_stage"; case "update_person_details": expected = "person_details"; default: throw LocalError.invalidProtocol }
+            switch op.envelope.kind { case "add_note", "edit_note": expected = "note"; case "create_task", "update_task", "complete_task": expected = "task"; case "log_contact_attempt": expected = "contact_attempt"; case "change_person_stage": expected = "person_stage"; case "update_person_details": expected = "person_details"; case "update_person_metadata": expected = "person_metadata"; default: throw LocalError.invalidProtocol }
             guard receipt.resource_type == expected else { throw LocalError.invalidProtocol }
             if op.envelope.kind == "log_contact_attempt" {
                 guard receipt.committed_revision == nil, receipt.changed else { throw LocalError.invalidProtocol }
@@ -342,10 +444,15 @@ final class LocalStore {
                       Set(mapping.compactMap { UUID(uuidString: $0.id) }).count == mapping.count,
                       mapping.allSatisfy({ entry in additions.contains(where: { $0.offset == entry.ordinal }) && UUID(uuidString: entry.id) != nil }) else { throw LocalError.invalidProtocol }
             }
+            if op.isMetadata {
+                guard receipt.committed_revision != nil else { throw LocalError.invalidProtocol }
+            }
             if let target = op.targetID, target != receipt.resource_id { throw LocalError.invalidProtocol }
             // A contact can change server-ranked Today without changing the
             // Person revision.  Keep its overlay until a new seal succeeds.
-            let covers = op.isContact ? false : (try activeBundle(op.envelope.person).map { try revision($0.revision) >= revision(receipt.person_revision) } ?? false)
+            let covers: Bool
+            if op.isContact || op.isMetadata { covers = false }
+            else { covers = try activeBundle(op.envelope.person).map { try revision($0.revision) >= revision(receipt.person_revision) } ?? false }
             try run("UPDATE operations SET receipt=?,status='accepted',error=NULL,overlay=? WHERE id=?",
                     [try string(receipt), covers ? "0" : "1", receipt.operation_id])
             if op.isContact { try setMeta("today_refresh_pending", "1") }
@@ -380,13 +487,25 @@ final class LocalStore {
                 try run("INSERT INTO stage_catalogs(generation,revision) VALUES(?,?)", [generation.generation_id, catalog.revision])
                 try setMeta("stage_catalog_cursor", "")
             }
+            if let metadata = generation.metadata {
+                guard metadata.representation == "metadata-v1", (try? revision(metadata.catalog_revision)) != nil,
+                      metadata.catalog_url == "/api/mobile/v1/reconciliations/\(generation.generation_id)/metadata/catalog" else { throw LocalError.invalidProtocol }
+                try run("INSERT INTO metadata_catalogs(generation,revision) VALUES(?,?)", [generation.generation_id, metadata.catalog_revision])
+                for section in ["tags", "fields", "options"] { try setMeta("metadata_catalog_cursor_\(section)", "pending") }
+            }
         }
     }
     func appendManifest(_ generation: String, _ manifest: Manifest) throws {
         guard manifest.items.count <= 250, manifest.complete == (manifest.next_cursor == nil) else { throw LocalError.invalidProtocol }
         for item in manifest.items {
             _ = try revision(item.revision)
-            try run("INSERT INTO members VALUES(?,?,?) ON CONFLICT(generation,person) DO UPDATE SET revision=excluded.revision", [generation, item.person_id, item.revision])
+            if let metadata = item.metadata_revision { _ = try revision(metadata) }
+            let versioned = !(try rows("PRAGMA table_info(members)").filter { $0.count > 1 && $0[1] == "metadata_revision" }).isEmpty
+            if versioned {
+                try run("INSERT INTO members(generation,person,revision,metadata_revision) VALUES(?,?,?,?) ON CONFLICT(generation,person) DO UPDATE SET revision=excluded.revision,metadata_revision=excluded.metadata_revision", [generation, item.person_id, item.revision, item.metadata_revision])
+            } else {
+                try run("INSERT INTO members VALUES(?,?,?) ON CONFLICT(generation,person) DO UPDATE SET revision=excluded.revision", [generation, item.person_id, item.revision])
+            }
         }
         try setMeta("manifest_cursor", manifest.next_cursor ?? "")
     }
@@ -400,6 +519,32 @@ final class LocalStore {
         // Revalidate pre-fix qualified rows so the same broad revision can be
         // downloaded again; the protected cache, drafts and operations remain.
         return try decode(Bundle.self, Data(body.utf8)).hasCompleteDetailsRepresentation
+    }
+    func hasQualifiedMetadataBundle(_ person: String, _ rev: String, generation: String) throws -> Bool {
+        // A component belongs to its generation, not the shared broad-revision
+        // bundle marker. Staging a replacement must not revoke the sealed cache.
+        guard let member = try rows("SELECT revision,metadata_revision FROM members WHERE generation=? AND person=?", [generation, person]).first,
+              member[0] == rev,
+              let catalog = try rows("SELECT revision,complete FROM metadata_catalogs WHERE generation=?", [generation]).first,
+              catalog[1] == "1",
+              let component = try rows("SELECT body FROM metadata_components WHERE generation=? AND person=? AND revision=?", [generation, person, rev]).first?.first else { return false }
+        let metadata = try decode(MetadataComponent.self, Data(component.utf8))
+        return metadata.complete && metadata.section == "metadata" && metadata.generation_id == generation && metadata.catalog_revision == catalog[0] && metadata.person_id == person && metadata.revision == rev && metadata.metadata_revision == member[1] && (try? revision(metadata.metadata_revision)) != nil
+    }
+    func metadataBaseline(person: String) throws -> JSON? {
+        guard let active = try meta("active"), let bundle = try activeBundle(person),
+              try hasQualifiedMetadataBundle(person, bundle.revision, generation: active),
+              let component = try rows("SELECT body FROM metadata_components WHERE generation=? AND person=? AND revision=?", [active, person, bundle.revision]).first?.first,
+              let catalog = try rows("SELECT revision FROM metadata_catalogs WHERE generation=? AND complete=1", [active]).first?.first else { return nil }
+        let metadata = try decode(MetadataComponent.self, Data(component.utf8))
+        let fields = try metadataCatalogRows(active, "fields"), options = try metadataCatalogRows(active, "options"), tags = try metadataCatalogRows(active, "tags")
+        guard metadata.catalog_revision == catalog, metadata.tags.allSatisfy({ tag in tags.contains(where: { $0["id"].text == tag["id"].text }) }),
+              metadata.values.allSatisfy({ value in fields.contains(where: { $0["id"].text == value["field_id"].text }) }) else { return nil }
+        return .object(["person_revision": .s(metadata.revision), "metadata_revision": .s(metadata.metadata_revision), "catalog_revision": .s(metadata.catalog_revision), "tags": .array(metadata.tags), "values": .array(metadata.values), "catalog_tags": .array(tags), "fields": .array(fields), "options": .array(options)])
+    }
+    func editableMetadata(person: String) throws -> JSON? { try metadataBaseline(person: person) }
+    private func metadataCatalogRows(_ generation: String, _ section: String) throws -> [JSON] {
+        try rows("SELECT body FROM metadata_catalog_rows WHERE generation=? AND section=? ORDER BY id", [generation, section]).map { try decode(JSON.self, Data($0[0].utf8)) }
     }
     func pages(_ gen: String, _ person: String, _ section: String) throws -> [Page] {
         try rows("SELECT body FROM pages WHERE generation=? AND person=? AND section=? ORDER BY position", [gen, person, section])
@@ -435,10 +580,12 @@ final class LocalStore {
             if !(try rows("SELECT 1 FROM sqlite_master WHERE type='table' AND name='bundle_qualification'")).isEmpty {
                 let versioned = notes.flatMap(\.items).allSatisfy { !$0["revision"].text.isEmpty && (try? revision($0["revision"].text)) != nil }
                 let columns = try rows("PRAGMA table_info(bundle_qualification)").compactMap { $0.count > 1 ? $0[1] : nil }
-                let hasStageColumn = columns.contains("stage_revisions"), hasDetailsColumn = columns.contains("details_revisions")
+                let hasStageColumn = columns.contains("stage_revisions"), hasDetailsColumn = columns.contains("details_revisions"), hasMetadataColumn = columns.contains("metadata_revisions")
                 if hasStageColumn {
                     let stageVersioned = !head["stage_revision"].text.isEmpty && (try? revision(head["stage_revision"].text)) != nil && UUID(uuidString: head["stage"]["id"].text) != nil
-                    if hasDetailsColumn {
+                    if hasDetailsColumn && hasMetadataColumn {
+                        try run("INSERT INTO bundle_qualification(person,revision,notes_versioned,stage_revisions,details_revisions,metadata_revisions) VALUES(?,?,?,?,?,0) ON CONFLICT(person,revision) DO UPDATE SET notes_versioned=excluded.notes_versioned,stage_revisions=excluded.stage_revisions,details_revisions=excluded.details_revisions,metadata_revisions=0", [person, rev, versioned ? "1" : "0", stageVersioned ? "1" : "0", detailsQualified ? "1" : "0"])
+                    } else if hasDetailsColumn {
                         try run("INSERT INTO bundle_qualification(person,revision,notes_versioned,stage_revisions,details_revisions) VALUES(?,?,?,?,?) ON CONFLICT(person,revision) DO UPDATE SET notes_versioned=excluded.notes_versioned,stage_revisions=excluded.stage_revisions,details_revisions=excluded.details_revisions", [person, rev, versioned ? "1" : "0", stageVersioned ? "1" : "0", detailsQualified ? "1" : "0"])
                     } else {
                         try run("INSERT INTO bundle_qualification(person,revision,notes_versioned,stage_revisions) VALUES(?,?,?,?) ON CONFLICT(person,revision) DO UPDATE SET notes_versioned=excluded.notes_versioned,stage_revisions=excluded.stage_revisions", [person, rev, versioned ? "1" : "0", stageVersioned ? "1" : "0"])
@@ -466,6 +613,55 @@ final class LocalStore {
             }
             try setMeta("stage_catalog_cursor", page.next_cursor ?? "")
             if page.complete { try run("UPDATE stage_catalogs SET complete=1 WHERE generation=?", [page.generation_id]) }
+        }
+    }
+    func metadataCatalogCursor(_ section: String) throws -> String? {
+        guard ["tags", "fields", "options"].contains(section) else { throw LocalError.invalidProtocol }
+        let cursor = try meta("metadata_catalog_cursor_\(section)")
+        // `pending` means no page has been read. An empty cursor means the
+        // section completed, so a resumed reconciliation must skip it rather
+        // than re-requesting page one and violating duplicate/complete rules.
+        if cursor == "pending" { return "" }
+        return cursor?.isEmpty == true ? nil : cursor
+    }
+    func appendMetadataCatalogPage(_ page: MetadataCatalogPage, expected: String) throws {
+        guard ["tags", "fields", "options"].contains(page.section), page.revision == expected,
+              (try? revision(page.revision)) != nil, page.items.count <= 100,
+              page.complete == (page.next_cursor == nil), page.next_cursor.map({ !$0.isEmpty && $0.utf8.count <= 2048 }) ?? true else { throw LocalError.invalidProtocol }
+        let encoded = try string(page); guard encoded.utf8.count <= 524288 else { throw LocalError.invalidProtocol }
+        try transaction {
+            guard let state = try rows("SELECT revision,complete FROM metadata_catalogs WHERE generation=?", [page.generation_id]).first,
+                  state[0] == expected, state[1] == "0" else { throw LocalError.invalidProtocol }
+            for item in page.items {
+                guard UUID(uuidString: item["id"].text) != nil else { throw LocalError.invalidProtocol }
+                switch page.section {
+                case "tags": guard !item["name"].text.isEmpty else { throw LocalError.invalidProtocol }
+                case "fields": guard !item["label"].text.isEmpty, ["text", "number", "date", "choice"].contains(item["field_type"].text), item["position"] != .null else { throw LocalError.invalidProtocol }
+                default: guard UUID(uuidString: item["field_id"].text) != nil, !item["label"].text.isEmpty, item["position"] != .null else { throw LocalError.invalidProtocol }
+                }
+                try run("INSERT INTO metadata_catalog_rows VALUES(?,?,?,?)", [page.generation_id, page.section, item["id"].text, try string(item)])
+            }
+            try setMeta("metadata_catalog_cursor_\(page.section)", page.next_cursor ?? "")
+            if page.complete {
+                let complete = try ["tags", "fields", "options"].allSatisfy { try meta("metadata_catalog_cursor_\($0)") == "" }
+                if complete { try run("UPDATE metadata_catalogs SET complete=1 WHERE generation=?", [page.generation_id]) }
+            }
+        }
+    }
+    func appendMetadataComponent(_ component: MetadataComponent, expected: String) throws {
+        guard component.section == "metadata", component.revision == expected, component.complete,
+              component.tags.count <= 100, component.values.count <= 100,
+              (try? revision(component.metadata_revision)) != nil, (try? revision(component.catalog_revision)) != nil else { throw LocalError.invalidProtocol }
+        let encoded = try string(component); guard encoded.utf8.count <= 524288 else { throw LocalError.invalidProtocol }
+        try transaction {
+            guard let catalog = try rows("SELECT revision,complete FROM metadata_catalogs WHERE generation=?", [component.generation_id]).first,
+                  catalog[0] == component.catalog_revision, catalog[1] == "1",
+                  let member = try rows("SELECT metadata_revision FROM members WHERE generation=? AND person=?", [component.generation_id, component.person_id]).first,
+                  member[0] == component.metadata_revision else { throw LocalError.invalidProtocol }
+            guard Set(component.tags.map { $0["id"].text }).count == component.tags.count,
+                  Set(component.values.map { $0["field_id"].text }).count == component.values.count else { throw LocalError.invalidProtocol }
+            try run("INSERT INTO metadata_components VALUES(?,?,?,?) ON CONFLICT(generation,person,revision) DO UPDATE SET body=excluded.body", [component.generation_id, component.person_id, component.revision, encoded])
+            try run("UPDATE bundle_qualification SET metadata_revisions=1 WHERE person=? AND revision=?", [component.person_id, component.revision])
         }
     }
     func stageCatalogCursor() throws -> String? { try meta("stage_catalog_cursor") }
@@ -538,6 +734,17 @@ final class LocalStore {
             try run("UPDATE drafts SET body=? WHERE id=?", [try string(changed), changed.id])
         }
     }
+    func recordMetadataConflict(_ operationID: String, current: CurrentMetadataResponse?, code: String, contextID: String, person: String) throws {
+        guard contextID == context, ["revision_conflict", "catalog_revision_conflict"].contains(code) else { throw LocalError.invalidProtocol }
+        let currentJSON = current.map { JSON.object(["person_revision": .s($0.person_revision), "metadata_revision": .s($0.metadata_revision), "catalog_revision": .s($0.catalog_revision), "tags": .array($0.tags), "values": .array($0.values)]) }
+        try transaction {
+            try run("UPDATE operations SET status='conflict',error=? WHERE id=?", [code, operationID])
+            guard let draft = try draftForOperation(operationID) else { return }
+            guard draft.person == person else { throw LocalError.identityChanged }
+            var changed = draft; changed.mode = "conflict"; changed.current = currentJSON; changed.revision += 1
+            try run("UPDATE drafts SET body=? WHERE id=?", [try string(changed), changed.id])
+        }
+    }
     func recordStageConflict(_ operationID: String, current: CurrentStageResponse?, contextID: String, person: String) throws {
         guard contextID == context else { throw LocalError.identityChanged }
         try transaction {
@@ -579,18 +786,27 @@ final class LocalStore {
             if stage.stage_catalog != nil {
                 guard let state = try rows("SELECT complete FROM stage_catalogs WHERE generation=?", [seal.generation_id]).first, state[0] == "1" else { throw LocalError.invalidProtocol }
             }
+            if stage.metadata != nil {
+                guard let catalog = try rows("SELECT complete FROM metadata_catalogs WHERE generation=?", [seal.generation_id]).first, catalog[0] == "1" else { throw LocalError.invalidProtocol }
+            }
             let selected = try members(seal.generation_id)
             guard selected.count == seal.selected_count else { throw LocalError.invalidProtocol }
             for (person, rev) in selected {
                 guard try hasBundle(person, rev) else { throw LocalError.invalidProtocol }
+                if stage.metadata != nil, !(try hasQualifiedMetadataBundle(person, rev, generation: seal.generation_id)) { throw LocalError.invalidProtocol }
                 if let old = try activeBundle(person), try revision(old.revision) > revision(rev) {
                     try run("UPDATE members SET revision=? WHERE generation=? AND person=?", [old.revision, seal.generation_id, person])
                 }
             }
             try setMeta("active", seal.generation_id); try setMeta("today", try string(seal.today)); try setMeta("last_sync", seal.sealed_at)
             if stage.stage_catalog != nil { try setMeta("active_stage_catalog", seal.generation_id) }
+            if stage.metadata != nil { try setMeta("active_metadata_catalog", seal.generation_id) }
             for op in try queue() where op.overlay && op.receipt != nil {
-                if let bundle = try activeBundle(op.envelope.person), let receipt = op.receipt,
+                if op.isMetadata, let receipt = op.receipt,
+                   let baseline = try metadataBaseline(person: op.envelope.person),
+                   try revision(baseline["metadata_revision"].text) >= revision(receipt.committed_revision ?? "0") {
+                    try run("UPDATE operations SET overlay=0,error=NULL WHERE id=?", [op.id])
+                } else if !op.isMetadata, let bundle = try activeBundle(op.envelope.person), let receipt = op.receipt,
                    try revision(bundle.revision) >= revision(receipt.person_revision) {
                     try run("UPDATE operations SET overlay=0,error=NULL WHERE id=?", [op.id])
                 } else if try activeBundle(op.envelope.person) == nil {
@@ -608,19 +824,30 @@ final class LocalStore {
     func discardGeneration() throws {
         try run("DELETE FROM metadata WHERE key='staging'")
         try run("DELETE FROM metadata WHERE key='stage_catalog_cursor'")
+        for section in ["tags", "fields", "options"] { try run("DELETE FROM metadata WHERE key=?", ["metadata_catalog_cursor_\(section)"]) }
         try reclaimCache()
     }
     /// Bounded cache-only reclamation. Never touches saved drafts or operations.
     @discardableResult func reclaimCache() throws -> Bool {
         let active = try meta("active") ?? "", staging = try generation()?.generation_id ?? ""
+        let hasMetadata = !(try rows("SELECT 1 FROM sqlite_master WHERE type='table' AND name='metadata_catalogs'")).isEmpty
         try transaction {
             try run("DELETE FROM pages WHERE rowid IN (SELECT rowid FROM pages WHERE generation<>? AND generation<>? LIMIT 200)", [active, staging])
             try run("DELETE FROM members WHERE rowid IN (SELECT rowid FROM members WHERE generation<>? AND generation<>? LIMIT 1000)", [active, staging])
             try run("DELETE FROM bundles WHERE rowid IN (SELECT b.rowid FROM bundles b WHERE NOT EXISTS(SELECT 1 FROM members m WHERE m.person=b.person AND m.revision=b.revision) LIMIT 50)")
             try run("DELETE FROM stage_catalog_stages WHERE rowid IN (SELECT s.rowid FROM stage_catalog_stages s WHERE s.generation<>? AND s.generation<>? LIMIT 200)", [active, staging])
             try run("DELETE FROM stage_catalogs WHERE generation<>? AND generation<>?", [active, staging])
+            if hasMetadata {
+                try run("DELETE FROM metadata_components WHERE generation<>? AND generation<>?", [active, staging])
+                try run("DELETE FROM metadata_catalog_rows WHERE generation<>? AND generation<>?", [active, staging])
+                try run("DELETE FROM metadata_catalogs WHERE generation<>? AND generation<>?", [active, staging])
+            }
         }
-        return try rows("SELECT EXISTS(SELECT 1 FROM pages WHERE generation<>? AND generation<>?) OR EXISTS(SELECT 1 FROM members WHERE generation<>? AND generation<>?) OR EXISTS(SELECT 1 FROM bundles b WHERE NOT EXISTS(SELECT 1 FROM members m WHERE m.person=b.person AND m.revision=b.revision)) OR EXISTS(SELECT 1 FROM stage_catalogs WHERE generation<>? AND generation<>?)", [active, staging, active, staging, active, staging])[0][0] == "1"
+        let base = try rows("SELECT EXISTS(SELECT 1 FROM pages WHERE generation<>? AND generation<>?) OR EXISTS(SELECT 1 FROM members WHERE generation<>? AND generation<>?) OR EXISTS(SELECT 1 FROM bundles b WHERE NOT EXISTS(SELECT 1 FROM members m WHERE m.person=b.person AND m.revision=b.revision)) OR EXISTS(SELECT 1 FROM stage_catalogs WHERE generation<>? AND generation<>?)", [active, staging, active, staging, active, staging])[0][0] == "1"
+        let metadataRemaining: Bool
+        if hasMetadata { metadataRemaining = try rows("SELECT EXISTS(SELECT 1 FROM metadata_catalogs WHERE generation<>? AND generation<>?)", [active, staging])[0][0] == "1" }
+        else { metadataRemaining = false }
+        return base || metadataRemaining
     }
     func pins() throws -> [String] { try meta("pins").map { try decode([String].self, Data($0.utf8)) } ?? [] }
     func pin(_ person: String) throws {

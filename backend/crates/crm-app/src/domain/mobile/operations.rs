@@ -5,10 +5,15 @@ use crate::domain::{
         ChangePersonStage, ContactChannel, ContactDetailOperation, ContactOutcome,
         DetailContactKind, LogContactAttemptInTransaction, UpdatePersonDetails,
     },
+    custom_field::CustomFieldValue,
     envelope::{CommandContext, Origin},
-    note, task,
+    note,
+    person_metadata::{
+        self, MetadataAction as TypedMetadataAction, MetadataError, UpdatePersonMetadata,
+    },
+    task,
 };
-use crate::ids::{ContactMethodId, PersonId, TaskId, UserId};
+use crate::ids::{ContactMethodId, CustomFieldId, PersonId, TagId, TaskId, UserId};
 use crate::realtime::{PersonChange, Publication, Publisher, RealtimeEvent};
 
 #[derive(Deserialize)]
@@ -116,6 +121,31 @@ struct UpdatePersonDetailsPayload {
     contact_operations: Vec<ContactOperationWire>,
 }
 #[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct UpdatePersonMetadataPayload {
+    person_id: Uuid,
+    expected_metadata_revision: String,
+    expected_catalog_revision: String,
+    actions: Vec<MetadataAction>,
+}
+#[derive(Deserialize, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+enum MetadataAction {
+    AddTag {
+        tag_id: Uuid,
+    },
+    RemoveTag {
+        tag_id: Uuid,
+    },
+    SetField {
+        field_id: Uuid,
+        value: CustomFieldValue,
+    },
+    ClearField {
+        field_id: Uuid,
+    },
+}
+#[derive(Deserialize, Serialize)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
 enum ContactOperationWire {
     Add { kind: String, value: String },
@@ -131,6 +161,7 @@ enum Payload {
     LogContactAttempt(LogContactAttempt),
     ChangePersonStage(ChangePersonStagePayload),
     UpdatePersonDetails(UpdatePersonDetailsPayload),
+    UpdatePersonMetadata(UpdatePersonMetadataPayload),
 }
 impl Payload {
     fn parse(kind: &str, value: Value) -> Result<Self, MobileError> {
@@ -192,6 +223,7 @@ impl Payload {
                 Self::ChangePersonStage(v)
             }
             "update_person_details" => Self::UpdatePersonDetails(parse_details(value)?),
+            "update_person_metadata" => Self::UpdatePersonMetadata(parse_metadata(value)?),
             _ => return Err(invalid()),
         })
     }
@@ -205,6 +237,7 @@ impl Payload {
             Self::LogContactAttempt(v) => v.person_id,
             Self::ChangePersonStage(v) => v.person_id,
             Self::UpdatePersonDetails(v) => v.person_id,
+            Self::UpdatePersonMetadata(v) => v.person_id,
         }
     }
     fn json(&self) -> Result<Value, MobileError> {
@@ -217,8 +250,34 @@ impl Payload {
             Self::LogContactAttempt(v) => serialize(v),
             Self::ChangePersonStage(v) => serialize(v),
             Self::UpdatePersonDetails(v) => serialize(v),
+            Self::UpdatePersonMetadata(v) => serialize(v),
         }
     }
+}
+fn parse_metadata(value: Value) -> Result<UpdatePersonMetadataPayload, MobileError> {
+    let payload: UpdatePersonMetadataPayload =
+        serde_json::from_value(value).map_err(|_| invalid())?;
+    revision(&payload.expected_metadata_revision)?;
+    revision(&payload.expected_catalog_revision)?;
+    if payload.actions.is_empty() || payload.actions.len() > 50 {
+        return Err(invalid());
+    }
+    let mut tags = std::collections::HashSet::new();
+    let mut fields = std::collections::HashSet::new();
+    for action in &payload.actions {
+        let unique = match action {
+            MetadataAction::AddTag { tag_id } | MetadataAction::RemoveTag { tag_id } => {
+                tags.insert(*tag_id)
+            }
+            MetadataAction::SetField { field_id, .. } | MetadataAction::ClearField { field_id } => {
+                fields.insert(*field_id)
+            }
+        };
+        if !unique {
+            return Err(invalid());
+        }
+    }
+    Ok(payload)
 }
 fn parse_details(value: Value) -> Result<UpdatePersonDetailsPayload, MobileError> {
     let mut object = value.as_object().cloned().ok_or_else(invalid)?;
@@ -310,6 +369,36 @@ fn revision(raw: &str) -> Result<i64, MobileError> {
     }
     Ok(n)
 }
+fn metadata_error(error: MetadataError) -> MobileError {
+    match error {
+        MetadataError::InvalidMetadata => code(422, "invalid_metadata"),
+        MetadataError::NotFound => missing(),
+        MetadataError::Forbidden => code(403, "forbidden"),
+        MetadataError::RevisionConflict => code(409, "revision_conflict"),
+        MetadataError::CatalogRevisionConflict => code(409, "catalog_revision_conflict"),
+        MetadataError::Tag(crate::domain::tag::TagError::PersonTagLimitReached) => {
+            code(422, "tag_limit_reached")
+        }
+        MetadataError::Tag(crate::domain::tag::TagError::NotFound)
+        | MetadataError::Field(crate::domain::custom_field::CustomFieldError::NotFound)
+        | MetadataError::Field(crate::domain::custom_field::CustomFieldError::FieldArchived)
+        | MetadataError::Field(crate::domain::custom_field::CustomFieldError::TypeMismatch)
+        | MetadataError::Field(crate::domain::custom_field::CustomFieldError::InvalidValue)
+        | MetadataError::Field(crate::domain::custom_field::CustomFieldError::UnknownOption) => {
+            code(422, "invalid_metadata")
+        }
+        MetadataError::Tag(crate::domain::tag::TagError::Forbidden)
+        | MetadataError::Field(crate::domain::custom_field::CustomFieldError::Forbidden) => {
+            code(403, "forbidden")
+        }
+        MetadataError::Database(error)
+        | MetadataError::Tag(crate::domain::tag::TagError::Database(error))
+        | MetadataError::Field(crate::domain::custom_field::CustomFieldError::Database(error)) => {
+            error.into()
+        }
+        _ => code(503, "unavailable"),
+    }
+}
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Receipt {
     pub operation_id: Uuid,
@@ -385,6 +474,7 @@ async fn visible(
         "contact_attempt"=>"SELECT EXISTS(SELECT 1 FROM contact_attempted c JOIN person p ON p.id=c.person_id AND p.organization_id=c.organization_id WHERE c.organization_id=$1 AND c.person_id=$2 AND c.id=$3)",
         "person_stage"=>"SELECT EXISTS(SELECT 1 FROM person p WHERE p.organization_id=$1 AND p.id=$2 AND p.id=$3)",
         "person_details"=>"SELECT EXISTS(SELECT 1 FROM person p WHERE p.organization_id=$1 AND p.id=$2 AND p.id=$3)",
+        "person_metadata"=>"SELECT EXISTS(SELECT 1 FROM person p WHERE p.organization_id=$1 AND p.id=$2 AND p.id=$3)",
         _=>return Err(code(503,"unavailable")),
     };
     if !sqlx::query_scalar::<_, bool>(sql)
@@ -447,12 +537,15 @@ pub async fn execute(
             return Err(code(503, "intake_busy"));
         }
     }
-    crate::domain::person::queries::lock_person(&mut tx, person, auth.active_organization_id)
-        .await?
-        .ok_or_else(missing)?;
-    authority(&mut tx, auth, true).await?;
+    if kind != "update_person_metadata" {
+        crate::domain::person::queries::lock_person(&mut tx, person, auth.active_organization_id)
+            .await?
+            .ok_or_else(missing)?;
+        authority(&mut tx, auth, true).await?;
+    }
     let mut ctx = CommandContext::from_auth(auth);
     ctx.origin = Origin::MobileSession;
+    let mut metadata_change = None;
     let (resource_type, resource_id, changed, added_contact_ids) = match payload {
         Payload::Add(v) => {
             let n = note::add_note_in_transaction(
@@ -666,6 +759,42 @@ pub async fn execute(
                     .collect(),
             )
         }
+        Payload::UpdatePersonMetadata(v) => {
+            let actions = v
+                .actions
+                .into_iter()
+                .map(|action| match action {
+                    MetadataAction::AddTag { tag_id } => TypedMetadataAction::AddTag {
+                        tag_id: TagId::new(tag_id),
+                    },
+                    MetadataAction::RemoveTag { tag_id } => TypedMetadataAction::RemoveTag {
+                        tag_id: TagId::new(tag_id),
+                    },
+                    MetadataAction::SetField { field_id, value } => TypedMetadataAction::SetField {
+                        field_id: CustomFieldId::new(field_id),
+                        value,
+                    },
+                    MetadataAction::ClearField { field_id } => TypedMetadataAction::ClearField {
+                        field_id: CustomFieldId::new(field_id),
+                    },
+                })
+                .collect();
+            let result = person_metadata::update_person_metadata_in_transaction(
+                &mut tx,
+                &ctx,
+                UpdatePersonMetadata {
+                    person_id: person,
+                    expected_metadata_revision: revision(&v.expected_metadata_revision)?,
+                    expected_catalog_revision: revision(&v.expected_catalog_revision)?,
+                    actions,
+                },
+            )
+            .await
+            .map_err(metadata_error)?;
+            let changed = result.tags || result.fields;
+            metadata_change = Some(result);
+            ("person_metadata", person.0, changed, Vec::new())
+        }
     };
     let resource_revision: Option<i64> = match kind.as_str() {
         "add_note" | "log_contact_attempt" => None,
@@ -681,6 +810,15 @@ pub async fn execute(
         "update_person_details" => Some(
             sqlx::query_scalar(
                 "SELECT details_revision FROM person WHERE organization_id=$1 AND id=$2",
+            )
+            .bind(auth.active_organization_id.0)
+            .bind(person.0)
+            .fetch_one(&mut *tx)
+            .await?,
+        ),
+        "update_person_metadata" => Some(
+            sqlx::query_scalar(
+                "SELECT metadata_revision FROM person WHERE organization_id=$1 AND id=$2",
             )
             .bind(auth.active_organization_id.0)
             .bind(person.0)
@@ -726,10 +864,28 @@ pub async fn execute(
                     "contact_attempt" => PersonChange::ContactAttempted,
                     "person_stage" => PersonChange::StageChanged,
                     "person_details" => PersonChange::DetailsChanged,
+                    "person_metadata" if metadata_change.as_ref().is_some_and(|v| v.fields) => {
+                        PersonChange::CustomFieldChanged
+                    }
+                    "person_metadata" => PersonChange::TagsChanged,
                     _ => return Err(code(503, "unavailable")),
                 },
             )))
             .await;
+        if metadata_change
+            .as_ref()
+            .is_some_and(|change| change.tags && change.fields)
+        {
+            publisher
+                .publish_after_commit(Publication::for_event(RealtimeEvent::person_changed(
+                    auth.active_organization_id,
+                    Utc::now(),
+                    ctx.correlation_id,
+                    person,
+                    PersonChange::TagsChanged,
+                )))
+                .await;
+        }
     }
     Ok(Receipt {
         operation_id: request.operation_id,
@@ -795,5 +951,16 @@ mod tests {
         assert!(parse_details(serde_json::json!({"person_id":"11111111-1111-1111-1111-111111111111","expected_details_revision":"1","last_name":"Ada","contact_operations":[],"extra":true})).is_err());
         assert!(contact_value("x".repeat(1025)).is_err());
         assert!(clean_name("x\u{0000}".into()).is_err());
+    }
+
+    #[test]
+    fn metadata_payload_requires_canonical_tokens_and_unique_targets() {
+        let tag = "22222222-2222-2222-2222-222222222222";
+        let field = "33333333-3333-3333-3333-333333333333";
+        let value = serde_json::json!({"person_id":"11111111-1111-1111-1111-111111111111","expected_metadata_revision":"1","expected_catalog_revision":"1","actions":[{"kind":"add_tag","tag_id":tag},{"kind":"set_field","field_id":field,"value":{"number":"12.3400"}}]});
+        assert!(parse_metadata(value).is_ok());
+        assert!(parse_metadata(serde_json::json!({"person_id":"11111111-1111-1111-1111-111111111111","expected_metadata_revision":"01","expected_catalog_revision":"1","actions":[{"kind":"add_tag","tag_id":tag}]})).is_err());
+        assert!(parse_metadata(serde_json::json!({"person_id":"11111111-1111-1111-1111-111111111111","expected_metadata_revision":"1","expected_catalog_revision":"1","actions":[{"kind":"add_tag","tag_id":tag},{"kind":"remove_tag","tag_id":tag}]})).is_err());
+        assert!(parse_metadata(serde_json::json!({"person_id":"11111111-1111-1111-1111-111111111111","expected_metadata_revision":"1","expected_catalog_revision":"1","actions":[]})).is_err());
     }
 }

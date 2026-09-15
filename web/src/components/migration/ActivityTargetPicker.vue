@@ -2,7 +2,9 @@
 import { computed, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import Dialog from 'primevue/dialog'
-import { fetchActivityTargets, useActivityAccess, type ActivityMapping, type ActivityTarget } from '../../api/activityImports'
+import { type ActivityMapping, type ActivityTarget } from '../../api/activityImports'
+import { useActivityReaders } from './activityFamily'
+const { fetchActivityTargets, useActivityAccess } = useActivityReaders()
 import { buttonClasses, dialogPt } from '../../lib/controls'
 import { describeApiError } from '../../lib/errors'
 const props = defineProps<{ importId: string; planId: string; mapping: ActivityMapping; disabled: boolean }>()

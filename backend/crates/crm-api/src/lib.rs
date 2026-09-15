@@ -131,6 +131,7 @@ fn build_app_with_routers_inner(
             .merge(routes::people_admissions::router())
             .merge(routes::admitted_people_refreshes::router())
             .merge(routes::admitted_metadata_imports::router())
+            .merge(routes::admitted_activity_imports::router())
             .merge(routes::migration_imports::router())
             .merge(routes::metadata_imports::router())
             .merge(routes::activity_imports::router())
@@ -513,6 +514,13 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
     });
     let _activity_import_worker = state.db.as_ref().map(|pool| {
         domain::migration::activity_worker::spawn(
+            pool.clone(),
+            state.raw_payload_key.clone(),
+            state.snapshot_policy.clone(),
+        )
+    });
+    let _admitted_activity_import_worker = state.db.as_ref().map(|pool| {
+        domain::migration::admitted_activity_worker::spawn(
             pool.clone(),
             state.raw_payload_key.clone(),
             state.snapshot_policy.clone(),

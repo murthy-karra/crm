@@ -312,6 +312,9 @@ mod db_metadata_import_r1;
 mod db_metadata_import_acceptance;
 mod db_metadata_import_concurrency;
 
+mod db_admitted_activity;
+#[cfg(feature = "perf-harness")]
+mod db_admitted_activity_ui_fixture;
 mod db_admitted_metadata;
 mod db_admitted_metadata_handover;
 mod db_admitted_metadata_http_boundary;
@@ -376,6 +379,10 @@ mod db_people_refresh_plans;
 mod db_people_refresh_reads;
 #[cfg(feature = "perf-harness")]
 mod db_people_refresh_ui_fixture;
+mod db_person_metadata;
 
 #[cfg(feature = "perf-harness")]
 mod db_admitted_metadata_ui_fixture;
+
+#[cfg(feature = "perf-harness")]
+mod db_admitted_activity_plans;

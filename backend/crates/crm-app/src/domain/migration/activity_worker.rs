@@ -98,6 +98,10 @@ async fn run_once_inner(pool: &PgPool, key: &RawPayloadKey) -> Result<bool, Migr
     let id: Uuid = c.get("id");
     let actor = UserId::new(c.get("executor_user_id"));
     let (mut tx, active) = worker_tx(pool, org, actor).await?;
+    // 010f4 extends the global identity owner tuple. Recheck before every
+    // preparation/claim path so a partially upgraded or old writer cannot
+    // prepare units it would later settle under the wrong owner.
+    workspace::startup_compatible(&mut tx).await?;
     let r = s::run(&mut tx, org, id).await?;
     if r.get::<Uuid, _>("executor_user_id") != actor.0
         || r.get::<Option<chrono::DateTime<Utc>>, _>("lease_expires_at")
@@ -135,6 +139,9 @@ async fn run_once_inner(pool: &PgPool, key: &RawPayloadKey) -> Result<bool, Migr
     sqlx::query("UPDATE migration_activity_import SET lease_token=$3,lease_expires_at=now()+interval '60 seconds',updated_at=now() WHERE id=$1 AND organization_id=$2").bind(id).bind(org.0).bind(j.token).execute(&mut *tx).await?;
     tx.commit().await?;
     let mut tx = s::begin(pool, &j.ctx(), false).await?;
+    // Claim/equality/native settlement is a distinct transaction and needs the
+    // same fence; a migration may complete between the two transactions.
+    workspace::startup_compatible(&mut tx).await?;
     let r = s::run(&mut tx, org, id).await?;
     if r.get::<Option<Uuid>, _>("lease_token") != Some(j.token)
         || r.get::<Uuid, _>("latest_plan_id") != j.plan

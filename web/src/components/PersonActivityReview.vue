@@ -117,6 +117,14 @@ const taskSections = computed(() => [
   { key: 'completed' as const, title: 'Completed tasks', count: core.value?.activity.completed_tasks_count, state: completed },
 ])
 const sourceRequest = computed(() => selectedSource.value ? { kind: 'results' as const, importId: selectedSource.value.activity_import_id, rowId: selectedSource.value.result_id, fieldKey: 'all' } : null)
+// Use the server's scoped path only to select a known reader family. Never fetch
+// a supplied source URL or allow it to choose a different import/result.
+const sourceFamily = computed(() => {
+  const source = selectedSource.value
+  if (!source) return undefined
+  return source.source_url === `/api/migrations/fub/admitted-activity-imports/${encodeURIComponent(source.activity_import_id)}/results/${encodeURIComponent(source.result_id)}/fields/all`
+    ? 'admitted' as const : undefined
+})
 </script>
 
 <template>
@@ -502,8 +510,9 @@ const sourceRequest = computed(() => selectedSource.value ? { kind: 'results' as
           FUB account {{ selectedSource.source_account_id }} · Source record {{ selectedSource.source_id }}. Source actor evidence is separate from linked CRM users.
         </p><ActivityFieldViewer
           v-if="sourceRequest"
-          :key="JSON.stringify([scope, generation, sourceRequest])"
+          :key="JSON.stringify([scope, generation, sourceFamily, sourceRequest])"
           :request="sourceRequest"
+          :family="sourceFamily"
           title="Original source and committed result"
         />
       </template>

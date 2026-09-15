@@ -3,7 +3,9 @@ import XCTest
 
 @MainActor final class LiveAPITests: XCTestCase {
     func connect(installation: String = UUID().uuidString.lowercased(), email: String = "agent@mobile.test") async throws -> (API, Bootstrap) {
-        #if MOBILE005_QA || MOBILE005_UPGRADE_QA
+        #if MOBILE006_QA || MOBILE006_UPGRADE_QA
+        let api = try API(base: "http://127.0.0.1:3106")
+        #elseif MOBILE005_QA || MOBILE005_UPGRADE_QA
         let api = try API(base: "http://127.0.0.1:3103")
         #elseif MOBILE002_QA || MOBILE003_QA || MOBILE004_QA
         let api = try API(base: "http://127.0.0.1:3102")
@@ -53,6 +55,52 @@ import XCTest
             let final = try await api.currentDetails(person: person, context: boot.context_id)
             XCTAssertTrue(final.items.contains { $0["id"].text == original["id"].text })
         }
+    }
+    #endif
+    #if MOBILE006_QA
+    func testMobile006RealMetadataLostResponseReplayCurrentAndRevisionConflict() async throws {
+        let installation = "f37e2c31-99b5-41f6-846e-8f16b1e4c013"
+        let (api, boot) = try await connect(installation: installation)
+        XCTAssertTrue(["update_person_metadata", "metadata_revisions", "metadata_catalog"].allSatisfy(boot.capabilities.contains))
+        let person = "923e2821-8644-487f-8fda-115027ddc226"
+        let before = try await api.currentMetadata(person: person, context: boot.context_id)
+        XCTAssertTrue(before.complete)
+        _ = try revision(before.metadata_revision); _ = try revision(before.catalog_revision)
+        let tag = "28eefc0b-87a2-49bc-ac36-9f0e30985113"
+        let text = "d9d979a3-5015-4cc9-9252-a58e1d109548"
+        let number = "b162603c-06a2-4325-9481-7bb5538fa907"
+        let date = "a7d8c964-1423-42a1-ac32-d34446f96a0a"
+        let choice = "ecc89596-43a6-40d9-99ca-17bc4afbd0b1"
+        let north = "be0f7bee-a376-47ba-8faf-d17563bf5625"
+        let unique = UUID().uuidString.lowercased()
+        var actions: [JSON] = [
+            .object(["kind": .s("set_field"), "field_id": .s(text), "value": .object(["text": .s("iOS Mobile006 " + unique)])]),
+            .object(["kind": .s("set_field"), "field_id": .s(number), "value": .object(["number": .s("123.4500")])]),
+            .object(["kind": .s("set_field"), "field_id": .s(date), "value": .object(["date": .s("2026-09-14")])]),
+            .object(["kind": .s("set_field"), "field_id": .s(choice), "value": .object(["option_id": .s(north)])])
+        ]
+        if !before.tags.contains(where: { $0["id"].text == tag }) { actions.insert(.object(["kind": .s("add_tag"), "tag_id": .s(tag)]), at: 0) }
+        let envelope = Envelope(context_id: boot.context_id, operation_id: UUID().uuidString.lowercased(), kind: "update_person_metadata", device_recorded_at: stamp(), payload: .object(["person_id": .s(person), "expected_metadata_revision": .s(before.metadata_revision), "expected_catalog_revision": .s(before.catalog_revision), "actions": .array(actions)]))
+        let bytes = try encode(envelope)
+        api.dropNextOperationResponse = true
+        do { _ = try await api.operation(bytes, context: boot.context_id); XCTFail("accepted metadata response must be deliberately lost") }
+        catch LocalError.lostResponse { }
+        let replay = try await api.operation(bytes, context: boot.context_id)
+        XCTAssertTrue(replay.replayed); XCTAssertEqual(replay.resource_type, "person_metadata")
+        let after = try await api.currentMetadata(person: person, context: boot.context_id)
+        XCTAssertEqual(after.metadata_revision, replay.committed_revision)
+        XCTAssertTrue(after.values.contains { $0["field_id"].text == text && $0["value"]["text"].text == "iOS Mobile006 " + unique })
+        XCTAssertTrue(after.values.contains { $0["field_id"].text == number && $0["value"]["number"].text == "123.4500" })
+        XCTAssertTrue(after.values.contains { $0["field_id"].text == date && $0["value"]["date"].text == "2026-09-14" })
+        XCTAssertTrue(after.values.contains { $0["field_id"].text == choice && $0["value"]["option_id"].text == north })
+        let other = try await connect(installation: "8a4f3c1d-46f2-4afc-aa90-e0d2ab581d76", email: "second@mobile.test")
+        let competing = Envelope(context_id: other.1.context_id, operation_id: UUID().uuidString.lowercased(), kind: "update_person_metadata", device_recorded_at: stamp(), payload: .object(["person_id": .s(person), "expected_metadata_revision": .s(after.metadata_revision), "expected_catalog_revision": .s(after.catalog_revision), "actions": .array([.object(["kind": .s("set_field"), "field_id": .s(text), "value": .object(["text": .s("second actor " + unique)])])])]))
+        _ = try await other.0.operation(try encode(competing), context: other.1.context_id)
+        let staleActions: [JSON] = [.object(["kind": .s("set_field"), "field_id": .s(number), "value": .object(["number": .s("9")])])]
+        let stalePayload: JSON = .object(["person_id": .s(person), "expected_metadata_revision": .s(after.metadata_revision), "expected_catalog_revision": .s(after.catalog_revision), "actions": .array(staleActions)])
+        let stale = Envelope(context_id: boot.context_id, operation_id: UUID().uuidString.lowercased(), kind: "update_person_metadata", device_recorded_at: stamp(), payload: stalePayload)
+        do { _ = try await api.operation(try encode(stale), context: boot.context_id); XCTFail("stale metadata revision must conflict") }
+        catch let error as APIError { XCTAssertEqual(error.code, "revision_conflict") }
     }
     #endif
     func testRealAPILostAcknowledgement100DurableActionsDependencyConflictAndAccountIsolation() async throws {

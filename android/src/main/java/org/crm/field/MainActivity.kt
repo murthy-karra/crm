@@ -103,6 +103,7 @@ fun FieldApp(repository: FieldRepository) {
     var contactComposer by remember { mutableStateOf<Pair<String, String>?>(null) }
     var stageComposer by remember { mutableStateOf<Pair<String, String>?>(null) }
     var profileComposer by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var metadataComposer by remember { mutableStateOf<Pair<String, String>?>(null) }
     var signOut by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf("") }
     LaunchedEffect(state.locked) {
@@ -111,6 +112,7 @@ fun FieldApp(repository: FieldRepository) {
             contactComposer = null
             stageComposer = null
             profileComposer = null
+            metadataComposer = null
             signOut = false
             tab = "Today"
             notice = ""
@@ -205,6 +207,7 @@ fun FieldApp(repository: FieldRepository) {
                                 stageComposer = state.person!!.id to UUID.randomUUID().toString()
                             },
                             onProfile = { profileComposer = state.person!!.id to UUID.randomUUID().toString() },
+                            onMetadata = { metadataComposer = state.person!!.id to UUID.randomUUID().toString() },
                             onError = { notice = it },
                         )
                     tab == "People" -> PeopleScreen(state, repository, onError = { notice = it })
@@ -265,6 +268,9 @@ fun FieldApp(repository: FieldRepository) {
                                 scope.launch { try { profileComposer = row.person to repository.reviseProfileConflict(row.id).id } catch (_: Exception) { notice = "The original profile proposal remains protected; a replacement could not be prepared." } }
                             },
                             onDiscardProfile = { row -> scope.launch { repository.discardProfileConflict(row.id) } },
+                            onMetadataDraft = { draft -> metadataComposer = draft.person to draft.id },
+                            onReviseMetadata = { row -> scope.launch { try { metadataComposer = row.person to repository.reviseMetadataConflict(row.id).id } catch (_: Exception) { notice = "The original metadata proposal remains protected; a replacement could not be prepared." } } },
+                            onDiscardMetadata = { row -> scope.launch { repository.discardMetadataConflict(row.id) } },
                         )
                     else -> TodayScreen(state, repository)
                 }
@@ -304,6 +310,9 @@ fun FieldApp(repository: FieldRepository) {
         ProfileComposer(repository, person, draft, onClose = { profileComposer = null }, onSubmitted = {
             profileComposer = null; repository.requestSync()
         })
+    }
+    metadataComposer?.let { (person, draft) ->
+        MetadataComposer(repository, person, draft, onClose = { metadataComposer = null }, onSubmitted = { metadataComposer = null; repository.requestSync() })
     }
     if (signOut)
         AlertDialog(
@@ -548,6 +557,7 @@ internal fun PersonScreen(
     onContact: () -> Unit = {},
     onStage: () -> Unit = {},
     onProfile: () -> Unit = {},
+    onMetadata: () -> Unit = {},
 ) {
     val row = state.person ?: return
     val summary = JSONObject(row.summary)
@@ -570,6 +580,25 @@ internal fun PersonScreen(
                 "Complete saved record · ${displayTime(row.evaluatedAt)}",
                 style = MaterialTheme.typography.bodySmall,
             )
+        }
+        item {
+            val metadataOp = local.firstOrNull { it.kind == "update_person_metadata" && it.status !in setOf("covered", "superseded") }
+            OutlinedCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Tags and custom fields", fontWeight = FontWeight.SemiBold)
+                    val saved = runCatching { JSONObject(row.metadata) }.getOrNull()
+                    if (saved != null) {
+                        val labels = saved.getJSONArray("tags").objects().map { it.optString("name", "Tag") }
+                        Text(if (labels.isEmpty()) "No tags" else labels.joinToString(" · "), style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (metadataOp != null) { Text("Pending metadata proposal", color = MaterialTheme.colorScheme.primary); StatusBadge(metadataOp) }
+                    Button(onClick = onMetadata, enabled = row.metadataRevisionsQualified && state.metadataEditingEnabled, modifier = Modifier.testTag("edit-metadata")) {
+                        Text(if (metadataOp == null) "Edit tags and fields" else "Save follow-up metadata")
+                    }
+                    if (!row.metadataRevisionsQualified) Text("Metadata editing needs a complete current tags and fields download.", style = MaterialTheme.typography.bodySmall)
+                    else if (!state.metadataEditingEnabled) Text("Metadata editing is unavailable until this workspace restores its metadata capability.", style = MaterialTheme.typography.bodySmall)
+                }
+            }
         }
         items(JSONArray(row.contacts).objects()) { contact ->
             Text("${contact.optString("kind")}: ${contact.optString("value")}")
@@ -796,6 +825,9 @@ internal fun SavedWork(
     onProfileDraft: (ProfileDraftRow) -> Unit,
     onReviseProfile: (OperationRow) -> Unit,
     onDiscardProfile: (OperationRow) -> Unit,
+    onMetadataDraft: (MetadataDraftRow) -> Unit = {},
+    onReviseMetadata: (OperationRow) -> Unit = {},
+    onDiscardMetadata: (OperationRow) -> Unit = {},
 ) {
     LazyColumn(
         Modifier.fillMaxSize().testTag("saved-work-list"),
@@ -888,7 +920,30 @@ internal fun SavedWork(
                 }
             }
         }
-        items(state.operations.filter { it.kind !in setOf("log_contact_attempt", "update_person_details") }, key = { it.id }) { row ->
+        items(state.metadataDrafts, key = { "metadata-${it.id}" }) { draft ->
+            val operation = draft.operation.takeIf { it.isNotEmpty() }?.let { state.operations.firstOrNull { row -> row.id == it } }
+            OutlinedCard(Modifier.fillMaxWidth().then(if (draft.operation.isEmpty()) Modifier.clickable { onMetadataDraft(draft) } else Modifier).testTag("metadata-draft-${draft.id}")) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Tags and custom fields", fontWeight = FontWeight.SemiBold)
+                    if (operation == null) Text("Draft revision ${draft.revision} saved on device · Continue editing") else StatusBadge(operation)
+                    operation?.takeIf { it.lastError in setOf("revision_conflict", "catalog_revision_conflict") }?.let { conflict ->
+                        val comparison = state.metadataContexts.firstOrNull { it.operation == conflict.id }
+                        Text("Version you started from", fontWeight = FontWeight.SemiBold)
+                        Text(comparison?.baseline?.ifEmpty { "Protected baseline unavailable" } ?: "Protected baseline unavailable", style = MaterialTheme.typography.bodySmall)
+                        Text("Current metadata and catalog", fontWeight = FontWeight.SemiBold)
+                        Text(comparison?.current?.ifEmpty { "Waiting for an authorized current-metadata read" } ?: "Waiting for an authorized current-metadata read", style = MaterialTheme.typography.bodySmall)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(onClick = { repository.requestSync(true) }) { Text("Keep for later") }
+                            TextButton(onClick = { onDiscardMetadata(conflict) }) { Text("Use current") }
+                            TextButton(onClick = { onReviseMetadata(conflict) }, enabled = !comparison?.current.isNullOrEmpty()) { Text("Review and replace") }
+                        }
+                    }
+                    if (operation != null && operation.lastError !in setOf("revision_conflict", "catalog_revision_conflict") && operation.status == "attention")
+                        TextButton(onClick = { onDiscardMetadata(operation) }) { Text("Discard proposal") }
+                }
+            }
+        }
+        items(state.operations.filter { it.kind !in setOf("log_contact_attempt", "update_person_details", "update_person_metadata") }, key = { it.id }) { row ->
             OutlinedCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text(
@@ -1380,6 +1435,107 @@ private fun ProfileComposer(
             ) { Text("Save profile on device") }
         },
         dismissButton = { TextButton(onClick = onClose, enabled = loaded && !dirty && !saving) { Text("Close draft") } },
+    )
+}
+
+/** Metadata editor intentionally emits explicit operations, never a replace-all collection. */
+@Composable
+private fun MetadataComposer(
+    repository: FieldRepository,
+    person: String,
+    id: String,
+    onClose: () -> Unit,
+    onSubmitted: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    var loaded by remember { mutableStateOf(false) }
+    var baseline by remember { mutableStateOf<JSONObject?>(null) }
+    var revision by remember { mutableStateOf(0L) }
+    var status by remember { mutableStateOf("Loading protected metadata…") }
+    var saving by remember { mutableStateOf(false) }
+    val selectedTags = remember { mutableStateListOf<String>() }
+    val values = remember { mutableStateMapOf<String, JSONObject?>() }
+    val clear = remember { mutableStateMapOf<String, Boolean>() }
+    val state by repository.ui.collectAsState()
+    LaunchedEffect(id) {
+        try {
+            val existing = repository.metadataDraft(id)
+            val source = existing?.let { JSONObject(it.baseline) } ?: state.person?.metadata?.takeIf { it.isNotBlank() }?.let(::JSONObject)
+                ?: throw ProtocolFailure()
+            baseline = source; revision = existing?.revision ?: 0
+            source.getJSONArray("tags").objects().forEach { selectedTags += it.getString("id") }
+            source.getJSONArray("values").objects().forEach { item -> values[item.getString("field_id")] = item.getJSONObject("value") }
+            existing?.let { draft ->
+                JSONArray(draft.proposal).objects().forEach { action ->
+                    when (action.getString("kind")) {
+                        "add_tag" -> if (action.getString("tag_id") !in selectedTags) selectedTags += action.getString("tag_id")
+                        "remove_tag" -> selectedTags.remove(action.getString("tag_id"))
+                        "set_field" -> { values[action.getString("field_id")] = action.getJSONObject("value"); clear[action.getString("field_id")] = false }
+                        "clear_field" -> { values[action.getString("field_id")] = null; clear[action.getString("field_id")] = true }
+                    }
+                }
+            }
+            loaded = true; status = "Changes are saved locally before they are sent."
+        } catch (_: Exception) { status = "A complete current metadata baseline is required before editing." }
+    }
+    fun proposal(): JSONArray {
+        val original = baseline ?: return JSONArray()
+        val initialTags = original.getJSONArray("tags").objects().map { it.getString("id") }.toSet()
+        val originalValues = original.getJSONArray("values").objects().associate { it.getString("field_id") to it.getJSONObject("value").toString() }
+        val out = JSONArray()
+        (selectedTags.toSet() - initialTags).sorted().forEach { out.put(json("kind" to "add_tag", "tag_id" to it)) }
+        (initialTags - selectedTags.toSet()).sorted().forEach { out.put(json("kind" to "remove_tag", "tag_id" to it)) }
+        state.metadataFields.forEach { field ->
+            val value = values[field.id]
+            val old = originalValues[field.id]
+            if (value == null && old != null && clear[field.id] == true) out.put(json("kind" to "clear_field", "field_id" to field.id))
+            else if (value != null && value.toString() != old) out.put(json("kind" to "set_field", "field_id" to field.id, "value" to value))
+        }
+        return out
+    }
+    AlertDialog(
+        onDismissRequest = { if (!saving) onClose() },
+        title = { Text("Tags and custom fields") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(status, style = MaterialTheme.typography.bodySmall)
+                Text("Tags", fontWeight = FontWeight.SemiBold)
+                state.metadataTags.forEach { tag ->
+                    FilterChip(selected = tag.id in selectedTags, onClick = { if (tag.id in selectedTags) selectedTags.remove(tag.id) else if (selectedTags.size < 20) selectedTags += tag.id }, label = { Text(tag.name) }, enabled = loaded && !saving)
+                }
+                state.metadataFields.forEach { field ->
+                    HorizontalDivider(); Text(field.label + if (field.archivedAt != null) " (archived)" else "", fontWeight = FontWeight.SemiBold)
+                    val value = values[field.id]
+                    when (field.fieldType) {
+                        "text" -> OutlinedTextField(value?.optString("text").orEmpty(), { text -> values[field.id] = json("text" to text); clear[field.id] = false }, label = { Text("Text") }, enabled = loaded && !saving && field.archivedAt == null, modifier = Modifier.fillMaxWidth().testTag("metadata-text-${field.id}"))
+                        "number" -> OutlinedTextField(value?.optString("number").orEmpty(), { number -> values[field.id] = json("number" to number); clear[field.id] = false }, label = { Text("Exact decimal") }, enabled = loaded && !saving && field.archivedAt == null, modifier = Modifier.fillMaxWidth().testTag("metadata-number-${field.id}"))
+                        "date" -> OutlinedTextField(value?.optString("date").orEmpty(), { date -> values[field.id] = json("date" to date); clear[field.id] = false }, label = { Text("Date (YYYY-MM-DD)") }, enabled = loaded && !saving && field.archivedAt == null, modifier = Modifier.fillMaxWidth().testTag("metadata-date-${field.id}"))
+                        "choice" -> {
+                            Text("Choose one", style = MaterialTheme.typography.bodySmall)
+                            state.metadataOptions.filter { it.fieldId == field.id }.forEach { option ->
+                                FilterChip(selected = value?.optString("option_id") == option.id, onClick = { values[field.id] = json("option_id" to option.id); clear[field.id] = false }, label = { Text(option.label + if (option.archivedAt != null) " (archived)" else "") }, enabled = loaded && !saving && field.archivedAt == null && option.archivedAt == null)
+                            }
+                        }
+                    }
+                    if (value != null || field.archivedAt != null) TextButton(onClick = { values[field.id] = null; clear[field.id] = true }, enabled = loaded && !saving) { Text("Clear value") }
+                }
+                Text("Archived fields can be cleared but cannot be set. Deleted catalog items remain visible only in the saved proposal review.", style = MaterialTheme.typography.bodySmall)
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                scope.launch {
+                    try {
+                        saving = true; val actions = proposal()
+                        val saved = repository.saveMetadataDraft(id, person, actions, revision, baseline)
+                        revision = saved.revision
+                        repository.submitMetadataDraft(id, revision)
+                        onSubmitted()
+                    } catch (error: Exception) { status = error.message ?: "Could not save this proposal; keep editing and retry."; saving = false }
+                }
+            }, enabled = loaded && !saving) { Text(if (saving) "Saving…" else "Save and sync") }
+        },
+        dismissButton = { TextButton(onClick = onClose, enabled = !saving) { Text("Close") } },
     )
 }
 

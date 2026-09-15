@@ -16,3 +16,7 @@ pub use commands::{
 pub use error::TagError;
 pub use model::{can_manage, Tag, TagRef};
 pub use queries::{exists, list_for_organization, list_for_person, names_for, TagRow};
+
+pub(crate) use commands::{
+    apply_prepared_person_tag, prepare_person_tag, validate_person_tag_capacity,
+};

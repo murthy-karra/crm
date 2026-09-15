@@ -1,22 +1,25 @@
 # Migration sequence for admitted People
 
-**Updated 2026-09-13 — D-079 sequence, D-081 next-pair planning.** The user selected smaller sequential migration
-slices after the 010e3 release. Only sequencing/planning is accepted; subsequent
-contracts and implementations require their own reviewed scope. This is the
+**Updated 2026-09-14 — D-079 sequence, D-082 metadata implementation, D-084 activity implementation.**
+The user selected smaller sequential migration slices after the 010e3 release.
+Each step's contracts and implementation require its own reviewed scope; the
+table distinguishes accepted work from later unassigned scope. This is the
 current follow-up to the [010e3 boundary](../specs/SLICE_010e3.md#1-outcome-and-deliberate-boundary).
 Keep the administrator review hold, full fidelity reporting and source-data gates.
 
 | Step | Outcome | Contract work / exit evidence |
 |---|---|---|
 | **010e4: later core refresh — delivered** | Update names/contacts/stage/assignee for successful admissions from a later retained report | [Released evidence](../tasks/MOBILE_004_010e4_RELEASE.md); admission-derived baseline, local-change holds, cohort watermark and recoverable confirmation |
-| **010f3: metadata — draft** | Tags/custom-field coverage for admitted People | [Draft specification](../specs/SLICE_010f3.md): admission-cohort child, qualified capture, explicit mappings, shared catalog claims and exact remainder; paired with [Mobile005](MOBILE_005_010f3_PARALLEL_LAUNCH.md) |
-| **Following activity slice** | Notes/open/completed tasks for admitted People | Define qualified newer notes/detail/tasks capture, admission target identities, source-user/kind/timezone mappings and one-time family ownership; preserve native/local changes, O-012/O-013 handling and bounded review |
+| **010f3: metadata — implemented and verified** | Tags/custom-field coverage for admitted People | [Accepted specification](../specs/SLICE_010f3.md), [final evidence](../tasks/MOBILE_005_010f3_FINAL_VERIFICATION.md); D-082 release is authorized and [recorded separately](../tasks/MOBILE_005_010f3_RELEASE.md) |
+| **010f4: activity — implemented and verified** | Notes/open/completed tasks for admitted People | [Accepted specification](../specs/SLICE_010f4.md): qualified newer notes/detail/tasks capture, exact admission identities, explicit roles/kinds/timezone, shared activity identity and exact remainder; paired with [Mobile006](MOBILE_006_010f4_PARALLEL_LAUNCH.md) |
 | **Following history slice** | Historical event/call/text metadata for admitted People | Extend 010d1 linkage and 010d2 anchoring deliberately; exact captured account/cohort/sequence, identity dedupe and bounded metadata-only timeline; no native contact credit |
 | **Later repair/delta/cutover scope** | Remaining coverage, deliberate mapping repair, per-family updates and activation | Separate accepted policies, final coverage/reconciliation, customer-data gates and recovery/cutoff procedure |
 
 Write the next family specification just in time after the preceding evidence.
-010f3 is the proposed numeric assignment for the metadata step; subsequent steps
-remain outcome boundaries without assigned IDs or approved contracts. A family extension must not imply ongoing synchronization or
+010f3's assignment/contracts are accepted under D-082. 010f4 is the accepted
+activity assignment under D-084, with [final acceptance](../tasks/MOBILE_006_010f4_FINAL_VERIFICATION.md)
+complete; history remains an outcome boundary without an
+assigned ID or approved contracts. A family extension must not imply ongoing synchronization or
 refresh of that family's already imported records. Report those separate gaps.
 
 ## Questions each later family spec must settle

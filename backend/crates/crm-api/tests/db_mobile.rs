@@ -36,6 +36,432 @@ struct Fixture {
 
 #[sqlx::test]
 #[ignore]
+async fn mobile006_metadata_atomic_receipt_current_and_catalog_generation(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let tag: Uuid = sqlx::query_scalar("INSERT INTO tag(organization_id,created_by_user_id,name) VALUES($1,$2,'Mobile006 tag') RETURNING id")
+        .bind(f.org).bind(f.actor).fetch_one(&f.app).await.unwrap();
+    let field: Uuid = sqlx::query_scalar("INSERT INTO custom_field(organization_id,label,field_type,position,created_by_user_id) VALUES($1,'Mobile006 budget','number',1,$2) RETURNING id")
+        .bind(f.org).bind(f.actor).fetch_one(&f.app).await.unwrap();
+    let (metadata, catalog):(i64,i64)=sqlx::query_as("SELECT p.metadata_revision,c.revision FROM person p JOIN mobile_metadata_catalog c ON c.organization_id=p.organization_id WHERE p.id=$1")
+        .bind(f.person).fetch_one(&f.app).await.unwrap();
+    let operation = f.operation("update_person_metadata", json!({"person_id":f.person,"expected_metadata_revision":metadata.to_string(),"expected_catalog_revision":catalog.to_string(),"actions":[{"kind":"add_tag","tag_id":tag},{"kind":"set_field","field_id":field,"value":{"number":"123.4500"}}]}));
+    let (status, accepted) = f.post("/api/mobile/v1/operations", operation.clone()).await;
+    assert_eq!(status, StatusCode::OK, "{accepted}");
+    assert_eq!(accepted["resource_type"], "person_metadata");
+    chrono::DateTime::parse_from_rfc3339(accepted["accepted_at"].as_str().unwrap()).unwrap();
+    assert_eq!(accepted["committed_revision"], (metadata + 2).to_string());
+    let (_, replay) = f.post("/api/mobile/v1/operations", operation).await;
+    assert_eq!(replay["replayed"], true);
+    let current_path = format!("/api/mobile/v1/people/{}/metadata", f.person);
+    let (status, current) = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &current_path,
+        json!(null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{current}");
+    assert_eq!(current["tags"][0]["id"], json!(tag));
+    assert_eq!(current["values"][0]["value"]["number"], "123.4500");
+    // A catalog-only change conflicts before a fresh mutation, and an invalid
+    // sibling rolls the whole atomic patch back.
+    let next_metadata: i64 = current["metadata_revision"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    let stale_catalog: i64 = current["catalog_revision"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    let rollback_tag: Uuid = sqlx::query_scalar("INSERT INTO tag(organization_id,created_by_user_id,name) VALUES($1,$2,'Mobile006 rollback') RETURNING id")
+        .bind(f.org).bind(f.actor).fetch_one(&f.app).await.unwrap();
+    let stale = f.operation("update_person_metadata", json!({"person_id":f.person,"expected_metadata_revision":next_metadata.to_string(),"expected_catalog_revision":stale_catalog.to_string(),"actions":[{"kind":"add_tag","tag_id":rollback_tag}]}));
+    assert_eq!(
+        f.post("/api/mobile/v1/operations", stale).await.1["error"],
+        "catalog_revision_conflict"
+    );
+    let catalog: i64 =
+        sqlx::query_scalar("SELECT revision FROM mobile_metadata_catalog WHERE organization_id=$1")
+            .bind(f.org)
+            .fetch_one(&f.app)
+            .await
+            .unwrap();
+    let invalid = f.operation("update_person_metadata", json!({"person_id":f.person,"expected_metadata_revision":next_metadata.to_string(),"expected_catalog_revision":catalog.to_string(),"actions":[{"kind":"add_tag","tag_id":rollback_tag},{"kind":"set_field","field_id":field,"value":{"number":"1e4"}}]}));
+    assert_eq!(
+        f.post("/api/mobile/v1/operations", invalid).await.1["error"],
+        "invalid_metadata"
+    );
+    let links: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM person_tag WHERE organization_id=$1 AND person_id=$2 AND tag_id=$3",
+    )
+    .bind(f.org)
+    .bind(f.person)
+    .bind(rollback_tag)
+    .fetch_one(&f.app)
+    .await
+    .unwrap();
+    assert_eq!(links, 0);
+    let (status, generation)=f.post("/api/mobile/v1/reconciliations",json!({"protocol":"mobile-v1","installation_id":f.install,"pinned_person_ids":[f.person],"include_metadata":true})).await;
+    assert_eq!(status, StatusCode::OK, "{generation}");
+    let generation_id = id(&generation, "generation_id");
+    let path = format!("/api/mobile/v1/reconciliations/{generation_id}/metadata/catalog/fields");
+    let (status, fields) = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &path,
+        json!(null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{fields}");
+    assert!(fields["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|v| v["id"] == json!(field)));
+    let component_path = format!(
+        "/api/mobile/v1/reconciliations/{generation_id}/people/{}/metadata",
+        f.person
+    );
+    let (status, component) = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &component_path,
+        json!(null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{component}");
+    assert_eq!(component["section"], "metadata");
+    assert_eq!(component["metadata_revision"], current["metadata_revision"]);
+    assert_eq!(component["catalog_revision"], json!(catalog.to_string()));
+    assert_eq!(component["complete"], true);
+}
+
+#[sqlx::test]
+#[ignore]
+async fn mobile006_metadata_events_and_noop_replay_are_content_free(pool: PgPool) {
+    let mut f = fixture(&pool).await;
+    let publisher = Publisher::recording();
+    f.router = crate::common::build_router_with_publisher(&pool, publisher.clone()).await;
+    let tag: Uuid = sqlx::query_scalar("INSERT INTO tag(organization_id,created_by_user_id,name) VALUES($1,$2,'Mobile006 event tag') RETURNING id")
+        .bind(f.org).bind(f.actor).fetch_one(&f.app).await.unwrap();
+    let field: Uuid = sqlx::query_scalar("INSERT INTO custom_field(organization_id,label,field_type,position,created_by_user_id) VALUES($1,'Mobile006 event value','text',1,$2) RETURNING id")
+        .bind(f.org).bind(f.actor).fetch_one(&f.app).await.unwrap();
+    let (metadata, catalog): (i64, i64) = sqlx::query_as("SELECT p.metadata_revision,c.revision FROM person p JOIN mobile_metadata_catalog c ON c.organization_id=p.organization_id WHERE p.id=$1")
+        .bind(f.person).fetch_one(&f.app).await.unwrap();
+    let operation = f.operation(
+        "update_person_metadata",
+        json!({
+            "person_id": f.person,
+            "expected_metadata_revision": metadata.to_string(),
+            "expected_catalog_revision": catalog.to_string(),
+            "actions": [
+                {"kind":"add_tag","tag_id":tag},
+                {"kind":"set_field","field_id":field,"value":{"text":"Private field value"}}
+            ]
+        }),
+    );
+    let (status, accepted) = f.post("/api/mobile/v1/operations", operation.clone()).await;
+    assert_eq!(status, StatusCode::OK, "{accepted}");
+    let Publisher::Recording(events, _) = &publisher else {
+        unreachable!()
+    };
+    let publications = events.lock().await;
+    assert_eq!(publications.len(), 2);
+    let changes: Vec<_> = publications
+        .iter()
+        .map(|publication| publication.1["data"]["change"].clone())
+        .collect();
+    assert_eq!(
+        changes,
+        vec![json!("custom_field_changed"), json!("tags_changed")]
+    );
+    assert!(publications
+        .iter()
+        .all(|publication| !publication.1.to_string().contains("Private field value")));
+    drop(publications);
+    let (_, replay) = f.post("/api/mobile/v1/operations", operation).await;
+    assert_eq!(replay["replayed"], true);
+    assert_eq!(events.lock().await.len(), 2);
+    let noop = f.operation(
+        "update_person_metadata",
+        json!({
+            "person_id": f.person,
+            "expected_metadata_revision": accepted["committed_revision"],
+            "expected_catalog_revision": catalog.to_string(),
+            "actions": [
+                {"kind":"add_tag","tag_id":tag},
+                {"kind":"set_field","field_id":field,"value":{"text":"Private field value"}}
+            ]
+        }),
+    );
+    let (status, unchanged) = f.post("/api/mobile/v1/operations", noop).await;
+    assert_eq!(status, StatusCode::OK, "{unchanged}");
+    assert_eq!(unchanged["changed"], false);
+    assert_eq!(events.lock().await.len(), 2);
+}
+
+#[sqlx::test]
+#[ignore]
+async fn mobile006_metadata_catalog_change_invalidates_only_opted_generation(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let legacy = f.gen().await;
+    let legacy_id = id(&legacy, "generation_id");
+    assert!(legacy.get("metadata_catalog").is_none());
+    let (status, opted) = f
+        .post(
+            "/api/mobile/v1/reconciliations",
+            json!({"protocol":"mobile-v1","installation_id":f.install,"pinned_person_ids":[f.person],"include_metadata":true}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{opted}");
+    let opted_id = id(&opted, "generation_id");
+    assert_eq!(
+        legacy["people"]["items"][0]["revision"],
+        opted["people"]["items"][0]["revision"]
+    );
+    let metadata = format!(
+        "/api/mobile/v1/reconciliations/{opted_id}/people/{}/metadata",
+        f.person
+    );
+    assert_eq!(
+        request(
+            &f.router,
+            &f.cookie,
+            Some(f.context),
+            "GET",
+            &metadata,
+            json!(null)
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    sqlx::query("INSERT INTO tag(organization_id,created_by_user_id,name) VALUES($1,$2,'Mobile006 catalog changed')")
+        .bind(f.org)
+        .bind(f.actor)
+        .execute(&f.app)
+        .await
+        .unwrap();
+    let (status, component) = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &metadata,
+        json!(null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{component}");
+    assert_eq!(component["error"], "generation_changed");
+    let (_, sealed) = f
+        .post(
+            &format!("/api/mobile/v1/reconciliations/{opted_id}/seal"),
+            json!({}),
+        )
+        .await;
+    assert_eq!(sealed["error"], "generation_changed");
+    for section in ["summary", "notes", "tasks"] {
+        let path = format!(
+            "/api/mobile/v1/reconciliations/{legacy_id}/people/{}/{}",
+            f.person, section
+        );
+        let (status, page) = request(
+            &f.router,
+            &f.cookie,
+            Some(f.context),
+            "GET",
+            &path,
+            json!(null),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{page}");
+        assert_eq!(page["complete"], true);
+    }
+    let (status, sealed) = f
+        .post(
+            &format!("/api/mobile/v1/reconciliations/{legacy_id}/seal"),
+            json!({}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{sealed}");
+}
+
+#[sqlx::test]
+#[ignore]
+async fn mobile006_metadata_reader_establishes_snapshot_after_catalog_barrier(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let tag: Uuid = sqlx::query_scalar("INSERT INTO tag(organization_id,created_by_user_id,name) VALUES($1,$2,'Mobile006 snapshot tag') RETURNING id")
+        .bind(f.org).bind(f.actor).fetch_one(&f.app).await.unwrap();
+    let generation = f
+        .post(
+            "/api/mobile/v1/reconciliations",
+            json!({"protocol":"mobile-v1","installation_id":f.install,"pinned_person_ids":[f.person],"include_metadata":true}),
+        )
+        .await
+        .1;
+    let generation_id = id(&generation, "generation_id");
+    let component = format!(
+        "/api/mobile/v1/reconciliations/{generation_id}/people/{}/metadata",
+        f.person
+    );
+    let mut writer = f.app.begin().await.unwrap();
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended('crm-mobile-metadata-catalog:' || $1::text, 0))")
+        .bind(f.org)
+        .execute(&mut *writer)
+        .await
+        .unwrap();
+    sqlx::query(
+        "UPDATE tag SET name='Mobile006 snapshot renamed' WHERE organization_id=$1 AND id=$2",
+    )
+    .bind(f.org)
+    .bind(tag)
+    .execute(&mut *writer)
+    .await
+    .unwrap();
+    let reader = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &component,
+        json!(null),
+    );
+    tokio::pin!(reader);
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(75), &mut reader)
+            .await
+            .is_err()
+    );
+    writer.commit().await.unwrap();
+    let (status, changed) = reader.await;
+    assert_eq!(status, StatusCode::CONFLICT, "{changed}");
+    assert_eq!(changed["error"], "generation_changed");
+}
+
+#[sqlx::test]
+#[ignore]
+async fn mobile006_metadata_receipt_and_current_authority_gates(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let tag: Uuid = sqlx::query_scalar("INSERT INTO tag(organization_id,created_by_user_id,name) VALUES($1,$2,'Mobile006 authority tag') RETURNING id")
+        .bind(f.org).bind(f.actor).fetch_one(&f.app).await.unwrap();
+    let (metadata, catalog): (i64, i64) = sqlx::query_as("SELECT p.metadata_revision,c.revision FROM person p JOIN mobile_metadata_catalog c ON c.organization_id=p.organization_id WHERE p.id=$1")
+        .bind(f.person).fetch_one(&f.app).await.unwrap();
+    let operation = f.operation("update_person_metadata", json!({"person_id":f.person,"expected_metadata_revision":metadata.to_string(),"expected_catalog_revision":catalog.to_string(),"actions":[{"kind":"add_tag","tag_id":tag}]}));
+    assert_eq!(
+        f.post("/api/mobile/v1/operations", operation.clone())
+            .await
+            .0,
+        StatusCode::OK
+    );
+    let mut altered = operation.clone();
+    altered["payload"]["actions"][0]["kind"] = json!("remove_tag");
+    assert_eq!(
+        f.post("/api/mobile/v1/operations", altered).await.1["error"],
+        "operation_payload_mismatch"
+    );
+    let other_cookie = crate::common::login_cookie(&f.router, "second@fixture.test", PW).await;
+    let (status, other_bootstrap) = request(
+        &f.router,
+        &other_cookie,
+        None,
+        "POST",
+        "/api/mobile/v1/bootstrap",
+        json!({"protocol":"mobile-v1","installation_id":Uuid::new_v4()}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let receipt = format!(
+        "/api/mobile/v1/operations/{}",
+        operation["operation_id"].as_str().unwrap()
+    );
+    assert_eq!(
+        request(
+            &f.router,
+            &other_cookie,
+            Some(id(&other_bootstrap, "context_id")),
+            "GET",
+            &receipt,
+            json!(null)
+        )
+        .await
+        .0,
+        StatusCode::NOT_FOUND
+    );
+    let current = format!("/api/mobile/v1/people/{}/metadata", f.person);
+    assert_eq!(
+        request(
+            &f.router,
+            &f.cookie,
+            Some(f.context),
+            "GET",
+            &current,
+            json!(null)
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    sqlx::query("UPDATE organization SET workspace_mode='migration_review',workspace_revision=workspace_revision+1 WHERE id=$1").bind(f.org).execute(&pool).await.unwrap();
+    assert_eq!(
+        request(
+            &f.router,
+            &f.cookie,
+            Some(f.context),
+            "GET",
+            &current,
+            json!(null)
+        )
+        .await
+        .1["error"],
+        "workspace_in_migration_review"
+    );
+}
+
+#[sqlx::test]
+#[ignore]
+async fn mobile006_current_metadata_rejects_more_than_one_hundred_values(pool: PgPool) {
+    let f = fixture(&pool).await;
+    for n in 0..101 {
+        let field: Uuid = sqlx::query_scalar("INSERT INTO custom_field(organization_id,label,field_type,position,created_by_user_id) VALUES($1,$2,'text',$3,$4) RETURNING id")
+            .bind(f.org).bind(format!("Mobile006 bound {n}")).bind(n).bind(f.actor).fetch_one(&f.app).await.unwrap();
+        sqlx::query("INSERT INTO person_custom_field_value(organization_id,person_id,field_id,field_type,text_value,updated_by_user_id,origin,correlation_id) VALUES($1,$2,$3,'text','bound',$4,'mobile_session',gen_random_uuid())")
+            .bind(f.org).bind(f.person).bind(field).bind(f.actor).execute(&f.app).await.unwrap();
+    }
+    let path = format!("/api/mobile/v1/people/{}/metadata", f.person);
+    let (status, error) = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &path,
+        json!(null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{error}");
+    assert_eq!(error["error"], "over_limit");
+}
+
+#[cfg(feature = "perf-harness")]
+#[path = "fixtures/mobile006_plans.rs"]
+mod metadata_plans;
+
+#[cfg(feature = "perf-harness")]
+#[sqlx::test]
+#[ignore = "coordinator-owned M6-09 isolated hot-plan run"]
+async fn mobile006_metadata_hot_query_plans(pool: PgPool) {
+    metadata_plans::run(&pool, fixture(&pool).await).await;
+}
+
+#[sqlx::test]
+#[ignore]
 async fn mobile005_details_receipt_replay_and_revision_scope(pool: PgPool) {
     let f = fixture(&pool).await;
     assert!(f.bootstrap["capabilities"]

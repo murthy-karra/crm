@@ -214,11 +214,24 @@ async fn finish(f: &Fixture, root: Uuid) {
 async fn ledger(f: &Fixture, root: Uuid) -> Value {
     sqlx::query_scalar("SELECT jsonb_build_object('root_retained',i.retained_bytes,'root_reserved',i.reserved_bytes,'snapshot_retained',s.retained_bytes,'snapshot_reserved',s.reserved_bytes,'org_retained',l.retained_bytes,'org_reserved',l.reserved_bytes,'reservations',(SELECT count(*) FROM migration_admitted_metadata_reservation WHERE import_id=i.id),'results',(SELECT count(*) FROM migration_admitted_metadata_result WHERE import_id=i.id),'claims',(SELECT count(*) FROM migration_metadata_catalog_claim WHERE admitted_import_id=i.id),'checkpoint',i.checkpoint_id) FROM migration_admitted_metadata_import i JOIN migration_snapshot s ON s.id=i.snapshot_id JOIN migration_snapshot_storage l ON l.organization_id=i.organization_id WHERE i.id=$1").bind(root).fetch_one(&f.pool).await.unwrap()
 }
+async fn metadata_tokens(f: &Fixture, person: Uuid) -> (i64, i64, i64, i64) {
+    sqlx::query_as(
+        "SELECT p.mobile_revision,p.metadata_revision,p.details_revision,c.revision \
+         FROM person p JOIN mobile_metadata_catalog c ON c.organization_id=p.organization_id \
+         WHERE p.organization_id=$1 AND p.id=$2",
+    )
+    .bind(f.org)
+    .bind(person)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap()
+}
 #[sqlx::test]
 #[ignore = "requires isolated PostgreSQL migrator"]
 async fn admitted_metadata_typed_units_preserve_types_and_settle_together(migrator: PgPool) {
     let (f, root, plan, person) = prepared_typed(&migrator).await;
     let original:Value=sqlx::query_scalar("SELECT jsonb_build_object('person',to_jsonb(p),'identities',(SELECT jsonb_agg(to_jsonb(i) ORDER BY source_id) FROM migration_import_identity i WHERE organization_id=p.organization_id)) FROM person p WHERE id=$1").bind(person).fetch_one(&f.pool).await.unwrap();
+    let tokens_before = metadata_tokens(&f, person).await;
     let before = ledger(&f, root).await;
     let _plan = approve_all(&f, root, plan).await;
     let calls = f.reader.calls();
@@ -258,9 +271,23 @@ async fn admitted_metadata_typed_units_preserve_types_and_settle_together(migrat
         child_delta
     );
     let current:Value=sqlx::query_scalar("SELECT jsonb_build_object('person',to_jsonb(p),'identities',(SELECT jsonb_agg(to_jsonb(i) ORDER BY source_id) FROM migration_import_identity i WHERE organization_id=p.organization_id)) FROM person p WHERE id=$1").bind(person).fetch_one(&f.pool).await.unwrap();
+    let mut expected = original;
+    expected["person"]["mobile_revision"] = json!(tokens_before.0 + 5);
+    expected["person"]["metadata_revision"] = json!(tokens_before.1 + 5);
     assert_eq!(
-        current, original,
-        "metadata never changes Person core/details revision or source identity"
+        current, expected,
+        "five imported cells advance only broad/metadata tokens; core/details and source identity stay exact"
+    );
+    let tokens_after = metadata_tokens(&f, person).await;
+    assert_eq!(
+        tokens_after,
+        (
+            tokens_before.0 + 5,
+            tokens_before.1 + 5,
+            tokens_before.2,
+            tokens_before.3 + 7
+        ),
+        "four field definitions, two options and one tag advance the shared catalog"
     );
     assert!(!admitted_metadata_worker::run_once(&f.pool, &f.key)
         .await
@@ -270,15 +297,17 @@ async fn admitted_metadata_typed_units_preserve_types_and_settle_together(migrat
         after,
         "completed work cannot be adopted or double-charged"
     );
+    assert_eq!(metadata_tokens(&f, person).await, tokens_after);
 }
 #[sqlx::test]
 #[ignore = "requires isolated PostgreSQL migrator"]
 async fn admitted_metadata_result_failure_rolls_back_native_claim_checkpoint_and_bytes(
     migrator: PgPool,
 ) {
-    let (f, root, plan, _) = prepared_typed(&migrator).await;
+    let (f, root, plan, person) = prepared_typed(&migrator).await;
     let _plan = approve_all(&f, root, plan).await;
     let before = ledger(&f, root).await;
+    let tokens_before = metadata_tokens(&f, person).await;
     sqlx::raw_sql("CREATE FUNCTION admitted_result_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic unit result failure'; END $$; CREATE TRIGGER admitted_result_fault BEFORE INSERT ON migration_admitted_metadata_result FOR EACH ROW EXECUTE FUNCTION admitted_result_fault();").execute(&migrator).await.unwrap();
     assert!(admitted_metadata_worker::run_once(&f.pool, &f.key)
         .await
@@ -288,6 +317,7 @@ async fn admitted_metadata_result_failure_rolls_back_native_claim_checkpoint_and
         before,
         "claim/native/result/checkpoint/accounting must all roll back"
     );
+    assert_eq!(metadata_tokens(&f, person).await, tokens_before);
     assert_eq!(
         sqlx::query_scalar::<_, i64>("SELECT count(*) FROM custom_field WHERE organization_id=$1")
             .bind(f.org)
@@ -329,6 +359,7 @@ async fn admitted_metadata_result_failure_rolls_back_native_claim_checkpoint_and
     .unwrap();
     finish_catalog(&f, root).await;
     let before_person = ledger(&f, root).await;
+    let tokens_before_person = metadata_tokens(&f, person).await;
     sqlx::query("CREATE TRIGGER admitted_result_fault BEFORE INSERT ON migration_admitted_metadata_result FOR EACH ROW EXECUTE FUNCTION admitted_result_fault()").execute(&migrator).await.unwrap();
     assert!(admitted_metadata_worker::run_once(&f.pool, &f.key)
         .await
@@ -338,6 +369,7 @@ async fn admitted_metadata_result_failure_rolls_back_native_claim_checkpoint_and
         before_person,
         "all Person cells and their single result settle together"
     );
+    assert_eq!(metadata_tokens(&f, person).await, tokens_before_person);
     assert_eq!(
         sqlx::query_scalar::<_, i64>(
             "SELECT count(*) FROM person_custom_field_value WHERE organization_id=$1"
@@ -2436,8 +2468,16 @@ async fn admitted_metadata_fidelity_oversized_native_baseline_settles_as_compact
     migrator: PgPool,
 ) {
     let (f, root, plan, person) = prepared_typed(&migrator).await;
-    sqlx::query("INSERT INTO custom_field(id,organization_id,label,field_type,position,created_by_user_id) SELECT gen_random_uuid(),$1,'Bound field '||n,'text',n,$2 FROM generate_series(1,35000) n").bind(f.org).bind(f.actor).execute(&migrator).await.unwrap();
-    sqlx::query("INSERT INTO person_custom_field_value(organization_id,person_id,field_id,field_type,text_value,updated_by_user_id,origin,correlation_id) SELECT $1,$2,id,'text',repeat('🟦',500),$3,'web_session',$4 FROM custom_field WHERE organization_id=$1 AND label LIKE 'Bound field %'").bind(f.org).bind(person).bind(f.actor).bind(Uuid::new_v4()).execute(&migrator).await.unwrap();
+    // This deliberately oversized fixture tests compact held-unit handling,
+    // not bulk-writer throughput. Keep all production revision triggers active,
+    // but commit bounded setup batches so one catalog/Person row does not retain
+    // 35,000 successive tuple versions in a single transaction.
+    let correlation = Uuid::new_v4();
+    for first in (1..=35000).step_by(500) {
+        let last = first + 499;
+        sqlx::query("INSERT INTO custom_field(id,organization_id,label,field_type,position,created_by_user_id) SELECT gen_random_uuid(),$1,'Bound field '||n,'text',n,$2 FROM generate_series($3::int,$4::int) n").bind(f.org).bind(f.actor).bind(first).bind(last).execute(&migrator).await.unwrap();
+        sqlx::query("INSERT INTO person_custom_field_value(organization_id,person_id,field_id,field_type,text_value,updated_by_user_id,origin,correlation_id) SELECT $1,$2,id,'text',repeat('🟦',500),$3,'web_session',$4 FROM custom_field WHERE organization_id=$1 AND label LIKE 'Bound field %' AND position BETWEEN $5 AND $6").bind(f.org).bind(person).bind(f.actor).bind(correlation).bind(first).bind(last).execute(&migrator).await.unwrap();
+    }
     let current = approve_all(&f, root, plan).await;
     assert!(sqlx::query_scalar::<_,bool>("SELECT oversized AND disposition='held' AND item_byte_bound<=67108864 FROM migration_admitted_metadata_manifest WHERE plan_id=$1").bind(current).fetch_one(&f.pool).await.unwrap());
     let records =

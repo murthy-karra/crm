@@ -10,8 +10,20 @@ import org.json.JSONObject
 class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock: DeviceClock) {
     val dao = db.data()
 
+    /**
+     * An expired lease can be discovered inside a Room transaction.  Persist its locked marker
+     * after that transaction rolls back, so a failed local write cannot leave the encrypted
+     * account apparently usable on the next process start.
+     */
+    private class ExpiredLease : AccessLocked()
+
     private fun <T> atomic(body: () -> T): T =
-        db.runInTransaction(java.util.concurrent.Callable { body() })
+        try {
+            db.runInTransaction(java.util.concurrent.Callable { body() })
+        } catch (error: ExpiredLease) {
+            db.runInTransaction(java.util.concurrent.Callable { dao.meta(MetaRow("locked", "true")) })
+            throw error
+        }
 
     fun authorize(cookie: String) = atomic {
         val old = dao.meta("binding")?.let { JSONObject(it) }
@@ -55,12 +67,10 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
                 value.getLong("duration"),
                 value.getLong("wall"),
             )
-        if (
-            dao.meta("locked") == "true" ||
-                !lease.usable(clock.boot(), clock.elapsed(), clock.wall())
-        ) {
+        if (dao.meta("locked") == "true") throw AccessLocked()
+        if (!lease.usable(clock.boot(), clock.elapsed(), clock.wall())) {
             dao.meta(MetaRow("locked", "true"))
-            throw AccessLocked()
+            throw ExpiredLease()
         }
     }
 
@@ -322,6 +332,215 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         row
     }
 
+    /**
+     * A metadata baseline is usable only when both the complete Person section and the exact
+     * catalog revision were sealed together. JSON is retained as server-shaped comparison
+     * material so decimal/date strings are never parsed through a locale or floating point.
+     */
+    fun metadataQualified(
+        person: PersonRow,
+        expectedCatalogRevision: String? = dao.meta("metadata_catalog_revision"),
+        expectedMetadataRevision: String? = null,
+    ): Boolean {
+        if (!person.metadataRevisionsQualified) return false
+        return try {
+            val baseline = JSONObject(person.metadata)
+            val metadataRevision = baseline.getString("metadata_revision")
+            val catalogRevision = baseline.getString("catalog_revision")
+            revision(metadataRevision)
+            revision(catalogRevision)
+            if (expectedCatalogRevision != null) require(catalogRevision == expectedCatalogRevision)
+            if (expectedMetadataRevision != null) require(metadataRevision == expectedMetadataRevision)
+            validateMetadataBaseline(baseline)
+            // A token alone cannot make a partially persisted catalog usable.  Reuse is safe
+            // only when the installed rows at that token can render every saved tag/value.
+            if (expectedCatalogRevision != null && !catalogDescribes(baseline, expectedCatalogRevision)) return false
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    internal fun catalogDescribes(metadata: JSONObject, revision: String): Boolean {
+        val tags = dao.metadataTags().filter { it.revision == revision }.map { it.id }.toSet()
+        val currentTags = metadata.getJSONArray("tags")
+        for (index in 0 until currentTags.length()) if (currentTags.getJSONObject(index).getString("id") !in tags) return false
+        val fields = dao.metadataFields().filter { it.revision == revision }.associateBy { it.id }
+        val options = dao.allMetadataOptions().filter { it.revision == revision }.map { it.id }.toSet()
+        val values = metadata.getJSONArray("values")
+        for (index in 0 until values.length()) {
+            val value = values.getJSONObject(index)
+            val field = fields[value.getString("field_id")] ?: return false
+            if (field.fieldType == "choice" && value.getJSONObject("value").getString("option_id") !in options) return false
+        }
+        return true
+    }
+
+    fun saveMetadataDraft(
+        id: String,
+        person: String,
+        proposal: JSONArray,
+        expectedRevision: Long = 0,
+        baseline: JSONObject? = null,
+    ): MetadataDraftRow = atomic {
+        requireAccess(); uuid(id)
+        val cached = dao.person(person) ?: throw AccessLocked()
+        require(metadataQualified(cached)) { "Refresh this Person before editing tags or fields" }
+        val current = dao.metadataDraft(id)
+        require((current?.revision ?: 0) == expectedRevision) { "Metadata draft changed; reload it" }
+        require(current == null || current.person == person)
+        require(current?.operation.orEmpty().isEmpty()) { "Saved metadata proposal is immutable" }
+        val original = current?.let { JSONObject(it.baseline) } ?: baseline ?: JSONObject(cached.metadata)
+        validateMetadataBaseline(original)
+        validateMetadataProposal(person, proposal, original)
+        val next = expectedRevision + 1
+        if (current == null)
+            dao.insertMetadataDraft(
+                MetadataDraftRow(
+                    id, person, original.toString(), proposal.toString(),
+                    revision(original.getString("metadata_revision")),
+                    revision(original.getString("catalog_revision")), next,
+                )
+            )
+        else
+            require(dao.updateMetadataDraft(id, proposal.toString(), next, expectedRevision) == 1)
+        dao.metadataDraft(id)!!
+    }
+
+    /** Submit is one atomic CAS: draft state, immutable envelope, outbox and overlay context. */
+    fun submitMetadataDraft(id: String, expectedRevision: Long): OperationRow = atomic {
+        requireAccess()
+        val draft = dao.metadataDraft(id) ?: throw StorageFailure()
+        require(draft.revision == expectedRevision)
+        require(dao.person(draft.person)?.let(::metadataQualified) == true)
+        if (draft.operation.isNotEmpty()) return@atomic dao.operation(draft.operation) ?: throw ProtocolFailure()
+        val baseline = JSONObject(draft.baseline)
+        val actions = JSONArray(draft.proposal)
+        validateMetadataProposal(draft.person, actions, baseline)
+        require(
+            dao.operations().none {
+                it.person == draft.person && it.kind == "update_person_metadata" &&
+                    it.status !in setOf("covered", "superseded")
+            }
+        ) { "Saved proposal — waiting for the previous metadata update" }
+        val payload = json(
+            "person_id" to draft.person,
+            "expected_metadata_revision" to draft.metadataRevision,
+            "expected_catalog_revision" to draft.catalogRevision,
+            "actions" to actions,
+        )
+        val row = newOperation(draft.person, "update_person_metadata", payload)
+        dao.operation(row)
+        require(dao.saveMetadataOperation(id, row.id) == 1)
+        dao.metadataContext(MetadataContextRow(row.id, draft.person, draft.baseline, draft.proposal))
+        row
+    }
+
+    private fun validateMetadataBaseline(value: JSONObject) {
+        require(value.getBoolean("complete"))
+        revision(value.getString("metadata_revision")); revision(value.getString("catalog_revision"))
+        val tags = value.getJSONArray("tags").objects(); val fields = value.getJSONArray("values").objects()
+        require(tags.size <= 100 && fields.size <= 100)
+        val ids = mutableSetOf<String>()
+        tags.forEach { ids.add(uuid(it.getString("id"))) }
+        fields.forEach { require(ids.add(uuid(it.getString("field_id")))) }
+    }
+
+    /** Syntax/identity checks mirror the contract only; availability and permissions stay server owned. */
+    private fun validateMetadataProposal(person: String, actions: JSONArray, baseline: JSONObject) {
+        validateMetadataBaseline(baseline); require(actions.length() in 1..50)
+        val seenTags = mutableSetOf<String>(); val seenFields = mutableSetOf<String>()
+        val knownTags = dao.metadataTags().map { it.id }.toSet()
+        val knownFields = dao.metadataFields().associateBy { it.id }
+        actions.objects().forEach { action ->
+            when (action.getString("kind")) {
+                "add_tag", "remove_tag" -> {
+                    require(action.length() == 2); val id = uuid(action.getString("tag_id"))
+                    require(seenTags.add(id)); require(id in knownTags) { "Deleted tag is no longer available" }
+                }
+                "clear_field" -> {
+                    require(action.length() == 2); val id = uuid(action.getString("field_id"))
+                    require(seenFields.add(id)); require(knownFields.containsKey(id))
+                }
+                "set_field" -> {
+                    require(action.length() == 3); val id = uuid(action.getString("field_id"))
+                    require(seenFields.add(id)); val field = knownFields[id] ?: throw IllegalArgumentException("Unknown field")
+                    require(field.archivedAt == null) { "Archived fields can only be cleared" }
+                    validateMetadataValue(field, action.getJSONObject("value"))
+                }
+                else -> throw IllegalArgumentException("Unknown metadata action")
+            }
+        }
+        require(person.isNotEmpty())
+    }
+
+    private fun validateMetadataValue(field: MetadataFieldRow, value: JSONObject) {
+        require(value.length() == 1)
+        when (field.fieldType) {
+            "text" -> { val text = value.getString("text"); require(text.isNotEmpty() && text.codePointCount(0, text.length) <= 500) }
+            "number" -> {
+                val number = value.getString("number")
+                // Exact NUMERIC(19,4) grammar; keep the supplied canonical string intact.
+                require(number.matches(Regex("-?(?:0|[1-9][0-9]{0,14})(?:\\.[0-9]{1,4})?")))
+            }
+            "date" -> {
+                val date = java.time.LocalDate.parse(value.getString("date"))
+                require(date >= java.time.LocalDate.parse("1900-01-01") && date <= java.time.LocalDate.parse("2200-12-31"))
+            }
+            "choice" -> {
+                val option = uuid(value.getString("option_id"))
+                require(dao.metadataOptions(field.id).any { it.id == option && it.archivedAt == null })
+            }
+            else -> throw IllegalArgumentException("Unknown field type")
+        }
+    }
+
+    fun recordCurrentMetadata(operationId: String, response: JSONObject) = atomic {
+        requireAccess()
+        val operation = dao.operation(operationId) ?: throw ProtocolFailure()
+        val context = dao.metadataContext(operationId) ?: throw ProtocolFailure()
+        require(operation.kind == "update_person_metadata" && operation.status == "attention")
+        require(response.getString("context_id") == binding.context && response.getString("person_id") == operation.person)
+        validateMetadataBaseline(response)
+        dao.currentMetadataContext(operationId, response.toString(), context.editorRevision + 1)
+    }
+
+    fun reviseMetadataConflict(operationId: String, draftId: String): MetadataDraftRow = atomic {
+        requireAccess(); val op = dao.operation(operationId) ?: throw ProtocolFailure()
+        val context = dao.metadataContext(operationId) ?: throw ProtocolFailure()
+        require(op.kind == "update_person_metadata" && op.status == "attention" &&
+            op.lastError in setOf("revision_conflict", "catalog_revision_conflict") && context.current.isNotEmpty())
+        val current = JSONObject(context.current)
+        // A conflict comparison is not a catalog refresh.  Never let a current-record response
+        // attach a newer token to editor labels/options from an older sealed catalog.  The next
+        // reconciliation must qualify this Person against that exact current baseline first.
+        val installedCatalog = dao.meta("metadata_catalog_revision") ?: throw ProtocolFailure()
+        require(current.getString("catalog_revision") == installedCatalog) {
+            "Refresh the metadata catalog before preparing a replacement"
+        }
+        val cached = dao.person(op.person) ?: throw AccessLocked()
+        require(metadataQualified(cached, installedCatalog, current.getString("metadata_revision"))) {
+            "Refresh this Person against the current metadata catalog before preparing a replacement"
+        }
+        // The matching revision marker is meaningful only when the installed sealed catalog can
+        // actually describe every retained current value.  This prevents a damaged/partial
+        // catalog table from opening an editor with no controls for an otherwise valid baseline.
+        require(catalogDescribes(current, installedCatalog)) {
+            "Refresh the complete metadata catalog before preparing a replacement"
+        }
+        require(dao.supersede(operationId) == 1)
+        val row = MetadataDraftRow(draftId, op.person, current.toString(), context.proposal,
+            revision(current.getString("metadata_revision")), revision(current.getString("catalog_revision")), 1)
+        dao.insertMetadataDraft(row); row
+    }
+
+    fun discardMetadataConflict(operationId: String) = atomic {
+        requireAccess(); val op = dao.operation(operationId) ?: throw ProtocolFailure()
+        require(op.kind == "update_person_metadata" && op.status in setOf("attention", "superseded"))
+        dao.removeMetadataContext(operationId); dao.removeMetadataOperation(operationId)
+        dao.operationState(operationId, "covered", op.attempts, 0, "")
+    }
+
     private fun profileBaseline(person: PersonRow): JSONObject {
         val summary = JSONObject(person.summary)
         val details = revision(summary.getString("details_revision"))
@@ -543,6 +762,7 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
             "complete_task" -> payload.optJSONObject("target")?.stringOrNull("task_id")?.let { "task:${uuid(it)}" }
             "change_person_stage" -> "person_stage:${uuid(payload.getString("person_id"))}"
             "update_person_details" -> "person_details:${uuid(payload.getString("person_id"))}"
+            "update_person_metadata" -> "person_metadata:${uuid(payload.getString("person_id"))}"
             else -> null
         }
 
@@ -571,6 +791,7 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
                 "log_contact_attempt" -> "contact_attempt"
                 "change_person_stage" -> "person_stage"
                 "update_person_details" -> "person_details"
+                "update_person_metadata" -> "person_metadata"
                 else -> throw ProtocolFailure()
             }
         if (
@@ -615,6 +836,11 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
                 require(ids.toSet().size == ids.size)
                 if (!response.getBoolean("changed")) require(mapping.isEmpty())
             }
+            "update_person_metadata" -> {
+                require(response.length() == 9)
+                require(response.getString("resource_id") == operation.person)
+                revision(response.getString("committed_revision"))
+            }
             else -> throw ProtocolFailure()
         }
         dao.accept(id, response.toString())
@@ -641,9 +867,15 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
             dao.removeMeta("generation"); dao.removeMeta("manifest_cursor"); dao.removeMeta("manifest_complete")
             dao.clearPages(); dao.clearManifest()
         }
+        if (operation.kind == "update_person_metadata") {
+            dao.metadataState(id, "accepted", "")
+            // Only a causally later sealed metadata representation may retire this overlay.
+            dao.removeMeta("generation"); dao.removeMeta("manifest_cursor"); dao.removeMeta("manifest_complete")
+            dao.clearPages(); dao.clearManifest(); dao.clearMetadataCatalogPages()
+        }
         val current = dao.person(operation.person)
         if (
-            operation.kind !in setOf("log_contact_attempt", "change_person_stage", "update_person_details") &&
+            operation.kind !in setOf("log_contact_attempt", "change_person_stage", "update_person_details", "update_person_metadata") &&
             current != null &&
                 revisionAtLeast(current.revision, response.getString("person_revision"))
         )
@@ -733,6 +965,7 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         dao.clearPages()
         dao.clearManifest()
         dao.clearStageCatalogPages()
+        dao.clearMetadataCatalogPages()
         if (response.has("stage_catalog")) {
             val catalog = response.getJSONObject("stage_catalog")
             revision(catalog.getString("revision"))
@@ -742,6 +975,18 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         } else {
             dao.removeMeta("stage_catalog_cursor")
             dao.removeMeta("stage_catalog_complete")
+        }
+        if (response.has("metadata")) {
+            val catalog = response.getJSONObject("metadata")
+            require(catalog.getString("representation") == "metadata-v1")
+            revision(catalog.getString("catalog_revision"))
+            listOf("tags", "fields", "options").forEach { section ->
+                require(catalog.getString("catalog_url").startsWith("/api/mobile/v1/reconciliations/${response.getString("generation_id")}/metadata/catalog"))
+                dao.meta(MetaRow("metadata_catalog_${section}_cursor", ""))
+                dao.meta(MetaRow("metadata_catalog_${section}_complete", "false"))
+            }
+        } else listOf("tags", "fields", "options").forEach { section ->
+            dao.removeMeta("metadata_catalog_${section}_cursor"); dao.removeMeta("metadata_catalog_${section}_complete")
         }
         dao.meta(MetaRow("generation", response.toString()))
         appendManifest(response.getString("generation_id"), response.getJSONObject("manifest"))
@@ -758,6 +1003,7 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
                     generation,
                     uuid(it.getString("person_id")),
                     revision(it.getString("revision")),
+                    if (it.has("metadata_revision")) revision(it.getString("metadata_revision")) else "",
                 )
             }
         )
@@ -784,13 +1030,23 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
                 response.getString("revision") != expected.revision
         )
             throw ProtocolFailure()
-        require(
-            response.getJSONArray("items").length() <= 100 &&
-                response.toString().toByteArray().size <= 524_288
-        )
-        require(section in setOf("summary", "notes", "tasks"))
+        require(section in setOf("summary", "notes", "tasks", "metadata"))
+        val items = if (section == "metadata") emptyList() else response.getJSONArray("items").objects()
+        require(items.size <= 100 && response.toString().toByteArray().size <= 524_288)
+        if (section == "metadata") {
+            require(response.getBoolean("complete") && response.isNull("next_cursor"))
+            require(response.has("tags") && response.has("values"))
+            require(expected.metadataRevision.isNotEmpty() && response.getString("metadata_revision") == expected.metadataRevision)
+            val values = json(
+                "metadata_revision" to response.getString("metadata_revision"),
+                "catalog_revision" to response.getString("catalog_revision"),
+                "tags" to response.getJSONArray("tags"), "values" to response.getJSONArray("values"),
+                "complete" to true,
+            )
+            validateMetadataBaseline(values)
+        }
         if (section == "summary") validateContactItems(response.getJSONArray("items"))
-        if (section != "summary")
+        if (section != "summary" && section != "metadata")
             response.getJSONArray("items").objects().forEach { item ->
                 uuid(item.getString("id"))
                 require(item.getString("person_id") == person)
@@ -846,6 +1102,40 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         }
     }
 
+    fun metadataCatalogPage(generation: String, section: String, cursor: String, response: JSONObject) = atomic {
+        requireAccess(); require(section in setOf("tags", "fields", "options"))
+        val active = JSONObject(dao.meta("generation") ?: throw ProtocolFailure())
+        val catalog = active.optJSONObject("metadata") ?: throw ProtocolFailure()
+        require(response.getString("generation_id") == generation && response.getString("section") == section &&
+            response.getString("revision") == catalog.getString("catalog_revision"))
+        val items = response.getJSONArray("items").objects()
+        require(items.size <= 100 && response.toString().toByteArray().size <= 524_288)
+        items.forEach { item ->
+            uuid(item.getString("id"))
+            when (section) {
+                "tags" -> require(item.getString("name").isNotBlank())
+                "fields" -> { require(item.getString("field_type") in setOf("text", "number", "date", "choice")); item.getInt("position") }
+                else -> { uuid(item.getString("field_id")); item.getInt("position") }
+            }
+        }
+        val next = response.stringOrNull("next_cursor")
+        require(response.getBoolean("complete") == (next == null) && next != cursor)
+        require(dao.metadataCatalogPages(generation, section).none { it.cursor == cursor })
+        dao.metadataCatalogPage(MetadataCatalogPageRow(generation, section, cursor, response.toString()))
+        dao.meta(MetaRow("metadata_catalog_${section}_cursor", next ?: ""))
+        dao.meta(MetaRow("metadata_catalog_${section}_complete", (next == null).toString()))
+    }
+
+    fun nextMetadataCatalogPage(generation: String, section: String): String? {
+        val pages = dao.metadataCatalogPages(generation, section).associateBy { it.cursor }
+        var cursor = ""; val visited = mutableSetOf<String>()
+        while (true) {
+            if (!visited.add(cursor)) throw ProtocolFailure()
+            val page = pages[cursor] ?: return cursor
+            cursor = JSONObject(page.body).stringOrNull("next_cursor") ?: return null
+        }
+    }
+
     private fun component(
         generation: String,
         person: String,
@@ -884,6 +1174,11 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
             // terminal wire shape intentionally does not echo it; the staged generation is the
             // authoritative local binding.
         }
+        val metadataCatalog = generation.optJSONObject("metadata")
+        if (metadataCatalog != null)
+            listOf("tags", "fields", "options").forEach { section ->
+                require(dao.meta("metadata_catalog_${section}_complete") == "true")
+            }
         val manifest = dao.manifest(id)
         require(
             manifest.size == generation.getInt("selected_count") &&
@@ -894,11 +1189,18 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         val pending = dao.operations().filter { it.status != "covered" }
         for (item in manifest) {
             val old = dao.person(item.person)
-            val needsQualification = old != null && (!old.noteRevisionsQualified || !old.stageRevisionsQualified || !detailsQualified(old))
+            val needsQualification = old != null &&
+                (!old.noteRevisionsQualified || !old.stageRevisionsQualified || !detailsQualified(old) ||
+                    (metadataCatalog != null && !metadataQualified(
+                        old,
+                        metadataCatalog.getString("catalog_revision"),
+                        item.metadataRevision,
+                    )))
             if (old == null || old.revision != item.revision || needsQualification) {
                 val summary = component(id, item.person, "summary")
                 val notes = component(id, item.person, "notes").second
                 val tasks = component(id, item.person, "tasks").second
+                val metadata = if (metadataCatalog != null) JSONObject(dao.pages(id, item.person, "metadata").singleOrNull()?.body ?: throw ProtocolFailure()) else null
                 require(summary.first?.getString("id") == item.person)
                 val modernSummary = summary.first!!
                 val detailsQualified =
@@ -906,6 +1208,13 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
                         runCatching { revision(modernSummary.getString("details_revision")); validateDetailContacts(summary.second) }.isSuccess
                 val notesQualified = notes.objects().all { it.has("revision") }
                 val tasksQualified = tasks.objects().all { it.has("revision") }
+                val metadataQualified = metadata?.let { page ->
+                    val candidate = json("metadata_revision" to page.getString("metadata_revision"), "catalog_revision" to page.getString("catalog_revision"),
+                        "tags" to page.getJSONArray("tags"), "values" to page.getJSONArray("values"), "complete" to page.getBoolean("complete"))
+                    candidate.getString("metadata_revision") == item.metadataRevision &&
+                        candidate.getString("catalog_revision") == metadataCatalog?.getString("catalog_revision") &&
+                        runCatching { validateMetadataBaseline(candidate) }.isSuccess
+                } ?: false
                 if (catalog != null && modernSummary.has("stage_revision")) revision(modernSummary.getString("stage_revision"))
                 if (old == null || revisionAtLeast(item.revision, old.revision))
                     dao.person(
@@ -921,6 +1230,8 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
                             notesQualified,
                             catalog != null && modernSummary.has("stage_revision"),
                             detailsQualified,
+                            metadataQualified,
+                            metadata?.let { page -> json("metadata_revision" to page.getString("metadata_revision"), "catalog_revision" to page.getString("catalog_revision"), "tags" to page.getJSONArray("tags"), "values" to page.getJSONArray("values"), "complete" to page.getBoolean("complete")).toString() } ?: "",
                         )
                     )
             }
@@ -937,6 +1248,10 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
                         } else if (op.kind == "update_person_details") {
                             val details = JSONObject(active.summary).stringOrNull("details_revision")
                             details != null && detailsQualified(active) && revisionAtLeast(details, receipt.getString("committed_revision"))
+                        } else if (op.kind == "update_person_metadata") {
+                            val current = JSONObject(active.metadata)
+                            active.metadataRevisionsQualified &&
+                                revisionAtLeast(current.getString("metadata_revision"), receipt.getString("committed_revision"))
                         } else revisionAtLeast(active.revision, receipt.getString("person_revision"))
                     if (covered)
                         dao.cover(op.id)
@@ -951,6 +1266,17 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
             dao.stageCatalog(staged)
             dao.meta(MetaRow("stage_catalog_revision", catalog.getString("revision")))
         }
+        if (metadataCatalog != null) {
+            fun rows(section: String) = dao.metadataCatalogPages(id, section)
+                .flatMap { JSONObject(it.body).getJSONArray("items").objects() }
+            val tags = rows("tags").map { MetadataTagRow(uuid(it.getString("id")), it.getString("name"), id, metadataCatalog.getString("catalog_revision")) }
+            val fields = rows("fields").map { MetadataFieldRow(uuid(it.getString("id")), it.getString("label"), it.getString("field_type"), it.getInt("position"), if (it.isNull("archived_at")) null else it.getString("archived_at"), id, metadataCatalog.getString("catalog_revision")) }
+            val options = rows("options").map { MetadataOptionRow(uuid(it.getString("id")), uuid(it.getString("field_id")), it.getString("label"), it.getInt("position"), if (it.isNull("archived_at")) null else it.getString("archived_at"), id, metadataCatalog.getString("catalog_revision")) }
+            require(tags.map { it.id }.distinct().size == tags.size && fields.map { it.id }.distinct().size == fields.size && options.map { it.id }.distinct().size == options.size)
+            dao.clearMetadataTags(); dao.clearMetadataFields(); dao.clearMetadataOptions()
+            dao.metadataTags(tags); dao.metadataFields(fields); dao.metadataOptions(options)
+            dao.meta(MetaRow("metadata_catalog_revision", metadataCatalog.getString("catalog_revision")))
+        }
         // A contact receipt is never covered merely because its Person revision happened to be
         // unchanged. Reaching this point proves a fresh complete seal (including Today) was
         // committed after the receipt. Drop only its bounded local display record then.
@@ -962,6 +1288,8 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
             .forEach { dao.removeStageOperation(it.operation) }
         dao.profileDrafts().filter { it.operation.isNotEmpty() && dao.operation(it.operation)?.status == "covered" }
             .forEach { dao.removeProfileOperation(it.operation) }
+        dao.metadataDrafts().filter { it.operation.isNotEmpty() && dao.operation(it.operation)?.status == "covered" }
+            .forEach { dao.removeMetadataOperation(it.operation) }
         val selected = manifest.map { it.person }.toSet()
         var removalConflicts = 0
         for (old in dao.people().filter { it.id !in selected }) {
@@ -995,8 +1323,12 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         dao.removeMeta("manifest_complete")
         dao.removeMeta("stage_catalog_cursor")
         dao.removeMeta("stage_catalog_complete")
+        listOf("tags", "fields", "options").forEach { section ->
+            dao.removeMeta("metadata_catalog_${section}_cursor"); dao.removeMeta("metadata_catalog_${section}_complete")
+        }
         dao.clearPages()
         dao.clearManifest()
         dao.clearStageCatalogPages()
+        dao.clearMetadataCatalogPages()
     }
 }

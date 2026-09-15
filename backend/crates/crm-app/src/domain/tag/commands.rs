@@ -179,6 +179,7 @@ async fn create_tag_attempt(
     let name = normalize_and_validate_name(&cmd.name)?;
 
     let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
+    crate::domain::mobile::metadata::acquire_exclusive(&mut tx, ctx.organization_id).await?;
     // The membership check some sibling commands perform is unnecessary
     // here: creation is "any active member", which `AuthContext` already
     // established (docs/specs/SLICE_011e.md §3 table).
@@ -230,6 +231,112 @@ pub struct RemovePersonTag {
     pub person_id: PersonId,
     pub tag_id: TagId,
 }
+/// Transaction-compatible terminal link mutation. The caller owns the Person
+/// lock and all validation/limit checks; this keeps mobile's atomic composer
+/// on the same link-write primitive as the ordinary typed commands.
+async fn apply_person_tag_in_transaction(
+    conn: &mut PgConnection,
+    organization_id: OrganizationId,
+    person_id: PersonId,
+    tag_id: TagId,
+    actor_user_id: UserId,
+    add: bool,
+) -> Result<bool, TagError> {
+    if add {
+        Ok(
+            queries::insert_person_tag(conn, organization_id, person_id, tag_id, actor_user_id)
+                .await?,
+        )
+    } else {
+        Ok(queries::delete_person_tag(conn, organization_id, person_id, tag_id).await?)
+    }
+}
+
+/// Prepared from trusted command context while its Person/catalog locks are held.
+pub(crate) struct PreparedPersonTag {
+    organization_id: OrganizationId,
+    person_id: PersonId,
+    tag_id: TagId,
+    actor_user_id: UserId,
+    add: bool,
+    present: bool,
+}
+impl PreparedPersonTag {
+    pub(crate) fn is_removal(&self) -> bool {
+        !self.add
+    }
+}
+
+pub(crate) async fn prepare_person_tag(
+    conn: &mut PgConnection,
+    ctx: &CommandContext,
+    person_id: PersonId,
+    tag_id: TagId,
+    add: bool,
+) -> Result<PreparedPersonTag, TagError> {
+    crate::auth::workspace::ordinary(conn, ctx.organization_id).await?;
+    crate::domain::mobile::metadata::acquire_shared(conn, ctx.organization_id).await?;
+    person_queries::lock_person(conn, person_id, ctx.organization_id)
+        .await?
+        .ok_or(TagError::NotFound)?;
+    if lock_current_membership(conn, ctx.organization_id, ctx.actor_user_id)
+        .await?
+        .is_none()
+    {
+        return Err(TagError::Forbidden);
+    }
+    if !queries::lock_tag_for_share_exists(conn, ctx.organization_id, tag_id).await? {
+        return Err(TagError::NotFound);
+    }
+    let present = queries::person_tag_exists(conn, ctx.organization_id, person_id, tag_id).await?;
+    Ok(PreparedPersonTag {
+        organization_id: ctx.organization_id,
+        person_id,
+        tag_id,
+        actor_user_id: ctx.actor_user_id,
+        add,
+        present,
+    })
+}
+
+/// One final-set capacity rule for both a single command and an atomic patch.
+pub(crate) async fn validate_person_tag_capacity(
+    conn: &mut PgConnection,
+    ctx: &CommandContext,
+    person_id: PersonId,
+    actions: &[PreparedPersonTag],
+) -> Result<(), TagError> {
+    let count = queries::count_person_tags_for_person(conn, ctx.organization_id, person_id).await?;
+    let delta: i64 = actions
+        .iter()
+        .map(|a| match (a.add, a.present) {
+            (true, false) => 1,
+            (false, true) => -1,
+            _ => 0,
+        })
+        .sum();
+    // Preserve idempotent no-op/removal behavior even for a preexisting over-cap
+    // fixture. A fresh addition must fit the final set, after all removals.
+    if actions.iter().any(|a| a.add && !a.present) && count + delta > 20 {
+        return Err(TagError::PersonTagLimitReached);
+    }
+    Ok(())
+}
+
+pub(crate) async fn apply_prepared_person_tag(
+    conn: &mut PgConnection,
+    prepared: PreparedPersonTag,
+) -> Result<bool, TagError> {
+    apply_person_tag_in_transaction(
+        conn,
+        prepared.organization_id,
+        prepared.person_id,
+        prepared.tag_id,
+        prepared.actor_user_id,
+        prepared.add,
+    )
+    .await
+}
 
 #[derive(Debug, Clone)]
 pub struct PersonTagOutcome {
@@ -279,34 +386,10 @@ async fn add_person_tag_attempt(
     cmd: AddPersonTag,
 ) -> Result<PersonTagOutcome, TagError> {
     let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
-    person_queries::lock_person(&mut tx, cmd.person_id, ctx.organization_id)
-        .await?
-        .ok_or(TagError::NotFound)?;
-    let tag_present =
-        queries::lock_tag_for_share_exists(&mut tx, ctx.organization_id, cmd.tag_id).await?;
-    if !tag_present {
-        return Err(TagError::NotFound);
-    }
-
-    let already_applied =
-        queries::person_tag_exists(&mut tx, ctx.organization_id, cmd.person_id, cmd.tag_id).await?;
-    if !already_applied {
-        let count =
-            queries::count_person_tags_for_person(&mut tx, ctx.organization_id, cmd.person_id)
-                .await?;
-        if count >= 20 {
-            return Err(TagError::PersonTagLimitReached);
-        }
-    }
-
-    let changed = queries::insert_person_tag(
-        &mut tx,
-        ctx.organization_id,
-        cmd.person_id,
-        cmd.tag_id,
-        ctx.actor_user_id,
-    )
-    .await?;
+    let prepared = prepare_person_tag(&mut tx, ctx, cmd.person_id, cmd.tag_id, true).await?;
+    validate_person_tag_capacity(&mut tx, ctx, cmd.person_id, std::slice::from_ref(&prepared))
+        .await?;
+    let changed = apply_prepared_person_tag(&mut tx, prepared).await?;
     let tags = queries::list_for_person(&mut tx, ctx.organization_id, cmd.person_id).await?;
     tx.commit().await?;
 
@@ -358,17 +441,10 @@ async fn remove_person_tag_attempt(
     cmd: RemovePersonTag,
 ) -> Result<PersonTagOutcome, TagError> {
     let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
-    person_queries::lock_person(&mut tx, cmd.person_id, ctx.organization_id)
-        .await?
-        .ok_or(TagError::NotFound)?;
-    let tag_present =
-        queries::lock_tag_for_share_exists(&mut tx, ctx.organization_id, cmd.tag_id).await?;
-    if !tag_present {
-        return Err(TagError::NotFound);
-    }
-
-    let changed =
-        queries::delete_person_tag(&mut tx, ctx.organization_id, cmd.person_id, cmd.tag_id).await?;
+    let prepared = prepare_person_tag(&mut tx, ctx, cmd.person_id, cmd.tag_id, false).await?;
+    validate_person_tag_capacity(&mut tx, ctx, cmd.person_id, std::slice::from_ref(&prepared))
+        .await?;
+    let changed = apply_prepared_person_tag(&mut tx, prepared).await?;
     let tags = queries::list_for_person(&mut tx, ctx.organization_id, cmd.person_id).await?;
     tx.commit().await?;
 
@@ -462,6 +538,7 @@ async fn rename_tag_attempt(
     let name = normalize_and_validate_name(&cmd.name)?;
 
     let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
+    crate::domain::mobile::metadata::acquire_exclusive(&mut tx, ctx.organization_id).await?;
     acquire_tags_lock(&mut tx, ctx.organization_id).await?;
     let row = queries::lock_tag_for_update(&mut tx, ctx.organization_id, cmd.tag_id)
         .await?
@@ -550,6 +627,7 @@ async fn delete_tag_attempt(
     cmd: DeleteTag,
 ) -> Result<DeleteTagOutcome, TagError> {
     let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
+    crate::domain::mobile::metadata::acquire_exclusive(&mut tx, ctx.organization_id).await?;
     acquire_tags_lock(&mut tx, ctx.organization_id).await?;
     let row = queries::lock_tag_for_update(&mut tx, ctx.organization_id, cmd.tag_id)
         .await?

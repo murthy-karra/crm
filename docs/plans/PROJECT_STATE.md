@@ -1,6 +1,6 @@
 # Project state
 
-Updated: 2026-09-14 (Mobile005 / 010f3 implemented and independently READY under D-082; prior release unchanged).
+Updated: 2026-09-15 (D-084 Mobile006 / 010f4 implementation; implementation verified; release in progress).
 Current status and live residuals only. [History](PROJECT_HISTORY.md#archived-project-state-snapshot--2026-09-13)
 preserves the previous state verbatim, including superseded instructions.
 Decisions remain authoritative; use the [reading index](../decisions/DECISION_INDEX.md).
@@ -20,14 +20,27 @@ production-cluster deployment remain separate. Shared development is Mac-hosted.
 
 ## Current slice
 
+**Implemented, implementation verified; release in progress: Mobile006 / 010f4, D-084.**
+Both native clients now support offline tags/custom-field edits. Administrators can
+import qualified retained notes/tasks for admitted People with exact cancellation
+remainders. [Implementation status](../tasks/MOBILE_006_010f4_IMPLEMENTATION_STATUS.md)
+owns scope/resources; [final verification](../tasks/MOBILE_006_010f4_FINAL_VERIFICATION.md)
+owns acceptance and passing gates. Both planning and final implementation reviews
+are READY. Full DB (1,103 tests), native/browser acceptance, realistic query plans
+and paired Person/Today performance pass. Publication and shared-development
+release are authorized and in progress.
+
+
 **Implemented and verified locally: Mobile005 / 010f3.** Offline Person name/contact
 editing on iOS/Android and admitted-People tags/custom-field imports are complete
 under D-082. Both independent implementation reviews are READY.
 The [coordinated plan](MOBILE_005_010f3_PARALLEL_LAUNCH.md) links both specifications,
 execution briefs and review evidence. [Implementation status](../tasks/MOBILE_005_010f3_IMPLEMENTATION_STATUS.md)
 owns delivered behavior, retained resources and passing checks. Final tested code
-is `ab4a362`; later completion changes are documentation only. Publication and
-deployment remain separate. Shared development is preserved.
+is `ab4a362`; later completion changes are documentation only. D-082's release
+follow-up authorizes publication/deployment; the [release record](../tasks/MOBILE_005_010f3_RELEASE.md)
+is IN PROGRESS at this planning inspection. No completion or new runtime identity
+is inferred from the source checkout.
 
 **Mobile004 / 010e4 delivered within their approved synthetic scope.**
 [Mobile stage specification](../specs/MOBILE_004_OFFLINE_STAGE_CHANGES.md),
@@ -44,26 +57,33 @@ Imported workspaces retain the administrator review hold; ordinary mutations,
 Today, Operator, outbound and mobile access do not bypass it.
 
 010e4 adds subsequent core refresh for admitted People in shared development.
-010f3 adds tags/custom-field imports locally; notes/tasks and history remain
-sequential follow-ups in the [family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md).
+010f3 adds tags/custom-field imports locally; 010f4 adds notes/tasks locally,
+with history next in the [family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md).
 Full migration fidelity, mapping repair, remaining deltas and activation need
 separately specified scope. Older ladder/summary milestone banners may predate
 this release; use the latest release record for delivered status.
 
 ## Current branch
 
-`codex/mobile005-010f3-integration`, final tested code `ab4a362`, followed by
-completion documentation. The three completed writer worktrees and owned QA
-APIs/Web preview are retained; no active writer remains. Keep verification and
-release recovery material, QA databases and native demo/QA stores. Only inactive
-private compiler caches were removed when needed. Shared runtime remains `ffbc9fd`.
+Local implementation branch: `codex/mobile006-010f4-integration`, based on
+`a5cb24d`. Final backend source is `22c6c06`; later changes cover Android catalog repairs/checks,
+upgrade assertions and documentation. Shared API3000/Web5173 artifacts remain
+unchanged. Preserve retained writer worktrees, verification/recovery evidence,
+QA databases and installed native stores. Publication/deployment of this pair is now authorized under the D-084 release
+follow-up and [in preparation](../tasks/MOBILE_006_010f4_RELEASE.md). The prior Mobile005/010f3 release remains separately IN PROGRESS.
 
 ## Last accepted decision
+
+**D-084:** accepts the reviewed Mobile006/010f4 contracts and authorizes
+implementation plus isolated synthetic verification, established writers and
+local integration commits. Its release follow-up now authorizes main publication,
+cleanup and shared-development deployment; other operational scope remains separate. D-083's planning boundary is superseded for this implementation.
 
 **D-082:** implement both reviewed plans and isolated synthetic verification,
 with Terra high writers and the coordinated three-worktree sequence. Local
 integration checkpoints are allowed. Implementation and required verification are
-complete; publication/deployment remains separate.
+complete; its subsequent release follow-up authorizes publication/deployment,
+currently recorded IN PROGRESS in the owning release document.
 
 **D-081:** draft Mobile005 and 010f3 together, preserving parallel mobile/migration
 development; 2026-09-14 follow-up authorized independent review, now READY.
@@ -158,6 +178,11 @@ Foundations F-01/F-02/F-03 remain proposals except where separately accepted.
 
 ## Latest verification
 
+[Mobile006 / 010f4 evidence](../tasks/MOBILE_006_010f4_FINAL_VERIFICATION.md)
+records the current final gates. Repository checks, 18 mobile and 26 migration
+query plans, desktop/390px acceptance, populated native upgrades and focused
+store/authority/fidelity checks pass. Full acceptance remains in progress.
+
 [Mobile005 / 010f3 final evidence](../tasks/MOBILE_005_010f3_FINAL_VERIFICATION.md)
 records all required gates passing at `ab4a362`: 992 ordinary Rust, 1,076 database,
 1,264 Web, 51 preflight, five documentation and 11 email-worker tests. Native proof
@@ -182,21 +207,28 @@ full-suite evidence was reused with its source attribution.
 
 ## Next recommended action
 
-The [Mobile005 / 010f3 pair](MOBILE_005_010f3_PARALLEL_LAUNCH.md) is ready for
-publication and shared-development release once requested. Preserve retained QA
-and installed stores through that release. Subsequent planning covers admitted
-notes/tasks, then history, in the [family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md)
-and the next mobile slice; native calling follows the agreed progression.
+Finish the remaining [Mobile006/010f4 acceptance gates](../tasks/MOBILE_006_010f4_FINAL_VERIFICATION.md)
+and obtain both final independent review verdicts within the existing second round.
+The Mobile005/010f3 release is already authorized and tracked in its
+[release record](../tasks/MOBILE_005_010f3_RELEASE.md); do not request repeat
+authorization or start a duplicate rollout. Preserve retained QA and installed
+stores. History follows notes/tasks in the
+[family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md); native calling follows the agreed progression.
 Physical-phone/design/live-source work remains deferred; complete C-gate
 erasure/restore work before real customer data. No repeat release action is needed
 for the completed Mobile004 / 010e4 milestone.
 
 ## Approval currently required
 
+D-083 authorizes the next pair's drafts only. Mobile006's metadata/catalog conflict,
+representation and atomic-edit contracts and 010f4's source/cohort/identity-owner/
+lifetime/reader contracts remain proposals pending independent review and acceptance.
+
 D-082 accepts Mobile005's input/revision/contact-operation/realtime and 010f3's
 source/catalog-handover/lifetime contracts. No repeat implementation approval is
 needed; materially different scope/authority/policy requires its own decision.
-Publication/deployment and native distribution remain separate.
+Publication/deployment of Mobile005/010f3 are already authorized by D-082's release
+follow-up; native distribution remains separate. The next pair has no release authority.
 
 D-080 implementation, publication, cleanup and shared-development release are
 complete; no repeat approval is pending. Completed D-078 release also needs no

@@ -10,11 +10,13 @@ def q(s): return json.dumps(s)
 def arr(xs): return '(' + ', '.join(xs) + (',)' if xs else ')')
 def config_list(name, settings):
     refs = []
-    for config in ['Debug', 'Mobile002QA', 'Mobile003QA', 'Mobile004QA', 'Mobile004UpgradeQA', 'Mobile005QA', 'Mobile005UpgradeQA', 'Release']:
+    for config in ['Debug', 'Mobile002QA', 'Mobile003QA', 'Mobile004QA', 'Mobile004UpgradeQA', 'Mobile005QA', 'Mobile005UpgradeQA', 'Mobile006QA', 'Mobile006UpgradeQA', 'Release']:
         merged = dict(settings)
-        merged['SWIFT_OPTIMIZATION_LEVEL'] = '-Onone' if config in ['Debug', 'Mobile002QA', 'Mobile003QA', 'Mobile004QA', 'Mobile004UpgradeQA', 'Mobile005QA', 'Mobile005UpgradeQA'] else '-O'
-        merged['SWIFT_ACTIVE_COMPILATION_CONDITIONS'] = ('DEBUG MOBILE002_QA $(inherited)' if config == 'Mobile002QA' else ('DEBUG MOBILE003_QA $(inherited)' if config == 'Mobile003QA' else ('DEBUG MOBILE004_QA $(inherited)' if config == 'Mobile004QA' else ('DEBUG MOBILE004_UPGRADE_QA $(inherited)' if config == 'Mobile004UpgradeQA' else ('DEBUG MOBILE005_QA $(inherited)' if config == 'Mobile005QA' else ('DEBUG MOBILE005_UPGRADE_QA $(inherited)' if config == 'Mobile005UpgradeQA' else ('DEBUG $(inherited)' if config == 'Debug' else '$(inherited)')))))))
-        merged['ENABLE_TESTABILITY'] = 'YES' if config in ['Debug', 'Mobile002QA', 'Mobile003QA', 'Mobile004QA', 'Mobile004UpgradeQA', 'Mobile005QA', 'Mobile005UpgradeQA'] else 'NO'
+        qa_configs = ['Debug', 'Mobile002QA', 'Mobile003QA', 'Mobile004QA', 'Mobile004UpgradeQA', 'Mobile005QA', 'Mobile005UpgradeQA', 'Mobile006QA', 'Mobile006UpgradeQA']
+        merged['SWIFT_OPTIMIZATION_LEVEL'] = '-Onone' if config in qa_configs else '-O'
+        conditions = {'Mobile002QA': 'DEBUG MOBILE002_QA $(inherited)', 'Mobile003QA': 'DEBUG MOBILE003_QA $(inherited)', 'Mobile004QA': 'DEBUG MOBILE004_QA $(inherited)', 'Mobile004UpgradeQA': 'DEBUG MOBILE004_UPGRADE_QA $(inherited)', 'Mobile005QA': 'DEBUG MOBILE005_QA $(inherited)', 'Mobile005UpgradeQA': 'DEBUG MOBILE005_UPGRADE_QA $(inherited)', 'Mobile006QA': 'DEBUG MOBILE006_QA $(inherited)', 'Mobile006UpgradeQA': 'DEBUG MOBILE006_UPGRADE_QA $(inherited)', 'Debug': 'DEBUG $(inherited)'}
+        merged['SWIFT_ACTIVE_COMPILATION_CONDITIONS'] = conditions.get(config, '$(inherited)')
+        merged['ENABLE_TESTABILITY'] = 'YES' if config in qa_configs else 'NO'
         if name == 'FieldCRM':
             merged['INFOPLIST_FILE'] = 'FieldCRM/Info.Debug.plist' if config in ['Debug', 'Mobile002QA', 'Mobile003QA'] else 'FieldCRM/Info.plist'
             if config == 'Mobile002QA': merged['PRODUCT_BUNDLE_IDENTIFIER'] = 'dev.crm.FieldCRM.mobile002qa'
@@ -23,6 +25,11 @@ def config_list(name, settings):
             if config == 'Mobile004UpgradeQA': merged['PRODUCT_BUNDLE_IDENTIFIER'] = 'dev.crm.FieldCRM.mobile004upgradeqa'
             if config == 'Mobile005QA': merged['PRODUCT_BUNDLE_IDENTIFIER'] = 'dev.crm.FieldCRM.mobile005qa'
             if config == 'Mobile005UpgradeQA': merged['PRODUCT_BUNDLE_IDENTIFIER'] = 'dev.crm.FieldCRM.mobile005upgradeqa'
+            if config == 'Mobile006QA': merged['PRODUCT_BUNDLE_IDENTIFIER'] = 'dev.crm.FieldCRM.mobile006qa'
+            # The upgrade app replaces an installed Mobile005 QA app in place.
+            # Keep its bundle/container identity so the protected SQLCipher key
+            # and store remain available to the schema-9 binary.
+            if config == 'Mobile006UpgradeQA': merged['PRODUCT_BUNDLE_IDENTIFIER'] = 'dev.crm.FieldCRM.mobile005upgradeqa'
         refs.append(add(name+config, 'isa = XCBuildConfiguration; name = '+config+'; buildSettings = {' + ''.join(q(k)+' = '+q(v)+';' for k,v in merged.items()) + '};'))
     return add(name+'configs', 'isa = XCConfigurationList; buildConfigurations = '+arr(refs)+'; defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;')
 products=[]; groups=[]; targets=[]
@@ -69,3 +76,5 @@ scheme=f'''<?xml version="1.0" encoding="UTF-8"?><Scheme LastUpgradeVersion="266
 (root/'FieldCRM.xcodeproj/xcshareddata/xcschemes/FieldCRMMobile004UpgradeQA.xcscheme').write_text(scheme.replace('buildConfiguration="Debug"', 'buildConfiguration="Mobile004UpgradeQA"').replace('<ArchiveAction buildConfiguration="Release"', '<ArchiveAction buildConfiguration="Mobile004UpgradeQA"'))
 (root/'FieldCRM.xcodeproj/xcshareddata/xcschemes/FieldCRMMobile005QA.xcscheme').write_text(scheme.replace('buildConfiguration="Debug"', 'buildConfiguration="Mobile005QA"').replace('<ArchiveAction buildConfiguration="Release"', '<ArchiveAction buildConfiguration="Mobile005QA"'))
 (root/'FieldCRM.xcodeproj/xcshareddata/xcschemes/FieldCRMMobile005UpgradeQA.xcscheme').write_text(scheme.replace('buildConfiguration="Debug"', 'buildConfiguration="Mobile005UpgradeQA"').replace('<ArchiveAction buildConfiguration="Release"', '<ArchiveAction buildConfiguration="Mobile005UpgradeQA"'))
+(root/'FieldCRM.xcodeproj/xcshareddata/xcschemes/FieldCRMMobile006QA.xcscheme').write_text(scheme.replace('buildConfiguration="Debug"', 'buildConfiguration="Mobile006QA"').replace('<ArchiveAction buildConfiguration="Release"', '<ArchiveAction buildConfiguration="Mobile006QA"'))
+(root/'FieldCRM.xcodeproj/xcshareddata/xcschemes/FieldCRMMobile006UpgradeQA.xcscheme').write_text(scheme.replace('buildConfiguration="Debug"', 'buildConfiguration="Mobile006UpgradeQA"').replace('<ArchiveAction buildConfiguration="Release"', '<ArchiveAction buildConfiguration="Mobile006UpgradeQA"'))

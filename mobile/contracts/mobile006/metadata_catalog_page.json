@@ -1,0 +1,10 @@
+{
+  "generation_id": "66666666-6666-6666-6666-666666666666",
+  "section": "fields",
+  "revision": "1",
+  "items": [
+    {"id": "55555555-5555-5555-5555-555555555555", "label": "Budget", "field_type": "number", "position": 1, "archived_at": null}
+  ],
+  "next_cursor": null,
+  "complete": true
+}

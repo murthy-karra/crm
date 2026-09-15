@@ -43,6 +43,19 @@ class Mobile006UiProofTest {
         compose.waitUntil(20_000) { active().store.dao.metadataContext(stale)?.current?.isNotEmpty() == true }
         screenshot("mobile006-ui-catalog-conflict")
         compose.onNodeWithText("Review and replace").assertIsEnabled().performClick()
+        // Retain the exact projection and dialog state before asserting individual controls;
+        // this makes a failed native proof distinguish a rejected revision from a missing row.
+        compose.waitUntil(20_000) {
+            compose.onAllNodesWithText("Save and sync", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() ||
+                compose.onAllNodesWithText("The original metadata proposal remains protected; a replacement could not be prepared.", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+        }
+        val editorState = repository.ui.value
+        File(compose.activity.filesDir, "mobile006-ui-evidence.txt").appendText(
+            "before_editor stale=$stale dao_fields=${active().store.dao.metadataFields().size} ui_fields=${editorState.metadataFields.size} " +
+                "drafts=${editorState.metadataDrafts.size} operation=${active().store.dao.operation(stale)?.status}\n",
+        )
+        compose.onRoot(useUnmergedTree = true).printToLog("Mobile006UiProof")
+        screenshot("mobile006-ui-catalog-conflict-editor-open")
         // OutlinedTextField carries its tag in the dialog's unmerged semantics tree.
         compose.waitUntil(20_000) { compose.onAllNodesWithTag("metadata-text-d9d979a3-5015-4cc9-9252-a58e1d109548", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
         screenshot("mobile006-ui-catalog-conflict-editor")

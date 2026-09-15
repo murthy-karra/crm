@@ -145,6 +145,70 @@ async fn mobile006_metadata_atomic_receipt_current_and_catalog_generation(pool: 
 
 #[sqlx::test]
 #[ignore]
+async fn mobile006_metadata_events_and_noop_replay_are_content_free(pool: PgPool) {
+    let mut f = fixture(&pool).await;
+    let publisher = Publisher::recording();
+    f.router = crate::common::build_router_with_publisher(&pool, publisher.clone()).await;
+    let tag: Uuid = sqlx::query_scalar("INSERT INTO tag(organization_id,created_by_user_id,name) VALUES($1,$2,'Mobile006 event tag') RETURNING id")
+        .bind(f.org).bind(f.actor).fetch_one(&f.app).await.unwrap();
+    let field: Uuid = sqlx::query_scalar("INSERT INTO custom_field(organization_id,label,field_type,position,created_by_user_id) VALUES($1,'Mobile006 event value','text',1,$2) RETURNING id")
+        .bind(f.org).bind(f.actor).fetch_one(&f.app).await.unwrap();
+    let (metadata, catalog): (i64, i64) = sqlx::query_as("SELECT p.metadata_revision,c.revision FROM person p JOIN mobile_metadata_catalog c ON c.organization_id=p.organization_id WHERE p.id=$1")
+        .bind(f.person).fetch_one(&f.app).await.unwrap();
+    let operation = f.operation(
+        "update_person_metadata",
+        json!({
+            "person_id": f.person,
+            "expected_metadata_revision": metadata.to_string(),
+            "expected_catalog_revision": catalog.to_string(),
+            "actions": [
+                {"kind":"add_tag","tag_id":tag},
+                {"kind":"set_field","field_id":field,"value":{"text":"Private field value"}}
+            ]
+        }),
+    );
+    let (status, accepted) = f.post("/api/mobile/v1/operations", operation.clone()).await;
+    assert_eq!(status, StatusCode::OK, "{accepted}");
+    let Publisher::Recording(events, _) = &publisher else {
+        unreachable!()
+    };
+    let publications = events.lock().await;
+    assert_eq!(publications.len(), 2);
+    let changes: Vec<_> = publications
+        .iter()
+        .map(|publication| publication.1["data"]["change"].clone())
+        .collect();
+    assert_eq!(
+        changes,
+        vec![json!("custom_field_changed"), json!("tags_changed")]
+    );
+    assert!(publications
+        .iter()
+        .all(|publication| !publication.1.to_string().contains("Private field value")));
+    drop(publications);
+    let (_, replay) = f.post("/api/mobile/v1/operations", operation).await;
+    assert_eq!(replay["replayed"], true);
+    assert_eq!(events.lock().await.len(), 2);
+    let noop = f.operation(
+        "update_person_metadata",
+        json!({
+            "person_id": f.person,
+            "expected_metadata_revision": accepted["committed_revision"],
+            "expected_catalog_revision": catalog.to_string(),
+            "actions": [
+                {"kind":"add_tag","tag_id":tag},
+                {"kind":"set_field","field_id":field,"value":{"text":"Private field value"}}
+            ]
+        }),
+    );
+    let (status, unchanged) = f.post("/api/mobile/v1/operations", noop).await;
+    assert_eq!(status, StatusCode::OK, "{unchanged}");
+    assert_eq!(unchanged["changed"], false);
+    assert_eq!(events.lock().await.len(), 2);
+}
+
+#[sqlx::test]
+#[ignore]
 async fn mobile005_details_receipt_replay_and_revision_scope(pool: PgPool) {
     let f = fixture(&pool).await;
     assert!(f.bootstrap["capabilities"]

@@ -71,3 +71,11 @@ Sealing still uses `POST /api/mobile/v1/reconciliations/{id}/seal` with `{}`. An
 opted-in seal additionally validates the current metadata catalog revision and all
 manifest metadata revisions. It returns the established sealed generation response
 or a `generation_changed` conflict; it never seals a partial metadata traversal.
+
+## Realtime publication
+
+A changed tag action publishes the established `person.changed` event with
+`data:{"person_id":"uuid","change":"tags_changed"}`. A changed field action
+publishes the same envelope with `change:"custom_field_changed"`; a mixed patch
+publishes one of each after commit. No action payload, value, label, revision, or
+receipt is included. No-op, replay, and rolled-back operations publish nothing.

@@ -156,15 +156,17 @@
       "path": "backend/crates/crm-app/src/auth/workspace.rs",
       "function": "read_check",
       "start_line": 78,
-      "sha256": "4291bf791058e9a5e390395ef10ab92bcbb2b950abf0648400f23767d969fc97",
-      "shared_revision": "619c1b3",
-      "shared_revision_note": "History-reader transaction setting predates Mobile003/010e3; both arms share this helper. Three frozen reader bodies remain cd3b010."
+      "sha256": "1571cd09152241a888e044e048e5e2b6a52550fd77d8256d3b870ef4ed68f7d9",
+      "shared_revision": "3c01177",
+      "shared_revision_note": "010f4 admitted-activity reader compatibility stamp is shared by both arms under the current HTTP/authentication protocol. read_check also retains the history reader stamp. Three frozen reader bodies remain exact cd3b010; this is not a historical authentication-stack comparison."
     },
     {
       "path": "backend/crates/crm-app/src/auth/workspace.rs",
       "function": "ordinary",
       "start_line": 47,
-      "sha256": "e00335dce8953bd3245988af436fde70f9c6936cd774ea2ae13c530251364f35"
+      "sha256": "94b51a39a3066b431953cfd7d76ee430069abe8e28017d7c100d1eef9fc3e121",
+      "shared_revision": "3c01177",
+      "shared_revision_note": "010f4 admitted-activity reader compatibility stamp is shared by both arms under the current HTTP/authentication protocol. read_check also retains the history reader stamp. Three frozen reader bodies remain exact cd3b010; this is not a historical authentication-stack comparison."
     },
     {
       "path": "backend/crates/crm-app/src/auth/workspace.rs",

@@ -38,6 +38,41 @@ final class StorageTests: XCTestCase {
         for section in ["summary", "notes", "tasks"] { try store.appendPage(Page(generation_id: gen.generation_id, person_id: person, revision: revision, section: section, summary: section == "summary" ? summary : nil, items: section == "summary" ? contacts : [], next_cursor: nil, complete: true), expected: revision) }
         try store.finishBundle(gen.generation_id, person, revision); try store.promote(seal(gen))
     }
+    func testMobile006IncompleteRefreshPreservesSealedMetadataBaseline() throws {
+        let store = try open(version: 9)
+        func metadataGeneration(_ catalog: String) -> Generation {
+            let id = UUID().uuidString
+            return Generation(generation_id: id, context_id: context, evaluated_at: "2026-09-13T00:00:00Z", expires_at: "2026-09-13T00:30:00Z", complete: true, selected_count: 1, manifest: Manifest(items: [ManifestItem(person_id: person, revision: "1", metadata_revision: "1", reasons: ["assigned"])], next_cursor: nil, complete: true), metadata: MetadataCatalog(representation: "metadata-v1", catalog_revision: catalog, catalog_url: "/api/mobile/v1/reconciliations/\(id)/metadata/catalog"))
+        }
+        func catalog(_ gen: Generation, _ token: String) throws {
+            for section in ["tags", "fields", "options"] {
+                try store.appendMetadataCatalogPage(MetadataCatalogPage(generation_id: gen.generation_id, section: section, revision: token, items: [], next_cursor: nil, complete: true), expected: token)
+            }
+        }
+        func component(_ gen: Generation, _ token: String) throws {
+            try store.appendMetadataComponent(MetadataComponent(generation_id: gen.generation_id, person_id: person, section: "metadata", revision: "1", metadata_revision: "1", catalog_revision: token, tags: [], values: [], complete: true), expected: "1")
+        }
+        let active = metadataGeneration("1")
+        try stage(store, active); try catalog(active, "1"); try component(active, "1"); try store.promote(seal(active))
+        let baseline = try XCTUnwrap(store.editableMetadata(person: person))
+        let pending = metadataGeneration("2")
+        try store.begin(pending)
+        XCTAssertEqual(try store.editableMetadata(person: person), baseline)
+        try catalog(pending, "2")
+        for section in ["summary", "notes", "tasks"] {
+            try store.appendPage(Page(generation_id: pending.generation_id, person_id: person, revision: "1", section: section, summary: section == "summary" ? .object(["id": .s(person)]) : nil, items: [], next_cursor: nil, complete: true), expected: "1")
+        }
+        try store.finishBundle(pending.generation_id, person, "1")
+        XCTAssertEqual(try store.editableMetadata(person: person), baseline, "Same-revision staging cannot revoke active qualification")
+        XCTAssertFalse(try store.hasQualifiedMetadataBundle(person, "1", generation: pending.generation_id))
+        XCTAssertThrowsError(try store.promote(seal(pending)))
+        let reopened = try open(version: 9)
+        XCTAssertEqual(try reopened.editableMetadata(person: person), baseline, "Restart preserves the last sealed offline baseline")
+        try component(pending, "2")
+        XCTAssertEqual(try store.editableMetadata(person: person), baseline)
+        try store.promote(seal(pending))
+        XCTAssertEqual(try store.editableMetadata(person: person)?["catalog_revision"].text, "2")
+    }
     func testMobile005SummaryQualificationRejectsMalformedCompleteContacts() throws {
         let store = try open(); try detailsBaseline(store)
         let saved = try store.saveDraft(draft()); _ = try store.submit(saved)

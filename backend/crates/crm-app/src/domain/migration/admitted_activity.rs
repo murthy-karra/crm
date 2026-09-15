@@ -240,7 +240,7 @@ pub(crate) async fn view(
             .bind(org.0)
             .fetch_one(&mut *conn)
             .await?
-        && sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM migration_admitted_activity_manifest m WHERE m.plan_id=$1 AND m.organization_id=$2 AND NOT EXISTS(SELECT 1 FROM migration_admitted_activity_result x WHERE x.import_id=$3 AND x.manifest_id=m.id AND x.organization_id=m.organization_id))")
+        && sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM migration_admitted_activity_manifest m WHERE m.plan_id=$1 AND m.organization_id=$2 AND m.disposition<>'excluded' AND NOT EXISTS(SELECT 1 FROM migration_admitted_activity_result x WHERE x.import_id=$3 AND x.manifest_id=m.id AND x.organization_id=m.organization_id))")
             .bind(remainder_source.1)
             .bind(org.0)
             .bind(remainder_source.0)

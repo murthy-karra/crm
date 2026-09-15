@@ -26,3 +26,13 @@
 
 - Earlier UI selector failures are retained in `ios006-ui-metadata.log`, `ios006-ui-metadata-rerun.log`, and `ios006-installed-upgrade*.log`. They occurred before metadata submission; the final replacement runs above passed.
 - The conflict-QA iteration logs `ios006-ui-metadata-conflict-round1.log` through `round5.log` are retained. They show initial control timing, an unqualified first cached Person, a compile correction, and an off-screen save selector before the final round6 pass; no persisted server metadata mutation occurred in those failed runs.
+
+## Final review recovery fix
+
+Root integrated an explicit generation argument for metadata qualification: active
+editing reads only the sealed generation, while reconciliation/promotion check the
+staging generation. A shared same-Person-revision marker cannot revoke a sealed
+baseline. `logs/integration/ios-sealed-metadata-storage-r2.log` passed 33/33 storage
+tests, including interrupted refresh, same-revision staging, reopen and subsequent
+valid seal (4.873s suite; new regression 0.218s). The comparison screen also omits
+internal token counters; names and actual values remain unchanged.

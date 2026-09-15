@@ -1141,9 +1141,32 @@ async fn admitted_activity_excluded_coverage_never_enters_native_reconciliation(
     assert_eq!(page["items"].as_array().unwrap().len(), 1);
     assert_eq!(page["items"][0]["source_id"], "99");
     confirm_ready(&f, root, &ready).await;
-    drain(&f).await;
+    // Settle both native units, then cancel before the separate terminal checkpoint.
+    // The excluded source remains inspectable but must not offer a phantom remainder.
+    for _ in 0..2 {
+        assert!(
+            admitted_activity_worker::run_once(&f.pool, &f.key, &f.policy)
+                .await
+                .unwrap()
+        );
+    }
+    let pending = current(&f, root).await;
+    assert_eq!(pending["state"], "running");
+    admitted_activity::action(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        root,
+        action(&pending),
+        false,
+        &f.policy,
+    )
+    .await
+    .unwrap();
     let done = current(&f, root).await;
-    assert_eq!(done["state"], "completed");
+    assert_eq!(done["state"], "cancelled");
+    assert_eq!(done["actions"]["remainder"], false);
+    assert_eq!(done["remainder"]["available"], false);
     assert_eq!(done["counts"]["tasks"]["applied"], "1");
     assert_eq!(done["counts"]["tasks"]["pending"], "0");
     assert_eq!(done["counts"]["excluded_count"], "1");

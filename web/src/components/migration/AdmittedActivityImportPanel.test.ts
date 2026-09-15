@@ -55,6 +55,37 @@ async function ack(wrapper: Awaited<ReturnType<typeof setup>>['wrapper']) { for 
 beforeEach(() => { api.mockReset(); resetWorkspace(); vi.stubGlobal('crypto', { randomUUID: () => 'request-uuid' }) })
 afterEach(() => { cleanup.splice(0).forEach(fn => fn()); document.body.innerHTML = ''; vi.unstubAllGlobals(); vi.useRealTimers(); resetWorkspace() })
 describe('activity import workflow', () => {
+  it('selects an active successor on reload and exposes prior attempts', async () => {
+    const predecessor = { ...run('cancelled'), id: 'a-predecessor', confirmed_plan_id: 'old-plan' }
+    const successor = { ...run('running'), id: 'z-successor' }
+    const { wrapper } = await setup({ handle: url => {
+      if (url === `${ROOT}?admission_id=admission&limit=20`) return { imports: [predecessor, successor], next_cursor: null }
+      if (url === `${ROOT}/a-predecessor`) return predecessor
+      if (url === `${ROOT}/z-successor`) return successor
+    } })
+    expect(api.mock.calls.some(([url]) => url === `${ROOT}/z-successor`)).toBe(true)
+    const label = [...document.querySelectorAll('label')].find(el => el.textContent?.includes('Activity import attempt'))!
+    const select = wrapper.get(`select[id="${label.htmlFor}"]`)
+    await select.setValue('a-predecessor'); await flushPromises()
+    expect(wrapper.text()).toContain('This activity import is permanently cancelled')
+    await select.setValue('z-successor'); await flushPromises()
+    expect(wrapper.text()).toContain('Activity import · Running')
+  })
+  it('pages bounded attempts so a successor outside the first page is reachable', async () => {
+    const predecessor = { ...run('cancelled'), id: 'a-predecessor', confirmed_plan_id: 'old-plan' }
+    const successor = { ...run('paused'), id: 'z-successor', confirmed_plan_id: 'new-plan' }
+    await setup({ handle: url => {
+      if (url === `${ROOT}?admission_id=admission&limit=20`) return { imports: [predecessor], next_cursor: 'next-attempt' }
+      if (url === `${ROOT}?admission_id=admission&cursor=next-attempt&limit=20`) return { imports: [successor], next_cursor: null }
+      if (url === `${ROOT}/a-predecessor`) return predecessor
+      if (url === `${ROOT}/z-successor`) return successor
+    } })
+    button('More activity attempts').click(); await flushPromises()
+    expect(api.mock.calls.some(([url]) => url === `${ROOT}/z-successor`)).toBe(true)
+    expect(button('More activity attempts').disabled).toBe(true)
+    button('Previous activity attempts').click(); await flushPromises()
+    expect(button('Previous activity attempts').disabled).toBe(true)
+  })
   it('prepares a new root after explicit unconfirmed cancellation', async () => {
     const { state } = await setup({ run: run('cancelled'), handle: (url, init) => {
       if (url === ROOT && init?.method === 'POST') { state.run = { ...run('preparing'), id: 'new-child' }; return { import: state.run } }

@@ -520,19 +520,20 @@ final class LocalStore {
         // downloaded again; the protected cache, drafts and operations remain.
         return try decode(Bundle.self, Data(body.utf8)).hasCompleteDetailsRepresentation
     }
-    func hasQualifiedMetadataBundle(_ person: String, _ rev: String) throws -> Bool {
-        let generation = try generation()?.generation_id ?? meta("active")
-        guard let active = generation,
-              !(try rows("SELECT 1 FROM bundle_qualification WHERE person=? AND revision=? AND metadata_revisions=1", [person, rev])).isEmpty,
-              let catalog = try rows("SELECT revision,complete FROM metadata_catalogs WHERE generation=?", [active]).first,
+    func hasQualifiedMetadataBundle(_ person: String, _ rev: String, generation: String) throws -> Bool {
+        // A component belongs to its generation, not the shared broad-revision
+        // bundle marker. Staging a replacement must not revoke the sealed cache.
+        guard let member = try rows("SELECT revision,metadata_revision FROM members WHERE generation=? AND person=?", [generation, person]).first,
+              member[0] == rev,
+              let catalog = try rows("SELECT revision,complete FROM metadata_catalogs WHERE generation=?", [generation]).first,
               catalog[1] == "1",
-              let component = try rows("SELECT body FROM metadata_components WHERE generation=? AND person=? AND revision=?", [active, person, rev]).first?.first else { return false }
+              let component = try rows("SELECT body FROM metadata_components WHERE generation=? AND person=? AND revision=?", [generation, person, rev]).first?.first else { return false }
         let metadata = try decode(MetadataComponent.self, Data(component.utf8))
-        return metadata.complete && metadata.catalog_revision == catalog[0] && metadata.person_id == person && metadata.revision == rev && (try? revision(metadata.metadata_revision)) != nil
+        return metadata.complete && metadata.section == "metadata" && metadata.generation_id == generation && metadata.catalog_revision == catalog[0] && metadata.person_id == person && metadata.revision == rev && metadata.metadata_revision == member[1] && (try? revision(metadata.metadata_revision)) != nil
     }
     func metadataBaseline(person: String) throws -> JSON? {
         guard let active = try meta("active"), let bundle = try activeBundle(person),
-              try hasQualifiedMetadataBundle(person, bundle.revision),
+              try hasQualifiedMetadataBundle(person, bundle.revision, generation: active),
               let component = try rows("SELECT body FROM metadata_components WHERE generation=? AND person=? AND revision=?", [active, person, bundle.revision]).first?.first,
               let catalog = try rows("SELECT revision FROM metadata_catalogs WHERE generation=? AND complete=1", [active]).first?.first else { return nil }
         let metadata = try decode(MetadataComponent.self, Data(component.utf8))
@@ -792,7 +793,7 @@ final class LocalStore {
             guard selected.count == seal.selected_count else { throw LocalError.invalidProtocol }
             for (person, rev) in selected {
                 guard try hasBundle(person, rev) else { throw LocalError.invalidProtocol }
-                if stage.metadata != nil, !(try hasQualifiedMetadataBundle(person, rev)) { throw LocalError.invalidProtocol }
+                if stage.metadata != nil, !(try hasQualifiedMetadataBundle(person, rev, generation: seal.generation_id)) { throw LocalError.invalidProtocol }
                 if let old = try activeBundle(person), try revision(old.revision) > revision(rev) {
                     try run("UPDATE members SET revision=? WHERE generation=? AND person=?", [old.revision, seal.generation_id, person])
                 }

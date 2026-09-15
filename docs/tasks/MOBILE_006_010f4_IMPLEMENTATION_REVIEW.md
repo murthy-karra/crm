@@ -1,8 +1,8 @@
 # Mobile006 / 010f4 implementation review
 
 **IN PROGRESS.** D-050 independent implementation round 1 returned NOT READY
-for both slices. Planning reviews are separate. One implementation review round
-remains for each slice; no second round has been requested yet.
+for both slices. Planning reviews are separate. Implementation round 2 is now open for both slices; no further review round is
+authorized. Reviewers are waiting for final acceptance evidence.
 
 ## Mobile006 — round 1
 
@@ -39,3 +39,22 @@ Earlier expanded database matrix: seven passed; the tombstone fixture and outer
 no-store failure were corrected and their two selectors passed separately.
 Bounded remainder copying, authority loss, two workers, exact receipt replay,
 rollback and byte accounting passed there. The broader source/handover matrix passed 12/12 in `logs/integration/f4-review-matrix-db-2.log`. The realistic migration plan harness passed in `activity-hotplans-db-1.log` (227.05s; 25k People/50 members, no plan failures). Storage sizing is a separate pending report. Browser acceptance, mobile query plans, paired performance, SQLx and final repository gates remain open.
+
+## Round 2 remediation checkpoint
+
+- Mobile M6-R2-01: Android current-read catalog could outrun its installed sealed
+  catalog during conflict replacement. Fixed in `6ae1d27`, integrated `26d0d00`;
+  nine storage tests pass, final live recovery is running.
+- Mobile M6-R2-02: iOS staging generation/shared qualification marker could hide
+  an intact sealed metadata baseline during an ordinary outage. Explicit generation
+  qualification fixes this; 33/33 current storage tests pass. Reviewer accepted
+  the code and actual new regression evidence in this same round.
+- Migration: excluded-only coverage could advertise a remainder that cannot be
+  created. The view now uses the same exclusion predicate as the command; the
+  native-settled-before-terminal-cancel regression passed in 6.75s.
+- Migration: reload could select a predecessor without a way to reach its
+  successor. A labeled, bounded attempt selector and cursor controls now expose
+  prior/successor attempts; 26 focused Web tests and typecheck passed.
+
+Both reviewers report no further static blockers. Browser, paired performance and
+full database gates are pending; this is not a final READY verdict.

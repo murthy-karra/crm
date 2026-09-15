@@ -870,7 +870,7 @@ struct StageProposal: Identifiable {
             message = "Downloading \(index + 1) of \(members.count) people. Previous workspace remains available."
             let stageQualified = gen.stage_catalog == nil ? true : (try store.hasQualifiedStageBundle(person, rev))
             let detailsQualified = detailsCapabilitiesReady ? try store.hasQualifiedDetailsBundle(person, rev) : true
-            let metadataQualified = metadataCapabilitiesReady ? try store.hasQualifiedMetadataBundle(person, rev) : true
+            let metadataQualified = metadataCapabilitiesReady ? try store.hasQualifiedMetadataBundle(person, rev, generation: gen.generation_id) : true
             let hasQualifiedRepresentation = stageQualified && detailsQualified && metadataQualified
             if try store.hasBundle(person, rev), hasQualifiedRepresentation { continue }
             for section in ["summary", "notes", "tasks"] {

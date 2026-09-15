@@ -805,7 +805,6 @@ struct MetadataComposerView: View {
         }
     }
     func metadataSummary(_ value: JSON) -> String {
-        let tokens = [value["metadata_revision"].text, value["catalog_revision"].text].filter { !$0.isEmpty }.joined(separator: "/")
         // A requalified current read carries the matching fresh catalog. Use it
         // over the original baseline so labels never describe a newer value
         // using definitions from the conflicted catalog revision.
@@ -813,7 +812,7 @@ struct MetadataComposerView: View {
         let tagName: (String) -> String = { id in catalog["catalog_tags"].list.first(where: { $0["id"].text == id })?["name"].text ?? id }
         let fieldName: (String) -> String = { id in catalog["fields"].list.first(where: { $0["id"].text == id })?["label"].text ?? id }
         let optionName: (String) -> String = { id in catalog["options"].list.first(where: { $0["id"].text == id })?["label"].text ?? id }
-        var lines = ["tokens: \(tokens.isEmpty ? "—" : tokens)"]
+        var lines: [String] = []
         let names = value["tags"].list.map { tagName($0["id"].text) }
         lines.append("tags: " + (names.isEmpty ? "none" : names.joined(separator: ", ")))
         let displayValue: (JSON) -> String = { item in

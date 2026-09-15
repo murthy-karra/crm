@@ -13,6 +13,7 @@ const QUERIES: &str =
     include_str!("../../crm-app/src/domain/migration/admitted_activity_queries.rs");
 const REMAINDER: &str =
     include_str!("../../crm-app/src/domain/migration/admitted_activity_remainder.rs");
+const ACTIONS: &str = include_str!("../../crm-app/src/domain/migration/admitted_activity.rs");
 const STORE: &str = include_str!("../../crm-app/src/domain/migration/admitted_activity_store.rs");
 fn sha(value: &str) -> String {
     Sha256::digest(value.as_bytes())
@@ -279,6 +280,17 @@ async fn admitted_activity_hot_queries_25k_people_50_members(migrator: PgPool) {
     let org = f.org;
     let nil = Uuid::nil();
     let mut r = Report::default();
+    probe!(
+        &mut r,
+        &mut conn,
+        "remainder_availability",
+        ACTIONS,
+        "SELECT EXISTS(SELECT 1 FROM migration_admitted_activity_manifest m WHERE m.plan_id=$1",
+        1,
+        plan,
+        org,
+        child
+    );
     probe!(&mut r,&mut conn,"selected_person_qualification",WORKER,"SELECT * FROM migration_admitted_activity_source WHERE plan_id=$1 AND organization_id=$2 AND family='people'",101,plan,org,"104");
     probe!(&mut r,&mut conn,"cohort_coverage",WORKER,"SELECT EXISTS(SELECT 1 FROM migration_admitted_activity_source s JOIN migration_people_admission_result ar",1,plan,org,"tasks","1024001",admission);
     probe!(
@@ -462,7 +474,7 @@ async fn admitted_activity_hot_queries_25k_people_50_members(migrator: PgPool) {
             }
         }
     }
-    let report = json!({"fixture":{"counts":counts,"relation_bytes":storage,"bulk_rows":"inert copied ciphertext; no post-scale worker, native equality, or storage-capacity claim"},"sources":{"worker":sha(WORKER),"queries":sha(QUERIES),"remainder":sha(REMAINDER),"store":sha(STORE)},"plans":r.plans,"failures":r.failures});
+    let report = json!({"fixture":{"counts":counts,"relation_bytes":storage,"bulk_rows":"inert copied ciphertext; no post-scale worker, native equality, or storage-capacity claim"},"sources":{"worker":sha(WORKER),"queries":sha(QUERIES),"remainder":sha(REMAINDER),"store":sha(STORE),"actions":sha(ACTIONS)},"plans":r.plans,"failures":r.failures});
     std::fs::write(output, serde_json::to_vec_pretty(&report).unwrap()).unwrap();
     assert!(
         report["failures"].as_array().unwrap().is_empty(),

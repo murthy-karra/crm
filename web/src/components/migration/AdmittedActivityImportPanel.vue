@@ -27,6 +27,7 @@ const selectedId = ref('')
 const parentCursors = ref<string[]>([''])
 const admissionCursors = ref<string[]>([''])
 const reportCursors = ref<string[]>([''])
+const attemptCursors = ref<string[]>([''])
 const readMode = ref<'plan' | 'results'>('plan')
 const heldAck = ref(false)
 const reviewAck = ref(false)
@@ -58,7 +59,7 @@ const admissionsKey = computed(() => [...access.prefix.value, 'admissions', pare
 const admissionKey = computed(() => [...access.prefix.value, 'admission', admissionId.value])
 const reportsKey = computed(() => [...access.prefix.value, 'reports', parentId.value, reportCursors.value.at(-1) ?? ''])
 const reportKey = computed(() => [...access.prefix.value, 'report', reportId.value])
-const listKey = computed(() => [...access.prefix.value, 'list', admissionId.value])
+const listKey = computed(() => [...access.prefix.value, 'list', admissionId.value, attemptCursors.value.at(-1) ?? ''])
 const detailKey = computed(() => [...access.prefix.value, 'detail', selectedId.value])
 const parents = useQuery({ queryKey: parentsKey, enabled: access.enabled, retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(parentsKey.value, () => parentsKey.value, () => fetchImports(parentCursors.value.at(-1) || undefined, signal)) })
 const parent = useQuery({ queryKey: parentKey, enabled: computed(() => access.enabled.value && !!parentId.value), retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(parentKey.value, () => parentKey.value, () => fetchImport(parentId.value, signal)) })
@@ -66,7 +67,7 @@ const admissions = useQuery({ queryKey: admissionsKey, enabled: computed(() => a
 const admission = useQuery({ queryKey: admissionKey, enabled: computed(() => access.enabled.value && !!admissionId.value), retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(admissionKey.value, () => admissionKey.value, () => fetchPeopleAdmission(admissionId.value, signal)) })
 const reports = useQuery({ queryKey: reportsKey, enabled: computed(() => access.enabled.value && !!parentId.value), retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(reportsKey.value, () => reportsKey.value, () => fetchCoreChangeReports(parentId.value, reportCursors.value.at(-1) || undefined, signal)) })
 const report = useQuery({ queryKey: reportKey, enabled: computed(() => access.enabled.value && !!reportId.value), retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(reportKey.value, () => reportKey.value, () => fetchCoreChangeReport(reportId.value, signal)) })
-const listing = useQuery({ queryKey: listKey, enabled: computed(() => access.enabled.value && !!admissionId.value), retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(listKey.value, () => listKey.value, () => fetchAdmittedActivityImports(admissionId.value, undefined, signal)) })
+const listing = useQuery({ queryKey: listKey, enabled: computed(() => access.enabled.value && !!admissionId.value), retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(listKey.value, () => listKey.value, () => fetchAdmittedActivityImports(admissionId.value, attemptCursors.value.at(-1) || undefined, signal)) })
 const detail = useQuery({
   queryKey: detailKey, enabled: computed(() => access.enabled.value && !!selectedId.value), retry: false, gcTime: 0,
   queryFn: async ({ signal }) => {
@@ -104,20 +105,21 @@ const confirmationText = computed(() => {
 function discard() { patches.value = []; zone.value = current.value?.latest_plan.source_timezone ?? ''; zoneAck.value = false; resetVersion.value++ }
 function clearReview() { confirmation.value = null; cancelReview.value = false; heldAck.value = false; reviewAck.value = false; remainingAck.value = false }
 watch(parents.data, value => { if (access.enabled.value && !parentId.value) parentId.value = value?.imports.find(row => row.state === 'completed')?.id ?? '' })
-watch(listing.data, value => { if (access.enabled.value && !selectedId.value && value?.imports.length) selectedId.value = value.imports[0]!.id })
+watch(listing.data, value => { if (access.enabled.value && !selectedId.value && value?.imports.length) selectedId.value = (value.imports.find(row => !['cancelled', 'completed'].includes(row.state)) ?? value.imports[0])!.id })
 watch(parentId, () => { selectionGeneration++; admissionId.value = ''; reportId.value = ''; selectedId.value = ''; admissionCursors.value = ['']; reportCursors.value = ['']; clearReview() }, { flush: 'sync' })
 watch(admissions.data, value => { if (access.enabled.value && !admissionId.value) admissionId.value = value?.items.find(row => ['completed', 'cancelled'].includes(row.state) && BigInt(row.progress.settled_items) > 0n)?.id ?? '' })
 watch(reports.data, value => { if (access.enabled.value && !reportId.value) reportId.value = value?.reports.find(row => row.state === 'completed')?.id ?? '' })
-watch(admissionId, () => { selectionGeneration++; selectedId.value = ''; clearReview() }, { flush: 'sync' })
+watch(admissionId, () => { selectionGeneration++; selectedId.value = ''; attemptCursors.value = ['']; clearReview() }, { flush: 'sync' })
 watch(reportId, () => { selectionGeneration++; clearReview() }, { flush: 'sync' })
 watch(() => current.value?.id, () => { if (current.value) reportId.value = current.value.source_report_id }, { flush: 'sync' })
+watch(() => attemptCursors.value.at(-1), () => { selectedId.value = ''; clearReview() }, { flush: 'sync' })
 watch(selectedId, () => { selectionGeneration++; clearReview(); readMode.value = 'plan' }, { flush: 'sync' })
 watch(() => current.value?.confirmed_plan_id, value => { if (value) readMode.value = 'results' })
 watch(() => current.value?.latest_plan?.id, () => { clearReview(); discard() })
 watch(dirty, value => { if (value) confirmation.value = null }, { flush: 'sync' })
 watch(zone, () => { zoneAck.value = false; confirmation.value = null })
 watch(() => current.value?.revision, clearReview)
-watch(access.identity, () => { identityGeneration++; intent.value = null; pending.value = false; uncertain.value = false; actionError.value = ''; selectedId.value = ''; parentId.value = ''; admissionId.value = ''; reportId.value = ''; parentCursors.value = ['']; admissionCursors.value = ['']; reportCursors.value = [''] }, { flush: 'sync' })
+watch(access.identity, () => { identityGeneration++; intent.value = null; pending.value = false; uncertain.value = false; actionError.value = ''; selectedId.value = ''; parentId.value = ''; admissionId.value = ''; reportId.value = ''; parentCursors.value = ['']; admissionCursors.value = ['']; reportCursors.value = ['']; attemptCursors.value = [''] }, { flush: 'sync' })
 watch(access.scope, clearReview, { flush: 'sync' })
 watch([parents.error, parent.error, admissions.error, admission.error, reports.error, report.error, listing.error, detail.error, source.error], errors => { if (errors.some(importAccessError)) void props.refreshWorkspace().catch(() => {}) })
 watch(resultVersion, () => { if (access.enabled.value && current.value) { void source.refetch() } })
@@ -355,6 +357,58 @@ function remainder() { if (current.value?.actions.remainder && !busy.value) void
         >
           This step requires a completed People import, a completed or cancelled admission with settled People, and a sealed core-change report whose People, users, notes, note detail, open-task and completed-task streams completed.
         </p>
+        <div
+          v-if="listing.data.value?.imports.length || current || attemptCursors.length > 1"
+          class="mt-4 min-w-0"
+        >
+          <FormField
+            v-slot="{ id }"
+            label="Activity import attempt"
+            bare
+          >
+            <select
+              :id="id"
+              v-model="selectedId"
+              :class="INPUT_CLASSES"
+              :disabled="busy || dirty || listing.isFetching.value"
+            >
+              <option value="">
+                Choose an activity import attempt
+              </option>
+              <option
+                v-if="current && !listing.data.value?.imports.some(row => row.id === current?.id)"
+                :value="current.id"
+              >
+                {{ snapshotTime(current.created_at) }} · {{ snapshotLabel(current.state) }} · {{ current.id }}
+              </option>
+              <option
+                v-for="row in listing.data.value?.imports ?? []"
+                :key="row.id"
+                :value="row.id"
+              >
+                {{ snapshotTime(row.created_at) }} · {{ snapshotLabel(row.state) }} · {{ row.id }}
+              </option>
+            </select>
+          </FormField>
+          <div class="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              :class="buttonClasses('ghost')"
+              :disabled="busy || dirty || attemptCursors.length < 2 || listing.isFetching.value"
+              @click="attemptCursors.pop()"
+            >
+              Previous activity attempts
+            </button>
+            <button
+              type="button"
+              :class="buttonClasses('ghost')"
+              :disabled="busy || dirty || !listing.data.value?.next_cursor || listing.isFetching.value"
+              @click="listing.data.value?.next_cursor && attemptCursors.push(listing.data.value.next_cursor)"
+            >
+              More activity attempts
+            </button>
+          </div>
+        </div>
         <button
           v-if="!selectedId || (current?.state === 'cancelled' && !current.confirmed_plan_id)"
           type="button"

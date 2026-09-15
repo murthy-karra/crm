@@ -1,8 +1,8 @@
 # Mobile 006 Android verification
 
-Status: **IN PROGRESS** — local encrypted-store checks and the populated
-schema-6 installed-store upgrade are complete. The serialized API3106 journey
-and native UI boundary walk-through remain.
+Status: **IN PROGRESS** — local encrypted-store checks, the populated
+schema-6 installed-store upgrade, and the serialized API3106 offline/restart
+journey are complete. Native UI boundary walk-through remains.
 
 ## Environment
 
@@ -31,6 +31,8 @@ and native UI boundary walk-through remain.
 | current schema-8 APK/test build | PASS, 44s | `/private/tmp/crm-mobile006-010f4-thyhauvv/android006-upgradeproof-build.log` |
 | actual installed schema-6 seed | PASS, 5.681s | direct `adb shell am instrument` on `org.crm.field.mobile006upgradeproofqa.legacytest` |
 | current APK installed over schema-6 store, inspector | PASS, 6.707s | direct `adb install -r` then `adb shell am instrument` on `org.crm.field.mobile006upgradeproofqa.test` |
+| API3106 offline mixed metadata prepare | PASS, 1/1 | direct `adb shell am instrument`; `mobile006-stage.json` retained protected operation ID and SHA-256 envelope evidence |
+| API3106 process relaunch + upload | PASS, 14.691s | direct second `adb shell am instrument`; verified same envelope SHA-256, `person_metadata` receipt and accepted/covered state |
 
 `Mobile006StorageTest` covers mixed immutable tag/typed-value envelopes,
 exact decimal/date string retention, explicit clear, choice option identity,
@@ -50,8 +52,8 @@ envelope and draft bytes, and an unqualified pre-Mobile006 Person.
 ## Remaining required evidence
 
 1. Serialized API3106 login, opted-in reconciliation, complete catalog/component
-   traversal, seal, offline mixed edit, forced process relaunch, one upload and
-   lost-response exact replay proof.
+   traversal, seal, offline mixed edit, forced process relaunch and one upload
+   are PASS. Lost-response exact replay remains to be observed separately.
 2. Two-client metadata and catalog conflict walk-through, including unrelated
    profile/stage/note/task edit boundaries, archived clear and deleted target.
 3. UI screenshots/inventory plus storage/key failure, access-expiry and late

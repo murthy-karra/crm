@@ -15,7 +15,11 @@ var appDefaults: UserDefaults {
     #elseif MOBILE004_UPGRADE_QA
     return UserDefaults(suiteName: "dev.crm.FieldCRM.mobile004upgradeqa") ?? .standard
     #elseif MOBILE005_UPGRADE_QA
-    return UserDefaults(suiteName: "dev.crm.FieldCRM.mobile005upgradeqa") ?? .standard
+        return UserDefaults(suiteName: "dev.crm.FieldCRM.mobile005upgradeqa") ?? .standard
+    #elseif MOBILE006_QA
+        return UserDefaults(suiteName: "dev.crm.FieldCRM.mobile006qa") ?? .standard
+    #elseif MOBILE006_UPGRADE_QA
+        return UserDefaults(suiteName: "dev.crm.FieldCRM.mobile005upgradeqa") ?? .standard
     #else
     return .standard
     #endif
@@ -87,6 +91,10 @@ final class SecureStorage {
         #elseif MOBILE004_UPGRADE_QA
         base += ".mobile004upgradeqa"
         #elseif MOBILE005_UPGRADE_QA
+        base += ".mobile005upgradeqa"
+        #elseif MOBILE006_QA
+        base += ".mobile006qa"
+        #elseif MOBILE006_UPGRADE_QA
         base += ".mobile005upgradeqa"
         #endif
         #if DEBUG
@@ -174,6 +182,10 @@ final class SecureStorage {
                     #elseif MOBILE004_UPGRADE_QA
                     return "SyntheticFieldCRMMobile004UpgradeQA"
                     #elseif MOBILE005_UPGRADE_QA
+                    return "SyntheticFieldCRMMobile005UpgradeQA"
+                    #elseif MOBILE006_QA
+                    return "SyntheticFieldCRMMobile006QA"
+                    #elseif MOBILE006_UPGRADE_QA
                     return "SyntheticFieldCRMMobile005UpgradeQA"
                     #else
                     return "SyntheticFieldCRM"

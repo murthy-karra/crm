@@ -44,6 +44,18 @@ struct StageProposal: Identifiable {
         guard let capabilities = credential?.bootstrap.capabilities else { return false }
         return ["update_person_details", "details_revisions"].allSatisfy(capabilities.contains)
     }
+    private var metadataCapabilitiesReady: Bool {
+        guard let capabilities = credential?.bootstrap.capabilities else { return false }
+        return ["update_person_metadata", "metadata_revisions", "metadata_catalog"].allSatisfy(capabilities.contains)
+    }
+    func canEditMetadata(person: String) -> Bool {
+        guard unlocked, metadataCapabilitiesReady, let store else { return false }
+        return (try? store.editableMetadata(person: person)) != nil
+    }
+    func displayedMetadata(person: String) -> JSON? {
+        guard let store else { return nil }
+        return try? store.metadataBaseline(person: person)
+    }
     func canEditDetails(person: String) -> Bool {
         guard unlocked, detailsCapabilitiesReady, let store else { return false }
         return (try? store.editableDetails(person: person)) != nil
@@ -80,6 +92,19 @@ struct StageProposal: Identifiable {
     #endif
     #if MOBILE005_QA
     @Published var qaProfileConflictStage = "no pending profile change"
+    #endif
+    #if MOBILE006_UPGRADE_QA
+    @Published var qaMobile006UpgradeStage = "not inspected"
+    /// Structural-only evidence for the in-place Mobile005→006 install.  It
+    /// deliberately exposes counts and schema rather than protected content.
+    func inspectMobile006Upgrade() {
+        guard let store else { qaMobile006UpgradeStage = "protected store unavailable"; return }
+        do {
+            let queue = try store.queue(), drafts = try store.drafts(), people = try store.activePeople()
+            let receipts = queue.filter { $0.receipt != nil }.count
+            qaMobile006UpgradeStage = "schema=" + (try store.rows("PRAGMA user_version")[0][0]) + " people=" + String(people.count) + " ops=" + String(queue.count) + " receipts=" + String(receipts) + " drafts=" + String(drafts.count)
+        } catch { qaMobile006UpgradeStage = "probe error: " + error.localizedDescription }
+    }
     #endif
     init(synthetic: Bool = false, startMonitor: Bool = true, restoreOnInit: Bool = true) {
         secure = SecureStorage(synthetic: synthetic); self.synthetic = secure.synthetic
@@ -119,7 +144,9 @@ struct StageProposal: Identifiable {
         return try SecureStorage.directory(synthetic: synthetic)
     }
     private var qaBaseURL: String {
-        #if MOBILE005_QA || MOBILE005_UPGRADE_QA
+        #if MOBILE006_QA || MOBILE006_UPGRADE_QA
+        return "http://127.0.0.1:3106"
+        #elseif MOBILE005_QA || MOBILE005_UPGRADE_QA
         return "http://127.0.0.1:3103"
         #elseif MOBILE002_QA || MOBILE003_QA || MOBILE004_QA || MOBILE004_UPGRADE_QA
         return "http://127.0.0.1:3102"
@@ -424,6 +451,30 @@ struct StageProposal: Identifiable {
                               expectedRevision: expected, baseline: baseline,
                               proposal: .object([:])))
     }
+    func newMetadataDraft(person: String) throws -> Draft {
+        guard validateAccess(), metadataCapabilitiesReady, let store, let baseline = try store.editableMetadata(person: person) else { throw LocalError.invalidInput }
+        let metadata = baseline["metadata_revision"].text, catalog = baseline["catalog_revision"].text
+        guard (try? revision(metadata)) != nil, (try? revision(catalog)) != nil else { throw LocalError.invalidProtocol }
+        return try save(Draft(id: UUID().uuidString.lowercased(), person: person, kind: "update_person_metadata", revision: 0,
+                              expectedRevision: metadata, expectedCatalogRevision: catalog, baseline: baseline, proposal: .object(["actions": .array([])])))
+    }
+    func revisedMetadataDraft(_ draft: Draft) throws -> Draft {
+        guard draft.isMetadata, let current = draft.current, let store else { throw LocalError.invalidProtocol }
+        let metadata = current["metadata_revision"].text, catalog = current["catalog_revision"].text
+        guard (try? revision(metadata)) != nil, (try? revision(catalog)) != nil else { throw LocalError.invalidProtocol }
+        if let predecessor = draft.predecessor { try store.markSuperseded(predecessor) }
+        var next = Draft(id: UUID().uuidString.lowercased(), person: draft.person, kind: "update_person_metadata", revision: 0,
+                         expectedRevision: metadata, expectedCatalogRevision: catalog, baseline: current, proposal: draft.proposal, mode: "editing", predecessor: draft.predecessor)
+        next = try store.saveDraft(next); try reload(); return next
+    }
+    func requalifyMetadata(_ draft: Draft) async throws -> Draft {
+        guard draft.isMetadata, validateAccess(), let api, let credential, let store else { throw LocalError.locked }
+        let run = epoch, response = try await api.currentMetadata(person: draft.person, context: credential.bootstrap.context_id)
+        try current(run)
+        guard response.context_id == credential.bootstrap.context_id, response.person_id == draft.person else { throw LocalError.invalidProtocol }
+        let saved = try store.saveCurrent(draft.id, current: .object(["person_revision": .s(response.person_revision), "metadata_revision": .s(response.metadata_revision), "catalog_revision": .s(response.catalog_revision), "tags": .array(response.tags), "values": .array(response.values)]), contextID: response.context_id, person: draft.person, editorEpoch: draft.editorEpoch)
+        try reload(); return saved
+    }
     func startDetails(person: String) throws -> Draft { try newDetailsDraft(person: person) }
     private func completeCurrentDetails(person: String) async throws -> CurrentDetailsResponse {
         guard validateAccess(), let api, let credential else { throw LocalError.locked }
@@ -608,6 +659,10 @@ struct StageProposal: Identifiable {
                     message = "Profile editing is unavailable for this account. Saved profile work remains protected."
                     continue
                 }
+                if op.isMetadata && !metadataCapabilitiesReady {
+                    message = "Tag and custom-field editing is unavailable for this account. Saved metadata work remains protected."
+                    continue
+                }
                 do {
                     let receipt = try await api.operation(op.bytes, context: credential.bootstrap.context_id)
                     try current(run); try store.acknowledge(receipt); try reload()
@@ -619,8 +674,17 @@ struct StageProposal: Identifiable {
                         do { try await api.verifyAuthority(credential.bootstrap); try current(run) }
                         catch { lock("Online authorization is required before reopening saved work."); return }
                     }
-                    if error.code == "revision_conflict" {
+                    if error.code == "revision_conflict" || (op.isMetadata && error.code == "catalog_revision_conflict") {
                         var currentRecord: JSON? = nil
+                        if op.isMetadata {
+                            var currentMetadata: CurrentMetadataResponse? = nil
+                            if let draft = try store.draftForOperation(op.id) {
+                                do { currentMetadata = try await api.currentMetadata(person: draft.person, context: credential.bootstrap.context_id); try current(run) }
+                                catch { /* A proposal remains usable for review when a current read is unavailable. */ }
+                            }
+                            try store.recordMetadataConflict(op.id, current: currentMetadata, code: error.code, contextID: credential.bootstrap.context_id, person: op.envelope.person)
+                            try reload(); continue
+                        }
                         if op.isStage {
                             var currentStage: CurrentStageResponse? = nil
                             if let draft = try store.draftForOperation(op.id) {
@@ -702,8 +766,10 @@ struct StageProposal: Identifiable {
         if generation == nil {
             var request: [String: JSON] = ["protocol": .s("mobile-v1"), "installation_id": .s(installation), "pinned_person_ids": .array(try store.pins().map(JSON.s))]
             if stageCapabilitiesReady { request["include_stage_catalog"] = .bool(true) }
+            if metadataCapabilitiesReady { request["include_metadata"] = .bool(true) }
             let fresh: Generation = try await api.call("/reconciliations", method: "POST", body: .object(request), context: boot.context_id)
             if stageCapabilitiesReady && fresh.stage_catalog == nil { throw LocalError.invalidProtocol }
+            if metadataCapabilitiesReady && fresh.metadata == nil { throw LocalError.invalidProtocol }
             try current(run); try store.begin(fresh); generation = fresh
         }
         guard let gen = generation else { throw LocalError.invalidProtocol }
@@ -724,12 +790,26 @@ struct StageProposal: Identifiable {
                 if page.complete { break }
             }
         }
+        if let catalog = gen.metadata {
+            for section in ["tags", "fields", "options"] {
+                while true {
+                    let cursor = try store.metadataCatalogCursor(section) ?? ""
+                    let suffix = cursor.isEmpty ? "" : "?cursor=" + API.cursor(cursor)
+                    let page: MetadataCatalogPage = try await api.call("/reconciliations/\(gen.generation_id)/metadata/catalog/\(section)\(suffix)", context: boot.context_id)
+                    try current(run)
+                    guard page.generation_id == gen.generation_id, page.section == section else { throw LocalError.invalidProtocol }
+                    try store.appendMetadataCatalogPage(page, expected: catalog.catalog_revision)
+                    if page.complete { break }
+                }
+            }
+        }
         for (index, (person, rev)) in members.enumerated() {
             try current(run)
             message = "Downloading \(index + 1) of \(members.count) people. Previous workspace remains available."
             let stageQualified = gen.stage_catalog == nil ? true : (try store.hasQualifiedStageBundle(person, rev))
             let detailsQualified = detailsCapabilitiesReady ? try store.hasQualifiedDetailsBundle(person, rev) : true
-            let hasQualifiedRepresentation = stageQualified && detailsQualified
+            let metadataQualified = metadataCapabilitiesReady ? try store.hasQualifiedMetadataBundle(person, rev) : true
+            let hasQualifiedRepresentation = stageQualified && detailsQualified && metadataQualified
             if try store.hasBundle(person, rev), hasQualifiedRepresentation { continue }
             for section in ["summary", "notes", "tasks"] {
                 while true {
@@ -743,6 +823,12 @@ struct StageProposal: Identifiable {
                 }
             }
             try store.finishBundle(gen.generation_id, person, rev)
+            if metadataCapabilitiesReady {
+                let component: MetadataComponent = try await api.call("/reconciliations/\(gen.generation_id)/people/\(person)/metadata", context: boot.context_id)
+                try current(run)
+                guard component.generation_id == gen.generation_id, component.person_id == person else { throw LocalError.invalidProtocol }
+                try store.appendMetadataComponent(component, expected: rev)
+            }
         }
         let seal: Seal = try await api.call("/reconciliations/\(gen.generation_id)/seal", method: "POST", body: .object([:]), context: boot.context_id)
         try current(run); try store.promote(seal)

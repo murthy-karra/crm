@@ -616,4 +616,66 @@ final class StorageTests: XCTestCase {
         XCTAssertFalse(try XCTUnwrap(store.queue().first { $0.id == one.operation_id }).overlay)
         XCTAssertNil(try store.meta("today_refresh_pending"))
     }
+    func testMobile006MetadataEncryptedUpgradeAtomicEnvelopeAndCoveringSeal() throws {
+        // Build an actual schema-8 protected store first: its pre-existing byte
+        // evidence must survive adding schema-9 metadata tables.
+        var old: LocalStore? = try open("mobile006-upgrade", version: 8)
+        let legacy = try old!.submit(old!.saveDraft(draft("Mobile005 bytes stay exact")))
+        let legacyBytes = try XCTUnwrap(old!.queue().first?.bytes)
+        old = nil
+        var store: LocalStore? = try open("mobile006-upgrade", version: 9)
+        XCTAssertEqual(try store!.rows("PRAGMA user_version")[0][0], "9")
+        XCTAssertEqual(try store!.queue().first?.id, legacy.operation_id)
+        XCTAssertEqual(try store!.queue().first?.bytes, legacyBytes)
+
+        let tag = "55555555-5555-4555-8555-555555555555", textID = "66666666-6666-4666-8666-666666666666", numberID = "77777777-7777-4777-8777-777777777777", dateID = "88888888-8888-4888-8888-888888888888", choiceID = "99999999-9999-4999-8999-999999999999", option = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        let gen = Generation(generation_id: UUID().uuidString, context_id: context, evaluated_at: stamp(), expires_at: stamp(Date().addingTimeInterval(1800)), complete: true, selected_count: 1, manifest: Manifest(items: [ManifestItem(person_id: person, revision: "1", metadata_revision: "1", reasons: ["assigned"])], next_cursor: nil, complete: true), metadata: MetadataCatalog(representation: "metadata-v1", catalog_revision: "1", catalog_url: "/api/mobile/v1/reconciliations/PLACEHOLDER"))
+        // The runtime ID is part of the route identity, so make the fixture exact.
+        let exact = Generation(generation_id: gen.generation_id, context_id: context, evaluated_at: gen.evaluated_at, expires_at: gen.expires_at, complete: true, selected_count: 1, manifest: gen.manifest, metadata: MetadataCatalog(representation: "metadata-v1", catalog_revision: "1", catalog_url: "/api/mobile/v1/reconciliations/\(gen.generation_id)/metadata/catalog"))
+        try store!.begin(exact)
+        let pages = [
+            MetadataCatalogPage(generation_id: exact.generation_id, section: "tags", revision: "1", items: [.object(["id": .s(tag), "name": .s("Seller")])], next_cursor: nil, complete: true),
+            MetadataCatalogPage(generation_id: exact.generation_id, section: "fields", revision: "1", items: [.object(["id": .s(textID), "label": .s("Name"), "field_type": .s("text"), "position": .number(1), "archived_at": .null]), .object(["id": .s(numberID), "label": .s("Budget"), "field_type": .s("number"), "position": .number(2), "archived_at": .null]), .object(["id": .s(dateID), "label": .s("Move date"), "field_type": .s("date"), "position": .number(3), "archived_at": .null]), .object(["id": .s(choiceID), "label": .s("Kind"), "field_type": .s("choice"), "position": .number(4), "archived_at": .null])], next_cursor: nil, complete: true),
+            MetadataCatalogPage(generation_id: exact.generation_id, section: "options", revision: "1", items: [.object(["id": .s(option), "field_id": .s(choiceID), "label": .s("Home"), "position": .number(1), "archived_at": .null])], next_cursor: nil, complete: true)
+        ]
+        for page in pages { try store!.appendMetadataCatalogPage(page, expected: "1") }
+        for section in ["summary", "notes", "tasks"] { try store!.appendPage(Page(generation_id: exact.generation_id, person_id: person, revision: "1", section: section, summary: section == "summary" ? .object(["id": .s(person)]) : nil, items: [], next_cursor: nil, complete: true), expected: "1") }
+        try store!.finishBundle(exact.generation_id, person, "1")
+        try store!.appendMetadataComponent(MetadataComponent(generation_id: exact.generation_id, person_id: person, section: "metadata", revision: "1", metadata_revision: "1", catalog_revision: "1", tags: [], values: [], complete: true), expected: "1")
+        try store!.promote(seal(exact))
+        let baseline = try XCTUnwrap(store!.editableMetadata(person: person))
+        XCTAssertEqual(baseline["catalog_revision"].text, "1")
+        for invalid in [
+            JSON.object(["kind": .s("set_field"), "field_id": .s(dateID), "value": .object(["date": .s("2201-01-01")])]),
+            JSON.object(["kind": .s("set_field"), "field_id": .s(choiceID), "value": .object(["option_id": .s(tag)])])
+        ] {
+            let invalidDraft = try store!.saveDraft(Draft(id: UUID().uuidString, person: person, kind: "update_person_metadata", revision: 0, expectedRevision: "1", expectedCatalogRevision: "1", baseline: baseline, proposal: .object(["actions": .array([invalid])])) )
+            XCTAssertThrowsError(try store!.submit(invalidDraft))
+            XCTAssertTrue(try store!.queue().allSatisfy { $0.envelope.kind != "update_person_metadata" })
+        }
+        let actions: [JSON] = [
+            .object(["kind": .s("add_tag"), "tag_id": .s(tag)]),
+            .object(["kind": .s("set_field"), "field_id": .s(numberID), "value": .object(["number": .s("123.4500")])]),
+            .object(["kind": .s("set_field"), "field_id": .s(dateID), "value": .object(["date": .s("2026-09-14")])]),
+            .object(["kind": .s("set_field"), "field_id": .s(choiceID), "value": .object(["option_id": .s(option)])])
+        ]
+        let draft = try store!.saveDraft(Draft(id: UUID().uuidString, person: person, kind: "update_person_metadata", revision: 0, expectedRevision: "1", expectedCatalogRevision: "1", baseline: baseline, proposal: .object(["actions": .array(actions)])))
+        let envelope = try store!.submit(draft), bytes = try XCTUnwrap(store!.queue().last?.bytes)
+        store = nil; store = try open("mobile006-upgrade", version: 9)
+        XCTAssertEqual(try store!.queue().last?.bytes, bytes)
+        try store!.acknowledge(Receipt(operation_id: envelope.operation_id, outcome: "accepted", resource_type: "person_metadata", resource_id: person, committed_revision: "2", person_revision: "2", accepted_at: stamp(), changed: true, replayed: false))
+        XCTAssertTrue(try XCTUnwrap(store!.queue().last).overlay, "An accepted metadata overlay remains until a sealed metadata component covers it")
+
+        // A later sealed generation that carries the receipt's metadata
+        // revision is the covering evidence that may retire the overlay.
+        let refreshed = Generation(generation_id: UUID().uuidString, context_id: context, evaluated_at: stamp(), expires_at: stamp(Date().addingTimeInterval(1800)), complete: true, selected_count: 1, manifest: Manifest(items: [ManifestItem(person_id: person, revision: "2", metadata_revision: "2", reasons: ["assigned"])], next_cursor: nil, complete: true), metadata: MetadataCatalog(representation: "metadata-v1", catalog_revision: "1", catalog_url: ""))
+        let refreshedExact = Generation(generation_id: refreshed.generation_id, context_id: context, evaluated_at: refreshed.evaluated_at, expires_at: refreshed.expires_at, complete: true, selected_count: 1, manifest: refreshed.manifest, metadata: MetadataCatalog(representation: "metadata-v1", catalog_revision: "1", catalog_url: "/api/mobile/v1/reconciliations/\(refreshed.generation_id)/metadata/catalog"))
+        try store!.begin(refreshedExact)
+        for page in pages { try store!.appendMetadataCatalogPage(MetadataCatalogPage(generation_id: refreshedExact.generation_id, section: page.section, revision: page.revision, items: page.items, next_cursor: page.next_cursor, complete: page.complete), expected: "1") }
+        for section in ["summary", "notes", "tasks"] { try store!.appendPage(Page(generation_id: refreshedExact.generation_id, person_id: person, revision: "2", section: section, summary: section == "summary" ? .object(["id": .s(person)]) : nil, items: [], next_cursor: nil, complete: true), expected: "2") }
+        try store!.finishBundle(refreshedExact.generation_id, person, "2")
+        try store!.appendMetadataComponent(MetadataComponent(generation_id: refreshedExact.generation_id, person_id: person, section: "metadata", revision: "2", metadata_revision: "2", catalog_revision: "1", tags: [.object(["id": .s(tag), "name": .s("Seller")])], values: [.object(["field_id": .s(numberID), "value": .object(["number": .s("123.4500")])]), .object(["field_id": .s(dateID), "value": .object(["date": .s("2026-09-14")])]), .object(["field_id": .s(choiceID), "value": .object(["option_id": .s(option)])])], complete: true), expected: "2")
+        try store!.promote(seal(refreshedExact))
+        XCTAssertFalse(try XCTUnwrap(store!.queue().last).overlay, "Only this metadata-qualified sealed generation retires the accepted overlay")
+    }
 }

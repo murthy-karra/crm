@@ -19,7 +19,9 @@ import XCTest
     func setupModel(details: Bool = false) async throws -> (FieldModel, API, SecureStorage, Bootstrap, LocalStore) {
         let model = FieldModel(synthetic: true, startMonitor: false, restoreOnInit: false)
         let secure = SecureStorage(synthetic: true, testingNamespace: UUID().uuidString); secure.testDirectory = directory
-        #if MOBILE005_QA || MOBILE005_UPGRADE_QA
+        #if MOBILE006_QA || MOBILE006_UPGRADE_QA
+        let api = try API(base: "http://127.0.0.1:3106")
+        #elseif MOBILE005_QA || MOBILE005_UPGRADE_QA
         let api = try API(base: "http://127.0.0.1:3103")
         #elseif MOBILE002_QA || MOBILE003_QA || MOBILE004_QA || MOBILE004_UPGRADE_QA
         let api = try API(base: "http://127.0.0.1:3102")

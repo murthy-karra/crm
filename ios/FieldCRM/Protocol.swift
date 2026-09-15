@@ -69,18 +69,36 @@ struct Receipt: Codable, Equatable, Sendable {
     }
 }
 struct AddedContactID: Codable, Equatable, Sendable { let ordinal: Int, id: String }
-struct ManifestItem: Codable, Sendable { let person_id: String, revision: String; let reasons: [String] }
+struct ManifestItem: Codable, Sendable {
+    let person_id: String, revision: String, metadata_revision: String?; let reasons: [String]
+    init(person_id: String, revision: String, metadata_revision: String? = nil, reasons: [String]) { self.person_id = person_id; self.revision = revision; self.metadata_revision = metadata_revision; self.reasons = reasons }
+}
 struct Manifest: Codable, Sendable { let items: [ManifestItem]; let next_cursor: String?; let complete: Bool }
 struct Generation: Codable, Sendable {
     let generation_id: String, context_id: String, evaluated_at: String, expires_at: String
     let complete: Bool, selected_count: Int, manifest: Manifest
     let stage_catalog: StageCatalog?
-    init(generation_id: String, context_id: String, evaluated_at: String, expires_at: String, complete: Bool, selected_count: Int, manifest: Manifest, stage_catalog: StageCatalog? = nil) {
+    let metadata: MetadataCatalog?
+    init(generation_id: String, context_id: String, evaluated_at: String, expires_at: String, complete: Bool, selected_count: Int, manifest: Manifest, stage_catalog: StageCatalog? = nil, metadata: MetadataCatalog? = nil) {
         self.generation_id = generation_id; self.context_id = context_id; self.evaluated_at = evaluated_at; self.expires_at = expires_at
-        self.complete = complete; self.selected_count = selected_count; self.manifest = manifest; self.stage_catalog = stage_catalog
+        self.complete = complete; self.selected_count = selected_count; self.manifest = manifest; self.stage_catalog = stage_catalog; self.metadata = metadata
     }
 }
 struct StageCatalog: Codable, Equatable, Sendable { let revision: String, stages_url: String }
+struct MetadataCatalog: Codable, Equatable, Sendable {
+    let representation: String, catalog_revision: String, catalog_url: String
+}
+struct MetadataCatalogPage: Codable, Sendable {
+    let generation_id: String, section: String, revision: String, items: [JSON], next_cursor: String?, complete: Bool
+}
+struct MetadataComponent: Codable, Sendable {
+    let generation_id: String, person_id: String, section: String, revision: String, metadata_revision: String, catalog_revision: String
+    let tags: [JSON], values: [JSON], complete: Bool
+}
+struct CurrentMetadataResponse: Codable, Sendable {
+    let context_id: String, person_id: String, person_revision: String, metadata_revision: String, catalog_revision: String
+    let tags: [JSON], values: [JSON], complete: Bool
+}
 struct Stage: Codable, Equatable, Identifiable, Sendable {
     let id: String, name: String, position: Int
     init(id: String, name: String, position: Int) { self.id = id; self.name = name; self.position = position }
@@ -183,16 +201,17 @@ struct Draft: Codable, Identifiable, Sendable {
     var deviceRecordedAt: String? = nil
     var targetID: String? = nil
     var expectedRevision: String? = nil
+    var expectedCatalogRevision: String? = nil
     var baseline: JSON? = nil
     var proposal: JSON? = nil
     var mode: String = "editing" // editing, follow_up, conflict, superseded, unavailable
     var predecessor: String? = nil
     var current: JSON? = nil
     var editorEpoch: String = UUID().uuidString.lowercased()
-    enum CodingKeys: String, CodingKey { case id, person, kind, text, revision, taskKind, dueAt, contactChannel, contactOutcome, occurredAt, deviceRecordedAt, targetID, expectedRevision, baseline, proposal, mode, predecessor, current, editorEpoch }
-    init(id: String, person: String, kind: String, text: String = "", revision: Int, taskKind: String = "follow_up", dueAt: String? = nil, contactChannel: String? = nil, contactOutcome: String? = nil, occurredAt: String? = nil, deviceRecordedAt: String? = nil, targetID: String? = nil, expectedRevision: String? = nil, baseline: JSON? = nil, proposal: JSON? = nil, mode: String = "editing", predecessor: String? = nil, current: JSON? = nil, editorEpoch: String = UUID().uuidString.lowercased()) {
+    enum CodingKeys: String, CodingKey { case id, person, kind, text, revision, taskKind, dueAt, contactChannel, contactOutcome, occurredAt, deviceRecordedAt, targetID, expectedRevision, expectedCatalogRevision, baseline, proposal, mode, predecessor, current, editorEpoch }
+    init(id: String, person: String, kind: String, text: String = "", revision: Int, taskKind: String = "follow_up", dueAt: String? = nil, contactChannel: String? = nil, contactOutcome: String? = nil, occurredAt: String? = nil, deviceRecordedAt: String? = nil, targetID: String? = nil, expectedRevision: String? = nil, expectedCatalogRevision: String? = nil, baseline: JSON? = nil, proposal: JSON? = nil, mode: String = "editing", predecessor: String? = nil, current: JSON? = nil, editorEpoch: String = UUID().uuidString.lowercased()) {
         self.id = id; self.person = person; self.kind = kind; self.text = text; self.revision = revision
-        self.taskKind = taskKind; self.dueAt = dueAt; self.targetID = targetID; self.expectedRevision = expectedRevision
+        self.taskKind = taskKind; self.dueAt = dueAt; self.targetID = targetID; self.expectedRevision = expectedRevision; self.expectedCatalogRevision = expectedCatalogRevision
         self.contactChannel = contactChannel; self.contactOutcome = contactOutcome; self.occurredAt = occurredAt; self.deviceRecordedAt = deviceRecordedAt
         self.baseline = baseline; self.proposal = proposal; self.mode = mode; self.predecessor = predecessor; self.current = current; self.editorEpoch = editorEpoch
     }
@@ -204,13 +223,14 @@ struct Draft: Codable, Identifiable, Sendable {
         taskKind = try c.decodeIfPresent(String.self, forKey: .taskKind) ?? "follow_up"; dueAt = try c.decodeIfPresent(String.self, forKey: .dueAt)
         contactChannel = try c.decodeIfPresent(String.self, forKey: .contactChannel); contactOutcome = try c.decodeIfPresent(String.self, forKey: .contactOutcome)
         occurredAt = try c.decodeIfPresent(String.self, forKey: .occurredAt); deviceRecordedAt = try c.decodeIfPresent(String.self, forKey: .deviceRecordedAt)
-        targetID = try c.decodeIfPresent(String.self, forKey: .targetID); expectedRevision = try c.decodeIfPresent(String.self, forKey: .expectedRevision)
+        targetID = try c.decodeIfPresent(String.self, forKey: .targetID); expectedRevision = try c.decodeIfPresent(String.self, forKey: .expectedRevision); expectedCatalogRevision = try c.decodeIfPresent(String.self, forKey: .expectedCatalogRevision)
         baseline = try c.decodeIfPresent(JSON.self, forKey: .baseline); proposal = try c.decodeIfPresent(JSON.self, forKey: .proposal)
         mode = try c.decodeIfPresent(String.self, forKey: .mode) ?? "editing"; predecessor = try c.decodeIfPresent(String.self, forKey: .predecessor)
         current = try c.decodeIfPresent(JSON.self, forKey: .current); editorEpoch = try c.decodeIfPresent(String.self, forKey: .editorEpoch) ?? UUID().uuidString.lowercased()
     }
     var isEdit: Bool { kind == "edit_note" || kind == "update_task" }
     var isDetails: Bool { kind == "update_person_details" }
+    var isMetadata: Bool { kind == "update_person_metadata" }
     var resourceType: String? { kind == "edit_note" ? "note" : kind == "update_task" ? "task" : nil }
 }
 struct Queued: Identifiable, Sendable {
@@ -220,11 +240,13 @@ struct Queued: Identifiable, Sendable {
     var isContact: Bool { envelope.kind == "log_contact_attempt" }
     var isStage: Bool { envelope.kind == "change_person_stage" }
     var isDetails: Bool { envelope.kind == "update_person_details" }
+    var isMetadata: Bool { envelope.kind == "update_person_metadata" }
     var title: String {
         if envelope.kind == "add_note" || envelope.kind == "edit_note" { return envelope.payload["body"].text }
         if isContact { return [envelope.payload["channel"].text, envelope.payload["outcome"].text, envelope.payload["occurred_at"].text].filter { !$0.isEmpty }.joined(separator: " · ") }
         if isStage { return envelope.payload["stage_id"].text }
         if isDetails { return "Profile details" }
+        if isMetadata { return "Tags and custom fields" }
         if ["create_task", "update_task"].contains(envelope.kind) { return envelope.payload["title"].text }
         return ""
     }
@@ -234,6 +256,7 @@ struct Queued: Identifiable, Sendable {
         if envelope.kind == "complete_task" { return envelope.payload["target"]["task_id"].text.isEmpty ? nil : envelope.payload["target"]["task_id"].text }
         if envelope.kind == "change_person_stage" { return envelope.payload["person_id"].text }
         if envelope.kind == "update_person_details" { return envelope.payload["person_id"].text }
+        if envelope.kind == "update_person_metadata" { return envelope.payload["person_id"].text }
         return nil
     }
 }

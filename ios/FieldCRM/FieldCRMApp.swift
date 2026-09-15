@@ -113,6 +113,12 @@ struct WorkspaceView: View {
                             Button("Verify profile receipt") { Task { await model.verifyQAProfileReceipt() } }.accessibilityIdentifier("qaVerifyProfileReceipt")
                         }
                         #endif
+                        #if MOBILE006_UPGRADE_QA
+                        Section("QA Mobile006 installed upgrade") {
+                            Text(model.qaMobile006UpgradeStage).font(.caption2).accessibilityIdentifier("qaMobile006UpgradeStage")
+                            Button("Inspect installed Mobile005 upgrade") { model.inspectMobile006Upgrade() }.accessibilityIdentifier("inspectMobile006Upgrade")
+                        }
+                        #endif
                         Section("Connection") {
                             Toggle("Work offline · pause sync", isOn: $model.paused).accessibilityIdentifier("offlineToggle")
                             Text("Last complete sync: \(model.lastSync)").font(.footnote)
@@ -192,6 +198,7 @@ struct PersonView: View {
     @State private var contactComposer: Draft?
     @State private var stageProposal: StageProposal?
     @State private var detailsComposer: Draft?
+    @State private var metadataComposer: Draft?
     var bundle: Bundle? { model.people.first { $0.person == personID } }
     var overlays: [Queued] { model.queue.filter { $0.envelope.person == personID && $0.overlay } }
     var body: some View {
@@ -210,12 +217,27 @@ struct PersonView: View {
                     Button("Edit profile") { detailsComposer = try? model.startDetails(person: personID) }
                         .disabled(!model.canEditDetails(person: personID))
                         .accessibilityIdentifier("editProfile")
+                    Button("Edit tags and custom fields") { metadataComposer = try? model.newMetadataDraft(person: personID) }
+                        .accessibilityIdentifier("editMetadata")
+                        .disabled(!model.canEditMetadata(person: personID))
+                        .accessibilityIdentifier("editMetadata")
                     Text(model.canLogContact ? "For a manual interaction that already happened. Calls made through the CRM already have a contact record." : "Contact logging is unavailable for this account. Existing saved work is retained.").font(.caption).foregroundStyle(.secondary)
                 }
                 Section("Contact methods") {
                     // Keep imported/server ordering stable while placing action
                     // controls before a long contact history.
                     ForEach(Array(bundle.orderedContacts.enumerated()), id: \.offset) { _, contact in Text(contact["value"].text).textSelection(.enabled) }
+                }
+                if let metadata = model.displayedMetadata(person: personID) {
+                    Section("Tags") {
+                        Text(metadata["tags"].list.map { $0["name"].text }.filter { !$0.isEmpty }.joined(separator: ", ").isEmpty ? "No tags" : metadata["tags"].list.map { $0["name"].text }.filter { !$0.isEmpty }.joined(separator: ", "))
+                    }
+                    Section("Custom fields") {
+                        ForEach(Array(metadata["values"].list.enumerated()), id: \.offset) { _, value in
+                            let label = metadata["fields"].list.first(where: { $0["id"].text == value["field_id"].text })?["label"].text ?? "Archived field"
+                            Text(label + ": " + MetadataEditorProjection.display(value["value"]))
+                        }
+                    }
                 }
                 if !overlays.isEmpty {
                     Section("Saved changes on this device") {
@@ -274,6 +296,7 @@ struct PersonView: View {
             .sheet(item: $contactComposer) { draft in ContactComposerView(initial: draft).environmentObject(model) }
             .sheet(item: $stageProposal) { proposal in StageProposalView(initial: proposal).environmentObject(model) }
             .sheet(item: $detailsComposer) { draft in DetailsComposerView(initial: draft).environmentObject(model) }
+            .sheet(item: $metadataComposer) { draft in MetadataComposerView(initial: draft).environmentObject(model) }
     }
 }
 struct DetailsEditorMethod: Identifiable, Equatable {
@@ -614,12 +637,120 @@ struct ContactComposerView: View {
         catch { status = error.localizedDescription; failed = true }
     }
 }
+enum MetadataEditorProjection {
+    static func dateValue(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+    static func pickerDate(_ raw: String) -> Date {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.date(from: raw) ?? Date()
+    }
+    static func display(_ value: JSON) -> String {
+        for key in ["text", "number", "date", "option_id"] where !value[key].text.isEmpty { return value[key].text }
+        return ""
+    }
+    static func valueMap(_ baseline: JSON) -> [String: JSON] {
+        Dictionary(uniqueKeysWithValues: baseline["values"].list.map { ($0["field_id"].text, $0["value"]) })
+    }
+    static func actions(tags: Set<String>, baseline: JSON, text: [String: String], number: [String: String], dates: [String: String], choices: [String: String], clears: Set<String>) -> [JSON] {
+        let originalTags = Set(baseline["tags"].list.map { $0["id"].text })
+        var actions = tags.subtracting(originalTags).sorted().map { JSON.object(["kind": .s("add_tag"), "tag_id": .s($0)]) }
+        actions += originalTags.subtracting(tags).sorted().map { JSON.object(["kind": .s("remove_tag"), "tag_id": .s($0)]) }
+        let original = valueMap(baseline)
+        for field in baseline["fields"].list {
+            let id = field["id"].text, type = field["field_type"].text
+            guard !id.isEmpty else { continue }
+            if clears.contains(id) {
+                if original[id] != nil { actions.append(.object(["kind": .s("clear_field"), "field_id": .s(id)])) }
+                continue
+            }
+            let raw: String? = type == "text" ? text[id] : type == "number" ? number[id] : type == "date" ? dates[id] : choices[id]
+            guard let raw, !raw.isEmpty else { continue }
+            let value: JSON = type == "text" ? .object(["text": .s(raw)]) : type == "number" ? .object(["number": .s(raw)]) : type == "date" ? .object(["date": .s(raw)]) : .object(["option_id": .s(raw)])
+            if original[id] != value { actions.append(.object(["kind": .s("set_field"), "field_id": .s(id), "value": value])) }
+        }
+        return actions
+    }
+}
+
+struct MetadataComposerView: View {
+    @EnvironmentObject private var model: FieldModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var draft: Draft
+    @State private var tags: Set<String>
+    @State private var text: [String: String] = [:]
+    @State private var number: [String: String] = [:]
+    @State private var dates: [String: String] = [:]
+    @State private var choices: [String: String] = [:]
+    @State private var clears: Set<String> = []
+    @State private var status = "Not yet saved"
+    @State private var failed = false
+    init(initial: Draft) {
+        _draft = State(initialValue: initial)
+        let baseline = initial.baseline ?? .object([:])
+        _tags = State(initialValue: Set(baseline["tags"].list.map { $0["id"].text }))
+        let values = MetadataEditorProjection.valueMap(baseline)
+        var t: [String: String] = [:], n: [String: String] = [:], d: [String: String] = [:], c: [String: String] = [:]
+        for field in baseline["fields"].list {
+            let id = field["id"].text, value = values[id]
+            switch field["field_type"].text { case "text": t[id] = value?["text"].text ?? ""; case "number": n[id] = value?["number"].text ?? ""; case "date": d[id] = value?["date"].text ?? ""; case "choice": c[id] = value?["option_id"].text ?? ""; default: break }
+        }
+        _text = State(initialValue: t); _number = State(initialValue: n); _dates = State(initialValue: d); _choices = State(initialValue: c)
+        _status = State(initialValue: initial.revision > 0 ? "Draft saved on device · revision \(initial.revision)" : "Not yet saved")
+    }
+    var baseline: JSON { draft.baseline ?? .object([:]) }
+    var body: some View {
+        NavigationStack { Form {
+            if draft.mode == "conflict" {
+                Section("Conflict requires review") {
+                    Text("Your saved proposal is protected. The catalog or metadata changed on the server.")
+                    Text("Current metadata: \(draft.current.map { $0["metadata_revision"].text } ?? "unavailable") · catalog: \(draft.current.map { $0["catalog_revision"].text } ?? "unavailable")").font(.caption)
+                    Button("Fetch current values") { Task { do { draft = try await model.requalifyMetadata(draft); status = "Current values fetched. Refresh the workspace before creating a new proposal."; failed = false } catch { fail(error) } } }
+                    Button("Use current values and discard my saved proposal", role: .destructive) { do { try model.resolveUsingCurrent(draft); dismiss() } catch { fail(error) } }
+                }
+            } else {
+                Section("Tags") {
+                    ForEach(Array(allTags.enumerated()), id: \.offset) { _, tag in Toggle(tag["name"].text, isOn: Binding(get: { tags.contains(tag["id"].text) }, set: { selected in if selected { tags.insert(tag["id"].text) } else { tags.remove(tag["id"].text) }; autosave() })).accessibilityIdentifier("metadataTag_\(tag["id"].text)") }
+                }
+                ForEach(Array(baseline["fields"].list.enumerated()), id: \.offset) { _, field in fieldEditor(field) }
+            }
+            Section { Text(status).font(.caption).foregroundStyle(failed ? .red : .secondary).accessibilityIdentifier("metadataDraftStatus") }
+            if draft.mode != "conflict" { Button("Save metadata proposal on device") { do { if draft.revision == 0 { autosave() }; guard !failed else { return }; try model.submit(draft); dismiss() } catch { fail(error) } }.disabled(failed).accessibilityIdentifier("saveMetadata") }
+        }.navigationTitle("Tags and fields").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() }.disabled(failed) } }.interactiveDismissDisabled(failed) }
+    }
+    var allTags: [JSON] { baseline["catalog_tags"].list.isEmpty ? baseline["tags"].list : baseline["catalog_tags"].list }
+    @ViewBuilder func fieldEditor(_ field: JSON) -> some View {
+        let id = field["id"].text, archived = field["archived_at"] != .null
+        Section(field["label"].text + (archived ? " · archived" : "")) {
+            if field["field_type"].text == "text" { TextField("Text", text: binding($text, id)).disabled(archived).onChange(of: text[id] ?? "") { _, _ in clears.remove(id); autosave() }.accessibilityIdentifier("metadataText_\(id)") }
+            else if field["field_type"].text == "number" { TextField("Exact decimal", text: binding($number, id)).keyboardType(.decimalPad).disabled(archived).onChange(of: number[id] ?? "") { _, _ in clears.remove(id); autosave() }.accessibilityIdentifier("metadataNumber_\(id)") }
+            else if field["field_type"].text == "date" { DatePicker("Date", selection: Binding(get: { MetadataEditorProjection.pickerDate(dates[id] ?? "") }, set: { dates[id] = MetadataEditorProjection.dateValue($0) }), displayedComponents: .date).environment(\.timeZone, TimeZone(secondsFromGMT: 0)!).disabled(archived).onChange(of: dates[id] ?? "") { _, _ in clears.remove(id); autosave() }.accessibilityIdentifier("metadataDate_\(id)") }
+            else if field["field_type"].text == "choice" { Picker("Choice", selection: binding($choices, id)) { Text("Choose").tag(""); ForEach(Array(options(for: id).enumerated()), id: \.offset) { _, option in Text(option["label"].text + (option["archived_at"] == .null ? "" : " · archived")).tag(option["id"].text).disabled(option["archived_at"] != .null) } }.disabled(archived).onChange(of: choices[id] ?? "") { _, _ in clears.remove(id); autosave() }.accessibilityIdentifier("metadataChoice_\(id)") }
+            if MetadataEditorProjection.valueMap(baseline)[id] != nil { Button("Clear value", role: .destructive) { clears.insert(id); autosave() }.accessibilityIdentifier("metadataClear_\(id)") }
+        }
+    }
+    func options(for field: String) -> [JSON] { baseline["options"].list.filter { $0["field_id"].text == field } }
+    func binding(_ source: Binding<[String: String]>, _ id: String) -> Binding<String> { Binding(get: { source.wrappedValue[id] ?? "" }, set: { source.wrappedValue[id] = $0 }) }
+    func autosave() { do { let actions = MetadataEditorProjection.actions(tags: tags, baseline: baseline, text: text, number: number, dates: dates, choices: choices, clears: clears); draft.proposal = .object(["actions": .array(actions)]); draft = try model.save(draft); status = "Draft saved on device · revision \(draft.revision)"; failed = false } catch { fail(error) } }
+    func fail(_ error: Error) { status = error.localizedDescription; failed = true }
+}
+
 struct QueueView: View {
     @EnvironmentObject private var model: FieldModel
     @State private var composer: Draft?
     @State private var contactComposer: Draft?
     @State private var stageProposal: StageProposal?
     @State private var detailsComposer: Draft?
+    @State private var metadataComposer: Draft?
     var body: some View {
         List {
             Section { Text("\(model.pendingCount) pending · \(model.drafts.count) saved drafts").accessibilityIdentifier("queueCount") }
@@ -629,6 +760,7 @@ struct QueueView: View {
                         if draft.kind == "log_contact_attempt" { contactComposer = draft }
                         else if draft.kind == "change_person_stage" { stageProposal = try? model.revisedStageProposal(draft) }
                         else if draft.kind == "update_person_details" { detailsComposer = draft }
+                        else if draft.kind == "update_person_metadata" { metadataComposer = draft }
                         else { composer = draft }
                     }.accessibilityIdentifier(draft.kind == "change_person_stage" && draft.mode == "follow_up" ? "stageFollowUp_" + draft.id : "draft_" + draft.id)
                     if draft.mode == "follow_up" { Text("Saved draft — waiting for the previous change").font(.caption).foregroundStyle(.orange) }
@@ -646,6 +778,7 @@ struct QueueView: View {
                             Button("Review conflict") {
                                 if op.isStage { stageProposal = try? model.revisedStageProposal(draft) }
                                 else if op.isDetails { detailsComposer = draft }
+                                else if op.isMetadata { metadataComposer = draft }
                                 else { composer = draft }
                             }
                         } else if op.status == "attention" && op.error == "contact_time_in_future" && op.isContact {
@@ -662,5 +795,6 @@ struct QueueView: View {
             .sheet(item: $contactComposer) { draft in ContactComposerView(initial: draft).environmentObject(model) }
             .sheet(item: $stageProposal) { proposal in StageProposalView(initial: proposal).environmentObject(model) }
             .sheet(item: $detailsComposer) { draft in DetailsComposerView(initial: draft).environmentObject(model) }
+            .sheet(item: $metadataComposer) { draft in MetadataComposerView(initial: draft).environmentObject(model) }
     }
 }

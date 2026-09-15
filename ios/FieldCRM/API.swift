@@ -35,7 +35,9 @@ private final class NoRedirect: NSObject, URLSessionTaskDelegate, @unchecked Sen
         var permitted = url.scheme == "https"
         #if DEBUG && targetEnvironment(simulator)
         let debugPort: Int
-        #if MOBILE005_QA || MOBILE005_UPGRADE_QA
+        #if MOBILE006_QA || MOBILE006_UPGRADE_QA
+        debugPort = 3106
+        #elseif MOBILE005_QA || MOBILE005_UPGRADE_QA
         debugPort = 3103
         #elseif MOBILE002_QA || MOBILE003_QA || MOBILE004_QA || MOBILE004_UPGRADE_QA
         debugPort = 3102
@@ -104,6 +106,16 @@ private final class NoRedirect: NSObject, URLSessionTaskDelegate, @unchecked Sen
               page.next_cursor.map({ !$0.isEmpty && $0.utf8.count <= 2048 }) ?? true else { throw LocalError.invalidProtocol }
         guard page.items.allSatisfy(isQualifiedDetailsContact) else { throw LocalError.invalidProtocol }
         return page
+    }
+    func currentMetadata(person: String, context: String) async throws -> CurrentMetadataResponse {
+        let (data, _) = try await raw("/api/mobile/v1/people/\(person)/metadata", method: "GET", context: context)
+        guard data.count <= 131072 else { throw LocalError.invalidProtocol }
+        let current = try decode(CurrentMetadataResponse.self, data)
+        guard current.complete, current.tags.count <= 100, current.values.count <= 100,
+              (try? revision(current.person_revision)) != nil,
+              (try? revision(current.metadata_revision)) != nil,
+              (try? revision(current.catalog_revision)) != nil else { throw LocalError.invalidProtocol }
+        return current
     }
     func verifyAuthority(_ boot: Bootstrap) async throws {
         let (data, _) = try await raw("/api/me", method: "GET")

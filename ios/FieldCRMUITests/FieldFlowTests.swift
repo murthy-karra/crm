@@ -187,6 +187,84 @@ final class FieldFlowTests: XCTestCase {
     }
     #endif
 
+    #if MOBILE006_QA
+    @MainActor func testMobile006MetadataOfflineRestartAndSynchronize() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication(); app.launchArguments = ["--synthetic-keychain"]; app.launch()
+        XCTAssertTrue(app.staticTexts["syntheticBanner"].waitForExistence(timeout: 20))
+        if app.buttons["signIn"].exists {
+            app.textFields["email"].tap(); app.textFields["email"].typeText("agent@mobile.test")
+            app.secureTextFields["password"].tap(); app.secureTextFields["password"].typeText("Mobile-demo-only-123!")
+            app.buttons["signIn"].tap()
+        }
+        XCTAssertTrue(app.tabBars.buttons["Settings"].waitForExistence(timeout: 90))
+        app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: false); app.buttons["sync"].tap()
+        XCTAssertTrue(app.staticTexts["100 people available offline"].waitForExistence(timeout: 240))
+        app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: true)
+        app.tabBars.buttons["People"].tap()
+        let person = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'person_' ")).firstMatch
+        XCTAssertTrue(person.waitForExistence(timeout: 20)); person.tap()
+        let edit = app.buttons["editMetadata"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 20), "A complete sealed metadata catalog and component enable editing")
+        edit.tap()
+        let tag = app.switches.matching(NSPredicate(format: "identifier BEGINSWITH 'metadataTag_' ")).firstMatch
+        XCTAssertTrue(tag.waitForExistence(timeout: 15)); tag.tap()
+        let text = app.textFields.matching(NSPredicate(format: "identifier BEGINSWITH 'metadataText_' ")).firstMatch
+        XCTAssertTrue(text.waitForExistence(timeout: 15)); text.tap(); text.typeText("iOS offline metadata")
+        let number = app.textFields.matching(NSPredicate(format: "identifier BEGINSWITH 'metadataNumber_' ")).firstMatch
+        XCTAssertTrue(number.waitForExistence(timeout: 15)); number.tap(); number.typeText("123.4500")
+        // SwiftUI exposes the date control as an accessibility "other" on
+        // this runtime, so assert the typed-field section labels instead of
+        // depending on the UIKit control class.
+        for _ in 0..<4 where !app.staticTexts["Move date"].exists || !app.staticTexts["Kind"].exists { app.swipeUp() }
+        XCTAssertTrue(app.staticTexts["Move date"].exists, "The date custom-field editor is present")
+        XCTAssertTrue(app.staticTexts["Kind"].exists, "The choice custom-field editor is present")
+        XCTAssertTrue(app.staticTexts["metadataDraftStatus"].label.contains("Draft saved on device"))
+        app.buttons["saveMetadata"].tap()
+        app.tabBars.buttons["Saved work"].tap()
+        XCTAssertTrue(app.staticTexts["queueCount"].label.contains("1 pending"), app.staticTexts["queueCount"].label)
+        let pending = XCTAttachment(screenshot: app.screenshot()); pending.name = "mobile006-metadata-offline-pending"; pending.lifetime = .keepAlways; add(pending)
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.tabBars.buttons["Saved work"].waitForExistence(timeout: 30)); app.tabBars.buttons["Saved work"].tap()
+        XCTAssertTrue(app.staticTexts["queueCount"].label.contains("1 pending"), "The metadata envelope survives a full app restart")
+        app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: false); app.buttons["sync"].tap()
+        app.tabBars.buttons["Saved work"].tap()
+        expectation(for: NSPredicate(format: "label BEGINSWITH '0 pending'"), evaluatedWith: app.staticTexts["queueCount"])
+        waitForExpectations(timeout: 180)
+        let accepted = XCTAttachment(screenshot: app.screenshot()); accepted.name = "mobile006-metadata-accepted"; accepted.lifetime = .keepAlways; add(accepted)
+        app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: true)
+    }
+    #endif
+
+    #if MOBILE006_UPGRADE_QA
+    @MainActor func testMobile006OpensActualInstalledMobile005StoreAndSavesMetadata() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication(); app.launchArguments = ["--synthetic-keychain"]; app.launch()
+        XCTAssertTrue(app.staticTexts["syntheticBanner"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.tabBars.buttons["Settings"].waitForExistence(timeout: 60), "The in-place app must restore the Mobile005 protected store and key")
+        app.tabBars.buttons["Settings"].tap(); app.buttons["inspectMobile006Upgrade"].tap()
+        let inventory = app.staticTexts["qaMobile006UpgradeStage"]
+        XCTAssertTrue(inventory.label.contains("schema=9"), inventory.label)
+        XCTAssertTrue(inventory.label.contains("people=100"), inventory.label)
+        XCTAssertTrue(inventory.label.contains("receipts=1"), inventory.label)
+        XCTAssertTrue(inventory.label.contains("drafts="), inventory.label)
+        // Download the new metadata representation without replacing the old
+        // protected work, then save a new metadata envelope after upgrade.
+        setSwitch(app.switches["offlineToggle"], to: false); app.buttons["sync"].tap()
+        XCTAssertTrue(app.staticTexts["100 people available offline"].waitForExistence(timeout: 240))
+        app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: true); app.tabBars.buttons["People"].tap()
+        let person = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'person_' ")).firstMatch
+        XCTAssertTrue(person.waitForExistence(timeout: 20)); person.tap()
+        XCTAssertTrue(app.buttons["editMetadata"].waitForExistence(timeout: 20)); app.buttons["editMetadata"].tap()
+        let text = app.textFields.matching(NSPredicate(format: "identifier BEGINSWITH 'metadataText_' ")).firstMatch
+        XCTAssertTrue(text.waitForExistence(timeout: 15)); text.tap(); text.typeText("Metadata after Mobile005 upgrade")
+        XCTAssertTrue(app.staticTexts["metadataDraftStatus"].label.contains("Draft saved on device"))
+        app.buttons["saveMetadata"].tap(); app.tabBars.buttons["Saved work"].tap()
+        XCTAssertTrue(app.staticTexts["queueCount"].label.contains("pending"), app.staticTexts["queueCount"].label)
+        let proof = XCTAttachment(screenshot: app.screenshot()); proof.name = "mobile006-new-metadata-after-installed-mobile005-upgrade"; proof.lifetime = .keepAlways; add(proof)
+    }
+    #endif
+
     #if MOBILE002_QA
     @MainActor func testMobile002NativeOfflineEditTerminateRelaunchAndSynchronizeReservedPerson001() throws {
         continueAfterFailure = false

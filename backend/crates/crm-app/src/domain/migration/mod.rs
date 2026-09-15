@@ -14,6 +14,7 @@ pub mod activity_worker;
 pub mod admitted_activity;
 pub(crate) mod admitted_activity_model;
 pub(crate) mod admitted_activity_queries;
+pub(crate) mod admitted_activity_remainder;
 pub(crate) mod admitted_activity_store;
 pub mod admitted_activity_worker;
 pub mod admitted_metadata;

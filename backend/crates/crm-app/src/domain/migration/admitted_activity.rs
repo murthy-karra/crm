@@ -225,12 +225,25 @@ pub(crate) async fn view(
     let storage=sqlx::query("SELECT s.run_byte_limit,s.retained_bytes,s.reserved_bytes,l.byte_limit,l.retained_bytes AS org_retained,l.reserved_bytes AS org_reserved FROM migration_snapshot s JOIN migration_snapshot_storage l ON l.organization_id=s.organization_id WHERE s.id=$1 AND s.organization_id=$2").bind(r.get::<Uuid,_>("snapshot_id")).bind(org.0).fetch_one(&mut *conn).await?;
     let cancel:i64=sqlx::query_scalar("SELECT COALESCE(sum(byte_count),0)::bigint FROM migration_admitted_activity_reservation WHERE import_id=$1 AND organization_id=$2 AND purpose='cancel'").bind(id).bind(org.0).fetch_one(&mut *conn).await?;
     let state: String = r.get("state");
+    let remainder_available: bool = state == "cancelled"
+        && confirmed.is_some()
+        && !sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM migration_admitted_activity_import WHERE predecessor_import_id=$1 AND organization_id=$2)")
+            .bind(id)
+            .bind(org.0)
+            .fetch_one(&mut *conn)
+            .await?
+        && sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM migration_admitted_activity_manifest m WHERE m.plan_id=$1 AND m.organization_id=$2 AND NOT EXISTS(SELECT 1 FROM migration_admitted_activity_result x WHERE x.import_id=$3 AND x.manifest_id=m.id AND x.organization_id=m.organization_id))")
+            .bind(confirmed.unwrap())
+            .bind(org.0)
+            .bind(id)
+            .fetch_one(&mut *conn)
+            .await?;
     let expires: Option<DateTime<Utc>> = p.get("expires_at");
     let mut response = json!({"id":id,"parent_import_id":r.get::<Uuid,_>("parent_import_id"),"parent_plan_id":r.get::<Uuid,_>("parent_plan_id"),"snapshot_id":r.get::<Uuid,_>("snapshot_id"),"source_account_id":r.get::<i64,_>("source_account_id").to_string(),"capture_sequence":r.get::<i64,_>("capture_sequence").to_string(),"workspace_revision":r.get::<i64,_>("workspace_revision").to_string(),"revision":r.get::<i64,_>("revision").to_string(),"activity_revision":r.get::<i64,_>("activity_revision").to_string(),"engine_version":ENGINE,"state":state,"phase":r.get::<String,_>("phase"),"pause_reason":r.get::<Option<String>,_>("pause_reason"),"created_at":r.get::<DateTime<Utc>,_>("created_at"),"updated_at":r.get::<DateTime<Utc>,_>("updated_at"),"confirmed_at":r.get::<Option<DateTime<Utc>>,_>("confirmed_at"),"confirmed_plan_id":confirmed,"completed_at":r.get::<Option<DateTime<Utc>>,_>("completed_at"),"retained_bytes":r.get::<i64,_>("retained_bytes").to_string(),"reserved_bytes":r.get::<i64,_>("reserved_bytes").to_string(),"native_row_bytes":r.get::<i64,_>("native_bytes").to_string(),"cancellation_reserved_bytes":cancel.to_string(),"release_ready":false,"counts":counts.wire(),
  "policy":{"run_byte_limit":storage.get::<i64,_>("run_byte_limit").to_string(),"org_byte_limit":storage.get::<i64,_>("byte_limit").to_string(),"run_ceiling_bytes":policy.run_ceiling_bytes.to_string(),"org_ceiling_bytes":policy.org_ceiling_bytes.to_string(),"run_retained_bytes":storage.get::<i64,_>("retained_bytes").to_string(),"run_reserved_bytes":storage.get::<i64,_>("reserved_bytes").to_string(),"org_retained_bytes":storage.get::<i64,_>("org_retained").to_string(),"org_reserved_bytes":storage.get::<i64,_>("org_reserved").to_string(),"unit_byte_limit":s::UNIT.to_string(),"policy_revision":policy.revision()},
  "coverage":{"remaining_data":["note_replies","reactions","reminders","recurrence","task_descriptions","history","mail","media","activation"],"native_review_only":true},
  "latest_plan":{"id":latest,"revision":p.get::<i64,_>("revision").to_string(),"state":p.get::<String,_>("state"),"phase":p.get::<String,_>("phase"),"expires_at":expires,"counts":pc.wire(),"source_timezone":d.source_timezone,"source_engine":d.source_engine,"html_profile":d.html_profile,"time_profile":d.time_profile,"tzdb_version":d.tzdb_version,"confirmation_digest":p.get::<Option<Vec<u8>>,_>("confirmation_digest").map(|v|s::hex(&v)),"max_added_byte_bound":p.get::<i64,_>("max_added_byte_bound").to_string()},
- "actions":{"replan":confirmed.is_none()&&!matches!(state.as_str(),"cancelled"|"completed"),"confirm":confirmed.is_none()&&state=="ready"&&pc.eligible()>0&&expires.is_some_and(|v|v>Utc::now()),"retry":state=="paused","cancel":!matches!(state.as_str(),"cancelled"|"completed")}});
+ "remainder":{"available":remainder_available},"actions":{"replan":confirmed.is_none()&&!matches!(state.as_str(),"cancelled"|"completed"),"confirm":confirmed.is_none()&&state=="ready"&&pc.eligible()>0&&expires.is_some_and(|v|v>Utc::now()),"retry":state=="paused","cancel":!matches!(state.as_str(),"cancelled"|"completed"),"remainder":remainder_available}});
     response["admission_id"] = json!(r.get::<Uuid, _>("admission_id"));
     response["admission_plan_id"] = json!(r.get::<Uuid, _>("admission_plan_id"));
     response["source_report_id"] = json!(r.get::<Uuid, _>("source_report_id"));
@@ -407,4 +420,7 @@ pub(crate) fn mapping_data(
 }
 pub use super::admitted_activity_queries::{
     field, list, mappings, observations, records, results, targets,
+};
+pub use super::admitted_activity_remainder::{
+    create as create_remainder, CreateAdmittedActivityRemainder,
 };

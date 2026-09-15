@@ -75,6 +75,10 @@ pub fn router() -> Router<AppState> {
             post(cancel),
         )
         .route(
+            "/api/migrations/fub/admitted-activity-imports/{id}/remainder",
+            post(create_remainder),
+        )
+        .route(
             "/api/migrations/fub/admitted-activity-imports/{id}/records",
             get(records),
         )
@@ -274,6 +278,26 @@ async fn cancel(
             path(p)?,
             body(b)?,
             false,
+            &s.snapshot_policy,
+        )
+        .await
+        .map_err(activity_error)?,
+    ))
+}
+async fn create_remainder(
+    State(s): State<AppState>,
+    a: OrgAdminContext,
+    p: Result<Path<Uuid>, PathRejection>,
+    b: Result<Json<i::CreateAdmittedActivityRemainder>, JsonRejection>,
+) -> Result<Response, ApiError> {
+    Ok(response(
+        StatusCode::ACCEPTED,
+        i::create_remainder(
+            s.db.as_ref().ok_or(ApiError::Unavailable)?,
+            &s.raw_payload_key,
+            &CommandContext::from_auth(&a.auth),
+            path(p)?,
+            body(b)?,
             &s.snapshot_policy,
         )
         .await

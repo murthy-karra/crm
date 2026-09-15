@@ -312,6 +312,7 @@ mod db_metadata_import_r1;
 mod db_metadata_import_acceptance;
 mod db_metadata_import_concurrency;
 
+mod db_admitted_activity;
 mod db_admitted_metadata;
 mod db_admitted_metadata_handover;
 mod db_admitted_metadata_http_boundary;

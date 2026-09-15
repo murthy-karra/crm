@@ -1169,7 +1169,7 @@ async fn execute(
                         target = Some(id)
                     }
                     NativeState::New if old == "eligible" => {
-                        sqlx::query("SELECT set_config('crm.activity_token',$1,true),set_config('crm.activity_unit',$2,true)").bind(j.token.to_string()).bind(unit.to_string()).execute(&mut *conn).await?;
+                        sqlx::query("SELECT set_config('crm.admitted_activity_token',$1,true),set_config('crm.admitted_activity_unit',$2,true)").bind(j.token.to_string()).bind(unit.to_string()).execute(&mut *conn).await?;
                         native_bytes = match data
                             .native
                             .as_ref()

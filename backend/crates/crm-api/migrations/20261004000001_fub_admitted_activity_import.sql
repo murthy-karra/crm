@@ -22,9 +22,9 @@ CREATE TABLE migration_admitted_activity_import (
  predecessor_import_id UUID,
  UNIQUE(id,organization_id), UNIQUE(id,snapshot_id,organization_id),
  UNIQUE(admission_id,organization_id), UNIQUE(predecessor_import_id,organization_id),
- FOREIGN KEY(parent_import_id,snapshot_id,organization_id) REFERENCES migration_import(id,snapshot_id,organization_id),
+ FOREIGN KEY(parent_import_id,organization_id) REFERENCES migration_import(id,organization_id),
  FOREIGN KEY(parent_plan_id,parent_import_id,organization_id) REFERENCES migration_import_plan(id,import_id,organization_id),
- FOREIGN KEY(preview_id,snapshot_id,organization_id) REFERENCES migration_snapshot_preview(id,snapshot_id,organization_id),
+ FOREIGN KEY(preview_id) REFERENCES migration_snapshot_preview(id),
  FOREIGN KEY(admission_id,organization_id) REFERENCES migration_people_admission(id,organization_id),
  FOREIGN KEY(admission_plan_id,admission_id,organization_id) REFERENCES migration_people_admission_plan(id,admission_id,organization_id),
  FOREIGN KEY(source_report_id,organization_id) REFERENCES migration_core_change_report(id,organization_id),
@@ -266,27 +266,22 @@ END $$;
 REVOKE ALL ON FUNCTION crm_admitted_activity_insert_allowed(UUID,TEXT,JSONB) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION crm_admitted_activity_insert_allowed(UUID,TEXT,JSONB) TO crm_app;
 
--- Preserve every 010c/010f1/terminal-case; add only a closed INSERT branch.
 CREATE OR REPLACE FUNCTION crm_workspace_mutation_guard() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE org UUID; row_value JSONB; token TEXT; terminal UUID; person UUID;
 BEGIN
  IF current_user<>'crm_app' THEN RETURN COALESCE(NEW,OLD); END IF;
- row_value:=CASE WHEN TG_OP='DELETE' THEN to_jsonb(OLD) ELSE to_jsonb(NEW) END;
- org:=(row_value->>'organization_id')::uuid;
+ row_value:=CASE WHEN TG_OP='DELETE' THEN to_jsonb(OLD) ELSE to_jsonb(NEW) END; org:=(row_value->>'organization_id')::uuid;
  IF TG_TABLE_NAME='operator_task_proposal' THEN SELECT organization_id INTO org FROM operator_proposal WHERE id=(row_value->>'proposal_id')::uuid; END IF;
  IF org IS NULL THEN RAISE EXCEPTION USING ERRCODE='P010C',MESSAGE='workspace_scope_required'; END IF;
- PERFORM crm_workspace_shared(org);
- IF EXISTS(SELECT 1 FROM organization WHERE id=org AND workspace_mode='operational') THEN RETURN COALESCE(NEW,OLD); END IF;
+ PERFORM crm_workspace_shared(org); IF EXISTS(SELECT 1 FROM organization WHERE id=org AND workspace_mode='operational') THEN RETURN COALESCE(NEW,OLD); END IF;
+ token:=current_setting('crm.admitted_metadata_permit',true);
+ IF TG_OP='INSERT' AND crm_admitted_metadata_insert_allowed(org,token,row_value) THEN RETURN NEW; END IF;
  IF TG_OP='INSERT' AND (crm_metadata_insert_allowed(org,TG_TABLE_NAME,row_value) OR crm_activity_insert_allowed(org,TG_TABLE_NAME,row_value) OR crm_admitted_activity_insert_allowed(org,TG_TABLE_NAME,row_value)) THEN RETURN NEW; END IF;
  token:=current_setting('crm.import_token',true);
- IF token IS NOT NULL AND TG_TABLE_NAME IN ('person','contact_method','stage','assignment_changed','stage_changed','person_imported')
- AND EXISTS(SELECT 1 FROM migration_workspace w JOIN migration_import i ON i.id=w.import_id AND i.organization_id=w.organization_id
- JOIN organization_membership m ON m.organization_id=i.organization_id AND m.user_id=i.executor_user_id
- WHERE w.organization_id=org AND w.plan_id=i.confirmed_plan_id AND i.state='running' AND i.lease_token::text=token AND i.lease_expires_at>clock_timestamp() AND m.role='admin' AND m.status='active') THEN RETURN COALESCE(NEW,OLD); END IF;
- token:=current_setting('crm.terminal_call',true);
- IF token IS NOT NULL AND token<>'' AND TG_TABLE_NAME IN ('call','call_completed','contact_attempted','person') THEN
- terminal:=token::uuid; SELECT person_id INTO person FROM call WHERE id=terminal AND organization_id=org;
- IF person IS NOT NULL AND ((TG_TABLE_NAME='call' AND (row_value->>'id')::uuid=terminal AND row_value->>'status' IN ('ended','failed','cancelled')) OR (TG_TABLE_NAME IN ('call_completed','contact_attempted') AND (row_value->>'person_id')::uuid=person) OR (TG_TABLE_NAME='person' AND TG_OP='UPDATE' AND (row_value->>'id')::uuid=person AND (to_jsonb(OLD)-'updated_at'-'last_contact_at')=(to_jsonb(NEW)-'updated_at'-'last_contact_at'))) THEN RETURN COALESCE(NEW,OLD); END IF;
- END IF;
+ IF token IS NOT NULL AND TG_TABLE_NAME IN ('person','contact_method','stage','assignment_changed','stage_changed','person_imported') AND (TG_TABLE_NAME<>'contact_method' OR TG_OP='INSERT') AND EXISTS(SELECT 1 FROM migration_workspace w JOIN migration_import i ON i.id=w.import_id AND i.organization_id=w.organization_id JOIN organization_membership m ON m.organization_id=i.organization_id AND m.user_id=i.executor_user_id WHERE w.organization_id=org AND w.plan_id=i.confirmed_plan_id AND i.state='running' AND i.lease_token::text=token AND i.lease_expires_at>clock_timestamp() AND m.role='admin' AND m.status='active') THEN RETURN COALESCE(NEW,OLD); END IF;
+ token:=current_setting('crm.people_refresh_permit',true); IF TG_TABLE_NAME IN ('person','contact_method','assignment_changed','stage_changed') AND crm_people_refresh_mutation_allowed(org,token,TG_TABLE_NAME,TG_OP,row_value) THEN RETURN COALESCE(NEW,OLD); END IF;
+ token:=current_setting('crm.people_admission_permit',true); IF TG_TABLE_NAME IN ('person','contact_method','assignment_changed','stage_changed','person_admitted') AND crm_people_admission_mutation_allowed(org,token,TG_TABLE_NAME,TG_OP,row_value) THEN RETURN COALESCE(NEW,OLD); END IF;
+ token:=current_setting('crm.admitted_people_refresh_permit',true); IF TG_TABLE_NAME IN ('person','contact_method','assignment_changed','stage_changed') AND crm_admitted_people_refresh_mutation_allowed(org,token,TG_TABLE_NAME,TG_OP,CASE WHEN TG_OP='INSERT' THEN NULL ELSE to_jsonb(OLD) END,CASE WHEN TG_OP='DELETE' THEN NULL ELSE to_jsonb(NEW) END) THEN RETURN COALESCE(NEW,OLD); END IF;
+ token:=current_setting('crm.terminal_call',true); IF token IS NOT NULL AND token<>'' AND TG_TABLE_NAME IN ('call','call_completed','contact_attempted','person') THEN terminal:=token::uuid; SELECT person_id INTO person FROM call WHERE id=terminal AND organization_id=org; IF person IS NOT NULL AND ((TG_TABLE_NAME='call' AND (row_value->>'id')::uuid=terminal AND row_value->>'status' IN ('ended','failed','cancelled')) OR (TG_TABLE_NAME IN ('call_completed','contact_attempted') AND (row_value->>'person_id')::uuid=person) OR (TG_TABLE_NAME='person' AND TG_OP='UPDATE' AND (to_jsonb(OLD)-'updated_at'-'last_contact_at')=(to_jsonb(NEW)-'updated_at'-'last_contact_at'))) THEN RETURN COALESCE(NEW,OLD); END IF; END IF;
  RAISE EXCEPTION USING ERRCODE='P010C',MESSAGE='workspace_in_migration_review';
 END $$;

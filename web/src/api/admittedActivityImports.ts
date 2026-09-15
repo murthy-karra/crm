@@ -14,7 +14,7 @@ export interface AdmittedActivityImport {
   id: string; parent_import_id: string; parent_plan_id: string; admission_id: string; admission_plan_id: string; source_report_id: string; source_output_revision: string; snapshot_id: string; source_account_id: string; capture_sequence: string; workspace_revision: string; revision: string; activity_revision: string; engine_version: string
   state: 'preparing' | 'ready' | 'queued' | 'running' | 'paused' | 'completed' | 'cancelled'; phase: 'preparation' | 'records' | 'complete'; pause_reason: string | null
   created_at: string; updated_at: string; confirmed_at: string | null; confirmed_plan_id: string | null; completed_at: string | null
-  retained_bytes: string; reserved_bytes: string; native_row_bytes: string; cancellation_reserved_bytes: string; release_ready: boolean; counts: ActivityCounts; policy: MetadataImport['policy']; coverage: { remaining_data: string[]; native_review_only: true }; latest_plan: ActivityPlan; actions: { replan: boolean; confirm: boolean; retry: boolean; cancel: boolean }
+  retained_bytes: string; reserved_bytes: string; native_row_bytes: string; cancellation_reserved_bytes: string; release_ready: boolean; counts: ActivityCounts; policy: MetadataImport['policy']; coverage: { remaining_data: string[]; native_review_only: true }; remainder: { available: boolean }; latest_plan: ActivityPlan; actions: { replan: boolean; confirm: boolean; retry: boolean; cancel: boolean; remainder: boolean }
 }
 export interface ActivityReplan { request_id: string; expected_plan_id: string; choices: ActivityPatch[]; source_timezone?: string | null }
 export interface ActivityConfirm { request_id: string; plan_id: string; expected_revision: string; acknowledge_held: string; acknowledge_source_only: string }
@@ -43,6 +43,7 @@ export const replanAdmittedActivityImport = (id: string, body: ActivityReplan, s
 export const confirmAdmittedActivityImport = (id: string, body: ActivityConfirm, signal?: AbortSignal) => post(`${path(id)}/confirm`, body, signal)
 export const retryAdmittedActivityImport = (id: string, body: AdmittedActivityAction, signal?: AbortSignal) => post(`${path(id)}/retry`, body, signal)
 export const cancelAdmittedActivityImport = (id: string, body: AdmittedActivityAction, signal?: AbortSignal) => post(`${path(id)}/cancel`, body, signal)
+export const createAdmittedActivityRemainder = (id: string, body: AdmittedActivityAction, signal?: AbortSignal) => post(`${path(id)}/remainder`, body, signal)
 export const fetchActivityMappings = (id: string, plan: string, role?: ActivityRole, cursor?: string, signal?: AbortSignal) => apiFetch<ActivityPage<ActivityMapping>>(`${path(id)}/mappings${query({ plan_id: plan, kind: role, cursor, limit: 50 })}`, { signal })
 export const fetchActivityTargets = (id: string, plan: string, cursor?: string, signal?: AbortSignal) => apiFetch<ActivityPage<ActivityTarget>>(`${path(id)}/targets${query({ plan_id: plan, cursor, limit: 50 })}`, { signal })
 export const fetchActivityRecords = (id: string, plan: string, filters: ActivityFilters = {}, cursor?: string, signal?: AbortSignal) => apiFetch<ActivityPage<ActivityRecord>>(`${path(id)}/records${query({ plan_id: plan, ...filters, cursor, limit: 25 })}`, { signal })

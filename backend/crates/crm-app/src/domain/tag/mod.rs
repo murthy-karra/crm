@@ -18,6 +18,5 @@ pub use model::{can_manage, Tag, TagRef};
 pub use queries::{exists, list_for_organization, list_for_person, names_for, TagRow};
 
 pub(crate) use commands::{
-    apply_person_tag_in_transaction, apply_prepared_person_tag, prepare_person_tag,
-    validate_person_tag_capacity,
+    apply_prepared_person_tag, prepare_person_tag, validate_person_tag_capacity,
 };

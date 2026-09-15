@@ -234,7 +234,7 @@ pub struct RemovePersonTag {
 /// Transaction-compatible terminal link mutation. The caller owns the Person
 /// lock and all validation/limit checks; this keeps mobile's atomic composer
 /// on the same link-write primitive as the ordinary typed commands.
-pub(crate) async fn apply_person_tag_in_transaction(
+async fn apply_person_tag_in_transaction(
     conn: &mut PgConnection,
     organization_id: OrganizationId,
     person_id: PersonId,

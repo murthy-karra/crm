@@ -279,6 +279,10 @@ fn parse_metadata(value: Value) -> Result<UpdatePersonMetadataPayload, MobileErr
     }
     Ok(payload)
 }
+// New operations use `domain::person_metadata` above. This retired adapter
+// implementation is retained temporarily for a narrow compatibility review;
+// it has no dispatch path.
+#[allow(dead_code)]
 enum PreparedMetadataAction {
     AddTag(Uuid),
     RemoveTag(Uuid),
@@ -292,6 +296,7 @@ enum PreparedMetadataAction {
     },
     ClearField(Uuid),
 }
+#[allow(dead_code)]
 struct MetadataChange {
     tags: bool,
     fields: bool,
@@ -301,6 +306,7 @@ struct MetadataChange {
 /// validators as the ordinary typed commands. It validates the complete final
 /// patch before changing any row, then removes tags before additions so a
 /// replacement at the 20-tag limit does not fail an intermediate quota check.
+#[allow(dead_code)]
 async fn update_metadata_in_transaction(
     conn: &mut PgConnection,
     ctx: &CommandContext,

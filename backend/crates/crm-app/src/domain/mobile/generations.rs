@@ -18,11 +18,13 @@ struct CatalogStage {
     name: String,
     position: i16,
 }
+type MetadataFieldSnapshot = (Uuid, String, String, i32, Option<DateTime<Utc>>);
+type MetadataOptionSnapshot = (Uuid, Uuid, String, i32, Option<DateTime<Utc>>);
 struct MetadataCatalog {
     revision: i64,
     tags: Vec<(Uuid, String)>,
-    fields: Vec<(Uuid, String, String, i32, Option<DateTime<Utc>>)>,
-    options: Vec<(Uuid, Uuid, String, i32, Option<DateTime<Utc>>)>,
+    fields: Vec<MetadataFieldSnapshot>,
+    options: Vec<MetadataOptionSnapshot>,
 }
 #[derive(Clone, PartialEq)]
 struct Entry {
@@ -56,10 +58,10 @@ async fn metadata_catalog_snapshot(
             .into_iter()
             .map(|r| (r.get("id"), r.get("name")))
             .collect();
-    let fields: Vec<(Uuid, String, String, i32, Option<DateTime<Utc>>)> = sqlx::query("SELECT id,label,field_type,position,archived_at FROM custom_field WHERE organization_id=$1 ORDER BY position,id LIMIT 10001")
+    let fields: Vec<MetadataFieldSnapshot> = sqlx::query("SELECT id,label,field_type,position,archived_at FROM custom_field WHERE organization_id=$1 ORDER BY position,id LIMIT 10001")
         .bind(organization_id).fetch_all(&mut *conn).await?
         .into_iter().map(|r| (r.get("id"),r.get("label"),r.get("field_type"),r.get("position"),r.get("archived_at"))).collect();
-    let options: Vec<(Uuid, Uuid, String, i32, Option<DateTime<Utc>>)> = sqlx::query("SELECT id,field_id,label,position,archived_at FROM custom_field_option WHERE organization_id=$1 ORDER BY field_id,position,id LIMIT 10001")
+    let options: Vec<MetadataOptionSnapshot> = sqlx::query("SELECT id,field_id,label,position,archived_at FROM custom_field_option WHERE organization_id=$1 ORDER BY field_id,position,id LIMIT 10001")
         .bind(organization_id).fetch_all(&mut *conn).await?
         .into_iter().map(|r| (r.get("id"),r.get("field_id"),r.get("label"),r.get("position"),r.get("archived_at"))).collect();
     if tags.len() > 10_000

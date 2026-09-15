@@ -366,9 +366,9 @@ async fn mobile006_metadata_hot_query_plans(pool: PgPool) {
     }
     sqlx::query("INSERT INTO person(organization_id,first_name,stage_id,assigned_user_id) SELECT $1,'Mobile006 plan',p.stage_id,$2 FROM person p CROSS JOIN generate_series(1,24999) WHERE p.id=$3")
         .bind(f.org).bind(f.actor).bind(f.person).execute(&f.app).await.unwrap();
-    let tag: Uuid = sqlx::query_scalar("INSERT INTO tag(organization_id,created_by_user_id,name) VALUES($1,$2,'Mobile006 plan tag') RETURNING id")
+    let _tag: Uuid = sqlx::query_scalar("INSERT INTO tag(organization_id,created_by_user_id,name) VALUES($1,$2,'Mobile006 plan tag') RETURNING id")
         .bind(f.org).bind(f.actor).fetch_one(&f.app).await.unwrap();
-    let field: Uuid = sqlx::query_scalar("INSERT INTO custom_field(organization_id,label,field_type,position,created_by_user_id) VALUES($1,'Mobile006 plan field','text',1,$2) RETURNING id")
+    let _field: Uuid = sqlx::query_scalar("INSERT INTO custom_field(organization_id,label,field_type,position,created_by_user_id) VALUES($1,'Mobile006 plan field','text',1,$2) RETURNING id")
         .bind(f.org).bind(f.actor).fetch_one(&f.app).await.unwrap();
     let statements = [
         ("membership", "SELECT role FROM organization_membership WHERE organization_id=$1 AND user_id=$2 AND status='active' FOR SHARE"),
@@ -380,15 +380,29 @@ async fn mobile006_metadata_hot_query_plans(pool: PgPool) {
     let mut evidence = Vec::new();
     for (name, sql) in statements {
         let explain = format!("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) {sql}");
-        let plan: Value = sqlx::query_scalar(&explain)
-            .bind(f.org)
-            .bind(f.actor)
-            .bind(f.person)
-            .bind(tag)
-            .bind(field)
-            .fetch_one(&f.app)
-            .await
-            .unwrap();
+        let plan: Value = match name {
+            "membership" => {
+                sqlx::query_scalar(&explain)
+                    .bind(f.org)
+                    .bind(f.actor)
+                    .fetch_one(&f.app)
+                    .await
+            }
+            "catalog_token" => {
+                sqlx::query_scalar(&explain)
+                    .bind(f.org)
+                    .fetch_one(&f.app)
+                    .await
+            }
+            _ => {
+                sqlx::query_scalar(&explain)
+                    .bind(f.org)
+                    .bind(f.person)
+                    .fetch_one(&f.app)
+                    .await
+            }
+        }
+        .unwrap();
         evidence.push(json!({"name":name,"sql":sql,"sha256":format!("{:x}",Sha256::digest(sql.as_bytes())),"plan":plan}));
     }
     println!(

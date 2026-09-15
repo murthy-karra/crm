@@ -2831,3 +2831,16 @@ bases to dependent writers. Preserve shared development, native demo/QA stores,
 source data and recovery evidence. Publication, deployment, app distribution,
 physical phones/cellular, broad redesign, native calling, live FUB/customer work,
 later migration families and activation remain separately scoped.
+
+**Release follow-up — 2026-09-14:** After implementation, final checks and both
+independent implementation reviews completed, the user requested **“commit, push,
+merge and cleanup and deploy.”** This authorizes committing and merging the
+verified Mobile005 / 010f3 changes into main, publishing them, cleaning completed
+milestone branches/worktrees, and deploying the compatible backend/Web and additive
+schema to existing Mac-hosted shared development. Reuse attributed implementation
+evidence and execute release-specific backup, preservation, artifact, workload
+compatibility, HTTP/mobile and browser checks. Preserve native demo/QA stores,
+retained source evidence and recovery material. Native distribution, physical
+phones/cellular, live FUB/customer processing, activation and production-cluster
+work remain separate. The release record is
+`docs/tasks/MOBILE_005_010f3_RELEASE.md`.

@@ -46,10 +46,13 @@ class Mobile006UiProofTest {
         val metadataCard = "metadata-draft-${metadataDraft.id}"
         // Saved work can also contain a profile conflict with an identically labelled action.
         // The proof must exercise the metadata operation that the staged server conflict named.
-        compose.onNode(
-            hasText("Review and replace") and hasAnyAncestor(hasTestTag(metadataCard)),
+        val review = compose.onNode(
+            hasClickAction() and
+                hasAnyAncestor(hasTestTag(metadataCard)) and
+                hasAnyDescendant(hasText("Review and replace")),
             useUnmergedTree = true,
-        ).assertIsEnabled().performClick()
+        )
+        review.performScrollTo().assertIsDisplayed().assertIsEnabled().performClick()
         delay(1_500)
         recordEditorDiagnostic("after_metadata_review_click", stale, metadataCard)
         // Retain the exact projection and dialog state before asserting individual controls;
@@ -74,8 +77,12 @@ class Mobile006UiProofTest {
         compose.waitUntil(20_000) { compose.onAllNodesWithTag("metadata-text-d9d979a3-5015-4cc9-9252-a58e1d109548", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
         screenshot("mobile006-ui-catalog-conflict-editor")
         compose.onNodeWithTag("metadata-text-d9d979a3-5015-4cc9-9252-a58e1d109548", useUnmergedTree = true)
+            .performScrollTo().assertIsDisplayed()
             .performTextReplacement("Android UI replacement ${java.util.UUID.randomUUID()}")
-        compose.onNodeWithText("Save and sync").assertIsEnabled().performClick()
+        compose.onNode(
+            hasClickAction() and hasAnyDescendant(hasText("Save and sync")),
+            useUnmergedTree = true,
+        ).assertIsDisplayed().assertIsEnabled().performClick()
         compose.waitUntil(20_000) {
             active().store.dao.operations().any { it.kind == "update_person_metadata" && it.id != stale && it.status == "queued" }
         }

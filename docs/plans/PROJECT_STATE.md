@@ -1,6 +1,6 @@
 # Project state
 
-Updated: 2026-09-15 — Mobile006 / 010f4 published and deployed.
+Updated: 2026-09-15 — Mobile006 / 010f4 deployed; Mobile007 / 010d3 implementation authorized.
 Current status and live residuals only. [History](PROJECT_HISTORY.md) preserves
 completed chronology. Decisions remain authoritative; use the
 [reading index](../decisions/DECISION_INDEX.md).
@@ -44,10 +44,23 @@ native API3106 is available; the isolated browser QA processes are stopped.
 
 010e4 core refresh, 010f3 metadata and 010f4 activity are present in shared
 development. History follows in the [family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md),
-but its next contracts and task are not assigned. Remaining deltas, mapping repair,
+and D-085 now authorizes [Mobile007 / 010d3 planning](MOBILE_007_010d3_PLAN.md).
+D-086 accepts both specifications and declares implementation/isolated synthetic
+verification authorized. Independent planning review is running before code work;
+[implementation status](../tasks/MOBILE_007_010d3_IMPLEMENTATION_STATUS.md) owns progress. Remaining deltas, mapping repair,
 activation and complete migration fidelity require their own specified scope.
 
 ## Last accepted decision
+
+**D-086:** accepts Mobile007 / 010d3 contracts and implementation with isolated
+synthetic verification. Complete the required planning review, then implement and
+verify both tracks under the coordinated ownership plan. Publication/deployment
+and customer-facing operational work remain separate.
+
+**D-085:** authorizes planning admitted-People history with the user-selected
+mobile companion, online Find and save People. Both detailed draft specifications,
+execution briefs and coordinated plan are written. No new implementation or
+shared-contract approval follows from this planning choice.
 
 **D-084:** accepts the reviewed Mobile006/010f4 contracts and authorizes
 implementation plus isolated synthetic verification, established writers and
@@ -164,9 +177,10 @@ linked verification records; they are not claims about present runtime health.
 
 ## Next recommended action
 
-Plan the admitted-People history family when assigned, following the
-[family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md). Native calling follows the
-agreed progression. Physical-phone/design/live-source work remains deferred;
+Complete the required planning review, then implement and verify the accepted
+[Mobile007 / 010d3 pair](MOBILE_007_010d3_PLAN.md) under D-086.
+The [family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md) retains the sequential
+migration scope. Native calling follows the agreed progression. Physical-phone/design/live-source work remains deferred;
 complete customer erasure/restore readiness before real customer data.
 No repeat implementation or release action is pending for Mobile006/010f4.
 

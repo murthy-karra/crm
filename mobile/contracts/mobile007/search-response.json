@@ -1,0 +1,17 @@
+{
+  "context_id": "10000000-0000-0000-0000-000000000001",
+  "items": [
+    {
+      "person_id": "20000000-0000-0000-0000-000000000001",
+      "display_name": "Ada Sample",
+      "stage": {
+        "id": "30000000-0000-0000-0000-000000000001",
+        "name": "New"
+      },
+      "assigned_user": null,
+      "primary_email": "ada@example.test",
+      "primary_phone": null
+    }
+  ],
+  "has_more": false
+}

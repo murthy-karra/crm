@@ -2909,3 +2909,59 @@ Native source publication is included; app distribution, physical phones/cellula
 live FUB/customer operations, workspace activation and calling remain separate.
 The earlier Mobile005/010f3 release record must be reconciled against actual
 runtime/schema evidence rather than assumed complete or repeated blindly.
+
+
+### D-085 — Mobile 007 discovery and admitted-People history planning (2026-09-15)
+
+After the next history step was presented in Lavish, the user replied **“ok lets
+plan it . what about mobile work?”**. Asked which mobile companion to plan, the
+user selected **“Find and save People (Recommended)”**: search the Organization
+while online, then download a selected Person for offline work.
+
+This authorizes drafting [Mobile007](../specs/MOBILE_007_FIND_AND_SAVE_PEOPLE.md),
+[admitted history 010d3](../specs/SLICE_010d3.md), their execution briefs and
+[coordinated plan](../plans/MOBILE_007_010d3_PLAN.md). Mobile search builds on the
+existing offline selection and sealed-download boundary; history follows the
+accepted smaller sequential family ladder with metadata-first meaning. The user
+also requests a plain-language cream Lavish companion with diagrams/context,
+keeping the detailed Markdown plans separate.
+
+The numeric slice assignments, proposed search matching/bounds/transient-result/
+pin recovery contract, later history capture qualification, exclusive global
+identity/fact ownership, exact remainder and compatibility contracts are draft
+planning details. They require independent review and implementation acceptance;
+this outcome choice does not accept new shared contracts or launch writers.
+Preserve the existing mobile/migration progression and substantive implementation
+model preference when later authorized. D-079's calling-afterwards choice remains.
+Physical-phone/cellular, broad redesign, app distribution, live FUB/customer work,
+activation and publication/deployment are separate; the completed D-084 release
+is not reopened. No runtime, schema or application action follows from this entry.
+
+
+### D-086 — Mobile 007 and admitted history implementation accepted (2026-09-15)
+
+After both specifications, execution briefs and coordinated plan were presented,
+the user requested **“go ahead and implementation”**. This accepts the declared
+[Mobile007](../specs/MOBILE_007_FIND_AND_SAVE_PEOPLE.md) and
+[010d3](../specs/SLICE_010d3.md) contracts and numeric assignments for implementation
+and isolated synthetic verification. Complete the required independent planning
+review before code work; compatible corrections within these accepted outcomes
+do not need another approval. Material changes to product, privacy, authority or
+migration fidelity still require their own decision.
+
+Mobile scope includes bounded online search feeding the existing protected pin/
+sealed-download workflow, clear transient result and download states, explicit
+invalid-pin recovery and preservation of pending work. History scope includes
+qualified retained capture and terminal successful admission cohorts, exclusive
+original/admitted global identity and fact provenance, metadata-only bounded
+review, durable compatibility fences and exact unprocessed remainder. Concrete
+DTO/schema/grant/lock checkpoints are owned implementation work.
+
+Use the [coordinated plan](../plans/MOBILE_007_010d3_PLAN.md), existing model
+preferences and at most three short-lived writer worktrees with exclusive file
+ownership. Local implementation/integration checkpoints may provide verified
+bases for dependent native work. Required independent implementation review and
+final gates remain necessary. Preserve shared development, retained native stores,
+source evidence and recovery material. Publication/deployment, native distribution,
+physical phones/cellular, live FUB/customer work, activation and calling remain
+separately scoped; the completed D-084 release is unchanged.

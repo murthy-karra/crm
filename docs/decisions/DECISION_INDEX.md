@@ -1,6 +1,6 @@
 # Decision reading index
 
-Navigation only, checked against the log on 2026-09-14: D-001–D-084 and O-001–O-015.
+Navigation only, checked against the log on 2026-09-15: D-001–D-086 and O-001–O-015.
 [DECISION_LOG.md](DECISION_LOG.md) remains the highest authority. Labels identify
 where to read; they do not summarize complete policy, grant approval, or override
 later amendments. Open/resolved labels are copied from the log's headings;
@@ -111,8 +111,9 @@ The original decision sections, including superseded choices, remain intact.
 | [D-081](DECISION_LOG.md#d-081--mobile-005-and-admitted-people-metadata-planning-authorized-2026-09-13) | Mobile005; 010f3; metadata; parallel planning | Mobile 005 and admitted-People metadata planning authorized |
 | [D-082](DECISION_LOG.md#d-082--mobile-005-and-admitted-people-metadata-implementation-approved-2026-09-14) | Mobile005; 010f3; implementation approval | Mobile 005 and admitted-People metadata implementation approved |
 | [D-083](DECISION_LOG.md#d-083--mobile-006-and-admitted-people-activity-planning-authorized-2026-09-14) | Mobile006; 010f4; notes/tasks; planning | Mobile 006 and admitted-People activity planning authorized |
-
 | [D-084](DECISION_LOG.md#d-084--mobile-006-and-admitted-people-activity-implementation-approved-2026-09-14) | Mobile006; 010f4; implementation approval/release | Mobile 006 and admitted-People activity implementation approved |
+| [D-085](DECISION_LOG.md#d-085--mobile-007-discovery-and-admitted-people-history-planning-2026-09-15) | Mobile007; 010d3; discovery; history; planning | Mobile 007 discovery and admitted-People history planning |
+| [D-086](DECISION_LOG.md#d-086--mobile-007-and-admitted-history-implementation-accepted-2026-09-15) | Mobile007; 010d3; implementation approval | Mobile 007 and admitted history implementation accepted |
 
 ## Open-decision register (includes resolved entries)
 

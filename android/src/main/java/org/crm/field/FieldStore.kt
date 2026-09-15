@@ -10,8 +10,20 @@ import org.json.JSONObject
 class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock: DeviceClock) {
     val dao = db.data()
 
+    /**
+     * An expired lease can be discovered inside a Room transaction.  Persist its locked marker
+     * after that transaction rolls back, so a failed local write cannot leave the encrypted
+     * account apparently usable on the next process start.
+     */
+    private class ExpiredLease : AccessLocked()
+
     private fun <T> atomic(body: () -> T): T =
-        db.runInTransaction(java.util.concurrent.Callable { body() })
+        try {
+            db.runInTransaction(java.util.concurrent.Callable { body() })
+        } catch (error: ExpiredLease) {
+            db.runInTransaction(java.util.concurrent.Callable { dao.meta(MetaRow("locked", "true")) })
+            throw error
+        }
 
     fun authorize(cookie: String) = atomic {
         val old = dao.meta("binding")?.let { JSONObject(it) }
@@ -55,12 +67,10 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
                 value.getLong("duration"),
                 value.getLong("wall"),
             )
-        if (
-            dao.meta("locked") == "true" ||
-                !lease.usable(clock.boot(), clock.elapsed(), clock.wall())
-        ) {
+        if (dao.meta("locked") == "true") throw AccessLocked()
+        if (!lease.usable(clock.boot(), clock.elapsed(), clock.wall())) {
             dao.meta(MetaRow("locked", "true"))
-            throw AccessLocked()
+            throw ExpiredLease()
         }
     }
 

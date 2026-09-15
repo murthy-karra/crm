@@ -87,7 +87,7 @@ interface DeviceClock {
     fun wall(): Long
 }
 
-class AccessLocked : Exception("Online authorization required; saved work remains protected")
+open class AccessLocked : Exception("Online authorization required; saved work remains protected")
 
 class StorageFailure : Exception("Device save failed; keep the draft open and free storage")
 

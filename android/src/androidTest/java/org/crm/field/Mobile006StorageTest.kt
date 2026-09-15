@@ -27,11 +27,13 @@ class Mobile006StorageTest {
     private lateinit var directory: File
     private lateinit var database: FieldDatabase
     private lateinit var store: FieldStore
+    private lateinit var clock: TestClock
 
     @Before fun open() {
         directory = File(context.noBackupFilesDir, "mobile006-${UUID.randomUUID()}").apply { mkdirs() }
         database = FieldDatabase.open(context, directory, key)
-        store = FieldStore(database, binding(), TestClock()); store.authorize("synthetic")
+        clock = TestClock()
+        store = FieldStore(database, binding(), clock); store.authorize("synthetic")
         store.dao.metadataTags(listOf(MetadataTagRow(tag, "Buyer", "g", "3")))
         store.dao.metadataFields(listOf(
             MetadataFieldRow(text, "Text", "text", 1, null, "g", "3"),
@@ -134,6 +136,65 @@ class Mobile006StorageTest {
         assertEquals("4", JSONObject(refreshed.metadata).getString("catalog_revision"))
         assertTrue(store.metadataQualified(refreshed, "4", "2"))
         assertFalse(store.metadataQualified(refreshed, "3", "2"))
+    }
+
+    @Test fun archivedFieldsCanBeClearedButDeletedAndArchivedSetTargetsAreRejected() {
+        // A catalog refresh can archive a field or option while an older baseline still contains
+        // its value. Clearing remains a valid explicit intent; selecting it again is not.
+        store.dao.metadataFields(listOf(MetadataFieldRow(text, "Text", "text", 1, "2026-09-14T00:00:00Z", "g", "3")))
+        assertThrows(IllegalArgumentException::class.java) {
+            store.saveMetadataDraft(UUID.randomUUID().toString(), person,
+                JSONArray().put(json("kind" to "set_field", "field_id" to text, "value" to json("text" to "cannot restore"))))
+        }
+        val clear = store.saveMetadataDraft(UUID.randomUUID().toString(), person,
+            JSONArray().put(json("kind" to "clear_field", "field_id" to text)))
+        assertEquals(1L, clear.revision)
+
+        store.dao.metadataFields(listOf(MetadataFieldRow(choice, "Choice", "choice", 4, null, "g", "3")))
+        store.dao.metadataOptions(listOf(MetadataOptionRow(option, choice, "North", 1, "2026-09-14T00:00:00Z", "g", "3")))
+        assertThrows(IllegalArgumentException::class.java) {
+            store.saveMetadataDraft(UUID.randomUUID().toString(), person,
+                JSONArray().put(json("kind" to "set_field", "field_id" to choice, "value" to json("option_id" to option))))
+        }
+        // The removed tag is deliberately not accepted as an empty/unknown target.
+        store.dao.clearMetadataTags()
+        assertThrows(IllegalArgumentException::class.java) {
+            store.saveMetadataDraft(UUID.randomUUID().toString(), person,
+                JSONArray().put(json("kind" to "add_tag", "tag_id" to tag)))
+        }
+        assertTrue(store.dao.operations().isEmpty())
+    }
+
+    @Test fun expiredLeaseLocksMetadataAndLateBootstrapIdentityCannotEnterAccount() {
+        clock.elapsedValue += 86_400_001
+        assertThrows(AccessLocked::class.java) {
+            store.saveMetadataDraft(UUID.randomUUID().toString(), person, actions())
+        }
+        assertEquals("true", store.dao.meta("locked"))
+        assertTrue(store.dao.metadataDrafts().isEmpty())
+        val bootstrap = JSONObject(binding().bootstrap).put("actor_user_id", "80000000-0000-4000-8000-000000000099")
+        assertThrows(ProtocolFailure::class.java) {
+            Binding.parse(bootstrap, "80000000-0000-4000-8000-000000000006", "90000000-0000-4000-8000-000000000006", "a0000000-0000-4000-8000-000000000006")
+        }
+    }
+
+    @Test fun metadataStoreKeyIsWrappedAndCannotBeRecoveredAfterKeystoreLoss() {
+        val name = "mobile006-vault-${UUID.randomUUID()}"
+        val vault = DeviceVault(context, name)
+        try {
+            val account = vault.accountId("https://metadata.example", "actor-a", "org-a")
+            val directory = vault.accountDirectory(account)
+            val secret = vault.databaseKey(directory)
+            assertArrayEquals(secret, DeviceVault(context, name).databaseKey(directory))
+            assertFalse(File(directory, "database.key").readBytes().contentEquals(secret))
+            java.security.KeyStore.getInstance("AndroidKeyStore").apply {
+                load(null); deleteEntry("crm.$name.device-wrap.v1")
+            }
+            assertThrows(Exception::class.java) { vault.databaseKey(directory) }
+            assertTrue("ciphertext stays protected for an explicit reauthorization path", File(directory, "database.key").exists())
+        } finally {
+            vault.root.deleteRecursively()
+        }
     }
 
     private fun actions() = JSONArray()

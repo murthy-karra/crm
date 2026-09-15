@@ -28,6 +28,7 @@ journey are complete. Native UI boundary walk-through remains.
 | `:testMobile006qaDebugUnitTest :connectedMobile006qaDebugAndroidTest :lintMobile006qaDebug` | PASS, 2m02s | `/private/tmp/crm-mobile006-010f4-thyhauvv/android006-final-local.log` |
 | corrected metadata parser + unit tests + `Mobile006StorageTest` | PASS, 5 emulator tests, 1m23s | `/private/tmp/crm-mobile006-010f4-thyhauvv/android006-storage-parser.log` |
 | catalog-only revision requalification regression | PASS, 6 emulator tests, 1m06s | `/private/tmp/crm-mobile006-010f4-thyhauvv/android006-r1-storage.log` |
+| archived/deleted catalog, key-loss, access-expiry and late-identity metadata boundaries | PASS, 9 emulator tests, 1m24s | `/private/tmp/crm-mobile006-010f4-thyhauvv/android006-storage-boundary-final.log` |
 | historical populated schema-6 APK/test build | PASS, 41s | `/private/tmp/crm-mobile006-010f4-thyhauvv/android005-upgradeproof-build.log` |
 | current schema-8 APK/test build | PASS, 44s | `/private/tmp/crm-mobile006-010f4-thyhauvv/android006-upgradeproof-build.log` |
 | actual installed schema-6 seed | PASS, 5.681s | direct `adb shell am instrument` on `org.crm.field.mobile006upgradeproofqa.legacytest` |
@@ -49,6 +50,13 @@ generic draft and immutable queued envelope); the current Mobile006 APK was
 then applied with `adb install -r`, with no uninstall, data clear or key
 replacement. The inspector proved schema 8, unchanged key length, exact legacy
 envelope and draft bytes, and an unqualified pre-Mobile006 Person.
+
+The current metadata boundary test proves that archived fields and options cannot
+be selected again, an archived value can still be explicitly cleared, and a
+deleted tag cannot enter a new proposal. It proves exact keystore-wrapped key
+loss leaves only ciphertext, an elapsed offline lease persists the locked marker
+even when the rejected write's transaction rolls back, and a late bootstrap with
+a different actor identity cannot bind to the protected account.
 
 ## Remaining required evidence
 

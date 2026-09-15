@@ -58,6 +58,23 @@ class Mobile006LiveApiTest {
         }
     }
 
+    /** Reads the retained lost-response operation after its exact retry; it creates no new work. */
+    @Test fun stagedLostResponseReplayRetainsExactEnvelopeAndReceipt() = runBlocking {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("mobile006ReplayEvidence") == "true")
+        val app = app()
+        val saved = JSONObject(conflictStage(app).readText())
+        val row = active(app.repository).store.dao.operation(saved.getString("replay"))!!
+        assertEquals("update_person_metadata", row.kind)
+        assertEquals(saved.getString("replay_sha"), sha(row.envelope))
+        assertTrue("replay status=${row.status} error=${row.lastError}", row.status in setOf("accepted", "covered"))
+        val receipt = JSONObject(requireNotNull(row.receipt))
+        assertEquals("person_metadata", receipt.getString("resource_type"))
+        assertTrue("the retained operation must have been exact-replayed", receipt.getBoolean("replayed"))
+        File(app.filesDir, "mobile006-ui-evidence.txt").appendText(
+            "lost_response_replay=${row.id} status=${row.status} sha256=${saved.getString("replay_sha")} receipt_replayed=${receipt.getBoolean("replayed")}\n",
+        )
+    }
+
     private suspend fun lostResponse() {
         val app = app(); val repository = app.repository
         authenticate(repository); awaitMetadata(repository)

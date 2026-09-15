@@ -1,10 +1,10 @@
 # Mobile 006 Android verification
 
-Status: **IN PROGRESS** — local encrypted-store checks, the populated
+Status: **COMPLETE** — local encrypted-store checks, the populated
 schema-6 installed-store upgrade, the serialized API3106 offline/restart
 journey, and the retained catalog-conflict native replacement journey are
-complete. The staged lost-response replay remains to be recorded in this
-verifier.
+complete. The retained lost-response replay also has exact-envelope and receipt
+evidence in this verifier.
 
 ## Environment
 
@@ -40,6 +40,7 @@ verifier.
 | API3106 offline mixed metadata prepare | PASS, 1/1 | direct `adb shell am instrument`; `mobile006-stage.json` retained protected operation ID and SHA-256 envelope evidence |
 | API3106 process relaunch + upload | PASS, 14.691s | direct second `adb shell am instrument`; verified same envelope SHA-256, `person_metadata` receipt and accepted/covered state |
 | API3106 catalog-conflict native replacement | PASS, 1/1, 14.334s | direct `adb shell am instrument` continuation; original `389ca800-05f4-41be-aacf-1302e4ebe6cc` remained superseded, replacement `4317238d-aabf-4e1b-a89b-a35618364e8c` reached `accepted`; screenshots and device evidence in `/private/tmp/crm-mobile006-010f4-thyhauvv/android006-ui-final-artifacts/` |
+| API3106 staged lost-response replay | PASS, 1/1, 15.311s | read-only direct instrumentation verified retained operation `a3f72bd0-2108-4512-823b-e310c258b73d` is `covered`, has the original SHA-256 envelope and a `person_metadata` receipt with `replayed=true` |
 
 `Mobile006StorageTest` covers mixed immutable tag/typed-value envelopes,
 exact decimal/date string retention, explicit clear, choice option identity,
@@ -113,9 +114,25 @@ It passed one test in 14.334 seconds using the frozen API source `82d081e` at
 -r`; the target APK stayed at SHA-256
 `7705977de274ca794b100bea63a6a62f2f3e6859d15e81d40bc30b93fab75268`.
 
+The guarded retained-replay verifier then read the already staged operation; it
+created no draft or request. It proved the exact original envelope digest
+`5210a81a93f400254e9757448fc5f16653d644c5984d771b6da83bb1a353d744`, a
+`covered` local operation and a `person_metadata` receipt whose `replayed` flag
+is true. Its command was:
+
+```sh
+adb -s emulator-5554 shell am instrument -w \
+  -e mobile006ReplayEvidence true \
+  -e class org.crm.field.Mobile006LiveApiTest#stagedLostResponseReplayRetainsExactEnvelopeAndReceipt \
+  org.crm.field.mobile006qa.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+It passed one test in 15.311 seconds. The device evidence line is retained in
+`files/mobile006-ui-evidence.txt` under the owned QA package.
+
 ## Remaining required evidence
 
-1. Record the staged lost-response replay in this verifier.
+None.
 
 No physical device, distribution, production API, customer data or retained demo
 package was used.

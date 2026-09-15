@@ -34,7 +34,13 @@ code. No generic family framework or second identity registry.
 
 Before new owner rows can exist, preparation/confirmation must require compatible
 schema and original/new writer support. Durable first confirmation installs the
-common read/worker barrier. Distinguish trusted old-artifact retirement from checks
+common read/worker barrier. Freeze separate `crm.admitted_history_reader=fub-admitted-history-v1` and
+unchanged `crm.history_reader=fub-history-timeline-v1`; guard each durable
+predicate independently across read/shared/ordinary and worker admission. Reacquire
+the shared barrier and stamp the actual unit transaction for original/new workers
+and recovery. Install the durable write/owner fence specified in
+[the contract](SLICE_010d3_CONTRACT.md), including the old-worker claim-to-unit race.
+Distinguish trusted old-artifact retirement from checks
 old binaries cannot perform. Checkpoint completion is not release permission.
 
 ## 2. Prepare and classify

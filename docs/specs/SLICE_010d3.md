@@ -187,9 +187,21 @@ No full-history sorting/decryption/count scan followed by client pagination.
 First confirmation takes the exclusive workspace barrier and installs a durable
 admitted-history predicate before any fact commit. Extend the common DB read guard,
 legacy complete-reader rejection, typed permits, worker admission and release
-preflight with `fub-admitted-history-v1`. Compatibility stamp is server-owned and
-transaction-local, never a business permission or caller header. Cover existing
-original workers and actual pooled connections. Confirmed cancelled/erased/zero-write
+preflight with `fub-admitted-history-v1`. Use a separate transaction-local
+`crm.admitted_history_reader=fub-admitted-history-v1` setting; retain the existing
+`crm.history_reader=fub-history-timeline-v1` value unchanged. The original anchor
+and admitted confirmed-root predicates independently require their respective
+stamp, so a workspace with both requires both. Stamp shared/ordinary/read_check
+admission and all affected original/new worker units and recovery connections;
+never overload one scalar or infer one capability from the other. Each stamp is
+server-owned, never a business permission or caller header. Cover existing
+original workers and actual pooled connections. Original and admitted workers must
+reacquire the shared barrier and stamp capabilities inside the actual unit
+transaction, including recovery. Durable database write/owner guards must reject
+an unstamped original unit claimed before first admitted confirmation before any
+manifest, identity, fact, display, result, revision or ledger charge can commit.
+Prove the paused-after-claim → exclusive confirmation → old-unit attempt race.
+Confirmed cancelled/erased/zero-write
 roots remain fenced. Trusted inventory retires unsupported artifacts, including
 ones older than the common guard. Forward recovery preserves anchors/owners/data;
 never remove a binding to start an old binary.

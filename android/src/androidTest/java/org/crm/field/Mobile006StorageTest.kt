@@ -151,6 +151,17 @@ class Mobile006StorageTest {
         assertFalse(store.metadataQualified(refreshed, "3", "2"))
     }
 
+    @Test fun matchingMetadataTokenCannotReusePersonWhenCatalogRowsAreMissing() {
+        val cached = store.dao.person(person)!!
+        store.dao.meta(MetaRow("metadata_catalog_revision", "3"))
+        assertTrue(store.metadataQualified(cached, "3", "2"))
+        store.dao.clearMetadataTags(); store.dao.clearMetadataFields(); store.dao.clearMetadataOptions()
+        assertFalse("a token without renderable typed rows must refetch", store.metadataQualified(cached, "3", "2"))
+        store.dao.metadataTags(listOf(MetadataTagRow(tag, "Buyer", "g", "3")))
+        store.dao.metadataFields(listOf(MetadataFieldRow(text, "Text", "text", 1, null, "g", "3")))
+        assertTrue(store.metadataQualified(cached, "3", "2"))
+    }
+
     @Test fun archivedFieldsCanBeClearedButDeletedAndArchivedSetTargetsAreRejected() {
         // A catalog refresh can archive a field or option while an older baseline still contains
         // its value. Clearing remains a valid explicit intent; selecting it again is not.

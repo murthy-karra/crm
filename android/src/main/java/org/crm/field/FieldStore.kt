@@ -351,7 +351,21 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
             if (expectedCatalogRevision != null) require(catalogRevision == expectedCatalogRevision)
             if (expectedMetadataRevision != null) require(metadataRevision == expectedMetadataRevision)
             validateMetadataBaseline(baseline)
+            // A token alone cannot make a partially persisted catalog usable.  Reuse is safe
+            // only when the installed rows at that token can render every saved tag/value.
+            if (expectedCatalogRevision != null) require(catalogDescribes(baseline, expectedCatalogRevision))
         }.isSuccess
+
+    private fun catalogDescribes(metadata: JSONObject, revision: String): Boolean {
+        val tags = dao.metadataTags().filter { it.revision == revision }.map { it.id }.toSet()
+        if (!metadata.getJSONArray("tags").objects().all { it.getString("id") in tags }) return false
+        val fields = dao.metadataFields().filter { it.revision == revision }.associateBy { it.id }
+        val options = dao.allMetadataOptions().filter { it.revision == revision }.map { it.id }.toSet()
+        return metadata.getJSONArray("values").objects().all { value ->
+            val field = fields[value.getString("field_id")] ?: return@all false
+            field.fieldType != "choice" || value.getJSONObject("value").getString("option_id") in options
+        }
+    }
 
     fun saveMetadataDraft(
         id: String,
@@ -502,16 +516,9 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         // The matching revision marker is meaningful only when the installed sealed catalog can
         // actually describe every retained current value.  This prevents a damaged/partial
         // catalog table from opening an editor with no controls for an otherwise valid baseline.
-        val tags = dao.metadataTags().filter { it.revision == installedCatalog }.map { it.id }.toSet()
-        require(current.getJSONArray("tags").objects().all { it.getString("id") in tags }) {
+        require(catalogDescribes(current, installedCatalog)) {
             "Refresh the complete metadata catalog before preparing a replacement"
         }
-        val fields = dao.metadataFields().filter { it.revision == installedCatalog }.associateBy { it.id }
-        val options = dao.allMetadataOptions().filter { it.revision == installedCatalog }.map { it.id }.toSet()
-        require(current.getJSONArray("values").objects().all { value ->
-            val field = fields[value.getString("field_id")] ?: return@all false
-            field.fieldType != "choice" || value.getJSONObject("value").getString("option_id") in options
-        }) { "Refresh the complete metadata catalog before preparing a replacement" }
         require(dao.supersede(operationId) == 1)
         val row = MetadataDraftRow(draftId, op.person, current.toString(), context.proposal,
             revision(current.getString("metadata_revision")), revision(current.getString("catalog_revision")), 1)

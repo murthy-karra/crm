@@ -577,7 +577,11 @@ final class LocalStore {
     func metadataCatalogCursor(_ section: String) throws -> String? {
         guard ["tags", "fields", "options"].contains(section) else { throw LocalError.invalidProtocol }
         let cursor = try meta("metadata_catalog_cursor_\(section)")
-        return cursor == "pending" ? "" : cursor
+        // `pending` means no page has been read. An empty cursor means the
+        // section completed, so a resumed reconciliation must skip it rather
+        // than re-requesting page one and violating duplicate/complete rules.
+        if cursor == "pending" { return "" }
+        return cursor?.isEmpty == true ? nil : cursor
     }
     func appendMetadataCatalogPage(_ page: MetadataCatalogPage, expected: String) throws {
         guard ["tags", "fields", "options"].contains(page.section), page.revision == expected,

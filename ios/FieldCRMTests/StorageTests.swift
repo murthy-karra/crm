@@ -639,6 +639,9 @@ final class StorageTests: XCTestCase {
             MetadataCatalogPage(generation_id: exact.generation_id, section: "options", revision: "1", items: [.object(["id": .s(option), "field_id": .s(choiceID), "label": .s("Home"), "position": .number(1), "archived_at": .null])], next_cursor: nil, complete: true)
         ]
         for page in pages { try store!.appendMetadataCatalogPage(page, expected: "1") }
+        XCTAssertNil(try store!.metadataCatalogCursor("tags"), "A completed catalog section is not re-read after a resumed sync")
+        XCTAssertNil(try store!.metadataCatalogCursor("fields"))
+        XCTAssertNil(try store!.metadataCatalogCursor("options"))
         for section in ["summary", "notes", "tasks"] { try store!.appendPage(Page(generation_id: exact.generation_id, person_id: person, revision: "1", section: section, summary: section == "summary" ? .object(["id": .s(person)]) : nil, items: [], next_cursor: nil, complete: true), expected: "1") }
         try store!.finishBundle(exact.generation_id, person, "1")
         try store!.appendMetadataComponent(MetadataComponent(generation_id: exact.generation_id, person_id: person, section: "metadata", revision: "1", metadata_revision: "1", catalog_revision: "1", tags: [], values: [], complete: true), expected: "1")

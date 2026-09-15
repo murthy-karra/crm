@@ -697,14 +697,40 @@ struct MetadataComposerView: View {
     init(initial: Draft) {
         _draft = State(initialValue: initial)
         let baseline = initial.baseline ?? .object([:])
-        _tags = State(initialValue: Set(baseline["tags"].list.map { $0["id"].text }))
+        var selectedTags = Set(baseline["tags"].list.map { $0["id"].text })
+        var restoredClears = Set<String>()
         let values = MetadataEditorProjection.valueMap(baseline)
         var t: [String: String] = [:], n: [String: String] = [:], d: [String: String] = [:], c: [String: String] = [:]
         for field in baseline["fields"].list {
             let id = field["id"].text, value = values[id]
             switch field["field_type"].text { case "text": t[id] = value?["text"].text ?? ""; case "number": n[id] = value?["number"].text ?? ""; case "date": d[id] = value?["date"].text ?? ""; case "choice": c[id] = value?["option_id"].text ?? ""; default: break }
         }
+        // Reopening a saved metadata draft must reconstruct its sparse action
+        // list before another control autosaves; otherwise that later edit
+        // would silently erase earlier tag/field choices.
+        for action in initial.proposal?["actions"].list ?? [] {
+            let id = action["tag_id"].text.isEmpty ? action["field_id"].text : action["tag_id"].text
+            switch action["kind"].text {
+            case "add_tag": selectedTags.insert(id)
+            case "remove_tag": selectedTags.remove(id)
+            case "clear_field": restoredClears.insert(id)
+            case "set_field":
+                restoredClears.remove(id)
+                if let field = baseline["fields"].list.first(where: { $0["id"].text == id }) {
+                    switch field["field_type"].text {
+                    case "text": t[id] = action["value"]["text"].text
+                    case "number": n[id] = action["value"]["number"].text
+                    case "date": d[id] = action["value"]["date"].text
+                    case "choice": c[id] = action["value"]["option_id"].text
+                    default: break
+                    }
+                }
+            default: break
+            }
+        }
+        _tags = State(initialValue: selectedTags)
         _text = State(initialValue: t); _number = State(initialValue: n); _dates = State(initialValue: d); _choices = State(initialValue: c)
+        _clears = State(initialValue: restoredClears)
         _status = State(initialValue: initial.revision > 0 ? "Draft saved on device · revision \(initial.revision)" : "Not yet saved")
     }
     var baseline: JSON { draft.baseline ?? .object([:]) }
@@ -713,8 +739,11 @@ struct MetadataComposerView: View {
             if draft.mode == "conflict" {
                 Section("Conflict requires review") {
                     Text("Your saved proposal is protected. The catalog or metadata changed on the server.")
-                    Text("Current metadata: \(draft.current.map { $0["metadata_revision"].text } ?? "unavailable") · catalog: \(draft.current.map { $0["catalog_revision"].text } ?? "unavailable")").font(.caption)
+                    metadataComparison("Version you started from", draft.baseline)
+                    metadataComparison("Your proposed changes", draft.proposal)
+                    metadataComparison("Current server values", draft.current)
                     Button("Fetch current values") { Task { do { draft = try await model.requalifyMetadata(draft); status = "Current values fetched. Refresh the workspace before creating a new proposal."; failed = false } catch { fail(error) } } }
+                    Button("Prepare revised proposal against current values") { do { draft = try model.revisedMetadataDraft(draft); status = "Revised proposal saved on device"; failed = false } catch { fail(error) } }
                     Button("Use current values and discard my saved proposal", role: .destructive) { do { try model.resolveUsingCurrent(draft); dismiss() } catch { fail(error) } }
                 }
             } else {
@@ -747,6 +776,16 @@ struct MetadataComposerView: View {
         }
     }
     func options(for field: String) -> [JSON] { baseline["options"].list.filter { $0["field_id"].text == field } }
+    @ViewBuilder func metadataComparison(_ title: String, _ value: JSON?) -> some View {
+        if let value { LabeledContent(title) { Text(metadataSummary(value)).font(.caption.monospaced()).multilineTextAlignment(.trailing) } }
+    }
+    func metadataSummary(_ value: JSON) -> String {
+        let tokens = [value["metadata_revision"].text, value["catalog_revision"].text].filter { !$0.isEmpty }.joined(separator: "/")
+        let actions = value["actions"].list.count
+        let values = value["values"].list.count
+        let tags = value["tags"].list.count
+        return "tokens \(tokens.isEmpty ? "—" : tokens) · tags \(tags) · values \(values) · actions \(actions)"
+    }
     func binding(_ source: Binding<[String: String]>, _ id: String) -> Binding<String> { Binding(get: { source.wrappedValue[id] ?? "" }, set: { source.wrappedValue[id] = $0 }) }
     func autosave() { do { let actions = MetadataEditorProjection.actions(tags: tags, baseline: baseline, text: text, number: number, dates: dates, choices: choices, clears: clears); draft.proposal = .object(["actions": .array(actions)]); draft = try model.save(draft); status = "Draft saved on device · revision \(draft.revision)"; failed = false } catch { fail(error) } }
     func fail(_ error: Error) { status = error.localizedDescription; failed = true }

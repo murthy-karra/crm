@@ -81,6 +81,20 @@ import XCTest
     func profileContact(value: String = "synthetic@example.test") -> JSON {
         .object(["id": .s(UUID().uuidString), "kind": .s("email"), "value": .s(value), "import_order": .null, "created_at": .s("2026-09-14T12:00:00Z")])
     }
+    func testMobile006RevisedMetadataDraftKeepsQualifiedCatalogAndProposal() async throws {
+        let (model, _, _, _, store) = try await setupModel()
+        let person = try XCTUnwrap(store.activePeople().first?.person)
+        let field = "11111111-1111-4111-8111-111111111111", tag = "22222222-2222-4222-8222-222222222222"
+        let baseline: JSON = .object(["metadata_revision": .s("1"), "catalog_revision": .s("1"), "tags": .array([]), "values": .array([]), "catalog_tags": .array([.object(["id": .s(tag), "name": .s("Buyer")])]), "fields": .array([.object(["id": .s(field), "label": .s("Source"), "field_type": .s("text"), "archived_at": .null])]), "options": .array([])])
+        let proposal: JSON = .object(["actions": .array([.object(["kind": .s("set_field"), "field_id": .s(field), "value": .object(["text": .s("Saved proposal")])])])])
+        let current: JSON = .object(["person_revision": .s("2"), "metadata_revision": .s("2"), "catalog_revision": .s("1"), "tags": .array([]), "values": .array([])])
+        let draft = Draft(id: UUID().uuidString, person: person, kind: "update_person_metadata", revision: 1, expectedRevision: "1", expectedCatalogRevision: "1", baseline: baseline, proposal: proposal, mode: "conflict", current: current)
+        let revised = try model.revisedMetadataDraft(draft)
+        XCTAssertEqual(revised.expectedRevision, "2"); XCTAssertEqual(revised.expectedCatalogRevision, "1")
+        XCTAssertEqual(revised.baseline?["fields"].list.first?["id"].text, field)
+        XCTAssertEqual(revised.baseline?["catalog_tags"].list.first?["id"].text, tag)
+        XCTAssertEqual(revised.proposal, proposal)
+    }
     func profilePage(_ boot: Bootstrap, _ person: String, _ items: [JSON], next: String?, broad: String = "9") -> JSON {
         .object(["context_id": .s(boot.context_id), "person_id": .s(person), "person_revision": .s(broad), "details_revision": .s("8"),
             "first_name": .s("Current"), "last_name": .null, "items": .array(items), "next_cursor": next.map(JSON.s) ?? .null, "complete": .bool(next == nil)])

@@ -463,8 +463,14 @@ struct StageProposal: Identifiable {
         let metadata = current["metadata_revision"].text, catalog = current["catalog_revision"].text
         guard (try? revision(metadata)) != nil, (try? revision(catalog)) != nil else { throw LocalError.invalidProtocol }
         if let predecessor = draft.predecessor { try store.markSuperseded(predecessor) }
+        // The current endpoint intentionally contains only values/tokens. Keep
+        // the catalog snapshot that qualified the saved proposal so all typed
+        // editors can be reconstructed for an explicit user-reviewed revision.
+        guard case .object(let oldBaseline) = draft.baseline ?? .object([:]), case .object(let currentValues) = current else { throw LocalError.invalidProtocol }
+        var merged = currentValues
+        for key in ["catalog_tags", "fields", "options"] { merged[key] = oldBaseline[key] ?? .array([]) }
         var next = Draft(id: UUID().uuidString.lowercased(), person: draft.person, kind: "update_person_metadata", revision: 0,
-                         expectedRevision: metadata, expectedCatalogRevision: catalog, baseline: current, proposal: draft.proposal, mode: "editing", predecessor: draft.predecessor)
+                         expectedRevision: metadata, expectedCatalogRevision: catalog, baseline: .object(merged), proposal: draft.proposal, mode: "editing", predecessor: draft.predecessor)
         next = try store.saveDraft(next); try reload(); return next
     }
     func requalifyMetadata(_ draft: Draft) async throws -> Draft {
@@ -792,14 +798,17 @@ struct StageProposal: Identifiable {
         }
         if let catalog = gen.metadata {
             for section in ["tags", "fields", "options"] {
+                guard let initialCursor = try store.metadataCatalogCursor(section) else { continue }
+                var cursor = initialCursor
                 while true {
-                    let cursor = try store.metadataCatalogCursor(section) ?? ""
                     let suffix = cursor.isEmpty ? "" : "?cursor=" + API.cursor(cursor)
                     let page: MetadataCatalogPage = try await api.call("/reconciliations/\(gen.generation_id)/metadata/catalog/\(section)\(suffix)", context: boot.context_id)
                     try current(run)
                     guard page.generation_id == gen.generation_id, page.section == section else { throw LocalError.invalidProtocol }
                     try store.appendMetadataCatalogPage(page, expected: catalog.catalog_revision)
                     if page.complete { break }
+                    guard let next = try store.metadataCatalogCursor(section) else { throw LocalError.invalidProtocol }
+                    cursor = next
                 }
             }
         }

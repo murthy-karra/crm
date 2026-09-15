@@ -1,9 +1,9 @@
 -- D-090 exact runtime/preflight recovery schema inventory.
 SELECT COALESCE(
  (SELECT bool_and(EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=to_regprocedure('public.'||signature) AND md5(p.prosrc)=body_md5)) FROM (VALUES
- ('crm_workspace_shared(uuid)','3e6c72a0128430ada6eed65780883bca'),
+ ('crm_workspace_shared(uuid)','5935cf5ffc9c1d2dfddf67bc62c2b76f'),
  ('crm_people_admission_mutation_allowed(uuid,text,text,text,jsonb)','3888826ac7d108c5b73db52ed0b5644c'),
- ('crm_workspace_mutation_guard()','a5ff3c1c8c3c2fe5e5e321490153ac8e'),
+ ('crm_workspace_mutation_guard()','ff5357f7664aa79c6ddee863ce099e34'),
  ('crm_people_recovery_capability(uuid)','c1b7daa1ef7e5495287707a42adeac4b'),
  ('crm_people_recovery_item_proof(uuid,uuid)','371fe1a39dcc6336340b54f725d18c49'),
  ('crm_people_recovery_item_owned()','701a824c7cb6a6e82389e52acb13a533'),
@@ -43,8 +43,8 @@ SELECT COALESCE(
  ('crm_people_recovery_result_owned()','84bf104fe30a78fbe6db527ad8b3a1cf'),
  ('crm_people_recovery_write_fence()','3c267000f5f91beaa1d382f52675e6e0'),
  ('crm_person_recovered_prepare_history()','2fc7f5c83cf37be62b23531be3e39a0e'),
- ('crm_workspace_mutation_guard()','9ac9b5fdaa643a6f1052d507aa41a308'),
- ('crm_workspace_shared(uuid)','bde7ac41a66f3a62b3479e029b6a4960')) required(signature,expected_hash))
+ ('crm_workspace_mutation_guard()','aa24cd513dda9818b61038d518c474ae'),
+ ('crm_workspace_shared(uuid)','fcbfe49c9552877b819ff365ca6b4b2f')) required(signature,expected_hash))
  AND (SELECT bool_and(EXISTS(SELECT 1 FROM pg_trigger t WHERE t.tgrelid=to_regclass('public.'||relation) AND t.tgname=name AND t.tgenabled IN ('O','A') AND md5(pg_get_triggerdef(t.oid))=expected_hash)) FROM (VALUES
  ('migration_people_recovery_requirement','people_recovery_requirement_immutable','95788fafaf59ac4c705952f4721a6632'),
  ('migration_people_recovery_candidate','people_recovery_owned','1d4ffb0773e86a1397e390fada05cdb6'),

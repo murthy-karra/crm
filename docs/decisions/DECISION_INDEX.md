@@ -1,6 +1,6 @@
 # Decision reading index
 
-Navigation only, checked against the log on 2026-09-15: D-001–D-090 and O-001–O-015.
+Navigation only, checked against the log on 2026-09-15: D-001–D-092 and O-001–O-015.
 [DECISION_LOG.md](DECISION_LOG.md) remains the highest authority. Labels identify
 where to read; they do not summarize complete policy, grant approval, or override
 later amendments. Open/resolved labels are copied from the log's headings;
@@ -118,6 +118,8 @@ The original decision sections, including superseded choices, remain intact.
 | [D-088](DECISION_LOG.md#d-088--existing-people-mapping-repair-implementation-accepted-2026-09-15) | migration; 010e5; mapping repair; implementation/review | Existing-People mapping repair implementation accepted |
 | [D-089](DECISION_LOG.md#d-089--never-imported-people-recovery-planning-2026-09-15) | migration; 010e6; recovery; planning | Never-imported People recovery planning |
 | [D-090](DECISION_LOG.md#d-090--never-imported-people-recovery-implementation-accepted-2026-09-15) | migration; 010e6; recovery; implementation | Never-imported People recovery implementation accepted |
+| [D-091](DECISION_LOG.md#d-091--combined-family-refresh-planning-deployment-deferred-2026-09-15) | migration; 010g1; combined family refresh; deployment deferred | Combined family refresh planning; deployment deferred |
+| [D-092](DECISION_LOG.md#d-092--combined-family-refresh-implementation-accepted-2026-09-15) | migration; 010g1; combined refresh; implementation | Combined family refresh implementation accepted |
 
 ## Open-decision register (includes resolved entries)
 

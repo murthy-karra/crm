@@ -56,6 +56,8 @@ pub mod snapshot_worker;
 pub(crate) mod store;
 pub mod worker;
 
+pub mod family_refresh;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

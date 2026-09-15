@@ -3052,3 +3052,47 @@ perform bounded independent review and isolated synthetic verification. Publicat
 and deployment of this new recovery slice, live source/customer processing,
 activation and production remain separate. The user ended the Lavish session;
 do not reopen it for routine updates.
+
+
+### D-091 — Combined family refresh planning; deployment deferred (2026-09-15)
+
+After 010e6 was committed and merged locally, the user said “no, lets deploy after
+more work.” The assistant proposed metadata refresh followed by activity/history;
+the user asked “can you combine them?” and accepted one combined plan, staged
+implementation and eventual combined delivery with “ok do it.”
+
+Plan metadata, notes/tasks and history refresh together using
+[010g1](../plans/SLICE_010g1_COMBINED_FAMILY_REFRESH.md), a shared review/confirmation
+workflow with family-specific progress and safe retries. This supersedes D-079's
+smaller sequential planning preference for this new package only; previously
+accepted family contracts remain authoritative until explicitly amended.
+
+P1–P4 replacement/removal/history-correction policies and the detailed new
+HTTP/persistence/reader contracts are proposals awaiting acceptance under AGENTS
+§§11/16, not inferred approval to overwrite data. Reuse the previously authorized
+single reviewer for bounded independent review; no additional writer delegation
+is authorized here. Preserve local main's verified 010e6, the running 010e5
+release and native stores. Deployment is explicitly deferred; live source/customer
+processing, activation, source deletions and production work remain outside scope.
+
+
+### D-092 — Combined family refresh implementation accepted (2026-09-15)
+
+The user submitted “Approve 010g1 P1–P4 and the shared contracts in
+ docs/plans/SLICE_010g1_COMBINED_FAMILY_REFRESH.md. Implement the combined metadata,
+notes/tasks and history refresh package in stages, with the previously authorized
+single reviewer. Keep deployment deferred.” through Lavish Send & End.
+
+This accepts [010g1](../plans/SLICE_010g1_COMBINED_FAMILY_REFRESH.md), its P1–P4
+policies and declared shared contracts, including positive baseline/revision
+protection, explicit owned clears/removals, task completion/reopen, append-only
+history corrections and one exact confirmation with independent family progress.
+The planning review is READY, round 1. Concrete compatible SQL/DTO/grant/byte-
+inventory detail is owned implementation work, not a repeat approval gate.
+
+One primary writer and the previously authorized single reviewer perform staged
+implementation, bounded implementation review and isolated synthetic verification.
+No additional writer delegation, publication/deployment, live FUB/customer work,
+activation or production work is authorized. Preserve the 010e5 runtime, local
+verified 010e6 and native stores. The user ended the Lavish session; do not reopen
+it for routine progress updates.

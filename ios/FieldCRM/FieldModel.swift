@@ -93,6 +93,36 @@ struct StageProposal: Identifiable {
     #if MOBILE005_QA
     @Published var qaProfileConflictStage = "no pending profile change"
     #endif
+    #if MOBILE006_QA
+    @Published var qaMetadataConflictStage = "no pending metadata conflict"
+    /// Creates an entirely local conflict review from the sealed synthetic
+    /// workspace. It is intentionally compiled only into the Mobile006 QA app:
+    /// no second server mutation is needed to verify that the UI renders the
+    /// three protected values and saves a revised proposal.
+    func prepareQAMetadataConflictReview() {
+        guard let store,
+              let person = try? store.activePeople().first?.person,
+              let baseline = try? store.editableMetadata(person: person) else { qaMetadataConflictStage = "sealed metadata unavailable"; return }
+        let selected = Set(baseline["tags"].list.map { $0["id"].text })
+        guard let candidate = baseline["catalog_tags"].list.first(where: { !selected.contains($0["id"].text) }) ?? baseline["catalog_tags"].list.first else {
+            qaMetadataConflictStage = "catalog has no tag"; return
+        }
+        let adding = !selected.contains(candidate["id"].text)
+        let action: JSON = adding ? .object(["kind": .s("add_tag"), "tag_id": .s(candidate["id"].text)]) : .object(["kind": .s("remove_tag"), "tag_id": .s(candidate["id"].text)])
+        do {
+            let draft = try store.saveDraft(Draft(id: UUID().uuidString.lowercased(), person: person, kind: "update_person_metadata", revision: 0,
+                                                  expectedRevision: baseline["metadata_revision"].text, expectedCatalogRevision: baseline["catalog_revision"].text,
+                                                  baseline: baseline, proposal: .object(["actions": .array([action])])) )
+            let envelope = try store.submit(draft)
+            let current = CurrentMetadataResponse(context_id: store.context, person_id: person, person_revision: baseline["person_revision"].text,
+                                                  metadata_revision: baseline["metadata_revision"].text, catalog_revision: baseline["catalog_revision"].text,
+                                                  tags: baseline["tags"].list, values: baseline["values"].list, complete: true)
+            try store.recordMetadataConflict(envelope.operation_id, current: current, code: "revision_conflict", contextID: store.context, person: person)
+            try reload()
+            qaMetadataConflictStage = "local metadata conflict ready"
+        } catch { qaMetadataConflictStage = "metadata conflict error: " + error.localizedDescription }
+    }
+    #endif
     #if MOBILE006_UPGRADE_QA
     @Published var qaMobile006UpgradeStage = "not inspected"
     /// Structural-only evidence for the in-place Mobile005→006 install.  It
@@ -462,23 +492,30 @@ struct StageProposal: Identifiable {
         guard draft.isMetadata, let current = draft.current, let store else { throw LocalError.invalidProtocol }
         let metadata = current["metadata_revision"].text, catalog = current["catalog_revision"].text
         guard (try? revision(metadata)) != nil, (try? revision(catalog)) != nil else { throw LocalError.invalidProtocol }
-        if let predecessor = draft.predecessor { try store.markSuperseded(predecessor) }
-        // The current endpoint intentionally contains only values/tokens. Keep
-        // the catalog snapshot that qualified the saved proposal so all typed
-        // editors can be reconstructed for an explicit user-reviewed revision.
-        guard case .object(let oldBaseline) = draft.baseline ?? .object([:]), case .object(let currentValues) = current else { throw LocalError.invalidProtocol }
+        // `/current` deliberately contains values and tokens only. It can be
+        // used for a revision only with a *fresh sealed* workspace catalog that
+        // proves it describes the same catalog revision. Never carry catalog
+        // rows forward from the conflicted proposal.
+        guard let qualified = try store.editableMetadata(person: draft.person),
+              qualified["catalog_revision"].text == catalog,
+              case .object(let currentValues) = current else { throw LocalError.invalidProtocol }
         var merged = currentValues
-        for key in ["catalog_tags", "fields", "options"] { merged[key] = oldBaseline[key] ?? .array([]) }
+        for key in ["catalog_tags", "fields", "options"] { merged[key] = qualified[key] }
         var next = Draft(id: UUID().uuidString.lowercased(), person: draft.person, kind: "update_person_metadata", revision: 0,
                          expectedRevision: metadata, expectedCatalogRevision: catalog, baseline: .object(merged), proposal: draft.proposal, mode: "editing", predecessor: draft.predecessor)
-        next = try store.saveDraft(next); try reload(); return next
+        // All validation happens before the transaction that saves the
+        // replacement and supersedes the old conflict.
+        try store.validateMetadataProposal(next)
+        next = try store.saveMetadataReplacement(next, superseding: draft.predecessor); try reload(); return next
     }
     func requalifyMetadata(_ draft: Draft) async throws -> Draft {
         guard draft.isMetadata, validateAccess(), let api, let credential, let store else { throw LocalError.locked }
         let run = epoch, response = try await api.currentMetadata(person: draft.person, context: credential.bootstrap.context_id)
         try current(run)
         guard response.context_id == credential.bootstrap.context_id, response.person_id == draft.person else { throw LocalError.invalidProtocol }
-        let saved = try store.saveCurrent(draft.id, current: .object(["person_revision": .s(response.person_revision), "metadata_revision": .s(response.metadata_revision), "catalog_revision": .s(response.catalog_revision), "tags": .array(response.tags), "values": .array(response.values)]), contextID: response.context_id, person: draft.person, editorEpoch: draft.editorEpoch)
+        guard let qualified = try store.editableMetadata(person: draft.person), qualified["catalog_revision"].text == response.catalog_revision else { throw LocalError.invalidProtocol }
+        let current: JSON = .object(["person_revision": .s(response.person_revision), "metadata_revision": .s(response.metadata_revision), "catalog_revision": .s(response.catalog_revision), "tags": .array(response.tags), "values": .array(response.values), "catalog_tags": qualified["catalog_tags"], "fields": qualified["fields"], "options": qualified["options"]])
+        let saved = try store.saveCurrent(draft.id, current: current, contextID: response.context_id, person: draft.person, editorEpoch: draft.editorEpoch)
         try reload(); return saved
     }
     func startDetails(person: String) throws -> Draft { try newDetailsDraft(person: person) }

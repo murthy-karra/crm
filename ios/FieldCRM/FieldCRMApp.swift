@@ -113,6 +113,13 @@ struct WorkspaceView: View {
                             Button("Verify profile receipt") { Task { await model.verifyQAProfileReceipt() } }.accessibilityIdentifier("qaVerifyProfileReceipt")
                         }
                         #endif
+                        #if MOBILE006_QA
+                        Section("QA Mobile006 metadata conflict") {
+                            Text(model.qaMetadataConflictStage).font(.caption2).accessibilityIdentifier("qaMetadataConflictStage")
+                            Button("Prepare local metadata conflict review") { model.prepareQAMetadataConflictReview() }.accessibilityIdentifier("qaPrepareMetadataConflict")
+                                .disabled(model.syncing)
+                        }
+                        #endif
                         #if MOBILE006_UPGRADE_QA
                         Section("QA Mobile006 installed upgrade") {
                             Text(model.qaMobile006UpgradeStage).font(.caption2).accessibilityIdentifier("qaMobile006UpgradeStage")
@@ -739,11 +746,11 @@ struct MetadataComposerView: View {
             if draft.mode == "conflict" {
                 Section("Conflict requires review") {
                     Text("Your saved proposal is protected. The catalog or metadata changed on the server.")
-                    metadataComparison("Version you started from", draft.baseline)
-                    metadataComparison("Your proposed changes", draft.proposal)
-                    metadataComparison("Current server values", draft.current)
-                    Button("Fetch current values") { Task { do { draft = try await model.requalifyMetadata(draft); status = "Current values fetched. Refresh the workspace before creating a new proposal."; failed = false } catch { fail(error) } } }
-                    Button("Prepare revised proposal against current values") { do { draft = try model.revisedMetadataDraft(draft); status = "Revised proposal saved on device"; failed = false } catch { fail(error) } }
+                    metadataComparison("Version you started from", draft.baseline, identifier: "metadataComparison_baseline")
+                    metadataComparison("Your proposed changes", draft.proposal, identifier: "metadataComparison_proposed")
+                    metadataComparison("Current server values", draft.current, identifier: "metadataComparison_current")
+                    Button("Fetch current values") { Task { do { draft = try await model.requalifyMetadata(draft); status = "Current values fetched. Create the revised proposal when the sealed catalog revision matches."; failed = false } catch LocalError.invalidProtocol { status = "Refresh the workspace to download the catalog matching these current values, then fetch again."; failed = false } catch { fail(error) } } }
+                    Button("Prepare revised proposal against current values") { do { let revised = try model.revisedMetadataDraft(draft); draft = revised; restoreControls(revised); status = "Revised proposal saved on device"; failed = false } catch { fail(error) } }
                     Button("Use current values and discard my saved proposal", role: .destructive) { do { try model.resolveUsingCurrent(draft); dismiss() } catch { fail(error) } }
                 }
             } else {
@@ -776,15 +783,49 @@ struct MetadataComposerView: View {
         }
     }
     func options(for field: String) -> [JSON] { baseline["options"].list.filter { $0["field_id"].text == field } }
-    @ViewBuilder func metadataComparison(_ title: String, _ value: JSON?) -> some View {
-        if let value { LabeledContent(title) { Text(metadataSummary(value)).font(.caption.monospaced()).multilineTextAlignment(.trailing) } }
+    @ViewBuilder func metadataComparison(_ title: String, _ value: JSON?, identifier: String) -> some View {
+        if let value {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.caption.bold())
+                Text(metadataSummary(value)).font(.caption.monospaced()).textSelection(.enabled).accessibilityIdentifier(identifier)
+            }.padding(.vertical, 2)
+        }
     }
     func metadataSummary(_ value: JSON) -> String {
         let tokens = [value["metadata_revision"].text, value["catalog_revision"].text].filter { !$0.isEmpty }.joined(separator: "/")
-        let actions = value["actions"].list.count
-        let values = value["values"].list.count
-        let tags = value["tags"].list.count
-        return "tokens \(tokens.isEmpty ? "—" : tokens) · tags \(tags) · values \(values) · actions \(actions)"
+        // A requalified current read carries the matching fresh catalog. Use it
+        // over the original baseline so labels never describe a newer value
+        // using definitions from the conflicted catalog revision.
+        let catalog = value["catalog_tags"].list.isEmpty && value["fields"].list.isEmpty ? (draft.baseline ?? value) : value
+        let tagName: (String) -> String = { id in catalog["catalog_tags"].list.first(where: { $0["id"].text == id })?["name"].text ?? id }
+        let fieldName: (String) -> String = { id in catalog["fields"].list.first(where: { $0["id"].text == id })?["label"].text ?? id }
+        let optionName: (String) -> String = { id in catalog["options"].list.first(where: { $0["id"].text == id })?["label"].text ?? id }
+        var lines = ["tokens: \(tokens.isEmpty ? "—" : tokens)"]
+        let names = value["tags"].list.map { tagName($0["id"].text) }
+        lines.append("tags: " + (names.isEmpty ? "none" : names.joined(separator: ", ")))
+        let displayValue: (JSON) -> String = { item in
+            let raw = MetadataEditorProjection.display(item)
+            return item["option_id"].text.isEmpty ? raw : optionName(item["option_id"].text)
+        }
+        if value["values"].list.isEmpty { lines.append("custom fields: none") }
+        for item in value["values"].list { lines.append("\(fieldName(item["field_id"].text)): \(displayValue(item["value"]))") }
+        for action in value["actions"].list {
+            switch action["kind"].text {
+            case "add_tag": lines.append("add tag: \(tagName(action["tag_id"].text))")
+            case "remove_tag": lines.append("remove tag: \(tagName(action["tag_id"].text))")
+            case "clear_field": lines.append("clear: \(fieldName(action["field_id"].text))")
+            case "set_field": lines.append("set \(fieldName(action["field_id"].text)): \(displayValue(action["value"]))")
+            default: break
+            }
+        }
+        return lines.joined(separator: "\n")
+    }
+    func restoreControls(_ source: Draft) {
+        let base = source.baseline ?? .object([:]); let values = MetadataEditorProjection.valueMap(base)
+        tags = Set(base["tags"].list.map { $0["id"].text }); clears = []
+        text = [:]; number = [:]; dates = [:]; choices = [:]
+        for field in base["fields"].list { let id = field["id"].text, value = values[id]; switch field["field_type"].text { case "text": text[id] = value?["text"].text ?? ""; case "number": number[id] = value?["number"].text ?? ""; case "date": dates[id] = value?["date"].text ?? ""; case "choice": choices[id] = value?["option_id"].text ?? ""; default: break } }
+        for action in source.proposal?["actions"].list ?? [] { let id = action["tag_id"].text.isEmpty ? action["field_id"].text : action["tag_id"].text; switch action["kind"].text { case "add_tag": tags.insert(id); case "remove_tag": tags.remove(id); case "clear_field": clears.insert(id); case "set_field": clears.remove(id); let kind = base["fields"].list.first(where: { $0["id"].text == id })?["field_type"].text; if kind == "text" { text[id] = action["value"]["text"].text } else if kind == "number" { number[id] = action["value"]["number"].text } else if kind == "date" { dates[id] = action["value"]["date"].text } else if kind == "choice" { choices[id] = action["value"]["option_id"].text }; default: break } }
     }
     func binding(_ source: Binding<[String: String]>, _ id: String) -> Binding<String> { Binding(get: { source.wrappedValue[id] ?? "" }, set: { source.wrappedValue[id] = $0 }) }
     func autosave() { do { let actions = MetadataEditorProjection.actions(tags: tags, baseline: baseline, text: text, number: number, dates: dates, choices: choices, clears: clears); draft.proposal = .object(["actions": .array(actions)]); draft = try model.save(draft); status = "Draft saved on device · revision \(draft.revision)"; failed = false } catch { fail(error) } }

@@ -81,19 +81,75 @@ import XCTest
     func profileContact(value: String = "synthetic@example.test") -> JSON {
         .object(["id": .s(UUID().uuidString), "kind": .s("email"), "value": .s(value), "import_order": .null, "created_at": .s("2026-09-14T12:00:00Z")])
     }
-    func testMobile006RevisedMetadataDraftKeepsQualifiedCatalogAndProposal() async throws {
-        let (model, _, _, _, store) = try await setupModel()
+    func installQualifiedMetadataWorkspace(_ store: LocalStore, _ boot: Bootstrap, person: String, catalogRevision: String = "2") throws -> (field: String, tag: String, option: String) {
+        let generation = UUID().uuidString.lowercased(), field = UUID().uuidString.lowercased(), tag = UUID().uuidString.lowercased(), option = UUID().uuidString.lowercased()
+        let metadata = MetadataCatalog(representation: "metadata-v1", catalog_revision: catalogRevision,
+                                       catalog_url: "/api/mobile/v1/reconciliations/\(generation)/metadata/catalog")
+        try store.begin(Generation(generation_id: generation, context_id: boot.context_id, evaluated_at: stamp(), expires_at: stamp(Date().addingTimeInterval(1800)), complete: true, selected_count: 1,
+                                   manifest: Manifest(items: [ManifestItem(person_id: person, revision: "2", metadata_revision: "2", reasons: ["assigned"])], next_cursor: nil, complete: true), metadata: metadata))
+        for section in ["summary", "notes", "tasks"] {
+            try store.appendPage(Page(generation_id: generation, person_id: person, revision: "2", section: section,
+                                      summary: section == "summary" ? .object(["id": .s(person), "display_name": .s("Controlled Synthetic Person")]) : nil,
+                                      items: [], next_cursor: nil, complete: true), expected: "2")
+        }
+        try store.finishBundle(generation, person, "2")
+        let pages = [
+            MetadataCatalogPage(generation_id: generation, section: "tags", revision: catalogRevision, items: [.object(["id": .s(tag), "name": .s("New buyer label")])], next_cursor: nil, complete: true),
+            MetadataCatalogPage(generation_id: generation, section: "fields", revision: catalogRevision, items: [.object(["id": .s(field), "label": .s("New source label"), "field_type": .s("choice"), "position": .number(1), "archived_at": .null])], next_cursor: nil, complete: true),
+            MetadataCatalogPage(generation_id: generation, section: "options", revision: catalogRevision, items: [.object(["id": .s(option), "field_id": .s(field), "label": .s("New option label"), "position": .number(1), "archived_at": .null])], next_cursor: nil, complete: true)
+        ]
+        for page in pages { try store.appendMetadataCatalogPage(page, expected: catalogRevision) }
+        try store.appendMetadataComponent(MetadataComponent(generation_id: generation, person_id: person, section: "metadata", revision: "2", metadata_revision: "2", catalog_revision: catalogRevision,
+                                                            tags: [.object(["id": .s(tag), "name": .s("New buyer label")])], values: [.object(["field_id": .s(field), "value": .object(["option_id": .s(option)])])], complete: true), expected: "2")
+        try store.promote(Seal(generation_id: generation, context_id: boot.context_id, sealed_at: stamp(), evaluated_at: stamp(), selected_count: 1, today: .object(["items": .array([])])))
+        return (field, tag, option)
+    }
+    func conflictedMetadataDraft(_ store: LocalStore, person: String, field: String, tag: String, option: String, catalog: String = "1") throws -> (Draft, Queued) {
+        let oldBaseline: JSON = .object(["metadata_revision": .s("1"), "catalog_revision": .s(catalog), "tags": .array([]), "values": .array([]),
+                                         "catalog_tags": .array([.object(["id": .s(tag), "name": .s("Old buyer label")])]),
+                                         "fields": .array([.object(["id": .s(field), "label": .s("Old source label"), "field_type": .s("choice"), "archived_at": .null])]),
+                                         "options": .array([.object(["id": .s(option), "field_id": .s(field), "label": .s("Old option label"), "archived_at": .null])])])
+        let proposal: JSON = .object(["actions": .array([.object(["kind": .s("add_tag"), "tag_id": .s(tag)]), .object(["kind": .s("set_field"), "field_id": .s(field), "value": .object(["option_id": .s(option)])])])])
+        let saved = try store.saveDraft(Draft(id: UUID().uuidString.lowercased(), person: person, kind: "update_person_metadata", revision: 0, expectedRevision: "1", expectedCatalogRevision: catalog, baseline: oldBaseline, proposal: proposal))
+        let envelope = try store.submit(saved)
+        try store.recordMetadataConflict(envelope.operation_id, current: CurrentMetadataResponse(context_id: store.context, person_id: person, person_revision: "2", metadata_revision: "2", catalog_revision: "2", tags: [.object(["id": .s(tag)])], values: [.object(["field_id": .s(field), "value": .object(["option_id": .s(option)])])], complete: true), code: "revision_conflict", contextID: store.context, person: person)
+        return (try XCTUnwrap(store.draftForOperation(envelope.operation_id)), try XCTUnwrap(store.queue().first { $0.id == envelope.operation_id }))
+    }
+    func testMobile006RevisedMetadataDraftUsesMatchingSealedCatalogAndPreservesProposal() async throws {
+        let (model, _, _, boot, store) = try await setupModel()
         let person = try XCTUnwrap(store.activePeople().first?.person)
-        let field = "11111111-1111-4111-8111-111111111111", tag = "22222222-2222-4222-8222-222222222222"
-        let baseline: JSON = .object(["metadata_revision": .s("1"), "catalog_revision": .s("1"), "tags": .array([]), "values": .array([]), "catalog_tags": .array([.object(["id": .s(tag), "name": .s("Buyer")])]), "fields": .array([.object(["id": .s(field), "label": .s("Source"), "field_type": .s("text"), "archived_at": .null])]), "options": .array([])])
-        let proposal: JSON = .object(["actions": .array([.object(["kind": .s("set_field"), "field_id": .s(field), "value": .object(["text": .s("Saved proposal")])])])])
-        let current: JSON = .object(["person_revision": .s("2"), "metadata_revision": .s("2"), "catalog_revision": .s("1"), "tags": .array([]), "values": .array([])])
-        let draft = Draft(id: UUID().uuidString, person: person, kind: "update_person_metadata", revision: 1, expectedRevision: "1", expectedCatalogRevision: "1", baseline: baseline, proposal: proposal, mode: "conflict", current: current)
+        let catalog = try installQualifiedMetadataWorkspace(store, boot, person: person)
+        let (draft, predecessor) = try conflictedMetadataDraft(store, person: person, field: catalog.field, tag: catalog.tag, option: catalog.option)
         let revised = try model.revisedMetadataDraft(draft)
-        XCTAssertEqual(revised.expectedRevision, "2"); XCTAssertEqual(revised.expectedCatalogRevision, "1")
-        XCTAssertEqual(revised.baseline?["fields"].list.first?["id"].text, field)
-        XCTAssertEqual(revised.baseline?["catalog_tags"].list.first?["id"].text, tag)
-        XCTAssertEqual(revised.proposal, proposal)
+        XCTAssertEqual(revised.expectedRevision, "2"); XCTAssertEqual(revised.expectedCatalogRevision, "2")
+        XCTAssertEqual(revised.baseline?["fields"].list.first?["label"].text, "New source label")
+        XCTAssertEqual(revised.baseline?["catalog_tags"].list.first?["name"].text, "New buyer label")
+        XCTAssertEqual(revised.proposal, draft.proposal)
+        XCTAssertEqual(try XCTUnwrap(store.queue().first { $0.id == predecessor.id }).status, "superseded")
+        XCTAssertEqual(try XCTUnwrap(store.drafts().first { $0.id == revised.id }).revision, 1)
+    }
+    func testMobile006CatalogChangedConflictRefusesRevisionUntilMatchingCatalogIsSealed() async throws {
+        let (model, _, _, boot, store) = try await setupModel()
+        let person = try XCTUnwrap(store.activePeople().first?.person)
+        let catalog = try installQualifiedMetadataWorkspace(store, boot, person: person)
+        let conflicted = try conflictedMetadataDraft(store, person: person, field: catalog.field, tag: catalog.tag, option: catalog.option)
+        var mismatch = try XCTUnwrap(store.draftForOperation(conflicted.1.id))
+        guard case .object(var current) = mismatch.current else { return XCTFail("missing current metadata") }
+        current["catalog_revision"] = .s("3")
+        mismatch = try store.saveCurrent(mismatch.id, current: .object(current), contextID: boot.context_id, person: person, editorEpoch: mismatch.editorEpoch)
+        XCTAssertThrowsError(try model.revisedMetadataDraft(mismatch))
+        XCTAssertEqual(try XCTUnwrap(store.queue().first { $0.id == conflicted.1.id }).status, "conflict")
+        XCTAssertEqual(try store.drafts().filter { $0.isMetadata }.count, 1)
+    }
+    func testMobile006ReplacementWriteFailureDoesNotSupersedeConflict() async throws {
+        let (_, _, _, boot, store) = try await setupModel()
+        let person = try XCTUnwrap(store.activePeople().first?.person)
+        let catalog = try installQualifiedMetadataWorkspace(store, boot, person: person)
+        let (draft, predecessor) = try conflictedMetadataDraft(store, person: person, field: catalog.field, tag: catalog.tag, option: catalog.option)
+        var duplicate = draft; duplicate.revision = 0; duplicate.mode = "editing"; duplicate.predecessor = predecessor.id
+        XCTAssertThrowsError(try store.saveMetadataReplacement(duplicate, superseding: predecessor.id))
+        XCTAssertEqual(try XCTUnwrap(store.queue().first { $0.id == predecessor.id }).status, "conflict")
+        XCTAssertEqual(try store.drafts().filter { $0.isMetadata }.count, 1)
     }
     func profilePage(_ boot: Bootstrap, _ person: String, _ items: [JSON], next: String?, broad: String = "9") -> JSON {
         .object(["context_id": .s(boot.context_id), "person_id": .s(person), "person_revision": .s(broad), "details_revision": .s("8"),

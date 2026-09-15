@@ -231,6 +231,39 @@ final class FieldFlowTests: XCTestCase {
         let accepted = XCTAttachment(screenshot: app.screenshot()); accepted.name = "mobile006-metadata-accepted"; accepted.lifetime = .keepAlways; add(accepted)
         app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: true)
     }
+    @MainActor func testMobile006MetadataConflictShowsValuesAndSavesRevisedProposal() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication(); app.launchArguments = ["--synthetic-keychain"]; app.launch()
+        XCTAssertTrue(app.staticTexts["syntheticBanner"].waitForExistence(timeout: 20))
+        if app.buttons["signIn"].exists {
+            app.textFields["email"].tap(); app.textFields["email"].typeText("agent@mobile.test")
+            app.secureTextFields["password"].tap(); app.secureTextFields["password"].typeText("Mobile-demo-only-123!")
+            app.buttons["signIn"].tap()
+        }
+        XCTAssertTrue(app.tabBars.buttons["Settings"].waitForExistence(timeout: 90))
+        app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: false); app.buttons["sync"].tap()
+        XCTAssertTrue(app.staticTexts["100 people available offline"].waitForExistence(timeout: 240))
+        app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: true)
+        app.buttons["qaPrepareMetadataConflict"].tap()
+        XCTAssertTrue(app.staticTexts["qaMetadataConflictStage"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["qaMetadataConflictStage"].label, "local metadata conflict ready")
+        app.tabBars.buttons["Saved work"].tap()
+        let review = app.buttons["Review conflict"].firstMatch
+        for _ in 0..<6 where !review.exists { app.swipeUp() }
+        XCTAssertTrue(review.waitForExistence(timeout: 20)); review.tap()
+        for _ in 0..<4 where !app.staticTexts["metadataComparison_baseline"].exists { app.swipeUp() }
+        let baseline = app.staticTexts["metadataComparison_baseline"], proposed = app.staticTexts["metadataComparison_proposed"], current = app.staticTexts["metadataComparison_current"]
+        XCTAssertTrue(baseline.waitForExistence(timeout: 10)); XCTAssertTrue(proposed.exists); XCTAssertTrue(current.exists)
+        XCTAssertTrue(baseline.label.contains("tags:"), baseline.label)
+        XCTAssertTrue(proposed.label.contains("tag:"), proposed.label)
+        XCTAssertTrue(current.label.contains("tags:"), current.label)
+        let reviewed = XCTAttachment(screenshot: app.screenshot()); reviewed.name = "mobile006-metadata-three-way-values"; reviewed.lifetime = .keepAlways; add(reviewed)
+        let revised = app.buttons["Prepare revised proposal against current values"]
+        XCTAssertTrue(revised.waitForExistence(timeout: 10)); revised.tap()
+        XCTAssertTrue(app.staticTexts["metadataDraftStatus"].label.contains("Revised proposal saved on device"))
+        XCTAssertTrue(app.buttons["saveMetadata"].exists, "The reset editor retains the revised proposal and controls")
+        let saved = XCTAttachment(screenshot: app.screenshot()); saved.name = "mobile006-revised-metadata-proposal"; saved.lifetime = .keepAlways; add(saved)
+    }
     #endif
 
     #if MOBILE006_UPGRADE_QA

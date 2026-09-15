@@ -145,15 +145,41 @@ final class LocalStore {
             return saved
         }
     }
+    /// Persist the replacement before superseding its conflicted predecessor.
+    /// Both writes share one transaction so a storage failure cannot strand a
+    /// proposal behind an irreversible supersession.
+    @discardableResult func saveMetadataReplacement(_ draft: Draft, superseding predecessor: String?) throws -> Draft {
+        guard draft.isMetadata, draft.revision == 0, let predecessor else { throw LocalError.invalidInput }
+        var saved = draft; saved.revision = 1
+        let body = try string(saved) // encode/validate before mutating either row
+        return try transaction {
+            guard try rows("SELECT 1 FROM drafts WHERE id=?", [saved.id]).isEmpty else { throw LocalError.staleDraft }
+            guard let conflicted = try queue().first(where: { $0.id == predecessor }),
+                  conflicted.isMetadata, conflicted.envelope.person == saved.person,
+                  conflicted.status == "conflict" else { throw LocalError.staleDraft }
+            try run("INSERT INTO drafts(id,body) VALUES(?,?)", [saved.id, body])
+            try run("UPDATE operations SET status='superseded',error='superseded' WHERE id=? AND status='conflict'", [predecessor])
+            return saved
+        }
+    }
+    /// Validate the revised proposal before its conflicted predecessor may be
+    /// superseded. The same validator is used again when the user submits.
+    func validateMetadataProposal(_ draft: Draft) throws {
+        guard draft.isMetadata, let expected = draft.expectedRevision,
+              let catalog = draft.expectedCatalogRevision,
+              (try? revision(expected)) != nil, (try? revision(catalog)) != nil,
+              let proposal = draft.proposal else { throw LocalError.invalidInput }
+        let actions = proposal["actions"].list
+        guard !actions.isEmpty, actions.count <= 50 else { throw LocalError.invalidInput }
+        try validateMetadataActions(actions, baseline: draft.baseline)
+    }
     @discardableResult func submit(_ draft: Draft) throws -> Envelope {
         var payload: [String: JSON] = ["person_id": .s(draft.person)]
         if draft.kind == "update_person_metadata" {
+            try validateMetadataProposal(draft)
             guard let expected = draft.expectedRevision, let catalog = draft.expectedCatalogRevision,
-                  (try? revision(expected)) != nil, (try? revision(catalog)) != nil,
                   let proposal = draft.proposal else { throw LocalError.invalidInput }
             let actions = proposal["actions"].list
-            guard !actions.isEmpty, actions.count <= 50 else { throw LocalError.invalidInput }
-            try validateMetadataActions(actions, baseline: draft.baseline)
             payload["expected_metadata_revision"] = .s(expected)
             payload["expected_catalog_revision"] = .s(catalog)
             payload["actions"] = .array(actions)

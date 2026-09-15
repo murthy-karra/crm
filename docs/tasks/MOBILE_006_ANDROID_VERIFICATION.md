@@ -1,9 +1,10 @@
 # Mobile 006 Android verification
 
 Status: **IN PROGRESS** — local encrypted-store checks, the populated
-schema-6 installed-store upgrade, and the serialized API3106 offline/restart
-journey are complete. The catalog-conflict review created its protected local
-replacement draft; its native edit, submit, and receipt continuation remains.
+schema-6 installed-store upgrade, the serialized API3106 offline/restart
+journey, and the retained catalog-conflict native replacement journey are
+complete. The staged lost-response replay remains to be recorded in this
+verifier.
 
 ## Environment
 
@@ -38,6 +39,7 @@ replacement draft; its native edit, submit, and receipt continuation remains.
 | current APK installed over schema-6 store, inspector | PASS, 6.707s | direct `adb install -r` then `adb shell am instrument` on `org.crm.field.mobile006upgradeproofqa.test` |
 | API3106 offline mixed metadata prepare | PASS, 1/1 | direct `adb shell am instrument`; `mobile006-stage.json` retained protected operation ID and SHA-256 envelope evidence |
 | API3106 process relaunch + upload | PASS, 14.691s | direct second `adb shell am instrument`; verified same envelope SHA-256, `person_metadata` receipt and accepted/covered state |
+| API3106 catalog-conflict native replacement | PASS, 1/1, 14.334s | direct `adb shell am instrument` continuation; original `389ca800-05f4-41be-aacf-1302e4ebe6cc` remained superseded, replacement `4317238d-aabf-4e1b-a89b-a35618364e8c` reached `accepted`; screenshots and device evidence in `/private/tmp/crm-mobile006-010f4-thyhauvv/android006-ui-final-artifacts/` |
 
 `Mobile006StorageTest` covers mixed immutable tag/typed-value envelopes,
 exact decimal/date string retention, explicit clear, choice option identity,
@@ -89,12 +91,31 @@ ambiguous multi-root diagnostic before editing or submitting. Evidence:
 `android006-ui-metadata-card-continuation.log`. No replacement request or
 receipt was generated in those failed harness attempts.
 
+The final continuation resumed that same staged state after the emulator reboot
+through the ordinary same-account UI authorization screen; the screen reported
+that one saved item remained protected, and the retained stage file remained
+`catalog_conflict_ready_for_ui_review`. The proof used the existing
+`saved-work-list` LazyColumn to compose the retained replacement card, asserted
+that its tagged node exposed its own click action, opened the native editor,
+replaced the text value, submitted it and observed `accepted`. The original
+conflict stayed superseded; the final screenshot shows the accepted replacement
+as “Synced · awaiting a current download.” The command was:
+
+```sh
+adb -s emulator-5554 shell am instrument -w \
+  -e uiMobile006Conflict review \
+  -e class org.crm.field.Mobile006UiProofTest#catalogConflictIsReviewedAndReplacedThroughNativeMetadataEditor \
+  org.crm.field.mobile006qa.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+It passed one test in 14.334 seconds using the frozen API source `82d081e` at
+`http://10.0.2.2:3106`. Only the current test APK was installed with `adb install
+-r`; the target APK stayed at SHA-256
+`7705977de274ca794b100bea63a6a62f2f3e6859d15e81d40bc30b93fab75268`.
+
 ## Remaining required evidence
 
-1. Finish the retained two-client catalog-conflict draft through the native
-   editor, submit it, and record the accepted/covered receipt plus screenshots.
-2. Record the staged lost-response replay and remaining two-client conflict UI
-   result in this verifier after the final continuation.
+1. Record the staged lost-response replay in this verifier.
 
 No physical device, distribution, production API, customer data or retained demo
 package was used.

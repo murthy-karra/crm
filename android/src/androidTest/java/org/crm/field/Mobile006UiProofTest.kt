@@ -69,11 +69,10 @@ class Mobile006UiProofTest {
                 // in the unmerged tree so the test invokes the card, not an off-screen child.
                 compose.onNodeWithTag("saved-work-list")
                     .performScrollToNode(hasTestTag(replacementCard))
-                compose.onNode(
-                    hasClickAction() and hasAnyDescendant(hasTestTag(replacementCard)),
-                    useUnmergedTree = true,
-                )
-                    .performScrollTo().assertIsDisplayed().performClick()
+                compose.onNodeWithTag(replacementCard, useUnmergedTree = true)
+                    .assertIsDisplayed()
+                    .assertHasClickAction()
+                    .performClick()
                 replacementDraft
             }
         val metadataCard = "metadata-draft-${metadataDraft.id}"

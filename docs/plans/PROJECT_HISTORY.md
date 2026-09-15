@@ -9,6 +9,19 @@ Use [PROJECT_STATE.md](PROJECT_STATE.md) for current work, live residuals and ne
 actions, and the [decision log](../decisions/DECISION_LOG.md) for authority.
 Per-slice verification/release records remain the detailed evidence.
 
+## Mobile006 / 010f4 local completion — 2026-09-15
+
+D-084 implementation and synthetic acceptance completed at `4bf6053` (last
+production Rust repair `22c6c06`, later native fixes/tests and reviewed test-only
+corrections). Both final implementation round-2 reviews are READY. All 1,103 DB
+checks, 993 ordinary Rust tests, 1,298 Web tests, native store/actual UI/installed
+upgrades, 18 Mobile and 26 migration plans pass. The completed paired measurement
+passes exact responses and p95 limits for Person detail and Today. The
+[final record](../tasks/MOBILE_006_010f4_FINAL_VERIFICATION.md) retains exact runners,
+failed/interrupted attempts, corrections and scope limits. D-084's subsequent
+release follow-up authorizes main publication, cleanup and shared-development
+rollout; [release evidence](../tasks/MOBILE_006_010f4_RELEASE.md) owns that execution.
+
 ## Mobile006 / 010f4 implementation checkpoints — 2026-09-14
 
 D-083 drafted the pair; both independent planning reviews returned READY and

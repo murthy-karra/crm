@@ -112,7 +112,7 @@ The original decision sections, including superseded choices, remain intact.
 | [D-082](DECISION_LOG.md#d-082--mobile-005-and-admitted-people-metadata-implementation-approved-2026-09-14) | Mobile005; 010f3; implementation approval | Mobile 005 and admitted-People metadata implementation approved |
 | [D-083](DECISION_LOG.md#d-083--mobile-006-and-admitted-people-activity-planning-authorized-2026-09-14) | Mobile006; 010f4; notes/tasks; planning | Mobile 006 and admitted-People activity planning authorized |
 
-| [D-084](DECISION_LOG.md#d-084--mobile-006-and-admitted-people-activity-implementation-approved-2026-09-14) | Mobile006; 010f4; implementation approval | Mobile 006 and admitted-People activity implementation approved |
+| [D-084](DECISION_LOG.md#d-084--mobile-006-and-admitted-people-activity-implementation-approved-2026-09-14) | Mobile006; 010f4; implementation approval/release | Mobile 006 and admitted-People activity implementation approved |
 
 ## Open-decision register (includes resolved entries)
 

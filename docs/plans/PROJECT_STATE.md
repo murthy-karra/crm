@@ -1,6 +1,6 @@
 # Project state
 
-Updated: 2026-09-15 (D-084 Mobile006 / 010f4 implementation; final verification in progress).
+Updated: 2026-09-15 (D-084 Mobile006 / 010f4 implementation; implementation verified; release in progress).
 Current status and live residuals only. [History](PROJECT_HISTORY.md#archived-project-state-snapshot--2026-09-13)
 preserves the previous state verbatim, including superseded instructions.
 Decisions remain authoritative; use the [reading index](../decisions/DECISION_INDEX.md).
@@ -20,14 +20,16 @@ production-cluster deployment remain separate. Shared development is Mac-hosted.
 
 ## Current slice
 
-**Implemented, final verification in progress: Mobile006 / 010f4, D-084.**
+**Implemented, implementation verified; release in progress: Mobile006 / 010f4, D-084.**
 Both native clients now support offline tags/custom-field edits. Administrators can
 import qualified retained notes/tasks for admitted People with exact cancellation
 remainders. [Implementation status](../tasks/MOBILE_006_010f4_IMPLEMENTATION_STATUS.md)
 owns scope/resources; [final verification](../tasks/MOBILE_006_010f4_FINAL_VERIFICATION.md)
-owns acceptance and passing/pending gates. Both planning reviews are READY;
-implementation reviews are in their final second round with no open static findings.
-Full DB, paired performance and Android UI submission remain open.
+owns acceptance and passing gates. Both planning and final implementation reviews
+are READY. Full DB (1,103 tests), native/browser acceptance, realistic query plans
+and paired Person/Today performance pass. Publication and shared-development
+release are authorized and in progress.
+
 
 **Implemented and verified locally: Mobile005 / 010f3.** Offline Person name/contact
 editing on iOS/Android and admitted-People tags/custom-field imports are complete
@@ -67,15 +69,15 @@ Local implementation branch: `codex/mobile006-010f4-integration`, based on
 `a5cb24d`. Final backend source is `22c6c06`; later changes cover Android catalog repairs/checks,
 upgrade assertions and documentation. Shared API3000/Web5173 artifacts remain
 unchanged. Preserve retained writer worktrees, verification/recovery evidence,
-QA databases and installed native stores. No publication/deployment of this pair
-has occurred. The prior Mobile005/010f3 release remains separately IN PROGRESS.
+QA databases and installed native stores. Publication/deployment of this pair is now authorized under the D-084 release
+follow-up and [in preparation](../tasks/MOBILE_006_010f4_RELEASE.md). The prior Mobile005/010f3 release remains separately IN PROGRESS.
 
 ## Last accepted decision
 
 **D-084:** accepts the reviewed Mobile006/010f4 contracts and authorizes
 implementation plus isolated synthetic verification, established writers and
-local integration commits. Publication/deployment and other operational scope
-remain separate. D-083's planning boundary is superseded for this implementation.
+local integration commits. Its release follow-up now authorizes main publication,
+cleanup and shared-development deployment; other operational scope remains separate. D-083's planning boundary is superseded for this implementation.
 
 **D-082:** implement both reviewed plans and isolated synthetic verification,
 with Terra high writers and the coordinated three-worktree sequence. Local

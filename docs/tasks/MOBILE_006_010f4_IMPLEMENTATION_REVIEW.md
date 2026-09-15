@@ -1,8 +1,9 @@
 # Mobile006 / 010f4 implementation review
 
-**IN PROGRESS.** D-050 independent implementation round 1 returned NOT READY
-for both slices. Planning reviews are separate. Implementation round 2 is now open for both slices; no further review round is
-authorized. Reviewers are waiting for final acceptance evidence.
+**READY — both slices, final D-050 implementation round 2, 2026-09-15.**
+Independent evidence closure reports no actionable findings. Planning reviews are
+separate. This closes the existing second/final implementation review round;
+it does not by itself claim publication or deployment.
 
 ## Mobile006 — round 1
 
@@ -38,13 +39,13 @@ verification of changed conflict/reconciliation code or final integrated gates.
 Earlier expanded database matrix: seven passed; the tombstone fixture and outer
 no-store failure were corrected and their two selectors passed separately.
 Bounded remainder copying, authority loss, two workers, exact receipt replay,
-rollback and byte accounting passed there. The broader source/handover matrix passed 12/12 in `logs/integration/f4-review-matrix-db-2.log`. The realistic migration plan harness passed in `activity-hotplans-db-1.log` (227.05s; 25k People/50 members, no plan failures). Allocated relation sizes are recorded separately, without a capacity claim. Browser acceptance, both realistic query-plan sets, SQLx and the final repository gate now pass. Full DB and the single paired run remain open.
+rollback and byte accounting passed there. The broader source/handover matrix passed 12/12 in `logs/integration/f4-review-matrix-db-2.log`. The realistic migration plan harness passed in `activity-hotplans-db-1.log` (227.05s; 25k People/50 members, no plan failures). Allocated relation sizes are recorded separately, without a capacity claim. Browser acceptance, both realistic query-plan sets, SQLx and the final repository gate now pass. Full DB and the completed paired measurement now pass.
 
 ## Round 2 remediation checkpoint
 
 - Mobile M6-R2-01: Android current-read catalog could outrun its installed sealed
   catalog during conflict replacement. Fixed in `6ae1d27`, integrated `26d0d00`;
-  the final catalog-integrity repair additionally requires exact cached catalog row completeness. Ten current storage tests pass; final live UI submission remains pending.
+  the final catalog-integrity repair additionally requires exact cached catalog row completeness. Ten current storage tests pass; final live UI submission and retained exact-envelope replay receipt now pass.
 - Mobile M6-R2-02: iOS staging generation/shared qualification marker could hide
   an intact sealed metadata baseline during an ordinary outage. Explicit generation
   qualification fixes this; 33/33 current storage tests pass. Reviewer accepted
@@ -64,5 +65,19 @@ rollback and byte accounting passed there. The broader source/handover matrix pa
   one indexed manifest/result checkpoint per worker unit. The reviewer verified
   all 26 final plans, including late/empty and present/absent cases, with no failures.
 
-Both reviewers report no further static blockers. Full DB, the single paired run
-and Android UI submission are pending; this is not a final READY verdict.
+## Final verdicts
+
+- **Mobile006: READY.** All static findings are closed. Native iOS/Android
+  storage, actual conflict replacement, exact replay and installed upgrade evidence
+  pass, alongside the shared final gates.
+- **Slice 010f4: READY.** Source/authority/remainder fixes, exact browser
+  reconciliation, 14 focused DB cases and 26 realistic plan probes pass.
+- Shared execution evidence: final repository and SQLx gates pass; all 1,103
+  DB tests pass. Mobile plans pass 18/18. The paired Person and Today comparisons
+  each have 40 equal measured responses per arm and pass their p95 limits.
+- The reviewer accepted `d6d77e4`'s exact revision expectations/batched large
+  fixture and `4bf6053`'s shared authentication manifest correction. Failed and
+  interrupted attempts remain retained; no third review round was opened.
+
+[Final verification](MOBILE_006_010f4_FINAL_VERIFICATION.md) owns executed commands,
+results, source attribution and remaining scope limits.

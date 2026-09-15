@@ -1,8 +1,8 @@
 # Mobile006 / 010f4 — Implementation status
 
-**IN PROGRESS — D-084.** Both features are implemented. Final database and paired
-performance gates, the Android conflict submission proof and both final independent
-review verdicts remain open. [Final verification](MOBILE_006_010f4_FINAL_VERIFICATION.md)
+**COMPLETE — D-084, 2026-09-15.** Both features are implemented and verified.
+Both independent implementation reviews are READY in their second/final round.
+[Final verification](MOBILE_006_010f4_FINAL_VERIFICATION.md)
 owns the acceptance matrix and shared checks; [review](MOBILE_006_010f4_IMPLEMENTATION_REVIEW.md)
 owns findings. Earlier development checkpoints are in
 [project history](../plans/PROJECT_HISTORY.md#mobile006--010f4-implementation-checkpoints--2026-09-14).
@@ -35,11 +35,14 @@ contract changes; no additional policy was invented.
 - Native API3106 uses frozen `82d081e` and owned `crm_mobile_006_qa`; iOS simulator
   `32978562-0A51-4E84-B55A-179BC5B28738` and Android `CRM_Mobile006_QA` retain their
   stores. Populated historical Mobile005 upgrade evidence is preserved separately.
-- Browser API3107 uses final backend `22c6c06` and owned `crm_010f4_qa`; Web5177
-  has isolated outputs. Retained captures, row inventories and screenshots remain.
+- Browser acceptance used backend `22c6c06` and owned `crm_010f4_qa` with isolated
+  Web5177. Those QA processes stopped during an interruption; database, outputs,
+  retained captures, row inventories and screenshots remain.
 - The three writer worktrees and their evidence remain available for handoff.
 
-Publication/deployment, native distribution, physical phones/cellular, live
-FUB/customer processing, activation and calling are separate. The prior
+The user subsequently authorized commit/merge/push, cleanup and shared-development
+deployment; the [release record](MOBILE_006_010f4_RELEASE.md) owns that execution.
+Native distribution, physical phones/cellular, live FUB/customer processing,
+activation and calling remain separate. The prior
 [Mobile005 / 010f3 release](MOBILE_005_010f3_RELEASE.md) remains recorded IN PROGRESS;
 this work neither repeats that rollout nor claims it completed.

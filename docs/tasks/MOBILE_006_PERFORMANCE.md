@@ -1,8 +1,7 @@
 # Mobile006 — hot-query inventory
 
 The realistic Mobile006 plan run passed: 18 exact statements, zero failures.
-The single paired Person/Today run remains pending; plan shape alone is not the
-complete M6-09 performance gate.
+The paired Person/Today comparison also passes, completing M6-09.
 
 ## New bounded statements
 
@@ -21,7 +20,7 @@ new three reads above are intentionally dynamic SQLx queries because they are
 bounded by trusted Org/Person identifiers and run in the existing transaction;
 they are included here rather than omitted from plan review.
 
-## Final-run requirements
+## Comparison protocol
 
 Capture the exact SQL source hashes, plan JSON, returned-row bounds, and the
 paired Person/Today comparison on the final integrated revision. A failed or stale
@@ -41,3 +40,29 @@ fields, 150 options, 25,019 Person/tag links and 25,049 values. The first two
 attempts had harness errors (column name and JSON numeric-plan parsing); their
 failed logs are retained and the corrected third attempt supplies the evidence.
 This is plan-shape evidence, not production capacity or a laptop latency promise.
+
+## Final paired comparison — PASS
+
+`logs/integration/paired-person-today-final-2.log` passed in 100.917s (100.90s test),
+using the frozen executable recorded in `integration/final-perf-binary-r4.json`
+at `4bf6053`. The 25,000-Person/50-member fixture includes 75,000 tag links and
+100,000 custom-field values. Both arms share the current authentication stack;
+this is a reader regression comparison, not a full historical-binary benchmark.
+
+| Read | Baseline p95 | Current p95 | Allowed current p95 | Evidence |
+|---|---:|---:|---:|---|
+| Person detail, cd3b010 reader bodies | 19.443ms | 21.921ms | 44.443ms | `integration/paired-person-today-final-2/person-detail-paired.json` |
+| Today, 9eaeb0a baseline | 72.095ms | 64.413ms | 97.095ms | `integration/paired-person-today-final-2/mobile006-today-paired.json` |
+
+Each arm has 40 measured samples with alternating AB/BA order; Person uses five
+warmups and exact complete JSON/byte equality, Today uses ten warmups and the
+same fixed clock/fixture with complete response parity. Both p95 limits and all
+response/entrypoint checks pass. Native API activity and other heavy checks were
+paused during measurement, then restored.
+
+The first attempt stopped before seeding or timing because two shared workspace
+helper hashes predated the required admitted-activity compatibility stamp.
+`4bf6053` pins those exact `3c01177` helpers with explicit scope notes. The three
+frozen cd3b010 reader bodies, fixtures, sample counts, parity and latency gates
+were unchanged. This failed setup attempt is retained; there is one completed
+paired measurement. These laptop timings are regression evidence, not capacity.

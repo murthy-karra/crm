@@ -8,8 +8,8 @@ existing Mac-hosted shared-development release at
 ## Ordered release plan
 
 1. Finish [implementation acceptance](MOBILE_006_010f4_FINAL_VERIFICATION.md),
-   including the interrupted full DB gate, one paired benchmark and final Android
-   UI receipt. Close both existing second-round independent reviews.
+   including the full DB gate, one completed paired measurement and final Android
+   UI receipt. Both existing second-round independent reviews are now READY.
 2. Commit the final reviewed tree, verify origin/main ancestry and publication
    contents, merge to main and push. Remove only completed clean milestone
    worktrees/branches after preserving any unique evidence or unmerged work.
@@ -40,3 +40,19 @@ Native source publication is included. App distribution, installed-store replace
 physical-phone/cellular testing, live FUB/customer work, business import confirmation,
 calling and activation remain separate. The deployment target is shared development,
 not a production cluster.
+
+## Preparation evidence
+
+Private release/recovery root: `/private/tmp/crm-mobile006-010f4-release-z_di8bdf`.
+The existing configuration and three binaries are protected in `recovery/`;
+73 served Web hashes were recorded. Isolated backend build at `3c080b5` passed
+in 66.995s and production Web in 2.033s. Exact artifact hashes are in
+`build-sha256.json` and `web-build-sha256.json`. Running API3000 still matches its
+original SHA256 `88f9b5fad385b5bd3834b2f81ceb48a6fd40fb1481769a30ddbdf9e261ad5b6a`.
+These are staged artifacts; rollout has not started.
+
+Implementation acceptance is complete at `4bf6053`; later edits are documentation.
+The live schema inspection found 69 successful migrations through `20261002000010`:
+Mobile005/010f3 schema is already present. This release will apply the five pending
+Mobile006/010f4 migrations and establish a new complete release record, without
+inventing completion evidence for the older IN PROGRESS runbook.

@@ -1,9 +1,10 @@
 # Slice 010f4 — implementation verification
 
-**IN PROGRESS.** Independent implementation review round 1 returned NOT READY;
+**COMPLETE — READY in final implementation round 2.** Round 1 returned NOT READY;
 the fixes and review budget are tracked in
 [the paired review record](MOBILE_006_010f4_IMPLEMENTATION_REVIEW.md).
-This record contains executed synthetic evidence. Full DB gates, paired performance and final review round 2 verdict remain open.
+This record contains executed synthetic evidence. Full DB and paired performance
+now pass; final verdicts are in the paired review record.
 The real desktop/390px browser acceptance and rowset/accounting reconciliation passed.
 The standalone SQLx preparation check passed; its cache is unchanged.
 
@@ -34,7 +35,7 @@ target with `--ignored --exact` or the documented module filter, one test thread
 | F4-07 old readers/workers and readiness | `old_reader_and_worker_barrier_fails_after_confirmation`, `readiness_rejects_incomplete_schema_grants_guards_and_owner` | Focused DB pass; 13 DDL/grant/guard negative variants |
 | F4-08 bounded review/provenance and page invalidation | HTTP/private-permit/native-cursor case, shared cursor unit tests, excluded coverage | Focused DB and browser source/provenance inspection pass |
 | F4-09 real desktop/390px acceptance | Owned API3107 + Web5177; real desktop/390px confirmation, two partial cancellations/remainders and account switch | Pass; evidence below |
-| F4-10 realistic plans and paired reads | 26 final exact hot-statement EXPLAIN probes at 25k People/50 members | Plan pass; paired Person/Today run pending |
+| F4-10 realistic plans and paired reads | 26 final exact hot-statement EXPLAIN probes at 25k People/50 members | Plans and paired Person/Today comparison pass |
 
 Selector names in the table have the common `admitted_activity_` prefix. The
 additional corrupt-People test passed in
@@ -145,7 +146,7 @@ and settled-row checkpoint cases. The current full repository gate also passed.
 The final 26-probe run passed in 208.328s with zero failures:
 `logs/integration/activity-hotplans-db-r3.log` and
 `integration/activity-hotplans-4.json`. It uses the frozen `22c6c06` backend.
-Full DB/paired gates remain pending; the previous failed plan is retained.
+Full DB/paired gates pass; the previous failed plan is retained.
 
 The final backend was also restarted without reseeding on API3107. Actual browser
 reload and attempt selection showed the completed successor with 51 applied tasks,

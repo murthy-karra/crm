@@ -380,7 +380,7 @@ async fn metadata_acceptance_two_valid_fields_cannot_merge_into_one_native_targe
     .await
     .unwrap();
     let parent = completed_parent(&f).await;
-    let before = native_history(&f, parent).await;
+    let mut before = native_history(&f, parent).await;
     let calls = f.reader.calls();
     let (child, first) = propose(&f, parent).await;
     let a = field_mapping(&f, plan(&first), "21").await;
@@ -435,6 +435,13 @@ async fn metadata_acceptance_two_valid_fields_cannot_merge_into_one_native_targe
     .await
     .unwrap();
     assert_eq!(native_after, native_before);
+    // Mobile006 introduces derived invalidation for the one independently
+    // accepted cell. Every other Person byte and all source/history rows must
+    // remain identical to the pre-import inventory.
+    for key in ["mobile_revision", "metadata_revision"] {
+        let previous = before["person"][0][key].as_i64().unwrap();
+        before["person"][0][key] = json!(previous + 1);
+    }
     assert_eq!(native_history(&f, parent).await, before);
     assert_eq!(f.reader.calls(), calls);
 }

@@ -493,6 +493,20 @@ async fn metadata_http_frozen_choices_enforce_patch_bounds_and_cursor_scope(migr
 #[ignore]
 async fn metadata_http_confirmation_replays_and_preserves_parent_and_review_hold(migrator: PgPool) {
     let (f, parent) = completed_parent(&migrator, book(None)).await;
+    let tokens_before: Vec<(Uuid, i64, i64, i64)> = sqlx::query_as(
+        "SELECT id,mobile_revision,metadata_revision,details_revision FROM person \
+         WHERE organization_id=$1 ORDER BY id",
+    )
+    .bind(f.org)
+    .fetch_all(&f.pool)
+    .await
+    .unwrap();
+    let catalog_before: i64 =
+        sqlx::query_scalar("SELECT revision FROM mobile_metadata_catalog WHERE organization_id=$1")
+            .bind(f.org)
+            .fetch_one(&f.pool)
+            .await
+            .unwrap();
     let before = imports::detail(&f.pool, &f.key, &f.ctx, parent, &f.policy)
         .await
         .unwrap();
@@ -537,6 +551,34 @@ async fn metadata_http_confirmation_replays_and_preserves_parent_and_review_hold
     )
     .await;
     assert_eq!(native_counts(&f).await, (2, 2, 3, 4));
+    for (person, mobile, metadata, details) in tokens_before {
+        let (current_mobile, current_metadata, current_details, cells): (i64, i64, i64, i64) =
+            sqlx::query_as(
+                "SELECT mobile_revision,metadata_revision,details_revision,\
+                 (SELECT count(*) FROM person_tag WHERE organization_id=p.organization_id AND person_id=p.id) + \
+                 (SELECT count(*) FROM person_custom_field_value WHERE organization_id=p.organization_id AND person_id=p.id) \
+                 FROM person p WHERE organization_id=$1 AND id=$2",
+            )
+            .bind(f.org)
+            .bind(person)
+            .fetch_one(&f.pool)
+            .await
+            .unwrap();
+        assert_eq!((current_mobile, current_metadata, current_details),
+            (mobile + cells, metadata + cells, details),
+            "each original-import tag/value advances metadata once, including exact confirmation replay");
+    }
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT revision FROM mobile_metadata_catalog WHERE organization_id=$1",
+        )
+        .bind(f.org)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap(),
+        catalog_before + 6,
+        "two tags, two fields and two options advance the shared metadata catalog"
+    );
     let literal: String = sqlx::query_scalar("SELECT o.label FROM person_custom_field_value v JOIN custom_field_option o ON o.organization_id=v.organization_id AND o.id=v.option_id JOIN migration_import_identity i ON i.organization_id=v.organization_id AND i.target_id=v.person_id WHERE i.organization_id=$1 AND i.family='people' AND i.source_id='101'").bind(f.org).fetch_one(&f.pool).await.unwrap();
     assert_eq!(
         literal, "None",

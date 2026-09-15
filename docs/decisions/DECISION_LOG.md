@@ -2844,3 +2844,55 @@ retained source evidence and recovery material. Native distribution, physical
 phones/cellular, live FUB/customer processing, activation and production-cluster
 work remain separate. The release record is
 `docs/tasks/MOBILE_005_010f3_RELEASE.md`.
+
+### D-083 — Mobile 006 and admitted-People activity planning authorized (2026-09-14)
+
+After the assistant identified admitted-People notes/tasks as the next migration
+step and proposed scoping the next mobile companion, the user requested **“ok
+start planning”**. Asked which mobile direction to pair with it, the user selected
+**“Offline tags and custom fields (Recommended)”**.
+
+This authorizes drafting [Mobile006](../specs/MOBILE_006_OFFLINE_METADATA.md),
+[admitted activity 010f4](../specs/SLICE_010f4.md), their implementation briefs and
+[coordinated plan](../plans/MOBILE_006_010f4_PARALLEL_LAUNCH.md). The numeric activity
+assignment, existing-catalog-only boundary, aggregate metadata/catalog conflict
+rules, representation/receipt/lock extensions, admitted activity source/cohort/
+identity-owner/lifetime and reader contracts are proposals pending independent
+review and implementation acceptance. The scope choice is not approval of those
+new contracts or an instruction to launch workers.
+
+Preserve the existing mobile/migration progression and Terra high preference for
+substantive implementation when later authorized. Native calling remains afterwards
+under D-079. Physical-phone/cellular testing, broad design, live FUB/customer work,
+activation and native distribution remain deferred/separately scoped. The prior
+Mobile005/010f3 release retains its D-082 follow-up authorization; this planning
+request does not repeat, cancel or establish completion of that release. No runtime,
+schema, source-data or application action is authorized by this planning entry.
+
+### D-084 — Mobile 006 and admitted-People activity implementation approved (2026-09-14)
+
+After the two draft specifications, execution briefs and coordinated plan were
+presented, the user requested **“implement them”**. This accepts
+[Mobile006](../specs/MOBILE_006_OFFLINE_METADATA.md),
+[010f4](../specs/SLICE_010f4.md), their declared contracts and
+[coordinated implementation](../plans/MOBILE_006_010f4_PARALLEL_LAUNCH.md) for
+implementation and isolated synthetic verification. The 010f4 numeric assignment
+is accepted. Independent planning review is being completed before code work;
+compatible corrections within these accepted outcomes do not need repeat approval.
+Materially different product/privacy/authority/fidelity policy still requires a
+separate decision. Independent implementation review and final gates remain required.
+
+Mobile scope is offline edits using existing tags/fields, aggregate metadata and
+catalog conflicts, complete opt-in representations, shared typed atomic commands
+and durable receipts. Activity scope is qualified first notes/tasks coverage for
+terminal successful admission cohorts, original/admitted exclusive global identity
+ownership, preserved source/role/time rules, bounded readers and exact unprocessed
+remainder. Concrete compatible schema/DTO/lock/grant checkpoints are owned work.
+
+Use the established Terra high substantive writers and coordinated three-worktree
+sequence: mobile backend alongside migration, then iOS/Android after backend
+integration. Local checkpoint/integration commits may supply consistent bases to
+dependent lanes. Preserve shared development, native demo/QA stores, retained
+source data and recovery evidence. Publication/deployment of this pair, native
+distribution, physical phones/cellular, live FUB/customer work, activation and
+calling remain separate. D-082's earlier release authorization is unaffected.

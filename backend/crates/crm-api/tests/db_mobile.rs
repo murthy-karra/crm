@@ -48,6 +48,7 @@ async fn mobile006_metadata_atomic_receipt_current_and_catalog_generation(pool: 
     let (status, accepted) = f.post("/api/mobile/v1/operations", operation.clone()).await;
     assert_eq!(status, StatusCode::OK, "{accepted}");
     assert_eq!(accepted["resource_type"], "person_metadata");
+    chrono::DateTime::parse_from_rfc3339(accepted["accepted_at"].as_str().unwrap()).unwrap();
     assert_eq!(accepted["committed_revision"], (metadata + 2).to_string());
     let (_, replay) = f.post("/api/mobile/v1/operations", operation).await;
     assert_eq!(replay["replayed"], true);

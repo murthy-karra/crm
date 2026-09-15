@@ -28,12 +28,18 @@ async fn serve_admitted_activity_ui_fixture() {
         .unwrap();
     let migrator = PgPool::connect_with(opt).await.unwrap();
     sqlx::migrate!("./migrations").run(&migrator).await.unwrap();
-    if std::env::var("CRM_ADMITTED_ACTIVITY_UI_SEED").as_deref() == Ok("create-synthetic-fixture") {
-        assert!(
-            sqlx::query_scalar::<_, bool>("SELECT NOT EXISTS(SELECT 1 FROM organization)")
+    let seed = std::env::var("CRM_ADMITTED_ACTIVITY_UI_SEED").unwrap_or_default();
+    if matches!(
+        seed.as_str(),
+        "create-synthetic-fixture" | "create-synthetic-fixture-v2"
+    ) {
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>("SELECT count(*) FROM organization")
                 .fetch_one(&migrator)
                 .await
-                .unwrap()
+                .unwrap(),
+            if seed.ends_with("-v2") { 1 } else { 0 },
+            "preserve retained fixtures; seed only the explicitly owned next attempt"
         );
         let people:Vec<Value>=(104..164).map(|id|json!({"id":id,"firstName":"Activity","lastName":id.to_string(),"stage":"Lead","assignedUserId":3})).collect();
         let (f, parent, admission) =
@@ -42,7 +48,7 @@ async fn serve_admitted_activity_ui_fixture() {
             Stream::Users,
             vec![json!({"id":3,"name":"Synthetic author","timezone":"America/Los_Angeles"})],
         );
-        f.reader.set_records(Stream::Notes,people.iter().map(|p|json!({"id":p["id"],"personId":p["id"],"body":"Retained QA note","createdById":3,"created":"2026-09-01T12:00:00Z","isHtml":false})).collect());
+        f.reader.set_records(Stream::Notes,people.iter().take(1).map(|p|json!({"id":p["id"],"personId":p["id"],"body":"Retained QA note","createdById":3,"created":"2026-09-01T12:00:00Z","isHtml":false})).collect());
         f.reader.set_records(Stream::TasksOpen,people.iter().map(|p|json!({"id":1000+p["id"].as_i64().unwrap(),"personId":p["id"],"name":"Call synthetic Person","type":"Call","createdById":3,"assignedUserId":3,"isCompleted":false,"created":"2026-09-01T12:00:00Z"})).collect());
         f.reader.set_records(Stream::TasksCompleted, vec![]);
         f.reader.set_raw(Stream::NoteDetail,0,200,serde_json::to_vec(&json!({"id":104,"personId":104,"body":"Frozen synthetic detail","createdById":3,"created":"2026-09-01T12:00:00Z","isHtml":false,"type":"Note"})).unwrap(),false);

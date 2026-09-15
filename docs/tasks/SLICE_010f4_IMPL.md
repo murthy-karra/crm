@@ -1,15 +1,15 @@
 # Slice 010f4 — Execution brief
 
-**IMPLEMENTATION AUTHORIZED — D-084, 2026-09-14.** The user requested “implement them”.
-The earlier draft/planning labels below preserve the proposal history; D-084
-supersedes their approval boundary. Complete independent planning review before
-code work, then implement and verify without requesting repeated approval of
-these contracts. Materially different policy remains outside this authorization.
+**ACCEPTED — D-084, 2026-09-14.** The user approved implementation and isolated
+synthetic verification. Both independent planning reviews returned READY. Current
+implementation and acceptance evidence are recorded in
+[implementation status](../tasks/MOBILE_006_010f4_IMPLEMENTATION_STATUS.md).
+Publication/deployment and materially different policy remain separate.
 
-**DRAFT — planning only, D-083.** [Specification](../specs/SLICE_010f4.md),
-[paired plan](../plans/MOBILE_006_010f4_PARALLEL_LAUNCH.md). Proposed branch
-`codex/migration-010f4`, one Terra high writer for backend then Web. No implementation
-until independent planning review and acceptance of the declared contracts.
+[Accepted specification](../specs/SLICE_010f4.md),
+[paired plan](../plans/MOBILE_006_010f4_PARALLEL_LAUNCH.md). Branch
+`codex/migration-010f4` has one Terra high writer for backend then Web; the
+coordinator owns integration and final gates.
 
 ## Ownership and execution
 

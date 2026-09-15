@@ -1,14 +1,13 @@
 # Mobile 006 — Offline tags and custom-field values
 
-**IMPLEMENTATION AUTHORIZED — D-084, 2026-09-14.** The user requested “implement them”.
-The earlier draft/planning labels below preserve the proposal history; D-084
-supersedes their approval boundary. Complete independent planning review before
-code work, then implement and verify without requesting repeated approval of
-these contracts. Materially different policy remains outside this authorization.
+**ACCEPTED — D-084, 2026-09-14.** The user approved implementation and isolated
+synthetic verification. Both independent planning reviews returned READY. Current
+implementation and acceptance evidence are recorded in
+[implementation status](../tasks/MOBILE_006_010f4_IMPLEMENTATION_STATUS.md).
+Publication/deployment and materially different policy remain separate.
 
-**DRAFT — planning authorized 2026-09-14; implementation not approved.** The user
-selected offline tags and custom fields as the next mobile outcome. D-083 records
-planning authority only. [Brief](../tasks/MOBILE_006_IMPL.md),
+The user selected offline tags and custom fields as the next mobile outcome.
+D-083 records the initial planning authority; D-084 accepts these contracts. [Brief](../tasks/MOBILE_006_IMPL.md),
 [paired plan](../plans/MOBILE_006_010f4_PARALLEL_LAUNCH.md),
 [author findings](../tasks/MOBILE_006_010f4_PLANNING_REVIEW.md).
 

@@ -1,14 +1,12 @@
 # Slice 010f4 — Notes and tasks for admitted People
 
-**IMPLEMENTATION AUTHORIZED — D-084, 2026-09-14.** The user requested “implement them”.
-The earlier draft/planning labels below preserve the proposal history; D-084
-supersedes their approval boundary. Complete independent planning review before
-code work, then implement and verify without requesting repeated approval of
-these contracts. Materially different policy remains outside this authorization.
+**ACCEPTED — D-084, 2026-09-14.** The user approved implementation and isolated
+synthetic verification. Both independent planning reviews returned READY. Current
+implementation and acceptance evidence are recorded in
+[implementation status](../tasks/MOBILE_006_010f4_IMPLEMENTATION_STATUS.md).
+Publication/deployment and materially different policy remain separate.
 
-**DRAFT — planning authorized 2026-09-14; numeric assignment and implementation
-contracts remain proposed.** D-083 records the planning request. This is the next
-activity step in the [family ladder](../plans/SLICE_010_ADMITTED_PEOPLE_LADDER.md).
+D-083 records the initial planning request. This is the accepted activity step in the [family ladder](../plans/SLICE_010_ADMITTED_PEOPLE_LADDER.md).
 [Brief](../tasks/SLICE_010f4_IMPL.md),
 [paired plan](../plans/MOBILE_006_010f4_PARALLEL_LAUNCH.md),
 [author findings](../tasks/MOBILE_006_010f4_PLANNING_REVIEW.md).

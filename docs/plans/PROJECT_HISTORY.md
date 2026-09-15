@@ -9,6 +9,33 @@ Use [PROJECT_STATE.md](PROJECT_STATE.md) for current work, live residuals and ne
 actions, and the [decision log](../decisions/DECISION_LOG.md) for authority.
 Per-slice verification/release records remain the detailed evidence.
 
+## Mobile006 / 010f4 implementation checkpoints — 2026-09-14
+
+D-083 drafted the pair; both independent planning reviews returned READY and
+D-084 accepted implementation and isolated synthetic verification. The root
+integrated the frozen mobile backend before native writers started, then repaired
+source qualification, excluded coverage, old-binary handover, native provenance,
+sealed metadata qualification and bounded remainder copying within the accepted
+contracts. Detailed final evidence and retained failures belong to the
+[verification record](../tasks/MOBILE_006_010f4_FINAL_VERIFICATION.md).
+
+### Earlier focused evidence
+
+All logs are under the private QA root, with command/timing sidecars where run
+through `run-check.py`:
+
+- `logs/integration/metadata-compatibility-db-1.log`: 7 passed at `ec2ccdd`.
+- `logs/integration/metadata-extra-boundaries-db-1.log`: 3 passed, observer failed;
+  `metadata-tag-delete-concurrency-db-2.log`: corrected observer test passed.
+- `logs/mobile006-focused-2.log`: 4 passed at writer `b744e4c`.
+- `logs/mobile006-http-boundaries-2.log`: bounds passed, receipt URL failed;
+  `mobile006-http-boundaries-3.log`: corrected authority test passed at `82d081e`.
+- `logs/integration/admitted-activity-remainder-db-2.log`: confirmed-cancel and
+  successor execution passed (6.202 test seconds) after the pointer/FK order fix.
+- Migration writer Web/API 28 tests and preflight 51 tests passed as development
+  checkpoints; final-tree gates remain required.
+
+
 ## Mobile005 / 010f3 local completion — 2026-09-14
 
 D-082 implementation completed on `codex/mobile005-010f3-integration`, with final

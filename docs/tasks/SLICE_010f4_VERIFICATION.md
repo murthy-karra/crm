@@ -34,7 +34,7 @@ target with `--ignored --exact` or the documented module filter, one test thread
 | F4-07 old readers/workers and readiness | `old_reader_and_worker_barrier_fails_after_confirmation`, `readiness_rejects_incomplete_schema_grants_guards_and_owner` | Focused DB pass; 13 DDL/grant/guard negative variants |
 | F4-08 bounded review/provenance and page invalidation | HTTP/private-permit/native-cursor case, shared cursor unit tests, excluded coverage | Focused DB and browser source/provenance inspection pass |
 | F4-09 real desktop/390px acceptance | Owned API3107 + Web5177; real desktop/390px confirmation, two partial cancellations/remainders and account switch | Pass; evidence below |
-| F4-10 realistic plans and paired reads | 21 exact hot-statement EXPLAIN probes at 25k People/50 members | Plan pass; paired Person/Today run pending |
+| F4-10 realistic plans and paired reads | 26 final exact hot-statement EXPLAIN probes at 25k People/50 members | Plan pass; paired Person/Today run pending |
 
 Selector names in the table have the common `admitted_activity_` prefix. The
 additional corrupt-People test passed in
@@ -61,17 +61,10 @@ be zero; that failed test assertion is retained in the `-1.log` file.
   sizes include indexes and PostgreSQL update/dead-tuple overhead; they are not
   estimates of live customer storage.
 
-## Integrated repository check
+## Integrated repository checks
 
-`logs/integration/final-local-check-4.log` passed on `7e0be21` in 173.354s: 51 release-preflight
-tests, Rust formatting/Clippy/production compilation and dependency fences,
-993 Rust tests, five doctests, Web lint/typecheck, 1,295 Web tests, isolated Web
-build and 11 email-worker tests. The preceding two attempts retain a stale
-readiness test initializer and Clippy failures; those were repaired.
-
-Standalone `scripts/sqlx-prepare` passed in 134.92s in
-`logs/integration/final-sqlx-prepare-1.log`, with no cache changes. The full database
-suite, paired performance and final independent review remain separate gates.
+[Integrated final verification](MOBILE_006_010f4_FINAL_VERIFICATION.md) owns shared
+repository, SQLx, full DB and paired performance results.
 
 ## Real desktop and 390px browser acceptance
 
@@ -131,5 +124,31 @@ Screenshots under `integration/activity-ui/` include `desktop-confirmation.png`,
 The native provenance repair passed 41 focused tests in
 `logs/integration/web-native-admitted-source-r2.log`; original/admitted family,
 unrelated URL and late account-change responses are covered. Typecheck passed in
-`web-native-admitted-source-typecheck.log`. Final full Web/repository gate is
-repeated for this actual production change.
+`web-native-admitted-source-typecheck.log`. Final full Web/repository gate passed after this production change.
+
+## Final remainder performance repair
+
+The first 22-probe run (`activity-hotplans-db-r2.log`, 262.692s) failed the
+broad-scan guard on the availability EXISTS. Its early-match execution examined
+five rows, but review correctly identified the unbounded all-settled/late-match
+case. The failure remains retained in `integration/activity-hotplans-3.json`.
+The gate was not weakened.
+
+`22c6c06` uses the canonical cancelled source's atomically committed pending
+counts for both view and command availability. A cancelled partial copy uses its
+complete source's counts. Manifest copying now fetches one indexed source row and
+point-checks its result; already-settled rows advance exactly one checkpoint per
+worker unit. New plans include late/empty source traversal and present/absent
+result lookups. All 14 focused migration DB tests passed on `22c6c06` in 138.094s
+(`activity-bounded-remainder-db-r2.log`), including no-remainder, partial-copy
+and settled-row checkpoint cases. The current full repository gate also passed.
+The final 26-probe run passed in 208.328s with zero failures:
+`logs/integration/activity-hotplans-db-r3.log` and
+`integration/activity-hotplans-4.json`. It uses the frozen `22c6c06` backend.
+Full DB/paired gates remain pending; the previous failed plan is retained.
+
+The final backend was also restarted without reseeding on API3107. Actual browser
+reload and attempt selection showed the completed successor with 51 applied tasks,
+zero pending records and zero reserved bytes. Evidence:
+`integration/activity-ui/desktop-final-api-completed.png` and
+`integration/activity-ui/final-api-reconciliation.txt`.

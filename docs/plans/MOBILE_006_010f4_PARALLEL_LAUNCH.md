@@ -1,15 +1,14 @@
-# Mobile 006 / migration 010f4 — Coordinated draft plan
+# Mobile 006 / migration 010f4 — Coordinated implementation plan
 
-**IMPLEMENTATION AUTHORIZED — D-084, 2026-09-14.** The user requested “implement them”.
-The earlier draft/planning labels below preserve the proposal history; D-084
-supersedes their approval boundary. Complete independent planning review before
-code work, then implement and verify without requesting repeated approval of
-these contracts. Materially different policy remains outside this authorization.
+**ACCEPTED — D-084, 2026-09-14.** The user approved implementation and isolated
+synthetic verification. Both independent planning reviews returned READY. Current
+implementation and acceptance evidence are recorded in
+[implementation status](../tasks/MOBILE_006_010f4_IMPLEMENTATION_STATUS.md).
+Publication/deployment and materially different policy remain separate.
 
-**PLANNING ONLY — 2026-09-14, D-083.** The user requested planning and chose offline
-tags/custom fields for mobile. The numerical activity assignment 010f4 and the
-specifications' new contracts are proposals. No implementation, agent dispatch or
-runtime resource is created by this schedule.
+D-083 records the initial planning choice; D-084 accepts the numerical assignment,
+contracts and coordinated implementation. Retain the declared ownership and
+verification limits below.
 
 ## Outcomes and current baseline
 
@@ -145,15 +144,15 @@ per-lane capacity exercises or treat laptop absolute p95 as a production gate.
 
 ## Planning exit and remaining authority
 
-The specifications declare all proposed product/contract changes and acceptance
+The specifications declare the accepted product/contract changes and acceptance
 criteria; the briefs assign implementation checkpoints rather than permission to
 invent policy. [Author findings](../tasks/MOBILE_006_010f4_PLANNING_REVIEW.md) record
-inspection and documentation checks. Independent planning review is still required,
-followed by implementation acceptance under AGENTS §11. At most two review/fix
+inspection and independent planning reviews, both READY. D-084 accepts these
+contracts and authorizes implementation and isolated synthetic verification. At most two review/fix
 rounds per slice under D-050; a third requires explicit approval.
 
-The current user request authorizes drafting only. The previous Mobile005 release
-keeps its existing authorization; this plan neither resumes nor cancels it.
+The previous Mobile005 release keeps its existing authorization and is recorded
+separately; this implementation does not claim its rollout is complete.
 Publication/deployment of this pair, app distribution, physical phones/cellular,
 live-source/customer processing, erasure policy, activation and calling remain
 separately scoped. Subsequent history work stays a just-in-time following plan.

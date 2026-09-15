@@ -1,9 +1,9 @@
 # Migration sequence for admitted People
 
-**Updated 2026-09-14 — D-079 sequence, D-082 metadata implementation, D-083 activity planning.**
+**Updated 2026-09-14 — D-079 sequence, D-082 metadata implementation, D-084 activity implementation.**
 The user selected smaller sequential migration slices after the 010e3 release.
 Each step's contracts and implementation require its own reviewed scope; the
-table distinguishes accepted work from the next draft. This is the
+table distinguishes accepted work from later unassigned scope. This is the
 current follow-up to the [010e3 boundary](../specs/SLICE_010e3.md#1-outcome-and-deliberate-boundary).
 Keep the administrator review hold, full fidelity reporting and source-data gates.
 
@@ -11,13 +11,14 @@ Keep the administrator review hold, full fidelity reporting and source-data gate
 |---|---|---|
 | **010e4: later core refresh — delivered** | Update names/contacts/stage/assignee for successful admissions from a later retained report | [Released evidence](../tasks/MOBILE_004_010e4_RELEASE.md); admission-derived baseline, local-change holds, cohort watermark and recoverable confirmation |
 | **010f3: metadata — implemented and verified** | Tags/custom-field coverage for admitted People | [Accepted specification](../specs/SLICE_010f3.md), [final evidence](../tasks/MOBILE_005_010f3_FINAL_VERIFICATION.md); D-082 release is authorized and [recorded separately](../tasks/MOBILE_005_010f3_RELEASE.md) |
-| **010f4: activity — draft** | Notes/open/completed tasks for admitted People | [Draft specification](../specs/SLICE_010f4.md): qualified newer notes/detail/tasks capture, exact admission identities, explicit roles/kinds/timezone, shared activity identity and exact remainder; paired with [Mobile006](MOBILE_006_010f4_PARALLEL_LAUNCH.md) |
+| **010f4: activity — implemented; final verification in progress** | Notes/open/completed tasks for admitted People | [Accepted specification](../specs/SLICE_010f4.md): qualified newer notes/detail/tasks capture, exact admission identities, explicit roles/kinds/timezone, shared activity identity and exact remainder; paired with [Mobile006](MOBILE_006_010f4_PARALLEL_LAUNCH.md) |
 | **Following history slice** | Historical event/call/text metadata for admitted People | Extend 010d1 linkage and 010d2 anchoring deliberately; exact captured account/cohort/sequence, identity dedupe and bounded metadata-only timeline; no native contact credit |
 | **Later repair/delta/cutover scope** | Remaining coverage, deliberate mapping repair, per-family updates and activation | Separate accepted policies, final coverage/reconciliation, customer-data gates and recovery/cutoff procedure |
 
 Write the next family specification just in time after the preceding evidence.
-010f3's assignment/contracts are accepted under D-082. 010f4 is the proposed
-activity assignment under D-083; history remains an outcome boundary without an
+010f3's assignment/contracts are accepted under D-082. 010f4 is the accepted
+activity assignment under D-084, with [final acceptance](../tasks/MOBILE_006_010f4_FINAL_VERIFICATION.md)
+in progress; history remains an outcome boundary without an
 assigned ID or approved contracts. A family extension must not imply ongoing synchronization or
 refresh of that family's already imported records. Report those separate gaps.
 

@@ -1,15 +1,14 @@
 # Mobile 006 — Execution briefs
 
-**IMPLEMENTATION AUTHORIZED — D-084, 2026-09-14.** The user requested “implement them”.
-The earlier draft/planning labels below preserve the proposal history; D-084
-supersedes their approval boundary. Complete independent planning review before
-code work, then implement and verify without requesting repeated approval of
-these contracts. Materially different policy remains outside this authorization.
+**ACCEPTED — D-084, 2026-09-14.** The user approved implementation and isolated
+synthetic verification. Both independent planning reviews returned READY. Current
+implementation and acceptance evidence are recorded in
+[implementation status](../tasks/MOBILE_006_010f4_IMPLEMENTATION_STATUS.md).
+Publication/deployment and materially different policy remain separate.
 
-**DRAFT — planning only, D-083.** [Specification](../specs/MOBILE_006_OFFLINE_METADATA.md)
-and [coordination](../plans/MOBILE_006_010f4_PARALLEL_LAUNCH.md). Independent planning
-review and acceptance of the proposed contracts precede implementation. Keep Terra
-high for substantive writers; no worker is launched by this brief.
+[Accepted specification](../specs/MOBILE_006_OFFLINE_METADATA.md) and
+[coordination](../plans/MOBILE_006_010f4_PARALLEL_LAUNCH.md). Terra high is assigned
+to substantive writers; the coordinator owns integration and final gates.
 
 ## A — Shared backend
 

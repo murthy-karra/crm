@@ -12,7 +12,7 @@ authorized. Reviewers are waiting for final acceptance evidence.
   Fixed in `e4d53af` (integrated `85d7bd0`); storage instrumentation 6/6 passed.
 - **M6-R1-03, P2:** iOS conflict recovery lacked actual value comparison,
   qualified current catalog, and atomic revised proposal creation. First repair
-  did not satisfy these requirements; `e2fd7c1` and `2cf2f00` add value comparison, sealed-catalog qualification, atomic replacement and explicit exclusion of invalid actions. ModelTests 20/20 pass; actual UI recovery verification remains in progress.
+  did not satisfy these requirements; `e2fd7c1` and `2cf2f00` add value comparison, sealed-catalog qualification, atomic replacement and explicit exclusion of invalid actions. ModelTests20/20, current StorageTests33/33 and the actual simulator conflict UI pass; the iOS verification record owns logs.
 - **M6-R1-04, P2:** iOS resumed completed catalog sections from their beginning.
   Fixed in `a8fb89c`; completed sections now skip on resume.
 
@@ -38,13 +38,13 @@ verification of changed conflict/reconciliation code or final integrated gates.
 Earlier expanded database matrix: seven passed; the tombstone fixture and outer
 no-store failure were corrected and their two selectors passed separately.
 Bounded remainder copying, authority loss, two workers, exact receipt replay,
-rollback and byte accounting passed there. The broader source/handover matrix passed 12/12 in `logs/integration/f4-review-matrix-db-2.log`. The realistic migration plan harness passed in `activity-hotplans-db-1.log` (227.05s; 25k People/50 members, no plan failures). Storage sizing is a separate pending report. Browser acceptance, mobile query plans, paired performance, SQLx and final repository gates remain open.
+rollback and byte accounting passed there. The broader source/handover matrix passed 12/12 in `logs/integration/f4-review-matrix-db-2.log`. The realistic migration plan harness passed in `activity-hotplans-db-1.log` (227.05s; 25k People/50 members, no plan failures). Allocated relation sizes are recorded separately, without a capacity claim. Browser acceptance, both realistic query-plan sets, SQLx and the final repository gate now pass. Full DB and the single paired run remain open.
 
 ## Round 2 remediation checkpoint
 
 - Mobile M6-R2-01: Android current-read catalog could outrun its installed sealed
   catalog during conflict replacement. Fixed in `6ae1d27`, integrated `26d0d00`;
-  nine storage tests pass, final live recovery is running.
+  the final catalog-integrity repair additionally requires exact cached catalog row completeness. Ten current storage tests pass; final live UI submission remains pending.
 - Mobile M6-R2-02: iOS staging generation/shared qualification marker could hide
   an intact sealed metadata baseline during an ordinary outage. Explicit generation
   qualification fixes this; 33/33 current storage tests pass. Reviewer accepted
@@ -56,5 +56,13 @@ rollback and byte accounting passed there. The broader source/handover matrix pa
   successor. A labeled, bounded attempt selector and cursor controls now expose
   prior/successor attempts; 26 focused Web tests and typecheck passed.
 
-Both reviewers report no further static blockers. Browser, paired performance and
-full database gates are pending; this is not a final READY verdict.
+- Migration: actual native Person source inspection exposed another original/admitted
+  reader-family use. `05faec2` qualifies the family by the exact server provenance
+  path; both note/task browser reads and 41 focused tests pass.
+- Migration: the 22-probe performance run exposed unbounded remainder availability
+  and settled-tail traversal. `22c6c06` uses canonical committed pending counts and
+  one indexed manifest/result checkpoint per worker unit. The reviewer verified
+  all 26 final plans, including late/empty and present/absent cases, with no failures.
+
+Both reviewers report no further static blockers. Full DB, the single paired run
+and Android UI submission are pending; this is not a final READY verdict.

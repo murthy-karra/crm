@@ -1,9 +1,8 @@
 # Mobile006 — hot-query inventory
 
-This is the source inventory for M6-09. It is not performance-pass evidence.
-The coordinator owns one paired Person/Today run on the final integrated source;
-each statement below still needs one `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` as
-`crm_app` in the owned realistic-book run.
+The realistic Mobile006 plan run passed: 18 exact statements, zero failures.
+The single paired Person/Today run remains pending; plan shape alone is not the
+complete M6-09 performance gate.
 
 ## New bounded statements
 
@@ -27,3 +26,18 @@ they are included here rather than omitted from plan review.
 Capture the exact SQL source hashes, plan JSON, returned-row bounds, and the
 paired Person/Today comparison on the final integrated revision. A failed or stale
 plan remains a failure; no laptop timing is treated as capacity evidence.
+
+## Executed Mobile006 plan evidence
+
+Private root: `/private/tmp/crm-mobile006-010f4-thyhauvv`.
+`integration/mobile006-hotplans-3.json` records 18 exact SQL/source hashes,
+`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` plans and enforced output bounds, with
+zero failures. `logs/integration/mobile006-hotplans-db-3.log` passed in 109.113s
+including compilation (29.23s test). New composer/catalog statements run as
+`crm_app`, except the explicitly identified existing SECURITY DEFINER owner path.
+
+The fixture has 25,000 People, 50 active members, 200 tags, 50 live plus 75 archived
+fields, 150 options, 25,019 Person/tag links and 25,049 values. The first two
+attempts had harness errors (column name and JSON numeric-plan parsing); their
+failed logs are retained and the corrected third attempt supplies the evidence.
+This is plan-shape evidence, not production capacity or a laptop latency promise.

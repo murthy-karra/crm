@@ -2896,3 +2896,16 @@ dependent lanes. Preserve shared development, native demo/QA stores, retained
 source data and recovery evidence. Publication/deployment of this pair, native
 distribution, physical phones/cellular, live FUB/customer work, activation and
 calling remain separate. D-082's earlier release authorization is unaffected.
+
+
+**Release follow-up (2026-09-15).** The user explicitly requested **“commit,
+merge, push, cleanup and deploy.”** This authorizes completion of the remaining
+acceptance gates, main integration/publication, cleanup of completed milestone
+worktrees/branches and deployment of Mobile006/010f4 to the existing Mac-hosted
+shared-development environment. Preserve installed native stores, retained source,
+QA evidence, configuration keys and release recovery material. Reuse applicable
+verified evidence and the established compatibility/backup/process runbook.
+Native source publication is included; app distribution, physical phones/cellular,
+live FUB/customer operations, workspace activation and calling remain separate.
+The earlier Mobile005/010f3 release record must be reconciled against actual
+runtime/schema evidence rather than assumed complete or repeated blindly.

@@ -360,6 +360,7 @@ mod db_admitted_refresh_reads;
 mod db_core_change_reports;
 #[path = "db_mobile.rs"]
 mod db_mobile;
+mod db_person_metadata;
 mod db_people_admission_adversarial;
 #[path = "db_people_admission_contract.rs"]
 mod db_people_admission_contract;

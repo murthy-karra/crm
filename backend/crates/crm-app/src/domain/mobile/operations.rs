@@ -5,10 +5,11 @@ use crate::domain::{
         ChangePersonStage, ContactChannel, ContactDetailOperation, ContactOutcome,
         DetailContactKind, LogContactAttemptInTransaction, UpdatePersonDetails,
     },
+    custom_field::{self, CustomFieldValue, FieldType},
     envelope::{CommandContext, Origin},
-    note, task,
+    note, tag, task,
 };
-use crate::ids::{ContactMethodId, PersonId, TaskId, UserId};
+use crate::ids::{ContactMethodId, PersonId, TagId, TaskId, UserId};
 use crate::realtime::{PersonChange, Publication, Publisher, RealtimeEvent};
 
 #[derive(Deserialize)]
@@ -116,6 +117,31 @@ struct UpdatePersonDetailsPayload {
     contact_operations: Vec<ContactOperationWire>,
 }
 #[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct UpdatePersonMetadataPayload {
+    person_id: Uuid,
+    expected_metadata_revision: String,
+    expected_catalog_revision: String,
+    actions: Vec<MetadataAction>,
+}
+#[derive(Deserialize, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+enum MetadataAction {
+    AddTag {
+        tag_id: Uuid,
+    },
+    RemoveTag {
+        tag_id: Uuid,
+    },
+    SetField {
+        field_id: Uuid,
+        value: CustomFieldValue,
+    },
+    ClearField {
+        field_id: Uuid,
+    },
+}
+#[derive(Deserialize, Serialize)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
 enum ContactOperationWire {
     Add { kind: String, value: String },
@@ -131,6 +157,7 @@ enum Payload {
     LogContactAttempt(LogContactAttempt),
     ChangePersonStage(ChangePersonStagePayload),
     UpdatePersonDetails(UpdatePersonDetailsPayload),
+    UpdatePersonMetadata(UpdatePersonMetadataPayload),
 }
 impl Payload {
     fn parse(kind: &str, value: Value) -> Result<Self, MobileError> {
@@ -192,6 +219,7 @@ impl Payload {
                 Self::ChangePersonStage(v)
             }
             "update_person_details" => Self::UpdatePersonDetails(parse_details(value)?),
+            "update_person_metadata" => Self::UpdatePersonMetadata(parse_metadata(value)?),
             _ => return Err(invalid()),
         })
     }
@@ -205,6 +233,7 @@ impl Payload {
             Self::LogContactAttempt(v) => v.person_id,
             Self::ChangePersonStage(v) => v.person_id,
             Self::UpdatePersonDetails(v) => v.person_id,
+            Self::UpdatePersonMetadata(v) => v.person_id,
         }
     }
     fn json(&self) -> Result<Value, MobileError> {
@@ -217,8 +246,271 @@ impl Payload {
             Self::LogContactAttempt(v) => serialize(v),
             Self::ChangePersonStage(v) => serialize(v),
             Self::UpdatePersonDetails(v) => serialize(v),
+            Self::UpdatePersonMetadata(v) => serialize(v),
         }
     }
+}
+fn parse_metadata(value: Value) -> Result<UpdatePersonMetadataPayload, MobileError> {
+    let payload: UpdatePersonMetadataPayload =
+        serde_json::from_value(value).map_err(|_| invalid())?;
+    revision(&payload.expected_metadata_revision)?;
+    revision(&payload.expected_catalog_revision)?;
+    if payload.actions.is_empty() || payload.actions.len() > 50 {
+        return Err(invalid());
+    }
+    let mut tags = std::collections::HashSet::new();
+    let mut fields = std::collections::HashSet::new();
+    for action in &payload.actions {
+        let unique = match action {
+            MetadataAction::AddTag { tag_id } | MetadataAction::RemoveTag { tag_id } => {
+                tags.insert(*tag_id)
+            }
+            MetadataAction::SetField { field_id, .. } | MetadataAction::ClearField { field_id } => {
+                fields.insert(*field_id)
+            }
+        };
+        if !unique {
+            return Err(invalid());
+        }
+    }
+    Ok(payload)
+}
+enum PreparedMetadataAction {
+    AddTag(Uuid),
+    RemoveTag(Uuid),
+    SetField {
+        field_id: Uuid,
+        field_type: String,
+        text: Option<String>,
+        number: Option<String>,
+        date: Option<chrono::NaiveDate>,
+        option_id: Option<Uuid>,
+    },
+    ClearField(Uuid),
+}
+struct MetadataChange {
+    tags: bool,
+    fields: bool,
+}
+
+/// The atomic mobile adapter intentionally uses the same stored shapes and
+/// validators as the ordinary typed commands. It validates the complete final
+/// patch before changing any row, then removes tags before additions so a
+/// replacement at the 20-tag limit does not fail an intermediate quota check.
+async fn update_metadata_in_transaction(
+    conn: &mut PgConnection,
+    ctx: &CommandContext,
+    person: PersonId,
+    payload: UpdatePersonMetadataPayload,
+) -> Result<MetadataChange, MobileError> {
+    let metadata_revision: i64 = sqlx::query_scalar(
+        "SELECT metadata_revision FROM person WHERE organization_id=$1 AND id=$2",
+    )
+    .bind(ctx.organization_id.0)
+    .bind(person.0)
+    .fetch_one(&mut *conn)
+    .await?;
+    if metadata_revision != revision(&payload.expected_metadata_revision)? {
+        return Err(code(409, "revision_conflict"));
+    }
+    let catalog_revision: Option<i64> =
+        sqlx::query_scalar("SELECT revision FROM mobile_metadata_catalog WHERE organization_id=$1")
+            .bind(ctx.organization_id.0)
+            .fetch_optional(&mut *conn)
+            .await?;
+    if catalog_revision.unwrap_or(1) != revision(&payload.expected_catalog_revision)? {
+        return Err(code(409, "catalog_revision_conflict"));
+    }
+
+    let mut prepared = Vec::with_capacity(payload.actions.len());
+    let mut add_tags = Vec::new();
+    let mut remove_tags = Vec::new();
+    for action in payload.actions {
+        match action {
+            MetadataAction::AddTag { tag_id } => {
+                let exists: bool = sqlx::query_scalar(
+                    "SELECT EXISTS(SELECT 1 FROM (SELECT id FROM tag WHERE organization_id=$1 AND id=$2 FOR SHARE) AS locked)",
+                )
+                .bind(ctx.organization_id.0)
+                .bind(tag_id)
+                .fetch_one(&mut *conn)
+                .await?;
+                if !exists {
+                    return Err(code(422, "invalid_metadata"));
+                }
+                add_tags.push(tag_id);
+                prepared.push(PreparedMetadataAction::AddTag(tag_id));
+            }
+            MetadataAction::RemoveTag { tag_id } => {
+                let exists: bool = sqlx::query_scalar(
+                    "SELECT EXISTS(SELECT 1 FROM (SELECT id FROM tag WHERE organization_id=$1 AND id=$2 FOR SHARE) AS locked)",
+                )
+                .bind(ctx.organization_id.0)
+                .bind(tag_id)
+                .fetch_one(&mut *conn)
+                .await?;
+                if !exists {
+                    return Err(code(422, "invalid_metadata"));
+                }
+                remove_tags.push(tag_id);
+                prepared.push(PreparedMetadataAction::RemoveTag(tag_id));
+            }
+            MetadataAction::ClearField { field_id } => {
+                let exists: bool = sqlx::query_scalar(
+                    "SELECT EXISTS(SELECT 1 FROM (SELECT id FROM custom_field WHERE organization_id=$1 AND id=$2 FOR SHARE) AS locked)",
+                )
+                .bind(ctx.organization_id.0)
+                .bind(field_id)
+                .fetch_one(&mut *conn)
+                .await?;
+                if !exists {
+                    return Err(code(422, "invalid_metadata"));
+                }
+                prepared.push(PreparedMetadataAction::ClearField(field_id));
+            }
+            MetadataAction::SetField { field_id, value } => {
+                let row = sqlx::query(
+                    "SELECT field_type,archived_at FROM custom_field WHERE organization_id=$1 AND id=$2 FOR SHARE",
+                )
+                .bind(ctx.organization_id.0)
+                .bind(field_id)
+                .fetch_optional(&mut *conn)
+                .await?
+                .ok_or_else(|| code(422, "invalid_metadata"))?;
+                let field_type: String = row.get("field_type");
+                let archived: Option<DateTime<Utc>> = row.get("archived_at");
+                if archived.is_some()
+                    || FieldType::from_db_str(&field_type) != Some(value.field_type())
+                {
+                    return Err(code(422, "invalid_metadata"));
+                }
+                let (text, number, date, option_id) = match value {
+                    CustomFieldValue::Text(value) => (
+                        Some(
+                            custom_field::validate_text_value(&value)
+                                .map_err(|_| code(422, "invalid_metadata"))?,
+                        ),
+                        None,
+                        None,
+                        None,
+                    ),
+                    CustomFieldValue::Number(value) => {
+                        custom_field::validate_number_pattern(&value)
+                            .map_err(|_| code(422, "invalid_metadata"))?;
+                        (None, Some(value), None, None)
+                    }
+                    CustomFieldValue::Date(value) => {
+                        custom_field::validate_date_range(value)
+                            .map_err(|_| code(422, "invalid_metadata"))?;
+                        (None, None, Some(value), None)
+                    }
+                    CustomFieldValue::Choice(value) => {
+                        let option_id = value.as_uuid();
+                        let live: bool = sqlx::query_scalar(
+                            "SELECT EXISTS(SELECT 1 FROM (SELECT id FROM custom_field_option WHERE organization_id=$1 AND field_id=$2 AND id=$3 AND archived_at IS NULL FOR SHARE) AS locked)",
+                        )
+                        .bind(ctx.organization_id.0)
+                        .bind(field_id)
+                        .bind(option_id)
+                        .fetch_one(&mut *conn)
+                        .await?;
+                        if !live {
+                            return Err(code(422, "invalid_metadata"));
+                        }
+                        (None, None, None, Some(option_id))
+                    }
+                };
+                prepared.push(PreparedMetadataAction::SetField {
+                    field_id,
+                    field_type,
+                    text,
+                    number,
+                    date,
+                    option_id,
+                });
+            }
+        }
+    }
+    let existing: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM person_tag WHERE organization_id=$1 AND person_id=$2",
+    )
+    .bind(ctx.organization_id.0)
+    .bind(person.0)
+    .fetch_one(&mut *conn)
+    .await?;
+    let present: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT tag_id FROM person_tag WHERE organization_id=$1 AND person_id=$2 AND tag_id=ANY($3::uuid[])",
+    )
+    .bind(ctx.organization_id.0)
+    .bind(person.0)
+    .bind(add_tags.iter().chain(remove_tags.iter()).copied().collect::<Vec<_>>())
+    .fetch_all(&mut *conn)
+    .await?;
+    let present = present
+        .into_iter()
+        .collect::<std::collections::HashSet<_>>();
+    let removed = remove_tags.iter().filter(|id| present.contains(id)).count() as i64;
+    let added = add_tags.iter().filter(|id| !present.contains(id)).count() as i64;
+    if existing - removed + added > 20 {
+        return Err(code(422, "tag_limit_reached"));
+    }
+
+    let mut tags_changed = false;
+    let mut fields_changed = false;
+    for action in &prepared {
+        if let PreparedMetadataAction::RemoveTag(tag_id) = action {
+            tags_changed |= tag::apply_person_tag_in_transaction(
+                conn,
+                ctx.organization_id,
+                person,
+                TagId::new(*tag_id),
+                ctx.actor_user_id,
+                false,
+            )
+            .await
+            .map_err(|_| code(503, "unavailable"))?;
+        }
+    }
+    for action in &prepared {
+        if let PreparedMetadataAction::AddTag(tag_id) = action {
+            tags_changed |= tag::apply_person_tag_in_transaction(
+                conn,
+                ctx.organization_id,
+                person,
+                TagId::new(*tag_id),
+                ctx.actor_user_id,
+                true,
+            )
+            .await
+            .map_err(|_| code(503, "unavailable"))?;
+        }
+    }
+    for action in prepared {
+        match action {
+            PreparedMetadataAction::ClearField(field_id) => {
+                fields_changed |= sqlx::query("DELETE FROM person_custom_field_value WHERE organization_id=$1 AND person_id=$2 AND field_id=$3")
+                    .bind(ctx.organization_id.0).bind(person.0).bind(field_id).execute(&mut *conn).await?.rows_affected() > 0;
+            }
+            PreparedMetadataAction::SetField {
+                field_id,
+                field_type,
+                text,
+                number,
+                date,
+                option_id,
+            } => {
+                let affected = sqlx::query(
+                    "INSERT INTO person_custom_field_value(organization_id,person_id,field_id,field_type,text_value,number_value,date_value,option_id,updated_by_user_id,origin,correlation_id) VALUES($1,$2,$3,$4,$5,CAST($6 AS numeric),$7,$8,$9,$10,$11) ON CONFLICT(organization_id,person_id,field_id) DO UPDATE SET text_value=EXCLUDED.text_value,number_value=EXCLUDED.number_value,date_value=EXCLUDED.date_value,option_id=EXCLUDED.option_id,updated_by_user_id=EXCLUDED.updated_by_user_id,origin=EXCLUDED.origin,correlation_id=EXCLUDED.correlation_id,updated_at=statement_timestamp() WHERE ROW(person_custom_field_value.field_type,person_custom_field_value.text_value,person_custom_field_value.number_value,person_custom_field_value.date_value,person_custom_field_value.option_id) IS DISTINCT FROM ROW(EXCLUDED.field_type,EXCLUDED.text_value,EXCLUDED.number_value,EXCLUDED.date_value,EXCLUDED.option_id)",
+                ).bind(ctx.organization_id.0).bind(person.0).bind(field_id).bind(field_type).bind(text).bind(number).bind(date).bind(option_id).bind(ctx.actor_user_id.0).bind(ctx.origin.as_str()).bind(ctx.correlation_id.as_uuid()).execute(&mut *conn).await?.rows_affected() > 0;
+                fields_changed |= affected;
+            }
+            PreparedMetadataAction::AddTag(_) | PreparedMetadataAction::RemoveTag(_) => {}
+        }
+    }
+    Ok(MetadataChange {
+        tags: tags_changed,
+        fields: fields_changed,
+    })
 }
 fn parse_details(value: Value) -> Result<UpdatePersonDetailsPayload, MobileError> {
     let mut object = value.as_object().cloned().ok_or_else(invalid)?;
@@ -385,6 +677,7 @@ async fn visible(
         "contact_attempt"=>"SELECT EXISTS(SELECT 1 FROM contact_attempted c JOIN person p ON p.id=c.person_id AND p.organization_id=c.organization_id WHERE c.organization_id=$1 AND c.person_id=$2 AND c.id=$3)",
         "person_stage"=>"SELECT EXISTS(SELECT 1 FROM person p WHERE p.organization_id=$1 AND p.id=$2 AND p.id=$3)",
         "person_details"=>"SELECT EXISTS(SELECT 1 FROM person p WHERE p.organization_id=$1 AND p.id=$2 AND p.id=$3)",
+        "person_metadata"=>"SELECT EXISTS(SELECT 1 FROM person p WHERE p.organization_id=$1 AND p.id=$2 AND p.id=$3)",
         _=>return Err(code(503,"unavailable")),
     };
     if !sqlx::query_scalar::<_, bool>(sql)
@@ -447,12 +740,17 @@ pub async fn execute(
             return Err(code(503, "intake_busy"));
         }
     }
+    if kind == "update_person_metadata" {
+        crate::domain::mobile::metadata::acquire_shared(&mut tx, auth.active_organization_id)
+            .await?;
+    }
     crate::domain::person::queries::lock_person(&mut tx, person, auth.active_organization_id)
         .await?
         .ok_or_else(missing)?;
     authority(&mut tx, auth, true).await?;
     let mut ctx = CommandContext::from_auth(auth);
     ctx.origin = Origin::MobileSession;
+    let mut metadata_change = None;
     let (resource_type, resource_id, changed, added_contact_ids) = match payload {
         Payload::Add(v) => {
             let n = note::add_note_in_transaction(
@@ -666,6 +964,12 @@ pub async fn execute(
                     .collect(),
             )
         }
+        Payload::UpdatePersonMetadata(v) => {
+            let result = update_metadata_in_transaction(&mut tx, &ctx, person, v).await?;
+            let changed = result.tags || result.fields;
+            metadata_change = Some(result);
+            ("person_metadata", person.0, changed, Vec::new())
+        }
     };
     let resource_revision: Option<i64> = match kind.as_str() {
         "add_note" | "log_contact_attempt" => None,
@@ -681,6 +985,15 @@ pub async fn execute(
         "update_person_details" => Some(
             sqlx::query_scalar(
                 "SELECT details_revision FROM person WHERE organization_id=$1 AND id=$2",
+            )
+            .bind(auth.active_organization_id.0)
+            .bind(person.0)
+            .fetch_one(&mut *tx)
+            .await?,
+        ),
+        "update_person_metadata" => Some(
+            sqlx::query_scalar(
+                "SELECT metadata_revision FROM person WHERE organization_id=$1 AND id=$2",
             )
             .bind(auth.active_organization_id.0)
             .bind(person.0)
@@ -726,10 +1039,28 @@ pub async fn execute(
                     "contact_attempt" => PersonChange::ContactAttempted,
                     "person_stage" => PersonChange::StageChanged,
                     "person_details" => PersonChange::DetailsChanged,
+                    "person_metadata" if metadata_change.as_ref().is_some_and(|v| v.fields) => {
+                        PersonChange::CustomFieldChanged
+                    }
+                    "person_metadata" => PersonChange::TagsChanged,
                     _ => return Err(code(503, "unavailable")),
                 },
             )))
             .await;
+        if metadata_change
+            .as_ref()
+            .is_some_and(|change| change.tags && change.fields)
+        {
+            publisher
+                .publish_after_commit(Publication::for_event(RealtimeEvent::person_changed(
+                    auth.active_organization_id,
+                    Utc::now(),
+                    ctx.correlation_id,
+                    person,
+                    PersonChange::TagsChanged,
+                )))
+                .await;
+        }
     }
     Ok(Receipt {
         operation_id: request.operation_id,
@@ -795,5 +1126,16 @@ mod tests {
         assert!(parse_details(serde_json::json!({"person_id":"11111111-1111-1111-1111-111111111111","expected_details_revision":"1","last_name":"Ada","contact_operations":[],"extra":true})).is_err());
         assert!(contact_value("x".repeat(1025)).is_err());
         assert!(clean_name("x\u{0000}".into()).is_err());
+    }
+
+    #[test]
+    fn metadata_payload_requires_canonical_tokens_and_unique_targets() {
+        let tag = "22222222-2222-2222-2222-222222222222";
+        let field = "33333333-3333-3333-3333-333333333333";
+        let value = serde_json::json!({"person_id":"11111111-1111-1111-1111-111111111111","expected_metadata_revision":"1","expected_catalog_revision":"1","actions":[{"kind":"add_tag","tag_id":tag},{"kind":"set_field","field_id":field,"value":{"number":"12.3400"}}]});
+        assert!(parse_metadata(value).is_ok());
+        assert!(parse_metadata(serde_json::json!({"person_id":"11111111-1111-1111-1111-111111111111","expected_metadata_revision":"01","expected_catalog_revision":"1","actions":[{"kind":"add_tag","tag_id":tag}]})).is_err());
+        assert!(parse_metadata(serde_json::json!({"person_id":"11111111-1111-1111-1111-111111111111","expected_metadata_revision":"1","expected_catalog_revision":"1","actions":[{"kind":"add_tag","tag_id":tag},{"kind":"remove_tag","tag_id":tag}]})).is_err());
+        assert!(parse_metadata(serde_json::json!({"person_id":"11111111-1111-1111-1111-111111111111","expected_metadata_revision":"1","expected_catalog_revision":"1","actions":[]})).is_err());
     }
 }

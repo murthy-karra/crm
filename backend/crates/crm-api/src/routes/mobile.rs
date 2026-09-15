@@ -42,10 +42,18 @@ pub fn router() -> Router<AppState> {
             "/api/mobile/v1/people/{person_id}/details",
             get(current_details).layer(DefaultBodyLimit::max(1024)),
         )
+        .route(
+            "/api/mobile/v1/people/{person_id}/metadata",
+            get(current_metadata).layer(DefaultBodyLimit::max(1024)),
+        )
         .route("/api/mobile/v1/reconciliations", post(reconcile))
         .route(
             "/api/mobile/v1/reconciliations/{id}/stages",
             get(stages).layer(DefaultBodyLimit::max(1024)),
+        )
+        .route(
+            "/api/mobile/v1/reconciliations/{id}/metadata/catalog/{section}",
+            get(metadata_catalog).layer(DefaultBodyLimit::max(1024)),
         )
         .route(
             "/api/mobile/v1/reconciliations/{id}/manifest",
@@ -195,6 +203,22 @@ async fn current_details(
         .await?,
     ))
 }
+async fn current_metadata(
+    State(state): State<AppState>,
+    auth: AuthContext,
+    headers: HeaderMap,
+    path: Result<Path<Uuid>, PathRejection>,
+    query: Result<Query<Empty>, QueryRejection>,
+    request_body: Result<axum::body::Bytes, BytesRejection>,
+) -> Result<Json<Value>, Error> {
+    let Path(person_id) = path.map_err(|_| Error(MobileError::Code(400, "malformed_request")))?;
+    query.map_err(|_| Error(MobileError::Code(400, "malformed_request")))?;
+    empty_body(&request_body.map_err(|_| Error(MobileError::Code(400, "malformed_request")))?)?;
+    let (pool, _) = dependencies(&state)?;
+    Ok(Json(
+        mobile::current_metadata(pool, &auth, context(&headers)?, person_id).await?,
+    ))
+}
 async fn current_note(
     State(state): State<AppState>,
     auth: AuthContext,
@@ -274,6 +298,32 @@ async fn stages(
             &auth,
             context(&headers)?,
             id,
+            query.cursor.as_deref(),
+        )
+        .await?,
+    ))
+}
+async fn metadata_catalog(
+    State(state): State<AppState>,
+    auth: AuthContext,
+    headers: HeaderMap,
+    path: Result<Path<(Uuid, String)>, PathRejection>,
+    query: Result<Query<CursorQuery>, QueryRejection>,
+    request_body: Result<axum::body::Bytes, BytesRejection>,
+) -> Result<Json<Value>, Error> {
+    let Path((id, section)) =
+        path.map_err(|_| Error(MobileError::Code(400, "malformed_request")))?;
+    let Query(query) = query.map_err(|_| Error(MobileError::Code(400, "malformed_request")))?;
+    empty_body(&request_body.map_err(|_| Error(MobileError::Code(400, "malformed_request")))?)?;
+    let (pool, keys) = dependencies(&state)?;
+    Ok(Json(
+        mobile::metadata_catalog(
+            pool,
+            keys,
+            &auth,
+            context(&headers)?,
+            id,
+            &section,
             query.cursor.as_deref(),
         )
         .await?,

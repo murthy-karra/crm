@@ -179,6 +179,7 @@ async fn create_tag_attempt(
     let name = normalize_and_validate_name(&cmd.name)?;
 
     let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
+    crate::domain::mobile::metadata::acquire_exclusive(&mut tx, ctx.organization_id).await?;
     // The membership check some sibling commands perform is unnecessary
     // here: creation is "any active member", which `AuthContext` already
     // established (docs/specs/SLICE_011e.md §3 table).
@@ -230,6 +231,26 @@ pub struct RemovePersonTag {
     pub person_id: PersonId,
     pub tag_id: TagId,
 }
+/// Transaction-compatible terminal link mutation. The caller owns the Person
+/// lock and all validation/limit checks; this keeps mobile's atomic composer
+/// on the same link-write primitive as the ordinary typed commands.
+pub async fn apply_person_tag_in_transaction(
+    conn: &mut PgConnection,
+    organization_id: OrganizationId,
+    person_id: PersonId,
+    tag_id: TagId,
+    actor_user_id: UserId,
+    add: bool,
+) -> Result<bool, TagError> {
+    if add {
+        Ok(
+            queries::insert_person_tag(conn, organization_id, person_id, tag_id, actor_user_id)
+                .await?,
+        )
+    } else {
+        Ok(queries::delete_person_tag(conn, organization_id, person_id, tag_id).await?)
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct PersonTagOutcome {
@@ -279,6 +300,7 @@ async fn add_person_tag_attempt(
     cmd: AddPersonTag,
 ) -> Result<PersonTagOutcome, TagError> {
     let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
+    crate::domain::mobile::metadata::acquire_shared(&mut tx, ctx.organization_id).await?;
     person_queries::lock_person(&mut tx, cmd.person_id, ctx.organization_id)
         .await?
         .ok_or(TagError::NotFound)?;
@@ -299,12 +321,13 @@ async fn add_person_tag_attempt(
         }
     }
 
-    let changed = queries::insert_person_tag(
+    let changed = apply_person_tag_in_transaction(
         &mut tx,
         ctx.organization_id,
         cmd.person_id,
         cmd.tag_id,
         ctx.actor_user_id,
+        true,
     )
     .await?;
     let tags = queries::list_for_person(&mut tx, ctx.organization_id, cmd.person_id).await?;
@@ -358,6 +381,7 @@ async fn remove_person_tag_attempt(
     cmd: RemovePersonTag,
 ) -> Result<PersonTagOutcome, TagError> {
     let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
+    crate::domain::mobile::metadata::acquire_shared(&mut tx, ctx.organization_id).await?;
     person_queries::lock_person(&mut tx, cmd.person_id, ctx.organization_id)
         .await?
         .ok_or(TagError::NotFound)?;
@@ -367,8 +391,15 @@ async fn remove_person_tag_attempt(
         return Err(TagError::NotFound);
     }
 
-    let changed =
-        queries::delete_person_tag(&mut tx, ctx.organization_id, cmd.person_id, cmd.tag_id).await?;
+    let changed = apply_person_tag_in_transaction(
+        &mut tx,
+        ctx.organization_id,
+        cmd.person_id,
+        cmd.tag_id,
+        ctx.actor_user_id,
+        false,
+    )
+    .await?;
     let tags = queries::list_for_person(&mut tx, ctx.organization_id, cmd.person_id).await?;
     tx.commit().await?;
 
@@ -462,6 +493,7 @@ async fn rename_tag_attempt(
     let name = normalize_and_validate_name(&cmd.name)?;
 
     let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
+    crate::domain::mobile::metadata::acquire_exclusive(&mut tx, ctx.organization_id).await?;
     acquire_tags_lock(&mut tx, ctx.organization_id).await?;
     let row = queries::lock_tag_for_update(&mut tx, ctx.organization_id, cmd.tag_id)
         .await?
@@ -550,6 +582,7 @@ async fn delete_tag_attempt(
     cmd: DeleteTag,
 ) -> Result<DeleteTagOutcome, TagError> {
     let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
+    crate::domain::mobile::metadata::acquire_exclusive(&mut tx, ctx.organization_id).await?;
     acquire_tags_lock(&mut tx, ctx.organization_id).await?;
     let row = queries::lock_tag_for_update(&mut tx, ctx.organization_id, cmd.tag_id)
         .await?

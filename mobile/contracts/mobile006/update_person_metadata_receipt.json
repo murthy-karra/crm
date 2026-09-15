@@ -1,0 +1,10 @@
+{
+  "operation_id": "22222222-2222-2222-2222-222222222222",
+  "outcome": "accepted",
+  "resource_type": "person_metadata",
+  "resource_id": "33333333-3333-3333-3333-333333333333",
+  "committed_revision": "3",
+  "person_revision": "3",
+  "changed": true,
+  "replayed": false
+}

@@ -10,17 +10,87 @@ pub struct ReconciliationRequest {
     pub pinned_person_ids: Vec<Uuid>,
     #[serde(default)]
     pub include_stage_catalog: bool,
+    #[serde(default)]
+    pub include_metadata: bool,
 }
 struct CatalogStage {
     id: Uuid,
     name: String,
     position: i16,
 }
+struct MetadataCatalog {
+    revision: i64,
+    tags: Vec<(Uuid, String)>,
+    fields: Vec<(Uuid, String, String, i32, Option<DateTime<Utc>>)>,
+    options: Vec<(Uuid, Uuid, String, i32, Option<DateTime<Utc>>)>,
+}
 #[derive(Clone, PartialEq)]
 struct Entry {
     person: Uuid,
     revision: i64,
+    metadata_revision: i64,
     reasons: Vec<String>,
+}
+async fn metadata_catalog_snapshot(
+    conn: &mut PgConnection,
+    organization_id: Uuid,
+) -> Result<MetadataCatalog, MobileError> {
+    // This is a shared admission, not an Organization-row lock. It pins rows
+    // with catalog writers while snapshot rows are copied into the generation.
+    crate::domain::mobile::metadata::acquire_shared(
+        conn,
+        crate::ids::OrganizationId::new(organization_id),
+    )
+    .await?;
+    let revision: i64 = sqlx::query_scalar(
+        "SELECT revision FROM mobile_metadata_catalog WHERE organization_id=$1 FOR SHARE",
+    )
+    .bind(organization_id)
+    .fetch_one(&mut *conn)
+    .await?;
+    let tags: Vec<(Uuid, String)> =
+        sqlx::query("SELECT id,name FROM tag WHERE organization_id=$1 ORDER BY id LIMIT 10001")
+            .bind(organization_id)
+            .fetch_all(&mut *conn)
+            .await?
+            .into_iter()
+            .map(|r| (r.get("id"), r.get("name")))
+            .collect();
+    let fields: Vec<(Uuid, String, String, i32, Option<DateTime<Utc>>)> = sqlx::query("SELECT id,label,field_type,position,archived_at FROM custom_field WHERE organization_id=$1 ORDER BY position,id LIMIT 10001")
+        .bind(organization_id).fetch_all(&mut *conn).await?
+        .into_iter().map(|r| (r.get("id"),r.get("label"),r.get("field_type"),r.get("position"),r.get("archived_at"))).collect();
+    let options: Vec<(Uuid, Uuid, String, i32, Option<DateTime<Utc>>)> = sqlx::query("SELECT id,field_id,label,position,archived_at FROM custom_field_option WHERE organization_id=$1 ORDER BY field_id,position,id LIMIT 10001")
+        .bind(organization_id).fetch_all(&mut *conn).await?
+        .into_iter().map(|r| (r.get("id"),r.get("field_id"),r.get("label"),r.get("position"),r.get("archived_at"))).collect();
+    if tags.len() > 10_000
+        || fields.len() > 10_000
+        || options.len() > 10_000
+        || serde_json::to_vec(&json!({"tags":&tags,"fields":&fields,"options":&options}))
+            .map_err(|_| invalid())?
+            .len()
+            > 8 * 1024 * 1024
+    {
+        return Err(code(422, "over_limit"));
+    }
+    Ok(MetadataCatalog {
+        revision,
+        tags,
+        fields,
+        options,
+    })
+}
+async fn metadata_catalog_matches(
+    conn: &mut PgConnection,
+    org: Uuid,
+    expected: i64,
+) -> Result<bool, MobileError> {
+    Ok(sqlx::query_scalar::<_, i64>(
+        "SELECT revision FROM mobile_metadata_catalog WHERE organization_id=$1 FOR SHARE",
+    )
+    .bind(org)
+    .fetch_one(&mut *conn)
+    .await?
+        == expected)
 }
 struct Selection {
     entries: Vec<Entry>,
@@ -91,7 +161,7 @@ async fn selection(
     let today_ids: Vec<Uuid> = list.items.iter().map(|i| i.person.id.0).collect();
     let value = serialize(&list)?;
     let digest = Sha256::digest(serde_json::to_vec(&value).map_err(|_| invalid())?).to_vec();
-    let rows=sqlx::query("SELECT id,mobile_revision,assigned_user_id=$2 AS assigned,id=ANY($3) AS pinned,id=ANY($4) AS today FROM person WHERE organization_id=$1 AND (assigned_user_id=$2 OR id=ANY($3) OR id=ANY($4)) ORDER BY id LIMIT 25001")
+    let rows=sqlx::query("SELECT id,mobile_revision,metadata_revision,assigned_user_id=$2 AS assigned,id=ANY($3) AS pinned,id=ANY($4) AS today FROM person WHERE organization_id=$1 AND (assigned_user_id=$2 OR id=ANY($3) OR id=ANY($4)) ORDER BY id LIMIT 25001")
         .bind(auth.active_organization_id.0).bind(auth.actor_user_id.0).bind(pins).bind(today_ids).fetch_all(&mut *conn).await?;
     if rows.len() > MAX_PEOPLE {
         return Err(code(422, "over_limit"));
@@ -111,6 +181,7 @@ async fn selection(
         entries.push(Entry {
             person: row.get("id"),
             revision: row.get("mobile_revision"),
+            metadata_revision: row.get("metadata_revision"),
             reasons,
         });
     }
@@ -186,20 +257,30 @@ pub async fn create_generation(
     } else {
         None
     };
+    let metadata_catalog = if request.include_metadata {
+        Some(metadata_catalog_snapshot(&mut tx, auth.active_organization_id.0).await?)
+    } else {
+        None
+    };
     let id = Uuid::new_v4();
     let expiry = now + chrono::Duration::minutes(30);
-    sqlx::query("INSERT INTO mobile_reconciliation(id,context_id,organization_id,actor_user_id,role,workspace_revision,evaluated_at,expires_at,complete,selected_count,pinned_person_ids,today_digest,stage_catalog_revision) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)")
-        .bind(id).bind(context_id).bind(auth.active_organization_id.0).bind(auth.actor_user_id.0).bind(role).bind(workspace_revision).bind(now).bind(expiry).bind(selected.complete).bind(selected.entries.len() as i32).bind(&request.pinned_person_ids).bind(selected.digest).bind(catalog.as_ref().map(|(revision, _)| *revision)).execute(&mut *tx).await?;
+    sqlx::query("INSERT INTO mobile_reconciliation(id,context_id,organization_id,actor_user_id,role,workspace_revision,evaluated_at,expires_at,complete,selected_count,pinned_person_ids,today_digest,stage_catalog_revision,metadata_catalog_revision) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)")
+        .bind(id).bind(context_id).bind(auth.active_organization_id.0).bind(auth.actor_user_id.0).bind(role).bind(workspace_revision).bind(now).bind(expiry).bind(selected.complete).bind(selected.entries.len() as i32).bind(&request.pinned_person_ids).bind(selected.digest).bind(catalog.as_ref().map(|(revision, _)| *revision)).bind(metadata_catalog.as_ref().map(|v|v.revision)).execute(&mut *tx).await?;
     if !selected.entries.is_empty() {
         let ids: Vec<_> = selected.entries.iter().map(|e| e.person).collect();
         let versions: Vec<_> = selected.entries.iter().map(|e| e.revision).collect();
+        let metadata_versions: Vec<_> = selected
+            .entries
+            .iter()
+            .map(|e| e.metadata_revision)
+            .collect();
         let reasons: Vec<_> = selected
             .entries
             .iter()
             .map(|e| serde_json::to_value(&e.reasons).expect("strings serialize"))
             .collect();
-        sqlx::query("INSERT INTO mobile_reconciliation_person(generation_id,person_id,revision,reasons) SELECT $1,u.id,u.revision,ARRAY(SELECT jsonb_array_elements_text(u.reasons)) FROM UNNEST($2::uuid[],$3::bigint[],$4::jsonb[]) AS u(id,revision,reasons)")
-            .bind(id).bind(ids).bind(versions).bind(reasons).execute(&mut *tx).await?;
+        sqlx::query("INSERT INTO mobile_reconciliation_person(generation_id,person_id,revision,metadata_revision,reasons) SELECT $1,u.id,u.revision,u.metadata_revision,ARRAY(SELECT jsonb_array_elements_text(u.reasons)) FROM UNNEST($2::uuid[],$3::bigint[],$4::bigint[],$5::jsonb[]) AS u(id,revision,metadata_revision,reasons)")
+            .bind(id).bind(ids).bind(versions).bind(metadata_versions).bind(reasons).execute(&mut *tx).await?;
     }
     if let Some((_, stages)) = &catalog {
         let ids: Vec<_> = stages.iter().map(|stage| stage.id).collect();
@@ -207,6 +288,20 @@ pub async fn create_generation(
         let positions: Vec<_> = stages.iter().map(|stage| stage.position).collect();
         sqlx::query("INSERT INTO mobile_reconciliation_stage(generation_id,stage_id,name,position) SELECT $1,u.id,u.name,u.position FROM UNNEST($2::uuid[],$3::text[],$4::smallint[]) AS u(id,name,position)")
             .bind(id).bind(ids).bind(names).bind(positions).execute(&mut *tx).await?;
+    }
+    if let Some(catalog) = &metadata_catalog {
+        if !catalog.tags.is_empty() {
+            sqlx::query("INSERT INTO mobile_reconciliation_metadata_tag(generation_id,tag_id,name) SELECT $1,u.id,u.name FROM UNNEST($2::uuid[],$3::text[]) AS u(id,name)")
+                .bind(id).bind(catalog.tags.iter().map(|v|v.0).collect::<Vec<_>>()).bind(catalog.tags.iter().map(|v|&v.1).collect::<Vec<_>>()).execute(&mut *tx).await?;
+        }
+        if !catalog.fields.is_empty() {
+            sqlx::query("INSERT INTO mobile_reconciliation_metadata_field(generation_id,field_id,label,field_type,position,archived_at) SELECT $1,u.id,u.label,u.field_type,u.position,u.archived_at FROM UNNEST($2::uuid[],$3::text[],$4::text[],$5::int[],$6::timestamptz[]) AS u(id,label,field_type,position,archived_at)")
+                .bind(id).bind(catalog.fields.iter().map(|v|v.0).collect::<Vec<_>>()).bind(catalog.fields.iter().map(|v|&v.1).collect::<Vec<_>>()).bind(catalog.fields.iter().map(|v|&v.2).collect::<Vec<_>>()).bind(catalog.fields.iter().map(|v|v.3).collect::<Vec<_>>()).bind(catalog.fields.iter().map(|v|v.4).collect::<Vec<_>>()).execute(&mut *tx).await?;
+        }
+        if !catalog.options.is_empty() {
+            sqlx::query("INSERT INTO mobile_reconciliation_metadata_option(generation_id,option_id,field_id,label,position,archived_at) SELECT $1,u.id,u.field_id,u.label,u.position,u.archived_at FROM UNNEST($2::uuid[],$3::uuid[],$4::text[],$5::int[],$6::timestamptz[]) AS u(id,field_id,label,position,archived_at)")
+                .bind(id).bind(catalog.options.iter().map(|v|v.0).collect::<Vec<_>>()).bind(catalog.options.iter().map(|v|v.1).collect::<Vec<_>>()).bind(catalog.options.iter().map(|v|&v.2).collect::<Vec<_>>()).bind(catalog.options.iter().map(|v|v.3).collect::<Vec<_>>()).bind(catalog.options.iter().map(|v|v.4).collect::<Vec<_>>()).execute(&mut *tx).await?;
+        }
     }
     let page = manifest_page(&mut tx, keys, context_id, id, None).await?;
     tx.commit().await?;
@@ -217,6 +312,9 @@ pub async fn create_generation(
             "stages_url": format!("/api/mobile/v1/reconciliations/{id}/stages"),
         });
     }
+    if let Some(catalog) = metadata_catalog {
+        response["metadata"] = json!({"representation":"metadata-v1","catalog_revision":catalog.revision.to_string(),"catalog_url":format!("/api/mobile/v1/reconciliations/{id}/metadata/catalog")});
+    }
     Ok(response)
 }
 struct Generation {
@@ -226,6 +324,7 @@ struct Generation {
     pins: Vec<Uuid>,
     digest: Vec<u8>,
     stage_catalog_revision: Option<i64>,
+    metadata_catalog_revision: Option<i64>,
 }
 async fn generation(
     conn: &mut PgConnection,
@@ -251,6 +350,7 @@ async fn generation(
         pins: row.get("pinned_person_ids"),
         digest: row.get("today_digest"),
         stage_catalog_revision: row.get("stage_catalog_revision"),
+        metadata_catalog_revision: row.get("metadata_catalog_revision"),
     })
 }
 async fn download_slot(conn: &mut PgConnection, context: Uuid) -> Result<(), MobileError> {
@@ -296,7 +396,7 @@ async fn manifest_page(
         after: Uuid::nil(),
     };
     let position = after(keys, cursor, binding)?;
-    let mut rows=sqlx::query("SELECT person_id,revision,reasons FROM mobile_reconciliation_person WHERE generation_id=$1 AND ($2::uuid IS NULL OR person_id>$2) ORDER BY person_id LIMIT 251").bind(id).bind(position).fetch_all(conn).await?;
+    let mut rows=sqlx::query("SELECT person_id,revision,metadata_revision,reasons FROM mobile_reconciliation_person WHERE generation_id=$1 AND ($2::uuid IS NULL OR person_id>$2) ORDER BY person_id LIMIT 251").bind(id).bind(position).fetch_all(conn).await?;
     let more = rows.len() > 250;
     rows.truncate(250);
     let next = if more {
@@ -312,7 +412,7 @@ async fn manifest_page(
     } else {
         None
     };
-    let items:Vec<Value>=rows.into_iter().map(|r|json!({"person_id":r.get::<Uuid,_>("person_id"),"revision":r.get::<i64,_>("revision").to_string(),"reasons":r.get::<Vec<String>,_>("reasons")})).collect();
+    let items:Vec<Value>=rows.into_iter().map(|r|json!({"person_id":r.get::<Uuid,_>("person_id"),"revision":r.get::<i64,_>("revision").to_string(),"metadata_revision":r.get::<Option<i64>,_>("metadata_revision").map(|v|v.to_string()),"reasons":r.get::<Vec<String>,_>("reasons")})).collect();
     Ok(json!({"items":items,"next_cursor":next,"complete":!more}))
 }
 #[tracing::instrument(name="mobile.manifest",skip_all,fields(organization_id=%auth.active_organization_id,actor_id=%auth.actor_user_id))]
@@ -418,6 +518,84 @@ pub async fn stages(
     tx.commit().await?;
     Ok(page)
 }
+
+/// Paged immutable catalog rows. The generation holds the copied rows; the
+/// current catalog token is checked before every page so a changed catalog
+/// cannot be mistaken for a complete editable baseline.
+pub async fn metadata_catalog(
+    pool: &PgPool,
+    keys: &ReceiptKeys,
+    auth: &AuthContext,
+    context_id: Uuid,
+    id: Uuid,
+    section: &str,
+    cursor: Option<&str>,
+) -> Result<Value, MobileError> {
+    if !matches!(section, "tags" | "fields" | "options") {
+        return Err(missing());
+    }
+    let mut tx = begin(pool, auth, true).await?;
+    download_slot(&mut tx, context_id).await?;
+    let generation = generation(&mut tx, auth, context_id, id).await?;
+    let revision = generation.metadata_catalog_revision.ok_or_else(missing)?;
+    if !metadata_catalog_matches(&mut tx, auth.active_organization_id.0, revision).await? {
+        return Err(MobileError::ProjectionChanged {
+            changed: 0,
+            added: 0,
+            removed: 0,
+            today_changed: false,
+        });
+    }
+    let position = after(
+        keys,
+        cursor,
+        Cursor {
+            context: context_id,
+            generation: id,
+            person: None,
+            section: format!("metadata-{section}"),
+            revision: Some(revision),
+            after_position: None,
+            after: Uuid::nil(),
+        },
+    )?;
+    let (sql, id_column) = match section {
+        "tags" => ("SELECT tag_id AS id,jsonb_build_object('id',tag_id,'name',name) AS data FROM mobile_reconciliation_metadata_tag WHERE generation_id=$1 AND ($2::uuid IS NULL OR tag_id>$2) ORDER BY tag_id LIMIT 101", "tag_id"),
+        "fields" => ("SELECT field_id AS id,jsonb_build_object('id',field_id,'label',label,'field_type',field_type,'position',position,'archived_at',archived_at) AS data FROM mobile_reconciliation_metadata_field WHERE generation_id=$1 AND ($2::uuid IS NULL OR field_id>$2) ORDER BY field_id LIMIT 101", "field_id"),
+        _ => ("SELECT option_id AS id,jsonb_build_object('id',option_id,'field_id',field_id,'label',label,'position',position,'archived_at',archived_at) AS data FROM mobile_reconciliation_metadata_option WHERE generation_id=$1 AND ($2::uuid IS NULL OR option_id>$2) ORDER BY option_id LIMIT 101", "option_id"),
+    };
+    let mut rows = sqlx::query(sql)
+        .bind(id)
+        .bind(position)
+        .fetch_all(&mut *tx)
+        .await?;
+    let more = rows.len() > 100;
+    rows.truncate(100);
+    let items: Vec<Value> = rows.iter().map(|r| r.get("data")).collect();
+    if !rows.is_empty() && serde_json::to_vec(&items[0]).map_err(|_| invalid())?.len() > PAGE_BYTES
+    {
+        return Err(code(422, "over_limit"));
+    }
+    let next = if more {
+        Some(keys.cursor(&Cursor {
+            context: context_id,
+            generation: id,
+            person: None,
+            section: format!("metadata-{section}"),
+            revision: Some(revision),
+            after_position: None,
+            after: rows.last().ok_or_else(invalid)?.get(id_column),
+        })?)
+    } else {
+        None
+    };
+    let value = json!({"generation_id":id,"section":section,"revision":revision.to_string(),"items":items,"next_cursor":next,"complete":!more});
+    if serde_json::to_vec(&value).map_err(|_| invalid())?.len() > PAGE_BYTES {
+        return Err(code(422, "over_limit"));
+    }
+    tx.commit().await?;
+    Ok(value)
+}
 #[tracing::instrument(name="mobile.seal",skip_all,fields(organization_id=%auth.active_organization_id,actor_id=%auth.actor_user_id))]
 pub async fn seal(
     pool: &PgPool,
@@ -445,12 +623,23 @@ pub async fn seal(
     if !fresh.complete {
         return Err(code(409, "generation_changed"));
     }
-    let rows=sqlx::query("SELECT person_id,revision,reasons FROM mobile_reconciliation_person WHERE generation_id=$1 ORDER BY person_id").bind(id).fetch_all(&mut *tx).await?;
+    if let Some(revision) = gen.metadata_catalog_revision {
+        if !metadata_catalog_matches(&mut tx, auth.active_organization_id.0, revision).await? {
+            return Err(MobileError::ProjectionChanged {
+                changed: 0,
+                added: 0,
+                removed: 0,
+                today_changed: false,
+            });
+        }
+    }
+    let rows=sqlx::query("SELECT person_id,revision,metadata_revision,reasons FROM mobile_reconciliation_person WHERE generation_id=$1 ORDER BY person_id").bind(id).fetch_all(&mut *tx).await?;
     let old: Vec<_> = rows
         .into_iter()
         .map(|r| Entry {
             person: r.get("person_id"),
             revision: r.get("revision"),
+            metadata_revision: r.get::<Option<i64>, _>("metadata_revision").unwrap_or(1),
             reasons: r.get("reasons"),
         })
         .collect();
@@ -510,12 +699,12 @@ pub async fn component(
     section: &str,
     cursor: Option<&str>,
 ) -> Result<Value, MobileError> {
-    if !matches!(section, "summary" | "notes" | "tasks") {
+    if !matches!(section, "summary" | "notes" | "tasks" | "metadata") {
         return Err(missing());
     }
     let mut tx = begin(pool, auth, true).await?;
     download_slot(&mut tx, context_id).await?;
-    generation(&mut tx, auth, context_id, id).await?;
+    let generation = generation(&mut tx, auth, context_id, id).await?;
     let expected: Option<i64> = sqlx::query_scalar(
         "SELECT revision FROM mobile_reconciliation_person WHERE generation_id=$1 AND person_id=$2",
     )
@@ -537,6 +726,47 @@ pub async fn component(
             removed: usize::from(current.is_none()),
             today_changed: false,
         });
+    }
+    if section == "metadata" {
+        let catalog_revision = generation.metadata_catalog_revision.ok_or_else(missing)?;
+        if !metadata_catalog_matches(&mut tx, auth.active_organization_id.0, catalog_revision)
+            .await?
+        {
+            return Err(MobileError::ProjectionChanged {
+                changed: 0,
+                added: 0,
+                removed: 0,
+                today_changed: false,
+            });
+        }
+        let expected_metadata: Option<i64> = sqlx::query_scalar("SELECT metadata_revision FROM mobile_reconciliation_person WHERE generation_id=$1 AND person_id=$2")
+            .bind(id).bind(person).fetch_optional(&mut *tx).await?;
+        let expected_metadata = expected_metadata.ok_or_else(missing)?;
+        let metadata: i64 = sqlx::query_scalar(
+            "SELECT metadata_revision FROM person WHERE organization_id=$1 AND id=$2",
+        )
+        .bind(auth.active_organization_id.0)
+        .bind(person)
+        .fetch_one(&mut *tx)
+        .await?;
+        if metadata != expected_metadata {
+            return Err(MobileError::ProjectionChanged {
+                changed: 1,
+                added: 0,
+                removed: 0,
+                today_changed: false,
+            });
+        }
+        let tags: Value = sqlx::query_scalar("SELECT COALESCE(jsonb_agg(jsonb_build_object('id',t.id,'name',t.name) ORDER BY t.id),'[]'::jsonb) FROM person_tag pt JOIN tag t ON t.id=pt.tag_id AND t.organization_id=pt.organization_id WHERE pt.organization_id=$1 AND pt.person_id=$2")
+            .bind(auth.active_organization_id.0).bind(person).fetch_one(&mut *tx).await?;
+        let values: Value = sqlx::query_scalar("SELECT COALESCE(jsonb_agg(jsonb_build_object('field_id',field_id,'field_type',field_type,'value',CASE field_type WHEN 'text' THEN jsonb_build_object('text',text_value) WHEN 'number' THEN jsonb_build_object('number',number_value::text) WHEN 'date' THEN jsonb_build_object('date',date_value::text) ELSE jsonb_build_object('option_id',option_id) END,'updated_at',updated_at) ORDER BY field_id),'[]'::jsonb) FROM person_custom_field_value WHERE organization_id=$1 AND person_id=$2")
+            .bind(auth.active_organization_id.0).bind(person).fetch_one(&mut *tx).await?;
+        let value = json!({"generation_id":id,"person_id":person,"section":"metadata","revision":expected.to_string(),"metadata_revision":metadata.to_string(),"catalog_revision":catalog_revision.to_string(),"tags":tags,"values":values,"complete":true});
+        if serde_json::to_vec(&value).map_err(|_| invalid())?.len() > PAGE_BYTES {
+            return Err(code(422, "over_limit"));
+        }
+        tx.commit().await?;
+        return Ok(value);
     }
     let position = after(
         keys,

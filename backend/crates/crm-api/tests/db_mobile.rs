@@ -36,6 +36,57 @@ struct Fixture {
 
 #[sqlx::test]
 #[ignore]
+async fn mobile006_metadata_atomic_receipt_current_and_catalog_generation(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let tag: Uuid = sqlx::query_scalar("INSERT INTO tag(organization_id,created_by_user_id,name) VALUES($1,$2,'Mobile006 tag') RETURNING id")
+        .bind(f.org).bind(f.actor).fetch_one(&f.app).await.unwrap();
+    let field: Uuid = sqlx::query_scalar("INSERT INTO custom_field(organization_id,label,field_type,position,created_by_user_id) VALUES($1,'Mobile006 budget','number',1,$2) RETURNING id")
+        .bind(f.org).bind(f.actor).fetch_one(&f.app).await.unwrap();
+    let (metadata, catalog):(i64,i64)=sqlx::query_as("SELECT p.metadata_revision,c.revision FROM person p JOIN mobile_metadata_catalog c ON c.organization_id=p.organization_id WHERE p.id=$1")
+        .bind(f.person).fetch_one(&f.app).await.unwrap();
+    let operation = f.operation("update_person_metadata", json!({"person_id":f.person,"expected_metadata_revision":metadata.to_string(),"expected_catalog_revision":catalog.to_string(),"actions":[{"kind":"add_tag","tag_id":tag},{"kind":"set_field","field_id":field,"value":{"number":"123.4500"}}]}));
+    let (status, accepted) = f.post("/api/mobile/v1/operations", operation.clone()).await;
+    assert_eq!(status, StatusCode::OK, "{accepted}");
+    assert_eq!(accepted["resource_type"], "person_metadata");
+    assert_eq!(accepted["committed_revision"], (metadata + 2).to_string());
+    let (_, replay) = f.post("/api/mobile/v1/operations", operation).await;
+    assert_eq!(replay["replayed"], true);
+    let current_path = format!("/api/mobile/v1/people/{}/metadata", f.person);
+    let (status, current) = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &current_path,
+        json!(null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{current}");
+    assert_eq!(current["tags"][0]["id"], tag);
+    assert_eq!(current["values"][0]["value"]["number"], "123.4500");
+    let (status, generation)=f.post("/api/mobile/v1/reconciliations",json!({"protocol":"mobile-v1","installation_id":f.install,"pinned_person_ids":[f.person],"include_metadata":true})).await;
+    assert_eq!(status, StatusCode::OK, "{generation}");
+    let generation_id = id(&generation, "generation_id");
+    let path = format!("/api/mobile/v1/reconciliations/{generation_id}/metadata/catalog/fields");
+    let (status, fields) = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &path,
+        json!(null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{fields}");
+    assert!(fields["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|v| v["id"] == field));
+}
+
+#[sqlx::test]
+#[ignore]
 async fn mobile005_details_receipt_replay_and_revision_scope(pool: PgPool) {
     let f = fixture(&pool).await;
     assert!(f.bootstrap["capabilities"]

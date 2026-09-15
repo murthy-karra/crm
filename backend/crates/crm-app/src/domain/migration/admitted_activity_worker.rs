@@ -1,9 +1,9 @@
 //! Bounded retained-only activity preparation and execution. No FUB reader exists here.
 use super::{
-    activity::{self, Choice, Patch},
-    activity_model::{self as m, CapturedRecord, Counts, Manifest, Mapping, ResultData},
     activity_source::{self as source, NativeActivity, Record},
-    activity_store as s, crypto,
+    admitted_activity::{self, Choice, Patch},
+    admitted_activity_model::{self as m, CapturedRecord, Counts, Manifest, Mapping, ResultData},
+    admitted_activity_store as s, crypto,
     snapshot::SnapshotPolicy,
     snapshot_source::{self, Cursor, Request, Stream},
     MigrationError,
@@ -30,8 +30,8 @@ struct Job {
     actor: UserId,
     boundary: i64,
     account: i64,
-    parent: Uuid,
-    parent_plan: Uuid,
+    admission: Uuid,
+    _admission_plan: Uuid,
 }
 impl Job {
     fn ctx(&self) -> CommandContext {
@@ -92,15 +92,12 @@ async fn worker_tx(
 }
 #[tracing::instrument(name = "migration.activity_import.unit", skip_all)]
 async fn run_once_inner(pool: &PgPool, key: &RawPayloadKey) -> Result<bool, MigrationError> {
-    let c=sqlx::query("SELECT i.id,i.organization_id,i.executor_user_id FROM migration_activity_import i JOIN migration_activity_plan p ON p.id=i.latest_plan_id AND p.organization_id=i.organization_id WHERE i.state IN ('preparing','queued','running') AND ((i.state='preparing' AND p.state='building') OR i.state IN ('queued','running')) AND (i.lease_expires_at IS NULL OR i.lease_expires_at<=now()) ORDER BY i.created_at,i.id LIMIT 1").fetch_optional(pool).await?;
+    let c=sqlx::query("SELECT i.id,i.organization_id,i.executor_user_id FROM migration_admitted_activity_import i JOIN migration_admitted_activity_plan p ON p.id=i.latest_plan_id AND p.organization_id=i.organization_id WHERE i.state IN ('preparing','queued','running') AND ((i.state='preparing' AND p.state='building') OR i.state IN ('queued','running')) AND (i.lease_expires_at IS NULL OR i.lease_expires_at<=now()) ORDER BY i.created_at,i.id LIMIT 1").fetch_optional(pool).await?;
     let Some(c) = c else { return Ok(false) };
     let org = OrganizationId::new(c.get("organization_id"));
     let id: Uuid = c.get("id");
     let actor = UserId::new(c.get("executor_user_id"));
     let (mut tx, active) = worker_tx(pool, org, actor).await?;
-    // 010f4 extends the global identity owner tuple. Recheck before every
-    // preparation/claim path so a partially upgraded or old writer cannot
-    // prepare units it would later settle under the wrong owner.
     workspace::startup_compatible(&mut tx).await?;
     let r = s::run(&mut tx, org, id).await?;
     if r.get::<Uuid, _>("executor_user_id") != actor.0
@@ -122,8 +119,8 @@ async fn run_once_inner(pool: &PgPool, key: &RawPayloadKey) -> Result<bool, Migr
         actor,
         boundary: r.get("capture_sequence"),
         account: r.get("source_account_id"),
-        parent: r.get("parent_import_id"),
-        parent_plan: r.get("parent_plan_id"),
+        admission: r.get("admission_id"),
+        _admission_plan: r.get("admission_plan_id"),
     };
     s::release(&mut tx, org, id, "work", 0).await?;
     if !active {
@@ -131,16 +128,17 @@ async fn run_once_inner(pool: &PgPool, key: &RawPayloadKey) -> Result<bool, Migr
         tx.commit().await?;
         return Ok(true);
     }
-    if activity::validate_binding(&mut tx, &r).await.is_err() {
+    if admitted_activity::validate_binding(&mut tx, &r)
+        .await
+        .is_err()
+    {
         pause(&mut tx, &j, "source_evidence_unavailable").await?;
         tx.commit().await?;
         return Ok(true);
     }
-    sqlx::query("UPDATE migration_activity_import SET lease_token=$3,lease_expires_at=now()+interval '60 seconds',updated_at=now() WHERE id=$1 AND organization_id=$2").bind(id).bind(org.0).bind(j.token).execute(&mut *tx).await?;
+    sqlx::query("UPDATE migration_admitted_activity_import SET lease_token=$3,lease_expires_at=now()+interval '60 seconds',updated_at=now() WHERE id=$1 AND organization_id=$2").bind(id).bind(org.0).bind(j.token).execute(&mut *tx).await?;
     tx.commit().await?;
     let mut tx = s::begin(pool, &j.ctx(), false).await?;
-    // Claim/equality/native settlement is a distinct transaction and needs the
-    // same fence; a migration may complete between the two transactions.
     workspace::startup_compatible(&mut tx).await?;
     let r = s::run(&mut tx, org, id).await?;
     if r.get::<Option<Uuid>, _>("lease_token") != Some(j.token)
@@ -156,7 +154,7 @@ async fn run_once_inner(pool: &PgPool, key: &RawPayloadKey) -> Result<bool, Migr
     };
     match result {
         Ok(()) => {
-            let count=sqlx::query("UPDATE migration_activity_import SET lease_token=NULL,lease_expires_at=NULL WHERE id=$1 AND organization_id=$2 AND lease_token=$3 AND lease_expires_at>clock_timestamp()").bind(id).bind(org.0).bind(j.token).execute(&mut *tx).await?.rows_affected();
+            let count=sqlx::query("UPDATE migration_admitted_activity_import SET lease_token=NULL,lease_expires_at=NULL WHERE id=$1 AND organization_id=$2 AND lease_token=$3 AND lease_expires_at>clock_timestamp()").bind(id).bind(org.0).bind(j.token).execute(&mut *tx).await?.rows_affected();
             if count != 1 {
                 return Err(MigrationError::ImportBusy);
             }
@@ -192,8 +190,8 @@ async fn run_once_inner(pool: &PgPool, key: &RawPayloadKey) -> Result<bool, Migr
 }
 async fn pause(conn: &mut PgConnection, j: &Job, reason: &str) -> Result<(), MigrationError> {
     tracing::info!(organization_id=%j.org,import_id=%j.id,plan_id=%j.plan,pause_reason=reason,"Activity import paused");
-    sqlx::query("UPDATE migration_activity_import SET state='paused',pause_reason=$3,lease_token=NULL,lease_expires_at=NULL,revision=revision+1,updated_at=now() WHERE id=$1 AND organization_id=$2").bind(j.id).bind(j.org.0).bind(reason).execute(&mut *conn).await?;
-    sqlx::query("UPDATE migration_activity_plan SET state=CASE WHEN state='building' THEN 'paused' ELSE state END,pause_reason=CASE WHEN state='building' THEN $3 ELSE pause_reason END WHERE id=$1 AND organization_id=$2").bind(j.plan).bind(j.org.0).bind(reason).execute(&mut *conn).await?;
+    sqlx::query("UPDATE migration_admitted_activity_import SET state='paused',pause_reason=$3,lease_token=NULL,lease_expires_at=NULL,revision=revision+1,updated_at=now() WHERE id=$1 AND organization_id=$2").bind(j.id).bind(j.org.0).bind(reason).execute(&mut *conn).await?;
+    sqlx::query("UPDATE migration_admitted_activity_plan SET state=CASE WHEN state='building' THEN 'paused' ELSE state END,pause_reason=CASE WHEN state='building' THEN $3 ELSE pause_reason END WHERE id=$1 AND organization_id=$2").bind(j.plan).bind(j.org.0).bind(reason).execute(&mut *conn).await?;
     s::control(conn, j.org, j.id).await
 }
 async fn admission(conn: &mut PgConnection, j: &Job, amount: i64) -> Result<Uuid, MigrationError> {
@@ -208,7 +206,7 @@ async fn admission(conn: &mut PgConnection, j: &Job, amount: i64) -> Result<Uuid
     Ok(t)
 }
 async fn phase(conn: &mut PgConnection, j: &Job, next: &str) -> Result<(), MigrationError> {
-    sqlx::query("UPDATE migration_activity_plan SET phase=$3,checkpoint_id=NULL WHERE id=$1 AND organization_id=$2").bind(j.plan).bind(j.org.0).bind(next).execute(&mut *conn).await?;
+    sqlx::query("UPDATE migration_admitted_activity_plan SET phase=$3,checkpoint_id=NULL WHERE id=$1 AND organization_id=$2").bind(j.plan).bind(j.org.0).bind(next).execute(&mut *conn).await?;
     s::charge(conn, j.org, j.id, j.snapshot, j.plan, 0).await
 }
 async fn save_counts(
@@ -218,9 +216,9 @@ async fn save_counts(
     execution: bool,
 ) -> Result<(), MigrationError> {
     sqlx::query(if execution {
-        "UPDATE migration_activity_import SET counts=$3 WHERE id=$1 AND organization_id=$2"
+        "UPDATE migration_admitted_activity_import SET counts=$3 WHERE id=$1 AND organization_id=$2"
     } else {
-        "UPDATE migration_activity_plan SET counts=$3 WHERE id=$1 AND organization_id=$2"
+        "UPDATE migration_admitted_activity_plan SET counts=$3 WHERE id=$1 AND organization_id=$2"
     })
     .bind(if execution { j.id } else { j.plan })
     .bind(j.org.0)
@@ -231,7 +229,7 @@ async fn save_counts(
 }
 async fn issues(conn: &mut PgConnection, j: &Job, codes: &[String]) -> Result<(), MigrationError> {
     for code in codes.iter().collect::<BTreeSet<_>>() {
-        sqlx::query("INSERT INTO migration_activity_issue(plan_id,import_id,organization_id,code,record_count) VALUES($1,$2,$3,$4,1) ON CONFLICT(plan_id,organization_id,code) DO UPDATE SET record_count=migration_activity_issue.record_count+1").bind(j.plan).bind(j.id).bind(j.org.0).bind(code).execute(&mut *conn).await?;
+        sqlx::query("INSERT INTO migration_admitted_activity_issue(plan_id,import_id,organization_id,code,record_count) VALUES($1,$2,$3,$4,1) ON CONFLICT(plan_id,organization_id,code) DO UPDATE SET record_count=migration_admitted_activity_issue.record_count+1").bind(j.plan).bind(j.id).bind(j.org.0).bind(code).execute(&mut *conn).await?;
     }
     Ok(())
 }
@@ -262,7 +260,7 @@ async fn copy_choices(
     let old: Option<Uuid> = p.get("inherit_plan_id");
     let mut added = 0;
     let rows = if let Some(old) = old {
-        sqlx::query("SELECT * FROM migration_activity_choice WHERE plan_id=$1 AND organization_id=$2 AND id>$3 ORDER BY id LIMIT 50").bind(old).bind(j.org.0).bind(p.get::<Option<Uuid>,_>("checkpoint_id").unwrap_or(Uuid::nil())).fetch_all(&mut *conn).await?
+        sqlx::query("SELECT * FROM migration_admitted_activity_choice WHERE plan_id=$1 AND organization_id=$2 AND id>$3 ORDER BY id LIMIT 50").bind(old).bind(j.org.0).bind(p.get::<Option<Uuid>,_>("checkpoint_id").unwrap_or(Uuid::nil())).fetch_all(&mut *conn).await?
     } else {
         vec![]
     };
@@ -278,7 +276,7 @@ async fn copy_choices(
             None
         };
         if let Some(previous) = predecessor {
-            sqlx::query("UPDATE migration_activity_plan SET inherit_plan_id=$3,checkpoint_id=NULL WHERE id=$1 AND organization_id=$2").bind(j.plan).bind(j.org.0).bind(previous).execute(&mut *conn).await?;
+            sqlx::query("UPDATE migration_admitted_activity_plan SET inherit_plan_id=$3,checkpoint_id=NULL WHERE id=$1 AND organization_id=$2").bind(j.plan).bind(j.org.0).bind(previous).execute(&mut *conn).await?;
         } else {
             phase(conn, j, "captures").await?
         }
@@ -286,7 +284,7 @@ async fn copy_choices(
         for r in &rows {
             let kind: String = r.get("kind");
             let sk: Vec<u8> = r.get("source_key");
-            let exists=sqlx::query_scalar::<_,bool>("SELECT EXISTS(SELECT 1 FROM migration_activity_choice WHERE plan_id=$1 AND organization_id=$2 AND kind=$3 AND source_key=$4)").bind(j.plan).bind(j.org.0).bind(&kind).bind(&sk).fetch_one(&mut *conn).await?;
+            let exists=sqlx::query_scalar::<_,bool>("SELECT EXISTS(SELECT 1 FROM migration_admitted_activity_choice WHERE plan_id=$1 AND organization_id=$2 AND kind=$3 AND source_key=$4)").bind(j.plan).bind(j.org.0).bind(&kind).bind(&sk).fetch_one(&mut *conn).await?;
             if !exists {
                 let choice = s::open(
                     key,
@@ -298,7 +296,7 @@ async fn copy_choices(
                     r.get("nonce"),
                     r.get("ciphertext"),
                 )?;
-                added += activity::insert_choice(
+                added += admitted_activity::insert_choice(
                     conn,
                     key,
                     j.org,
@@ -314,7 +312,7 @@ async fn copy_choices(
                 .await?;
             }
         }
-        sqlx::query("UPDATE migration_activity_plan SET checkpoint_id=$3 WHERE id=$1 AND organization_id=$2").bind(j.plan).bind(j.org.0).bind(rows.last().unwrap().get::<Uuid,_>("id")).execute(&mut *conn).await?;
+        sqlx::query("UPDATE migration_admitted_activity_plan SET checkpoint_id=$3 WHERE id=$1 AND organization_id=$2").bind(j.plan).bind(j.org.0).bind(rows.last().unwrap().get::<Uuid,_>("id")).execute(&mut *conn).await?;
     }
     s::settle(conn, j.org, j.id, token, added).await
 }
@@ -352,7 +350,7 @@ async fn collection_cursor(
     // A successful nonterminal page always has at least one record. Read only
     // its first authenticated child observation, not the whole capture history.
     // Rejected attempts never advance the source checkpoint or this cursor.
-    let previous=sqlx::query("SELECT a.* FROM migration_snapshot_capture c JOIN migration_activity_source a ON a.capture_id=c.id AND a.snapshot_id=c.snapshot_id AND a.organization_id=c.organization_id AND a.plan_id=$4 AND a.ordinal=0 WHERE c.snapshot_id=$1 AND c.organization_id=$2 AND c.stream=$3 AND c.checkpoint=$5 AND c.accepted AND c.sequence<$6 LIMIT 1").bind(j.snapshot).bind(j.org.0).bind(stream.as_str()).bind(j.plan).bind(checkpoint-1).bind(c.get::<i64,_>("sequence")).fetch_optional(conn).await?.ok_or(MigrationError::SourceNotEligible)?;
+    let previous=sqlx::query("SELECT a.* FROM migration_snapshot_capture c JOIN migration_admitted_activity_source a ON a.capture_id=c.id AND a.snapshot_id=c.snapshot_id AND a.organization_id=c.organization_id AND a.plan_id=$4 AND a.ordinal=0 WHERE c.snapshot_id=$1 AND c.organization_id=$2 AND c.stream=$3 AND c.checkpoint=$5 AND c.accepted AND c.sequence<$6 LIMIT 1").bind(j.snapshot).bind(j.org.0).bind(stream.as_str()).bind(j.plan).bind(checkpoint-1).bind(c.get::<i64,_>("sequence")).fetch_optional(conn).await?.ok_or(MigrationError::SourceNotEligible)?;
     let progress: CapturedRecord = s::open(
         key,
         j.org,
@@ -546,7 +544,7 @@ async fn capture(
             .await?;
         }
     }
-    sqlx::query("UPDATE migration_activity_plan SET checkpoint_capture=$3 WHERE id=$1 AND organization_id=$2").bind(j.plan).bind(j.org.0).bind(c.get::<i64,_>("sequence")).execute(&mut *conn).await?;
+    sqlx::query("UPDATE migration_admitted_activity_plan SET checkpoint_capture=$3 WHERE id=$1 AND organization_id=$2").bind(j.plan).bind(j.org.0).bind(c.get::<i64,_>("sequence")).execute(&mut *conn).await?;
     s::settle(conn, j.org, j.id, token, added).await
 }
 #[allow(clippy::too_many_arguments)]
@@ -577,7 +575,7 @@ async fn insert_source(
         + item.stream.as_str().len() as i64
         + item.stream.representation().len() as i64
         + 32;
-    sqlx::query("INSERT INTO migration_activity_source(id,plan_id,import_id,snapshot_id,organization_id,family,source_id,record_id,capture_id,capture_sequence,ordinal,stream,representation,semantic_hmac,negative,nonce,ciphertext,source_only_counts) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)").bind(id).bind(j.plan).bind(j.id).bind(j.snapshot).bind(j.org.0).bind(item.stream.family().as_str()).bind(&item.source_id).bind(record_id).bind(c.get::<Uuid,_>("id")).bind(c.get::<i64,_>("sequence")).bind(ordinal).bind(item.stream.as_str()).bind(item.stream.representation()).bind(semantic).bind(negative).bind(a.nonce.as_slice()).bind(a.ciphertext).bind(json!(counters)).execute(conn).await?;
+    sqlx::query("INSERT INTO migration_admitted_activity_source(id,plan_id,import_id,snapshot_id,organization_id,family,source_id,record_id,capture_id,capture_sequence,ordinal,stream,representation,semantic_hmac,negative,nonce,ciphertext,source_only_counts) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)").bind(id).bind(j.plan).bind(j.id).bind(j.snapshot).bind(j.org.0).bind(item.stream.family().as_str()).bind(&item.source_id).bind(record_id).bind(c.get::<Uuid,_>("id")).bind(c.get::<i64,_>("sequence")).bind(ordinal).bind(item.stream.as_str()).bind(item.stream.representation()).bind(semantic).bind(negative).bind(a.nonce.as_slice()).bind(a.ciphertext).bind(json!(counters)).execute(conn).await?;
     Ok(size)
 }
 async fn parent_person(
@@ -585,7 +583,7 @@ async fn parent_person(
     j: &Job,
     source_id: &str,
 ) -> Result<Option<(Uuid, Uuid)>, MigrationError> {
-    let r=sqlx::query("SELECT r.id,r.person_id FROM migration_import_identity i JOIN migration_import_result r ON r.import_id=i.import_id AND r.plan_id=i.plan_id AND r.organization_id=i.organization_id AND r.source_id=i.source_id AND r.person_id=i.target_id JOIN person p ON p.id=r.person_id AND p.organization_id=r.organization_id WHERE i.organization_id=$1 AND i.source_account_id=$2 AND i.family='people' AND i.source_id=$3 AND i.import_id=$4 AND i.plan_id=$5 AND r.disposition IN ('imported','already_imported')").bind(j.org.0).bind(j.account).bind(source_id).bind(j.parent).bind(j.parent_plan).fetch_optional(conn).await?;
+    let r=sqlx::query("SELECT r.id,r.person_id FROM migration_people_admission_result r JOIN person p ON p.id=r.person_id AND p.organization_id=r.organization_id JOIN LATERAL(SELECT 1 FROM migration_import_identity i WHERE i.organization_id=r.organization_id AND i.source_account_id=$2 AND i.family='people' AND i.source_id=r.source_id AND i.target_id=r.person_id AND i.admission_id=r.admission_id AND i.admission_item_id=r.item_id AND i.admission_result_id=r.id) identity ON true WHERE r.organization_id=$1 AND r.source_id=$3 AND r.admission_id=$4 AND r.disposition='settled'").bind(j.org.0).bind(j.account).bind(source_id).bind(j.admission).fetch_optional(conn).await?;
     Ok(r.map(|r| (r.get("id"), r.get("person_id"))))
 }
 async fn mapping(
@@ -596,8 +594,8 @@ async fn mapping(
     value: &str,
 ) -> Result<(Choice, i64), MigrationError> {
     let sk = s::source_key(key, j.org, j.account, role, value.as_bytes());
-    if let Some(r)=sqlx::query("SELECT * FROM migration_activity_mapping WHERE plan_id=$1 AND organization_id=$2 AND kind=$3 AND source_key=$4").bind(j.plan).bind(j.org.0).bind(role).bind(&sk).fetch_optional(&mut *conn).await?{let data:Mapping=s::open(key,j.org,j.snapshot,j.plan,r.get("id"),"mapping",r.get("nonce"),r.get("ciphertext"))?;sqlx::query("UPDATE migration_activity_mapping SET dependent_count=dependent_count+1 WHERE id=$1 AND organization_id=$2").bind(r.get::<Uuid,_>("id")).bind(j.org.0).execute(conn).await?;return Ok((data.choice,0))}
-    let choice=if let Some(c)=sqlx::query("SELECT * FROM migration_activity_choice WHERE plan_id=$1 AND organization_id=$2 AND kind=$3 AND source_key=$4").bind(j.plan).bind(j.org.0).bind(role).bind(&sk).fetch_optional(&mut *conn).await?{s::open(key,j.org,j.snapshot,j.plan,c.get("id"),"choice",c.get("nonce"),c.get("ciphertext"))?}else{Choice::Hold};
+    if let Some(r)=sqlx::query("SELECT * FROM migration_admitted_activity_mapping WHERE plan_id=$1 AND organization_id=$2 AND kind=$3 AND source_key=$4").bind(j.plan).bind(j.org.0).bind(role).bind(&sk).fetch_optional(&mut *conn).await?{let data:Mapping=s::open(key,j.org,j.snapshot,j.plan,r.get("id"),"mapping",r.get("nonce"),r.get("ciphertext"))?;sqlx::query("UPDATE migration_admitted_activity_mapping SET dependent_count=dependent_count+1 WHERE id=$1 AND organization_id=$2").bind(r.get::<Uuid,_>("id")).bind(j.org.0).execute(conn).await?;return Ok((data.choice,0))}
+    let choice=if let Some(c)=sqlx::query("SELECT * FROM migration_admitted_activity_choice WHERE plan_id=$1 AND organization_id=$2 AND kind=$3 AND source_key=$4").bind(j.plan).bind(j.org.0).bind(role).bind(&sk).fetch_optional(&mut *conn).await?{s::open(key,j.org,j.snapshot,j.plan,c.get("id"),"choice",c.get("nonce"),c.get("ciphertext"))?}else{Choice::Hold};
     let id = Uuid::new_v4();
     let data = Mapping {
         source_value: value.into(),
@@ -613,7 +611,7 @@ async fn mapping(
     };
     let a = s::seal(key, j.org, j.snapshot, j.plan, id, "mapping", &data)?;
     let size = s::sealed_bytes(&a) + 32;
-    sqlx::query("INSERT INTO migration_activity_mapping(id,plan_id,import_id,organization_id,kind,source_key,dependent_count,nonce,ciphertext) VALUES($1,$2,$3,$4,$5,$6,1,$7,$8)").bind(id).bind(j.plan).bind(j.id).bind(j.org.0).bind(role).bind(sk).bind(a.nonce.as_slice()).bind(a.ciphertext).execute(conn).await?;
+    sqlx::query("INSERT INTO migration_admitted_activity_mapping(id,plan_id,import_id,organization_id,kind,source_key,dependent_count,nonce,ciphertext) VALUES($1,$2,$3,$4,$5,$6,1,$7,$8)").bind(id).bind(j.plan).bind(j.id).bind(j.org.0).bind(role).bind(sk).bind(a.nonce.as_slice()).bind(a.ciphertext).execute(conn).await?;
     Ok((choice, size))
 }
 async fn manifest(
@@ -622,7 +620,7 @@ async fn manifest(
     j: &Job,
     p: &sqlx::postgres::PgRow,
 ) -> Result<(), MigrationError> {
-    let row=sqlx::query("SELECT * FROM migration_activity_source a WHERE plan_id=$1 AND organization_id=$2 AND id>$3 AND family IN ('notes','tasks') AND NOT negative ORDER BY id LIMIT 1").bind(j.plan).bind(j.org.0).bind(p.get::<Option<Uuid>,_>("checkpoint_id").unwrap_or(Uuid::nil())).fetch_optional(&mut *conn).await?;
+    let row=sqlx::query("SELECT * FROM migration_admitted_activity_source a WHERE plan_id=$1 AND organization_id=$2 AND id>$3 AND family IN ('notes','tasks') AND NOT negative ORDER BY id LIMIT 1").bind(j.plan).bind(j.org.0).bind(p.get::<Option<Uuid>,_>("checkpoint_id").unwrap_or(Uuid::nil())).fetch_optional(&mut *conn).await?;
     let Some(row) = row else {
         let digest = crypto::snapshot_hmac(
             key,
@@ -632,8 +630,8 @@ async fn manifest(
                 &json!({"plan":j.plan,"counts":p.get::<Value,_>("counts"),"capture_sequence":j.boundary}),
             )?,
         );
-        sqlx::query("UPDATE migration_activity_plan SET state='ready',phase='ready',confirmation_digest=$3,expires_at=now()+interval '30 minutes',completed_at=now() WHERE id=$1 AND organization_id=$2").bind(j.plan).bind(j.org.0).bind(digest.as_slice()).execute(&mut *conn).await?;
-        sqlx::query("UPDATE migration_activity_import SET state='ready',revision=revision+1,updated_at=now() WHERE id=$1 AND organization_id=$2").bind(j.id).bind(j.org.0).execute(&mut *conn).await?;
+        sqlx::query("UPDATE migration_admitted_activity_plan SET state='ready',phase='ready',confirmation_digest=$3,expires_at=now()+interval '10 minutes',completed_at=now() WHERE id=$1 AND organization_id=$2").bind(j.plan).bind(j.org.0).bind(digest.as_slice()).execute(&mut *conn).await?;
+        sqlx::query("UPDATE migration_admitted_activity_import SET state='ready',revision=revision+1,updated_at=now() WHERE id=$1 AND organization_id=$2").bind(j.id).bind(j.org.0).execute(&mut *conn).await?;
         s::charge(conn, j.org, j.id, j.snapshot, j.plan, 32).await?;
         return Ok(());
     };
@@ -642,12 +640,12 @@ async fn manifest(
     let family: String = row.get("family");
     let kind = if family == "notes" { "note" } else { "task" };
     let exists = if let Some(sid) = &sid {
-        sqlx::query_scalar::<_,bool>("SELECT EXISTS(SELECT 1 FROM migration_activity_manifest WHERE plan_id=$1 AND organization_id=$2 AND kind=$3 AND source_id=$4)").bind(j.plan).bind(j.org.0).bind(kind).bind(sid).fetch_one(&mut *conn).await?
+        sqlx::query_scalar::<_,bool>("SELECT EXISTS(SELECT 1 FROM migration_admitted_activity_manifest WHERE plan_id=$1 AND organization_id=$2 AND kind=$3 AND source_id=$4)").bind(j.plan).bind(j.org.0).bind(kind).bind(sid).fetch_one(&mut *conn).await?
     } else {
         false
     };
     if exists {
-        sqlx::query("UPDATE migration_activity_plan SET checkpoint_id=$3 WHERE id=$1 AND organization_id=$2").bind(j.plan).bind(j.org.0).bind(rowid).execute(conn).await?;
+        sqlx::query("UPDATE migration_admitted_activity_plan SET checkpoint_id=$3 WHERE id=$1 AND organization_id=$2").bind(j.plan).bind(j.org.0).bind(rowid).execute(conn).await?;
         return Ok(());
     }
     let token = admission(conn, j, s::UNIT).await?;
@@ -657,7 +655,7 @@ async fn manifest(
     let mut observations = 1;
     let mut source_only = None;
     if let Some(sid) = &sid {
-        let group=sqlx::query("SELECT representation,count(DISTINCT semantic_hmac) AS variants,count(DISTINCT stream) AS streams,count(*) AS observations FROM migration_activity_source WHERE plan_id=$1 AND organization_id=$2 AND family=$3 AND source_id=$4 GROUP BY representation ORDER BY representation LIMIT 3").bind(j.plan).bind(j.org.0).bind(&family).bind(sid).fetch_all(&mut *conn).await?;
+        let group=sqlx::query("SELECT representation,count(DISTINCT semantic_hmac) AS variants,count(DISTINCT stream) AS streams,count(*) AS observations FROM migration_admitted_activity_source WHERE plan_id=$1 AND organization_id=$2 AND family=$3 AND source_id=$4 GROUP BY representation ORDER BY representation LIMIT 3").bind(j.plan).bind(j.org.0).bind(&family).bind(sid).fetch_all(&mut *conn).await?;
         observations = group.iter().map(|r| r.get::<i64, _>("observations")).sum();
         if group.iter().any(|r| {
             r.get::<i64, _>("variants") > 1 || (kind == "task" && r.get::<i64, _>("streams") > 1)
@@ -668,7 +666,7 @@ async fn manifest(
         // duplicates collapse within a representation; complementary note list
         // and detail each contribute, even when both contain a similar property.
         // They do not assert a globally unique attachment/reply identity.
-        let counters=sqlx::query("WITH observations AS (SELECT DISTINCT ON (representation,semantic_hmac) source_only_counts FROM migration_activity_source WHERE plan_id=$1 AND organization_id=$2 AND family=$3 AND source_id=$4 ORDER BY representation,semantic_hmac,id) SELECT e.key AS code,sum((e.value #>> '{}')::bigint)::bigint AS count FROM observations CROSS JOIN LATERAL jsonb_each(source_only_counts) e GROUP BY e.key ORDER BY e.key").bind(j.plan).bind(j.org.0).bind(&family).bind(sid).fetch_all(&mut *conn).await?;
+        let counters=sqlx::query("WITH observations AS (SELECT DISTINCT ON (representation,semantic_hmac) source_only_counts FROM migration_admitted_activity_source WHERE plan_id=$1 AND organization_id=$2 AND family=$3 AND source_id=$4 ORDER BY representation,semantic_hmac,id) SELECT e.key AS code,sum((e.value #>> '{}')::bigint)::bigint AS count FROM observations CROSS JOIN LATERAL jsonb_each(source_only_counts) e GROUP BY e.key ORDER BY e.key").bind(j.plan).bind(j.org.0).bind(&family).bind(sid).fetch_all(&mut *conn).await?;
         source_only = Some(
             counters
                 .into_iter()
@@ -680,7 +678,7 @@ async fn manifest(
                 .collect::<Result<BTreeMap<_, _>, MigrationError>>()?,
         );
         if kind == "note" {
-            let detail=sqlx::query("SELECT a.* FROM migration_activity_source a JOIN migration_snapshot_capture c ON c.id=a.capture_id AND c.snapshot_id=a.snapshot_id AND c.organization_id=a.organization_id WHERE a.plan_id=$1 AND a.organization_id=$2 AND a.family='notes' AND a.source_id=$3 AND a.stream='note_detail' AND NOT a.negative ORDER BY c.accepted DESC,a.id LIMIT 1").bind(j.plan).bind(j.org.0).bind(sid).fetch_optional(&mut *conn).await?;
+            let detail=sqlx::query("SELECT a.* FROM migration_admitted_activity_source a JOIN migration_snapshot_capture c ON c.id=a.capture_id AND c.snapshot_id=a.snapshot_id AND c.organization_id=a.organization_id WHERE a.plan_id=$1 AND a.organization_id=$2 AND a.family='notes' AND a.source_id=$3 AND a.stream='note_detail' AND NOT a.negative ORDER BY c.accepted DESC,a.id LIMIT 1").bind(j.plan).bind(j.org.0).bind(sid).fetch_optional(&mut *conn).await?;
             if let Some(detail) = detail {
                 chosen = detail
             } else {
@@ -692,7 +690,7 @@ async fn manifest(
                         &json!({"stream":"note_detail","offset":0,"next":null,"source_id":sid}),
                     )?,
                 );
-                let inaccessible=sqlx::query_scalar::<_,bool>("SELECT EXISTS(SELECT 1 FROM migration_activity_source WHERE plan_id=$1 AND organization_id=$2 AND negative AND semantic_hmac=$3)").bind(j.plan).bind(j.org.0).bind(request.as_slice()).fetch_one(&mut *conn).await?;
+                let inaccessible=sqlx::query_scalar::<_,bool>("SELECT EXISTS(SELECT 1 FROM migration_admitted_activity_source WHERE plan_id=$1 AND organization_id=$2 AND negative AND semantic_hmac=$3)").bind(j.plan).bind(j.org.0).bind(request.as_slice()).fetch_one(&mut *conn).await?;
                 m::mark(
                     &mut reasons,
                     if inaccessible {
@@ -705,12 +703,12 @@ async fn manifest(
         } else {
             // Rejected observations still participate in variant detection, but
             // only an accepted observation can supply an executable task.
-            chosen=sqlx::query("SELECT a.* FROM migration_activity_source a JOIN migration_snapshot_capture c ON c.id=a.capture_id AND c.snapshot_id=a.snapshot_id AND c.organization_id=a.organization_id WHERE a.plan_id=$1 AND a.organization_id=$2 AND a.family='tasks' AND a.source_id=$3 AND NOT a.negative ORDER BY c.accepted DESC,a.id LIMIT 1").bind(j.plan).bind(j.org.0).bind(sid).fetch_one(&mut *conn).await?;
+            chosen=sqlx::query("SELECT a.* FROM migration_admitted_activity_source a JOIN migration_snapshot_capture c ON c.id=a.capture_id AND c.snapshot_id=a.snapshot_id AND c.organization_id=a.organization_id WHERE a.plan_id=$1 AND a.organization_id=$2 AND a.family='tasks' AND a.source_id=$3 AND NOT a.negative ORDER BY c.accepted DESC,a.id LIMIT 1").bind(j.plan).bind(j.org.0).bind(sid).fetch_one(&mut *conn).await?;
         }
     }
     let record = source_record(key, j, &chosen)?;
     let r = s::run(conn, j.org, j.id).await?;
-    let dst = activity::decode_destination(key, &r, p)?;
+    let dst = admitted_activity::decode_destination(key, &r, p)?;
     let mut preview = source::preview(&record, dst.source_timezone.as_deref());
     if let Some(source_only) = source_only {
         preview.source_only = source_only;
@@ -726,7 +724,7 @@ async fn manifest(
             .is_some_and(|v| v != "null"))
     {
         if let Some(assignee) = record.roles.iter().find(|r| r.role == "task_assignee") {
-            let users=sqlx::query("SELECT * FROM migration_activity_source WHERE plan_id=$1 AND organization_id=$2 AND family='users' AND source_id=$3 ORDER BY id LIMIT 101").bind(j.plan).bind(j.org.0).bind(&assignee.source_id).fetch_all(&mut *conn).await?;
+            let users=sqlx::query("SELECT * FROM migration_admitted_activity_source WHERE plan_id=$1 AND organization_id=$2 AND family='users' AND source_id=$3 ORDER BY id LIMIT 101").bind(j.plan).bind(j.org.0).bind(&assignee.source_id).fetch_all(&mut *conn).await?;
             if users.len() > 100 {
                 m::mark(&mut reasons, "source_user_evidence_ambiguous")
             }
@@ -764,7 +762,7 @@ async fn manifest(
         let target = match &choice {
             Choice::LeaveUnmapped => None,
             Choice::MapExisting { target_id } => {
-                if activity::validate_choice(conn, j.org, &role.role, &choice)
+                if admitted_activity::validate_choice(conn, j.org, &role.role, &choice)
                     .await
                     .is_err()
                 {
@@ -853,7 +851,7 @@ async fn manifest(
         + sid.as_ref().map_or(0, |v| v.len() as i64)
         + data.record.person_id.as_ref().map_or(0, |v| v.len() as i64)
         + native_key.as_ref().map_or(0, |v| v.len() as i64);
-    sqlx::query("INSERT INTO migration_activity_manifest(id,plan_id,import_id,organization_id,kind,source_id,source_row_id,source_person_id,parent_result_id,person_id,target_id,native_source_key,author_user_id,creator_user_id,assignee_user_id,disposition,added_byte_bound,nonce,ciphertext) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)").bind(id).bind(j.plan).bind(j.id).bind(j.org.0).bind(kind).bind(&sid).bind(chosen.get::<Uuid,_>("id")).bind(&data.record.person_id).bind(parent.map(|v|v.0)).bind(parent.map(|v|v.1)).bind(target_id).bind(&native_key).bind(author).bind(creator).bind(assignee).bind(disposition).bind(bound).bind(a.nonce.as_slice()).bind(a.ciphertext).execute(&mut *conn).await?;
+    sqlx::query("INSERT INTO migration_admitted_activity_manifest(id,plan_id,import_id,organization_id,kind,source_id,source_row_id,source_person_id,admission_result_id,person_id,target_id,native_source_key,author_user_id,creator_user_id,assignee_user_id,disposition,added_byte_bound,nonce,ciphertext) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)").bind(id).bind(j.plan).bind(j.id).bind(j.org.0).bind(kind).bind(&sid).bind(chosen.get::<Uuid,_>("id")).bind(&data.record.person_id).bind(parent.map(|v|v.0)).bind(parent.map(|v|v.1)).bind(target_id).bind(&native_key).bind(author).bind(creator).bind(assignee).bind(disposition).bind(bound).bind(a.nonce.as_slice()).bind(a.ciphertext).execute(&mut *conn).await?;
     let mut counts = Counts::load(p.get("counts"))?;
     counts.planned(kind, disposition, source_only_count);
     if sid.is_none() {
@@ -870,10 +868,10 @@ async fn manifest(
     save_counts(conn, j, &counts, false).await?;
     issues(conn, j, &data.reasons).await?;
     for code in &data.reasons {
-        sqlx::query("INSERT INTO migration_activity_manifest_issue(manifest_id,plan_id,import_id,organization_id,code) VALUES($1,$2,$3,$4,$5)").bind(id).bind(j.plan).bind(j.id).bind(j.org.0).bind(code).execute(&mut *conn).await?;
+        sqlx::query("INSERT INTO migration_admitted_activity_manifest_issue(manifest_id,plan_id,import_id,organization_id,code) VALUES($1,$2,$3,$4,$5)").bind(id).bind(j.plan).bind(j.id).bind(j.org.0).bind(code).execute(&mut *conn).await?;
         added += code.len() as i64;
     }
-    sqlx::query("UPDATE migration_activity_plan SET checkpoint_id=$3,max_added_byte_bound=GREATEST(max_added_byte_bound,$4) WHERE id=$1 AND organization_id=$2").bind(j.plan).bind(j.org.0).bind(rowid).bind(bound).execute(&mut *conn).await?;
+    sqlx::query("UPDATE migration_admitted_activity_plan SET checkpoint_id=$3,max_added_byte_bound=GREATEST(max_added_byte_bound,$4) WHERE id=$1 AND organization_id=$2").bind(j.plan).bind(j.org.0).bind(rowid).bind(bound).execute(&mut *conn).await?;
     s::settle(conn, j.org, j.id, token, added).await
 }
 enum NativeState {
@@ -1055,13 +1053,13 @@ pub(crate) async fn validate_choices(
     let plan: Uuid = p.get("id");
     let mut after = Uuid::nil();
     loop {
-        let rows=sqlx::query("SELECT * FROM migration_activity_mapping WHERE plan_id=$1 AND organization_id=$2 AND id>$3 ORDER BY id LIMIT 50").bind(plan).bind(org.0).bind(after).fetch_all(&mut *conn).await?;
+        let rows=sqlx::query("SELECT * FROM migration_admitted_activity_mapping WHERE plan_id=$1 AND organization_id=$2 AND id>$3 ORDER BY id LIMIT 50").bind(plan).bind(org.0).bind(after).fetch_all(&mut *conn).await?;
         if rows.is_empty() {
             break;
         }
         for row in rows {
-            let m = activity::mapping_data(key, r, plan, &row)?;
-            activity::validate_choice(conn, org, &m.role, &m.choice).await?;
+            let m = admitted_activity::mapping_data(key, r, plan, &row)?;
+            admitted_activity::validate_choice(conn, org, &m.role, &m.choice).await?;
             after = row.get("id");
         }
     }
@@ -1074,9 +1072,9 @@ async fn execute(
     r: &sqlx::postgres::PgRow,
     p: &sqlx::postgres::PgRow,
 ) -> Result<(), MigrationError> {
-    let row=sqlx::query("SELECT * FROM migration_activity_manifest WHERE plan_id=$1 AND organization_id=$2 AND id>$3 ORDER BY id LIMIT 1").bind(j.plan).bind(j.org.0).bind(r.get::<Option<Uuid>,_>("checkpoint_id").unwrap_or(Uuid::nil())).fetch_optional(&mut *conn).await?;
+    let row=sqlx::query("SELECT * FROM migration_admitted_activity_manifest WHERE plan_id=$1 AND organization_id=$2 AND id>$3 ORDER BY id LIMIT 1").bind(j.plan).bind(j.org.0).bind(r.get::<Option<Uuid>,_>("checkpoint_id").unwrap_or(Uuid::nil())).fetch_optional(&mut *conn).await?;
     let Some(row) = row else {
-        sqlx::query("UPDATE migration_activity_import SET state='completed',phase='complete',completed_at=now(),updated_at=now(),revision=revision+1,cancel_reservation_token=NULL WHERE id=$1 AND organization_id=$2").bind(j.id).bind(j.org.0).execute(&mut *conn).await?;
+        sqlx::query("UPDATE migration_admitted_activity_import SET state='completed',phase='complete',completed_at=now(),updated_at=now(),revision=revision+1,cancel_reservation_token=NULL WHERE id=$1 AND organization_id=$2").bind(j.id).bind(j.org.0).execute(&mut *conn).await?;
         s::release(conn, j.org, j.id, "cancel", 0).await?;
         return Ok(());
     };
@@ -1098,7 +1096,7 @@ async fn execute(
     let mut target = None;
     let mut native_bytes = 0;
     sqlx::query(
-        "UPDATE migration_activity_import SET state='running' WHERE id=$1 AND organization_id=$2",
+        "UPDATE migration_admitted_activity_import SET state='running' WHERE id=$1 AND organization_id=$2",
     )
     .bind(j.id)
     .bind(j.org.0)
@@ -1112,7 +1110,7 @@ async fn execute(
         };
         let frozen_parent = row
             .get::<Option<Uuid>, _>("person_id")
-            .zip(row.get::<Option<Uuid>, _>("parent_result_id"));
+            .zip(row.get::<Option<Uuid>, _>("admission_result_id"));
         if current_parent.map(|v| (v.1, v.0)) != frozen_parent || current_parent.is_none() {
             m::mark(&mut data.reasons, "parent_person_unavailable")
         } else {
@@ -1235,7 +1233,7 @@ async fn execute(
                     NativeState::New => m::mark(&mut data.reasons, "identity_target_missing"),
                 }
                 if let Some(target) = target {
-                    let inserted=sqlx::query("INSERT INTO migration_activity_identity(organization_id,source_account_id,kind,source_id,target_id,import_id,plan_id,manifest_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(organization_id,source_account_id,kind,source_id) DO NOTHING").bind(j.org.0).bind(j.account).bind(&kind).bind(sid).bind(target).bind(j.id).bind(j.plan).bind(unit).execute(&mut *conn).await?.rows_affected();
+                    let inserted=sqlx::query("INSERT INTO migration_activity_identity(organization_id,source_account_id,kind,source_id,target_id,import_id,plan_id,manifest_id,admitted_import_id,admitted_plan_id,admitted_manifest_id) VALUES($1,$2,$3,$4,$5,NULL,NULL,NULL,$6,$7,$8) ON CONFLICT(organization_id,source_account_id,kind,source_id) DO NOTHING").bind(j.org.0).bind(j.account).bind(&kind).bind(sid).bind(target).bind(j.id).bind(j.plan).bind(unit).execute(&mut *conn).await?.rows_affected();
                     let _ = inserted;
                 }
             }
@@ -1253,8 +1251,8 @@ async fn execute(
     let mut counts = Counts::load(r.get("counts"))?;
     counts.settled(&kind, &old, outcome);
     save_counts(conn, j, &counts, true).await?;
-    sqlx::query("UPDATE migration_activity_import SET checkpoint_id=$3,revision=revision+1,activity_revision=activity_revision+1,native_bytes=native_bytes+$4,updated_at=now() WHERE id=$1 AND organization_id=$2").bind(j.id).bind(j.org.0).bind(unit).bind(native_bytes).execute(&mut *conn).await?;
-    let pending:i64=sqlx::query_scalar("SELECT measured_bytes-retained_bytes FROM migration_activity_import WHERE id=$1 AND organization_id=$2").bind(j.id).bind(j.org.0).fetch_one(&mut *conn).await?;
+    sqlx::query("UPDATE migration_admitted_activity_import SET checkpoint_id=$3,revision=revision+1,activity_revision=activity_revision+1,native_bytes=native_bytes+$4,updated_at=now() WHERE id=$1 AND organization_id=$2").bind(j.id).bind(j.org.0).bind(unit).bind(native_bytes).execute(&mut *conn).await?;
+    let pending:i64=sqlx::query_scalar("SELECT measured_bytes-retained_bytes FROM migration_admitted_activity_import WHERE id=$1 AND organization_id=$2").bind(j.id).bind(j.org.0).fetch_one(&mut *conn).await?;
     let result_reasons: BTreeSet<_> = payload.reasons.iter().collect();
     let issue_bytes = result_reasons
         .iter()
@@ -1267,9 +1265,9 @@ async fn execute(
         + kind.len() as i64
         + outcome.len() as i64
         + data.record.source_id.as_ref().map_or(0, |v| v.len() as i64);
-    sqlx::query("INSERT INTO migration_activity_result(id,import_id,plan_id,organization_id,manifest_id,kind,source_id,person_id,target_id,disposition,nonce,ciphertext,actual_bytes,native_bytes) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)").bind(result).bind(j.id).bind(j.plan).bind(j.org.0).bind(unit).bind(&kind).bind(&data.record.source_id).bind(row.get::<Option<Uuid>,_>("person_id")).bind(target).bind(outcome).bind(a.nonce.as_slice()).bind(a.ciphertext).bind(size).bind(native_bytes).execute(&mut *conn).await?;
+    sqlx::query("INSERT INTO migration_admitted_activity_result(id,import_id,plan_id,organization_id,manifest_id,kind,source_id,person_id,target_id,disposition,nonce,ciphertext,actual_bytes,native_bytes) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)").bind(result).bind(j.id).bind(j.plan).bind(j.org.0).bind(unit).bind(&kind).bind(&data.record.source_id).bind(row.get::<Option<Uuid>,_>("person_id")).bind(target).bind(outcome).bind(a.nonce.as_slice()).bind(a.ciphertext).bind(size).bind(native_bytes).execute(&mut *conn).await?;
     for code in result_reasons {
-        sqlx::query("INSERT INTO migration_activity_result_issue(result_id,plan_id,import_id,organization_id,code) VALUES($1,$2,$3,$4,$5)").bind(result).bind(j.plan).bind(j.id).bind(j.org.0).bind(code).execute(&mut *conn).await?;
+        sqlx::query("INSERT INTO migration_admitted_activity_result_issue(result_id,plan_id,import_id,organization_id,code) VALUES($1,$2,$3,$4,$5)").bind(result).bind(j.plan).bind(j.id).bind(j.org.0).bind(code).execute(&mut *conn).await?;
     }
     let _ = p;
     s::settle(conn, j.org, j.id, token, size).await?;

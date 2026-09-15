@@ -60,6 +60,8 @@ class PreflightTests(unittest.TestCase):
                     return {"present": True, "database_name": "synthetic_only"}
                 if "FROM public.migration_workspace" in query:
                     return fixtures("1")[3]
+                if "migration_admitted_activity" in query:
+                    return {"present": False, "compatible": False}
                 if "migration_metadata_catalog_readiness" in query:
                     if "to_regclass" in query:
                         return presence
@@ -117,7 +119,7 @@ class PreflightTests(unittest.TestCase):
                          "COALESCE(octet_length(OLD.field_name_key),0)",
                          "migration_admitted_metadata_result_unit", "indisunique AND indisvalid"]:
                 self.assertIn(name, schema)
-            observed = queries[-1]
+            observed = next(q for q in queries if "migration_metadata_catalog_readiness WHERE state='ready'" in q)
             self.assertIn("state='ready'", observed)
             self.assertIn("engine_version IS DISTINCT FROM 'fub-admitted-metadata-v1'", observed)
             self.assertNotIn("confirmed_plan_id", observed)
@@ -370,12 +372,13 @@ class PreflightTests(unittest.TestCase):
                      {"count": "6", "unsupported_count": "0"}, {"present": True, "compatible": True},
                      {"count": "7", "unsupported_count": "0"}, {"present": True, "compatible": True},
                      {"count": "8", "unsupported_count": "0"}, {"present": True, "compatible": True},
-                     {"count": "9", "unsupported_count": "0"}][len(calls)-1]
+                     {"count": "9", "unsupported_count": "0"}, {"present": True, "compatible": True},
+                     {"count": "10", "unsupported_count": "0"}][len(calls)-1]
             return mock.Mock(returncode=0, stdout=json.dumps(value).encode())
         with mock.patch.object(MODULE["subprocess"], "run", side_effect=fake_run):
             result = MODULE["database_state"]()
         self.assertEqual(result["binding_count"], "1")
-        self.assertEqual(len(calls), 18)
+        self.assertEqual(len(calls), 20)
         self.assertEqual(result["activity_binding_count"], "2")
         self.assertIn("confirmed_plan_id IS NOT NULL", calls[3][0][-1])
         self.assertNotIn("state=", calls[3][0][-1])
@@ -404,6 +407,8 @@ class PreflightTests(unittest.TestCase):
         self.assertIn("migration_metadata_catalog_readiness WHERE state='ready'", calls[17][0][-1])
         self.assertIn("FROM public.migration_admitted_metadata_import", calls[17][0][-1])
         self.assertNotIn("confirmed_plan_id", calls[17][0][-1])
+        self.assertEqual(result["admitted_activity_binding_count"], "10")
+        self.assertIn("FROM public.migration_admitted_activity_import", calls[19][0][-1])
         sql = calls[1][0][-1]
         self.assertIn("FROM public.migration_workspace", sql)
         self.assertNotIn("WHERE", sql)
@@ -645,6 +650,8 @@ class PreflightTests(unittest.TestCase):
     def test_database_people_refresh_inventory_requires_all_guard_objects_and_engine(self):
         sql = []
         def answer(query):
+            if "migration_admitted_activity" in query:
+                return {"present": False, "compatible": False}
             if "migration_metadata_catalog_readiness" in query:
                 return {"present": False, "compatible": False}
             if "migration_admitted_people_refresh" in query:
@@ -685,6 +692,8 @@ class PreflightTests(unittest.TestCase):
             {"present": True, "compatible": None},
         ]:
             def answer(query):
+                if "migration_admitted_activity" in query:
+                    return {"present": False, "compatible": False}
                 if "migration_metadata_catalog_readiness" in query:
                     return {"present": False, "compatible": False}
                 if "migration_admitted_people_refresh" in query:
@@ -847,6 +856,8 @@ class PreflightTests(unittest.TestCase):
     def test_database_people_admission_inventory_requires_all_guard_objects_and_engine(self):
         sql = []
         def answer(query):
+            if "migration_admitted_activity" in query:
+                return {"present": False, "compatible": False}
             if "migration_metadata_catalog_readiness" in query:
                 return {"present": False, "compatible": False}
             if "migration_admitted_people_refresh" in query:
@@ -889,6 +900,8 @@ class PreflightTests(unittest.TestCase):
             {"present": True, "compatible": None},
         ]:
             def answer(query):
+                if "migration_admitted_activity" in query:
+                    return {"present": False, "compatible": False}
                 if "migration_metadata_catalog_readiness" in query:
                     return {"present": False, "compatible": False}
                 if "migration_admitted_people_refresh" in query:
@@ -914,6 +927,8 @@ class PreflightTests(unittest.TestCase):
         for compatible in [True, False]:
             queries = []
             def answer(query):
+                if "migration_admitted_activity" in query:
+                    return {"present": False, "compatible": False}
                 if "migration_metadata_catalog_readiness" in query:
                     return {"present": False, "compatible": False}
                 queries.append(query)
@@ -1044,6 +1059,8 @@ class PreflightTests(unittest.TestCase):
     def test_database_timeline_inventory_counts_every_anchor_and_checks_versions(self):
         sql = []
         def answer(query):
+            if "migration_admitted_activity" in query:
+                return {"present": False, "compatible": False}
             if "migration_metadata_catalog_readiness" in query:
                 return {"present": False, "compatible": False}
             if "migration_admitted_people_refresh" in query:

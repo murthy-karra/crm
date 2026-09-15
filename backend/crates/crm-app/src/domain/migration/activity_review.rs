@@ -177,7 +177,7 @@ WHERE w.organization_id=$1 AND p.id=$2"#)
         .fetch_optional(&mut **tx)
         .await
 }
-pub const REVIEW_REVISION_SQL: &str = "SELECT COALESCE(sum(activity_revision),0)::bigint FROM migration_activity_import WHERE organization_id=$1";
+pub const REVIEW_REVISION_SQL: &str = "SELECT COALESCE((SELECT sum(activity_revision) FROM migration_activity_import WHERE organization_id=$1),0)::bigint + COALESCE((SELECT sum(activity_revision) FROM migration_admitted_activity_import WHERE organization_id=$1),0)::bigint";
 pub const REVIEW_COUNTS_SQL: &str = r#"SELECT
  (SELECT count(*) FROM note WHERE organization_id=$1 AND person_id=$2 AND deleted_at IS NULL) AS notes,
  (SELECT count(*) FROM task WHERE organization_id=$1 AND person_id=$2 AND deleted_at IS NULL AND completed_at IS NULL) AS open_tasks,
@@ -293,22 +293,26 @@ fn decode(
 
 pub const NOTES_PAGE_SQL: &str = r#"SELECT n.id,n.created_at,n.updated_at,left(n.body,512) AS excerpt,
  char_length(n.body)>512 AS has_more,n.author_user_id,u.display_name AS author_name,
- i.import_id AS activity_import_id,i.source_account_id,i.source_id,r.id AS result_id
+ COALESCE(i.import_id,i.admitted_import_id) AS activity_import_id,i.source_account_id,i.source_id,(i.admitted_import_id IS NOT NULL) AS admitted_activity,COALESCE(r.id,ar.id) AS result_id
 FROM note n LEFT JOIN app_user u ON u.id=n.author_user_id
 LEFT JOIN migration_activity_identity i ON i.organization_id=n.organization_id AND i.kind='note' AND i.target_id=n.id
  AND n.source='fub' AND n.source_external_id='v1:'||i.source_account_id::text||':'||i.source_id
 LEFT JOIN migration_activity_result r ON r.organization_id=i.organization_id AND r.import_id=i.import_id
  AND r.plan_id=i.plan_id AND r.manifest_id=i.manifest_id AND r.person_id=n.person_id AND r.target_id=n.id
+LEFT JOIN migration_admitted_activity_result ar ON ar.organization_id=i.organization_id AND ar.import_id=i.admitted_import_id
+ AND ar.plan_id=i.admitted_plan_id AND ar.manifest_id=i.admitted_manifest_id AND ar.person_id=n.person_id AND ar.target_id=n.id
 WHERE n.organization_id=$1 AND n.person_id=$2 AND n.deleted_at IS NULL
  AND ($3::timestamptz IS NULL OR (n.created_at,n.id)>($3,$4))
 ORDER BY n.created_at,n.id LIMIT $5"#;
 pub const NOTE_DETAIL_SQL: &str = r#"SELECT n.id,n.created_at,n.updated_at,n.body,n.author_user_id,u.display_name AS author_name,
- i.import_id AS activity_import_id,i.source_account_id,i.source_id,r.id AS result_id
+ COALESCE(i.import_id,i.admitted_import_id) AS activity_import_id,i.source_account_id,i.source_id,(i.admitted_import_id IS NOT NULL) AS admitted_activity,COALESCE(r.id,ar.id) AS result_id
 FROM note n LEFT JOIN app_user u ON u.id=n.author_user_id
 LEFT JOIN migration_activity_identity i ON i.organization_id=n.organization_id AND i.kind='note' AND i.target_id=n.id
  AND n.source='fub' AND n.source_external_id='v1:'||i.source_account_id::text||':'||i.source_id
 LEFT JOIN migration_activity_result r ON r.organization_id=i.organization_id AND r.import_id=i.import_id
  AND r.plan_id=i.plan_id AND r.manifest_id=i.manifest_id AND r.person_id=n.person_id AND r.target_id=n.id
+LEFT JOIN migration_admitted_activity_result ar ON ar.organization_id=i.organization_id AND ar.import_id=i.admitted_import_id
+ AND ar.plan_id=i.admitted_plan_id AND ar.manifest_id=i.admitted_manifest_id AND ar.person_id=n.person_id AND ar.target_id=n.id
 WHERE n.organization_id=$1 AND n.person_id=$2 AND n.id=$3 AND n.deleted_at IS NULL"#;
 
 fn actor(row: &PgRow, id_column: &str, name_column: &str) -> Result<Value, ReviewError> {
@@ -330,10 +334,15 @@ fn provenance(row: &PgRow) -> Result<Value, ReviewError> {
     let result: Uuid = row
         .try_get::<Option<Uuid>, _>("result_id")?
         .ok_or(ReviewError::Unavailable)?;
+    let base = if row.try_get::<bool, _>("admitted_activity")? {
+        "admitted-activity-imports"
+    } else {
+        "activity-imports"
+    };
     Ok(json!({"activity_import_id":child,"result_id":result,
         "source_account_id":row.try_get::<i64,_>("source_account_id")?.to_string(),
         "source_id":row.try_get::<String,_>("source_id")?,
-        "source_url":format!("/api/migrations/fub/activity-imports/{child}/results/{result}/fields/all")}))
+        "source_url":format!("/api/migrations/fub/{base}/{child}/results/{result}/fields/all")}))
 }
 fn note_value(row: &PgRow, full: bool) -> Result<Value, ReviewError> {
     let mut v = json!({"id":row.try_get::<Uuid,_>("id")?,"created_at":row.try_get::<DateTime<Utc>,_>("created_at")?,
@@ -408,13 +417,15 @@ pub async fn note(
 pub const TASKS_OPEN_PAGE_SQL: &str = r#"SELECT t.id,t.title,t.kind,t.due_at,t.completed_at,t.created_at,t.updated_at,
  t.assignee_user_id,a.display_name AS assignee_name,t.created_by_user_id,c.display_name AS creator_name,
  t.completed_by_user_id,b.display_name AS completer_name,
- i.import_id AS activity_import_id,i.source_account_id,i.source_id,r.id AS result_id
+ COALESCE(i.import_id,i.admitted_import_id) AS activity_import_id,i.source_account_id,i.source_id,(i.admitted_import_id IS NOT NULL) AS admitted_activity,COALESCE(r.id,ar.id) AS result_id
 FROM task t LEFT JOIN app_user a ON a.id=t.assignee_user_id LEFT JOIN app_user c ON c.id=t.created_by_user_id
  LEFT JOIN app_user b ON b.id=t.completed_by_user_id
 LEFT JOIN migration_activity_identity i ON i.organization_id=t.organization_id AND i.kind='task' AND i.target_id=t.id
  AND t.source='fub' AND t.source_external_id='v1:'||i.source_account_id::text||':'||i.source_id
 LEFT JOIN migration_activity_result r ON r.organization_id=i.organization_id AND r.import_id=i.import_id
  AND r.plan_id=i.plan_id AND r.manifest_id=i.manifest_id AND r.person_id=t.person_id AND r.target_id=t.id
+LEFT JOIN migration_admitted_activity_result ar ON ar.organization_id=i.organization_id AND ar.import_id=i.admitted_import_id
+ AND ar.plan_id=i.admitted_plan_id AND ar.manifest_id=i.admitted_manifest_id AND ar.person_id=t.person_id AND ar.target_id=t.id
 WHERE t.organization_id=$1 AND t.person_id=$2 AND t.deleted_at IS NULL AND t.completed_at IS NULL
  AND ($4::uuid IS NULL OR ($3::timestamptz IS NULL AND t.due_at IS NULL AND t.id>$4)
   OR ($3::timestamptz IS NOT NULL AND (t.due_at IS NULL OR (t.due_at,t.id)>($3,$4))))
@@ -422,13 +433,15 @@ ORDER BY t.due_at NULLS LAST,t.id LIMIT $5"#;
 pub const TASKS_COMPLETED_PAGE_SQL: &str = r#"SELECT t.id,t.title,t.kind,t.due_at,t.completed_at,t.created_at,t.updated_at,
  t.assignee_user_id,a.display_name AS assignee_name,t.created_by_user_id,c.display_name AS creator_name,
  t.completed_by_user_id,b.display_name AS completer_name,
- i.import_id AS activity_import_id,i.source_account_id,i.source_id,r.id AS result_id
+ COALESCE(i.import_id,i.admitted_import_id) AS activity_import_id,i.source_account_id,i.source_id,(i.admitted_import_id IS NOT NULL) AS admitted_activity,COALESCE(r.id,ar.id) AS result_id
 FROM task t LEFT JOIN app_user a ON a.id=t.assignee_user_id LEFT JOIN app_user c ON c.id=t.created_by_user_id
  LEFT JOIN app_user b ON b.id=t.completed_by_user_id
 LEFT JOIN migration_activity_identity i ON i.organization_id=t.organization_id AND i.kind='task' AND i.target_id=t.id
  AND t.source='fub' AND t.source_external_id='v1:'||i.source_account_id::text||':'||i.source_id
 LEFT JOIN migration_activity_result r ON r.organization_id=i.organization_id AND r.import_id=i.import_id
  AND r.plan_id=i.plan_id AND r.manifest_id=i.manifest_id AND r.person_id=t.person_id AND r.target_id=t.id
+LEFT JOIN migration_admitted_activity_result ar ON ar.organization_id=i.organization_id AND ar.import_id=i.admitted_import_id
+ AND ar.plan_id=i.admitted_plan_id AND ar.manifest_id=i.admitted_manifest_id AND ar.person_id=t.person_id AND ar.target_id=t.id
 WHERE t.organization_id=$1 AND t.person_id=$2 AND t.deleted_at IS NULL AND t.completed_at IS NOT NULL
  AND ($3::timestamptz IS NULL OR (t.completed_at,t.id)>($3,$4))
 ORDER BY t.completed_at,t.id LIMIT $5"#;

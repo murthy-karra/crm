@@ -11,6 +11,7 @@ import PeopleImportPanel from '../components/migration/PeopleImportPanel.vue'
 import AdmittedMetadataImportPanel from '../components/migration/AdmittedMetadataImportPanel.vue'
 import MetadataImportPanel from '../components/migration/MetadataImportPanel.vue'
 import ActivityImportPanel from '../components/migration/ActivityImportPanel.vue'
+import AdmittedActivityImportPanel from '../components/migration/AdmittedActivityImportPanel.vue'
 import HistoryCapturePanel from '../components/migration/HistoryCapturePanel.vue'
 import HistoryImportPanel from '../components/migration/HistoryImportPanel.vue'
 import CoreChangeReports from '../components/migration/CoreChangeReports.vue'
@@ -482,6 +483,7 @@ function checkStatusLabel(check: FubAssessmentCheck) {
     <PeopleImportPanel :refresh-workspace="refreshWorkspace" />
     <MetadataImportPanel :refresh-workspace="refreshWorkspace" />
     <ActivityImportPanel :refresh-workspace="refreshWorkspace" />
+    <AdmittedActivityImportPanel :refresh-workspace="refreshWorkspace" />
     <HistoryCapturePanel
       :connection="connection"
       :refresh-workspace="refreshWorkspace"

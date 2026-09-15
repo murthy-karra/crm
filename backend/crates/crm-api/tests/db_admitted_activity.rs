@@ -1258,5 +1258,18 @@ async fn admitted_activity_corrupt_people_capture_pauses_before_native_work(migr
         .unwrap(),
         0
     );
+    // A paused preparation retains its reservation for retry. Explicit cancellation
+    // releases it; terminal byte accounting must then settle exactly.
+    admitted_activity::action(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        root,
+        action(&paused),
+        false,
+        &f.policy,
+    )
+    .await
+    .unwrap();
     assert_bytes(&f, root).await;
 }

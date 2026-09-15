@@ -167,7 +167,7 @@ fn count(scope: &Scope, key: &str) -> Result<i64, ReviewError> {
     // D-078 admits only new Persons; retained pre-admission rows cannot carry
     // this fact. Preserve their stored bytes while exposing the additive zero.
     // Every new Person has the new key initialized by the schema default.
-    if key == "person_admitted" && scope.counts.get(key).is_none() {
+    if matches!(key, "person_admitted" | "person_recovered") && scope.counts.get(key).is_none() {
         return Ok(0);
     }
     scope
@@ -282,7 +282,7 @@ struct Kind {
     rank: i16,
     family: Family,
 }
-const KINDS: [Kind; 12] = [
+const KINDS: [Kind; 13] = [
     Kind {
         name: "person_imported",
         table: "person_imported",
@@ -350,6 +350,12 @@ const KINDS: [Kind; 12] = [
         family: Family::TextMessages,
     },
     Kind {
+        name: "person_recovered",
+        table: "person_recovered",
+        rank: 13,
+        family: Family::Native,
+    },
+    Kind {
         name: "person_admitted",
         table: "person_admitted",
         rank: 12,
@@ -366,7 +372,7 @@ fn native_parts(kind: Kind) -> (String, String) {
     let from_stage = reference("fs", "name");
     let to_stage = reference("ts", "name");
     match kind.name {
-        "person_admitted" => ("jsonb_build_object('admission_id',f.admission_id,'plan_id',f.plan_id,'item_id',f.item_id,'result_id',f.result_id,'on_behalf_of_user_id',f.on_behalf_of_user_id)".into(), String::new()),
+        "person_recovered" | "person_admitted" => ("jsonb_build_object('admission_id',f.admission_id,'plan_id',f.plan_id,'item_id',f.item_id,'result_id',f.result_id,'on_behalf_of_user_id',f.on_behalf_of_user_id)".into(), String::new()),
         "person_imported"=>("jsonb_build_object('import_id',f.import_id,'plan_id',f.plan_id,'source_record_id',f.source_record_id,'capture_id',f.capture_id,'on_behalf_of_user_id',f.on_behalf_of_user_id)".into(),String::new()),
         "inquiry_received"=>("jsonb_build_object('inquiry_id',f.inquiry_id,'source',f.source,'person_created',f.person_created,'matched_by',f.matched_by)".into(),String::new()),
         "routing_decision"=>(format!("jsonb_build_object('inquiry_id',f.inquiry_id,'strategy',f.strategy,'assignee',{to_user})")," LEFT JOIN app_user tu ON tu.id=f.assignee_user_id".into()),
@@ -397,7 +403,7 @@ fn candidate_sql(kind: Kind, dated: Dated, detail: bool, after: Option<&Key>) ->
     };
     let actor = if matches!(
         kind.name,
-        "person_imported" | "person_admitted" | "correspondence"
+        "person_imported" | "person_admitted" | "person_recovered" | "correspondence"
     ) {
         "NULL::jsonb"
     } else {
@@ -1037,7 +1043,7 @@ mod tests {
     }
     #[test]
     fn query_inventory_preserves_native_correction_time_and_fixed_candidate_limits() {
-        assert_eq!(KINDS.len(), 12);
+        assert_eq!(KINDS.len(), 13);
         for kind in KINDS {
             let sql = candidate_sql(kind, Dated::Known, false, None);
             assert!(sql.contains("LIMIT $8"));

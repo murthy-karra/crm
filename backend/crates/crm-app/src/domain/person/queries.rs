@@ -1587,6 +1587,7 @@ pub(crate) async fn core_history_for_migration_review(
     let mut entries = Vec::new();
     entries.extend(imported_history(conn, organization_id, person_id).await?);
     entries.extend(admitted_history(conn, organization_id, person_id).await?);
+    entries.extend(recovered_history(conn, organization_id, person_id).await?);
     entries.extend(inquiry_received_history(conn, organization_id, person_id).await?);
     entries.extend(routing_decision_history(conn, organization_id, person_id).await?);
     entries.extend(assignment_changed_history(conn, organization_id, person_id).await?);
@@ -1761,6 +1762,45 @@ async fn admitted_history(
         .map(|r| HistoryEntry {
             kind: "person_admitted",
             kind_rank: 12,
+            id: r.get("id"),
+            occurred_at: r.get("occurred_at"),
+            recorded_at: r.get("recorded_at"),
+            actor: None,
+            origin: "migration".into(),
+            correlation_id: CorrelationId::new(r.get("correlation_id")),
+            detail: serde_json::json!({"admission_id":r.get::<Uuid,_>("admission_id"),
+            "plan_id":r.get::<Uuid,_>("plan_id"),"item_id":r.get::<Uuid,_>("item_id"),
+            "result_id":r.get::<Uuid,_>("result_id"),
+            "on_behalf_of_user_id":r.get::<Uuid,_>("on_behalf_of_user_id")}),
+        })
+        .collect())
+}
+
+async fn recovered_history(
+    conn: &mut PgConnection,
+    org: OrganizationId,
+    person: PersonId,
+) -> Result<Vec<HistoryEntry>, sqlx::Error> {
+    use sqlx::Row;
+    let present: bool =
+        sqlx::query_scalar("SELECT to_regclass('public.person_recovered') IS NOT NULL")
+            .fetch_one(&mut *conn)
+            .await?;
+    if !present {
+        return Ok(Vec::new());
+    }
+    let rows = sqlx::query("SELECT id,occurred_at,recorded_at,correlation_id,on_behalf_of_user_id,admission_id,plan_id,item_id,result_id FROM person_recovered WHERE organization_id=$1 AND person_id=$2 ORDER BY occurred_at,id LIMIT 2")
+        .bind(org.0).bind(person.0).fetch_all(conn).await?;
+    if rows.len() > 1 {
+        return Err(sqlx::Error::Protocol(
+            "inconsistent recovery history".into(),
+        ));
+    }
+    Ok(rows
+        .into_iter()
+        .map(|r| HistoryEntry {
+            kind: "person_recovered",
+            kind_rank: 13,
             id: r.get("id"),
             occurred_at: r.get("occurred_at"),
             recorded_at: r.get("recorded_at"),

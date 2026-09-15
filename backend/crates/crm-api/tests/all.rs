@@ -395,3 +395,6 @@ mod db_admitted_metadata_ui_fixture;
 
 #[cfg(feature = "perf-harness")]
 mod db_admitted_activity_plans;
+
+#[path = "db_people_recovery.rs"]
+mod db_people_recovery;

@@ -234,7 +234,7 @@ pub(super) async fn prepare(f: &Fixture, admission: Uuid, report: Uuid) -> (Uuid
     panic!("refresh did not seal")
 }
 
-fn confirmation(detail: &Value) -> refresh::ConfirmAdmittedPeopleRefresh {
+pub(super) fn confirmation(detail: &Value) -> refresh::ConfirmAdmittedPeopleRefresh {
     let plan = &detail["plan"];
     refresh::ConfirmAdmittedPeopleRefresh {
         mapping_repair: None,
@@ -251,7 +251,11 @@ fn confirmation(detail: &Value) -> refresh::ConfirmAdmittedPeopleRefresh {
     }
 }
 
-async fn confirm(f: &Fixture, run: Uuid, command: &refresh::ConfirmAdmittedPeopleRefresh) -> Value {
+pub(super) async fn confirm(
+    f: &Fixture,
+    run: Uuid,
+    command: &refresh::ConfirmAdmittedPeopleRefresh,
+) -> Value {
     refresh::confirm(
         &f.pool,
         &f.key,

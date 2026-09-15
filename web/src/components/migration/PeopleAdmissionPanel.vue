@@ -2,21 +2,25 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import Card from '../Card.vue'
+import PeopleRecoveryMappings from './PeopleRecoveryMappings.vue'
 import FormField from '../FormField.vue'
 import ConfirmDialog from '../ConfirmDialog.vue'
 import { buttonClasses, INPUT_CLASSES } from '../../lib/controls'
 import { describeApiError } from '../../lib/errors'
 import { fetchImport, fetchImports, importAccessError, uncertainImportError } from '../../api/imports'
 import { fetchCoreChangeReports } from '../../api/coreChangeReports'
-import { admissionActive, admissionDispositions, admissionLabel, cancelPeopleAdmission, confirmPeopleAdmission, fetchAdmissionContacts, fetchAdmissionField, fetchAdmissionItem, fetchAdmissionItems, fetchAdmissionResults, fetchPeopleAdmission, fetchPeopleAdmissions, preparePeopleAdmission, repreviewPeopleAdmission, retryPeopleAdmission, usePeopleAdmissionAccess, type AdmissionConfirm, type AdmissionItem } from '../../api/peopleAdmissions'
+import { admissionActive, admissionDispositions, admissionLabel, cancelPeopleAdmission, confirmPeopleAdmission, fetchAdmissionContacts, fetchAdmissionField, fetchAdmissionItem, fetchAdmissionItems, fetchAdmissionResults, fetchPeopleAdmission, fetchPeopleAdmissions, preparePeopleAdmission, preparePeopleRecovery, repreviewPeopleAdmission, retryPeopleAdmission, usePeopleAdmissionAccess, type AdmissionConfirm, type AdmissionItem, type RecoveryStart } from '../../api/peopleAdmissions'
 import { snapshotTime } from './format'
 
+const emit=defineEmits<{followOn:[value:import('../../api/peopleAdmissions').RecoveryFollowOn]}>()
 const props=defineProps<{refreshWorkspace:()=>Promise<void>}>()
 const access=usePeopleAdmissionAccess(); const parentId=ref(''); const reportId=ref(''); const admissionId=ref('')
 const parentCursor=ref(''); const reportCursor=ref(''); const listCursor=ref(''); const itemCursor=ref(''); const resultCursor=ref(''); const contactCursor=ref(''); const fieldCursor=ref('')
 const disposition=ref(''); const selected=ref<AdmissionItem>(); const selectedField=ref(''); const acknowledgement=ref(false); const mappings=ref(false); const distinct=ref(false); const hold=ref(false)
+const recoveryBusy=ref(false);const creation=ref(false)
+const recoveryStartLabel=computed(()=>current.value?.mode==='mapping_recovery' && current.value?.state==='cancelled' && current.value?.confirmed_admission_plan_id ? 'Preview unfinished recovery remainder' : 'Recover mapping holds from this admission')
 const action=ref<'confirm'|'cancel'|null>(null); const error=ref(''); const pending=ref(false); const now=ref(Date.now()); const timer=setInterval(()=>{now.value=Date.now()},1000)
-type Intent={body:string;kind:'prepare'|'confirm'|'plans'|'retry'|'cancel';id?:string;identity:string;parent:string}
+type Intent={body:string;kind:'prepare'|'recovery'|'confirm'|'plans'|'retry'|'cancel';id?:string;identity:string;parent:string}
 const intent=ref<Intent|null>(null); let disposed=false; let identityEpoch=0; let authorityEpoch=0; let selectionEpoch=0
 const key=(...v:unknown[])=>[...access.prefix.value,...v]
 const parents=useQuery({queryKey:computed(()=>key('parents',parentCursor.value)),enabled:access.enabled,retry:false,gcTime:0,queryFn:({signal})=>access.read(key('parents',parentCursor.value),()=>key('parents',parentCursor.value),()=>fetchImports(parentCursor.value||undefined,signal))})
@@ -30,8 +34,8 @@ const item=useQuery({queryKey:computed(()=>key('item',admissionId.value,selected
 const contacts=useQuery({queryKey:computed(()=>key('contacts',admissionId.value,selected.value?.id,contactCursor.value)),enabled:computed(()=>access.enabled.value&&!!selected.value&&!!item.data.value),retry:false,gcTime:0,queryFn:async({signal})=>access.read(key('contacts',admissionId.value,selected.value?.id,contactCursor.value),()=>key('contacts',admissionId.value,selected.value?.id,contactCursor.value),async()=>{const v=await fetchAdmissionContacts(admissionId.value,selected.value!.id,contactCursor.value||undefined,signal);if(v.plan_id!==plan.value?.id||v.plan_revision!==plan.value?.revision)throw Error('Preview changed');return v})})
 const field=useQuery({queryKey:computed(()=>key('field',admissionId.value,selected.value?.id,selectedField.value,fieldCursor.value)),enabled:computed(()=>access.enabled.value&&!!selected.value&&!!selectedField.value),retry:false,gcTime:0,queryFn:async({signal})=>access.read(key('field',admissionId.value,selected.value?.id,selectedField.value,fieldCursor.value),()=>key('field',admissionId.value,selected.value?.id,selectedField.value,fieldCursor.value),async()=>{const v=await fetchAdmissionField(admissionId.value,selected.value!.id,selectedField.value,fieldCursor.value||undefined,signal);if(v.plan_id!==plan.value?.id||v.plan_revision!==plan.value?.revision||v.field!==selectedField.value)throw Error('Field changed');return v})})
 const results=useQuery({queryKey:computed(()=>key('results',admissionId.value,resultCursor.value)),enabled:computed(()=>access.enabled.value&&!!admissionId.value&&['running','paused','completed','cancelled'].includes(current.value?.state??'')),retry:false,gcTime:0,queryFn:({signal})=>access.read(key('results',admissionId.value,resultCursor.value),()=>key('results',admissionId.value,resultCursor.value),()=>fetchAdmissionResults(admissionId.value,resultCursor.value||undefined,signal))})
-const fieldSummaries=computed(()=>item.data.value?.fields??{}); watch(()=>`${current.value?.state??''}:${current.value?.progress.settled_items??''}`,(next,previous)=>{if(previous&&next!==previous&&plan.value)void items.refetch()}); const expired=computed(()=>!!plan.value?.expires_at&&Date.parse(plan.value.expires_at)<=now.value); const canConfirm=computed(()=>!!current.value?.actions.confirm&&!!plan.value&&plan.value.counts.eligible!=='0'&&!expired.value&&acknowledgement.value&&mappings.value&&distinct.value&&hold.value&&!pending.value)
-function resetDetail(){itemCursor.value='';resultCursor.value='';contactCursor.value='';fieldCursor.value='';selected.value=undefined;selectedField.value='';acknowledgement.value=mappings.value=distinct.value=hold.value=false;action.value=null}
+const fieldSummaries=computed(()=>item.data.value?.fields??{}); watch(()=>`${current.value?.state??''}:${current.value?.progress.settled_items??''}`,(next,previous)=>{if(previous&&next!==previous&&plan.value)void items.refetch()}); const expired=computed(()=>!!plan.value?.expires_at&&Date.parse(plan.value.expires_at)<=now.value); const canConfirm=computed(()=>!!current.value?.actions.confirm&&!!plan.value&&plan.value.counts.eligible!=='0'&&!expired.value&&acknowledgement.value&&mappings.value&&distinct.value&&hold.value&&!pending.value&&!recoveryBusy.value&&(current.value?.mode!=='mapping_recovery'||creation.value))
+function resetDetail(){itemCursor.value='';resultCursor.value='';contactCursor.value='';fieldCursor.value='';selected.value=undefined;selectedField.value='';acknowledgement.value=mappings.value=distinct.value=hold.value=false;action.value=null;creation.value=false}
 watch(parentId,()=>{selectionEpoch++;reportId.value='';admissionId.value='';reportCursor.value='';listCursor.value='';resetDetail()}); watch(reportId,()=>{selectionEpoch++},{flush:'sync'}); watch([admissionId,disposition],()=>{selectionEpoch++;resetDetail()}); watch(() => `${plan.value?.id}:${plan.value?.revision}:${plan.value?.digest}`,()=>resetDetail(),{flush:'sync'}); watch(access.scope,()=>{authorityEpoch++},{flush:'sync'}); watch(access.identity,()=>{identityEpoch++;intent.value=null;pending.value=false;error.value='';parentId.value='';reportId.value='';admissionId.value='';resetDetail()},{flush:'sync'})
 watch([parents.error,parent.error,reports.error,listing.error,detail.error,items.error,item.error,contacts.error,field.error,results.error],v=>{if(v.some(importAccessError)){access.denied.value=true;access.remove(access.prefix.value);void props.refreshWorkspace()}})
 function reload(){void parents.refetch();if(parentId.value){void parent.refetch();void reports.refetch();void listing.refetch()}if(admissionId.value)void detail.refetch();if(plan.value)void items.refetch();if(selected.value&&item.data.value){void item.refetch();void contacts.refetch();if(selectedField.value&&field.data.value)void field.refetch()}if(['running','paused','completed','cancelled'].includes(current.value?.state??''))void results.refetch()}
@@ -41,15 +45,25 @@ async function dispatch(value:Intent, replay=false){
   const sameIdentity=()=>!disposed&&identity===identityEpoch&&value.identity===access.identity.value
   const sameRequest=()=>sameIdentity()&&access.enabled.value&&authority===authorityEpoch&&selection===selectionEpoch
   if(!replay)intent.value=value; pending.value=true; error.value=''; action.value=null
-  try{const b=JSON.parse(value.body) as never;const receipt=value.kind==='prepare'?await preparePeopleAdmission((b as {report_id:string}).report_id,(b as {request_id:string}).request_id):value.kind==='confirm'?await confirmPeopleAdmission(value.id??'',b as AdmissionConfirm):value.kind==='plans'?await repreviewPeopleAdmission(value.id??'',(b as {request_id:string}).request_id,(b as {expected_plan_revision:string}).expected_plan_revision):value.kind==='retry'?await retryPeopleAdmission(value.id??'',(b as {request_id:string}).request_id,(b as {expected_lifecycle_revision:string}).expected_lifecycle_revision):await cancelPeopleAdmission(value.id??'',(b as {request_id:string}).request_id,(b as {expected_lifecycle_revision:string}).expected_lifecycle_revision)
+  try{const b=JSON.parse(value.body) as never;const receipt=value.kind==='recovery'?await preparePeopleRecovery(b as RecoveryStart):value.kind==='prepare'?await preparePeopleAdmission((b as {report_id:string}).report_id,(b as {request_id:string}).request_id):value.kind==='confirm'?await confirmPeopleAdmission(value.id??'',b as AdmissionConfirm):value.kind==='plans'?await repreviewPeopleAdmission(value.id??'',(b as {request_id:string}).request_id,(b as {expected_plan_revision:string}).expected_plan_revision):value.kind==='retry'?await retryPeopleAdmission(value.id??'',(b as {request_id:string}).request_id,(b as {expected_lifecycle_revision:string}).expected_lifecycle_revision):await cancelPeopleAdmission(value.id??'',(b as {request_id:string}).request_id,(b as {expected_lifecycle_revision:string}).expected_lifecycle_revision)
     if(!sameRequest()){if(sameIdentity())error.value='Access or selection changed while the request was pending. Verify the current scope, then retry the same request to recover its receipt.';return}
     admissionId.value=receipt.admission_id;intent.value=null;reload()
   }catch(e){if(!sameIdentity())return;if(importAccessError(e)){access.denied.value=true;access.remove(access.prefix.value);intent.value=null;error.value='Administrator access is required.';return}if(uncertainImportError(e)){error.value='The outcome is uncertain. Retry the same request to recover its saved receipt.'}else{intent.value=null;error.value=describeApiError(e,'Could not complete this People admission request.')}}finally{if(sameIdentity())pending.value=false}
 }
-function send(kind:Intent['kind'],body:Record<string,string|boolean>,id=admissionId.value){void dispatch({kind,body:JSON.stringify(body),id,identity:access.identity.value,parent:parentId.value})}
+function send(kind:Intent['kind'],body:Record<string,unknown>,id=admissionId.value){void dispatch({kind,body:JSON.stringify(body),id,identity:access.identity.value,parent:parentId.value})}
 function replay(){const value=intent.value;if(value)void dispatch(value,true)}
 function prepare(){if(reportId.value)void send('prepare',{request_id:crypto.randomUUID(),report_id:reportId.value})}
-function confirm(){if(plan.value&&canConfirm.value&&action.value==='confirm')void send('confirm',{request_id:crypto.randomUUID(),plan_id:plan.value.id,plan_revision:plan.value.revision,plan_digest:plan.value.digest,eligible_count:plan.value.counts.eligible,acknowledged_coverage:true,acknowledged_mappings:true,acknowledged_distinct_contacts:true,acknowledged_review_hold:true})}
+function recover(original:boolean){
+  if(!reportId.value||pending.value||intent.value)return
+  const base=parent.data.value;const cohort=current.value
+  if(original&&base?.confirmed_plan_id)send('recovery',{request_id:crypto.randomUUID(),report_id:reportId.value,anchor:{kind:'original',import_id:base.id,plan_id:base.confirmed_plan_id},expected_anchor_revision:base.plan.revision})
+  else if(cohort?.plan)send('recovery',{request_id:crypto.randomUUID(),report_id:reportId.value,anchor:{kind:'admission',admission_id:cohort.id,plan_id:cohort.plan.id,remainder:cohort.mode==='mapping_recovery'&&cohort.state==='cancelled'&&!!cohort.confirmed_admission_plan_id},expected_anchor_revision:cohort.lifecycle_revision})
+}
+function confirm(){
+  if(!plan.value||!canConfirm.value||action.value!=='confirm')return
+  const recovery=current.value?.mode==='mapping_recovery'?{mapping_digest:current.value.recovery?.mapping_digest,candidate_count:plan.value.counts.recovery_candidates,contact_count:plan.value.counts.intended_contacts,unassigned_count:plan.value.counts.recovery_unassigned,acknowledged_creation:creation.value}:undefined
+  send('confirm',{request_id:crypto.randomUUID(),plan_id:plan.value.id,plan_revision:plan.value.revision,plan_digest:plan.value.digest,eligible_count:plan.value.counts.eligible,acknowledged_coverage:true,acknowledged_mappings:true,acknowledged_distinct_contacts:true,acknowledged_review_hold:true,...(recovery?{recovery}:{})})
+}
 function lifecycle(kind:'plans'|'retry'|'cancel'){if(!current.value)return;const revision=kind==='plans'?plan.value?.revision:current.value.lifecycle_revision;if(!revision||(kind==='cancel'&&action.value!=='cancel'))return;void send(kind,{request_id:crypto.randomUUID(),[kind==='plans'?'expected_plan_revision':'expected_lifecycle_revision']:revision})}
 onBeforeUnmount(()=>{disposed=true;clearInterval(timer);intent.value=null;access.remove(access.prefix.value)})
 </script>
@@ -61,7 +75,7 @@ onBeforeUnmount(()=>{disposed=true;clearInterval(timer);intent.value=null;access
     <div class="flex flex-wrap justify-between gap-3">
       <div>
         <h2 class="text-section font-medium">
-          Add newly observed People
+          Add or recover People
         </h2><p class="mt-1 max-w-3xl text-small text-text-muted">
           Admit qualified new People from a completed retained change report. These core-only People remain in administrator migration review; notes, tasks, metadata and history are not covered.
         </p>
@@ -103,7 +117,7 @@ onBeforeUnmount(()=>{disposed=true;clearInterval(timer);intent.value=null;access
           </button>
         </FormField><FormField
           v-slot="{id}"
-          label="Completed report for newly observed People"
+          label="Completed retained change report"
           bare
         >
           <select
@@ -136,6 +150,13 @@ onBeforeUnmount(()=>{disposed=true;clearInterval(timer);intent.value=null;access
               @click="prepare"
             >
               Prepare admission preview
+            </button><button
+              type="button"
+              :class="buttonClasses()"
+              :disabled="!reportId||!parent.data.value?.confirmed_plan_id||pending||!!intent"
+              @click="recover(true)"
+            >
+              Recover original mapping holds
             </button>
           </div>
         </FormField>
@@ -158,7 +179,7 @@ onBeforeUnmount(()=>{disposed=true;clearInterval(timer);intent.value=null;access
             :key="a.id"
             :value="a.id"
           >
-            {{ admissionLabel(a.state) }} · {{ snapshotTime(a.created_at) }}
+            {{ a.mode==='mapping_recovery'?'Recovery · ':'' }}{{ admissionLabel(a.state) }} · {{ snapshotTime(a.created_at) }}
           </option>
         </select><button
           :class="buttonClasses('ghost')"
@@ -172,8 +193,31 @@ onBeforeUnmount(()=>{disposed=true;clearInterval(timer);intent.value=null;access
         class="mt-5 space-y-3 rounded border border-border p-3"
       >
         <h3 class="font-medium">
-          {{ admissionLabel(current.state) }}
-        </h3><dl class="grid gap-1 text-small sm:grid-cols-2">
+          {{ current.mode==='mapping_recovery'?'People recovery · ':'' }}{{ admissionLabel(current.state) }}
+        </h3>
+        <PeopleRecoveryMappings
+          v-if="current.mode==='mapping_recovery'"
+          :current="current"
+          :disabled="pending||!!intent"
+          @reload="reload"
+          @busy="recoveryBusy=$event"
+          @denied="access.denied.value=true;props.refreshWorkspace()"
+        />
+        <div
+          v-if="current.plan&&['ready','completed','cancelled'].includes(current.state)"
+          class="space-y-2"
+        >
+          <p class="text-small text-text-muted">
+            Use the selected retained report to recover mapping holds. A ready unconfirmed preview is replaced atomically; its evidence remains available.
+          </p>
+          <button
+            :class="buttonClasses()"
+            :disabled="!reportId||pending||!!intent||recoveryBusy"
+            @click="recover(false)"
+          >
+            {{ recoveryStartLabel }}
+          </button>
+        </div><dl class="grid gap-1 text-small sm:grid-cols-2">
           <div>
             <dt class="text-text-muted">
               Original snapshot boundary
@@ -188,11 +232,37 @@ onBeforeUnmount(()=>{disposed=true;clearInterval(timer);intent.value=null;access
           {{ current.retained_bytes }} retained bytes · {{ current.progress.settled_items }} settled.
         </p><p class="text-small">
           Covered: {{ current.coverage.covered_families.join(', ') || 'none' }}. Deferred: {{ current.coverage.deferred_families.join(', ') || 'none' }}. {{ current.coverage.review_hold ? 'Administrator review hold remains active.' : 'No review hold is reported.' }}
-        </p><p
+        </p><section
+          v-if="current.coverage.follow_on"
+          class="space-y-2 rounded border border-border p-3"
+        >
+          <h3 class="font-semibold">
+            Follow-on coverage for this recovered group
+          </h3>
+          <p class="text-small">
+            Each step needs its own preview and confirmation. Status describes the latest retained attempt. Remainders or exclusions remain partial; review the step's full coverage.
+          </p>
+          <div
+            v-for="step in current.coverage.follow_on"
+            :key="step.family"
+            class="space-y-1"
+          >
+            <button
+              :class="buttonClasses('ghost')"
+              :disabled="!step.can_review"
+              @click="emit('followOn',step)"
+            >
+              {{ step.label }} · {{ step.status.replaceAll('_',' ') }}
+            </button>
+            <p class="text-small text-text-muted">
+              {{ step.prerequisite }}
+            </p>
+          </div>
+        </section><p
           v-if="current.pause_reason"
           class="text-small text-danger"
         >
-          {{ current.pause_reason }}
+          {{ current.pause_reason==='awaiting_mapping_choices'?'Choose mappings, then prepare the full recovery preview.':current.pause_reason }}
         </p><template v-if="plan">
           <dl class="grid gap-x-4 gap-y-1 text-small sm:grid-cols-2">
             <template
@@ -204,7 +274,7 @@ onBeforeUnmount(()=>{disposed=true;clearInterval(timer);intent.value=null;access
               </dt><dd>{{ count }}</dd>
             </template>
           </dl><p class="text-small">
-            Inherited stage and assignment mappings are frozen. Equal contacts do not merge People; each qualified source identity creates its own Person.
+            {{ current.mode==='mapping_recovery'?'Your recovery mapping approvals are frozen.':'Inherited stage and assignment mappings are frozen.' }} Equal contacts do not merge People; each qualified source identity creates its own Person.
           </p><p
             v-if="expired"
             class="text-danger"
@@ -220,13 +290,20 @@ onBeforeUnmount(()=>{disposed=true;clearInterval(timer);intent.value=null;access
             > I understand only core Person/contact/stage/assignment values are covered.</label><label class="flex gap-2"><input
               v-model="mappings"
               type="checkbox"
-            > I acknowledge inherited mapping targets are frozen and rechecked.</label><label class="flex gap-2"><input
+            > I acknowledge the mapping targets are frozen and rechecked.</label><label class="flex gap-2"><input
               v-model="distinct"
               type="checkbox"
             > I acknowledge shared contacts create distinct People.</label><label class="flex gap-2"><input
               v-model="hold"
               type="checkbox"
-            > I acknowledge the continuing administrator review hold.</label><button
+            > I acknowledge the continuing administrator review hold.</label>
+            <label
+              v-if="current.mode==='mapping_recovery'"
+              class="flex gap-2"
+            ><input
+              v-model="creation"
+              type="checkbox"
+            > Create {{ plan.counts.eligible }} People with {{ plan.counts.intended_contacts }} contacts; {{ plan.counts.recovery_unassigned }} explicitly unassigned, from {{ plan.counts.recovery_candidates }} candidates.</label><button
               :class="buttonClasses('primary')"
               :disabled="!canConfirm"
               @click="action='confirm'"

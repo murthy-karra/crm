@@ -173,6 +173,11 @@ pub async fn measured_bytes(
       + COALESCE((SELECT sum(octet_length(nonce)+octet_length(ciphertext)) FROM person_admission_provenance WHERE admission_id=$1 AND organization_id=$2),0)
       + COALESCE((SELECT sum(octet_length(source_id)+octet_length(disposition)) FROM migration_people_admission_result WHERE admission_id=$1 AND organization_id=$2),0)
       + COALESCE((SELECT sum(octet_length(source_id)+octet_length(family)) FROM migration_import_identity WHERE admission_id=$1 AND organization_id=$2),0)
+      + COALESCE((SELECT sum(octet_length(nonce)+octet_length(ciphertext)+octet_length(source_id)+COALESCE(octet_length(stage_source_hmac),0)+COALESCE(octet_length(assignee_source_hmac),0)) FROM migration_people_recovery_candidate WHERE admission_id=$1 AND organization_id=$2),0)
+      + COALESCE((SELECT sum(octet_length(nonce)+octet_length(ciphertext)+octet_length(source_key_hmac)) FROM migration_people_recovery_key WHERE admission_id=$1 AND organization_id=$2),0)
+      + COALESCE((SELECT sum(octet_length(nonce)+octet_length(ciphertext)+octet_length(source_key_hmac)) FROM migration_people_recovery_choice WHERE admission_id=$1 AND organization_id=$2),0)
+      + COALESCE((SELECT sum(octet_length(source_id)+COALESCE(octet_length(source_key_hmac),0)+COALESCE(octet_length(semantic_hmac),0)) FROM migration_people_recovery_catalog WHERE admission_id=$1 AND organization_id=$2),0)
+      + COALESCE((SELECT COALESCE(octet_length(recovery_choices_digest),0)+COALESCE(octet_length(recovery_draft_digest),0) FROM migration_people_admission WHERE id=$1 AND organization_id=$2),0)
       + COALESCE((SELECT octet_length(preparation_checkpoint_key) FROM migration_people_admission WHERE id=$1 AND organization_id=$2),0)
     )::bigint"#).bind(id).bind(org.0).fetch_one(conn).await.map_err(Into::into)
 }
@@ -302,7 +307,13 @@ pub async fn validate_run(
     org: OrganizationId,
     run: &PgRow,
 ) -> Result<Value, MigrationError> {
-    if run.get::<String, _>("engine_version") != ENGINE {
+    if run.get::<String, _>("engine_version")
+        != if super::people_recovery::is_recovery(run) {
+            super::people_recovery::ENGINE
+        } else {
+            ENGINE
+        }
+    {
         return Err(MigrationError::ReleaseNotReady);
     }
     let parent =
@@ -373,9 +384,11 @@ pub async fn validate_run(
     if mapping_digest.len() != 32 {
         return Err(MigrationError::Crypto);
     }
-    Ok(
-        json!({"organization_id":org.0,"parent_import_id":run.get::<Uuid,_>("parent_import_id"),"parent_plan_id":run.get::<Uuid,_>("parent_plan_id"),"workspace_revision":run.get::<i64,_>("workspace_revision").to_string(),"source_account_id":run.get::<i64,_>("source_account_id").to_string(),"report_id":run.get::<Uuid,_>("report_id"),"report_output_revision":report.get::<Option<Uuid>,_>("output_revision").ok_or(MigrationError::SourceNotEligible)?,"report_tuple_hmac":report.get::<Vec<u8>,_>("tuple_hmac"),"original":original,"newer":newer,"original_mapping_digest":mapping_digest,"engine":ENGINE}),
-    )
+    let mut result = json!({"organization_id":org.0,"parent_import_id":run.get::<Uuid,_>("parent_import_id"),"parent_plan_id":run.get::<Uuid,_>("parent_plan_id"),"workspace_revision":run.get::<i64,_>("workspace_revision").to_string(),"source_account_id":run.get::<i64,_>("source_account_id").to_string(),"report_id":run.get::<Uuid,_>("report_id"),"report_output_revision":report.get::<Option<Uuid>,_>("output_revision").ok_or(MigrationError::SourceNotEligible)?,"report_tuple_hmac":report.get::<Vec<u8>,_>("tuple_hmac"),"original":original,"newer":newer,"original_mapping_digest":mapping_digest,"engine":run.get::<String,_>("engine_version")});
+    if super::people_recovery::is_recovery(run) {
+        result["recovery"] = super::people_recovery::frozen(run);
+    }
+    Ok(result)
 }
 
 /// Debit only this run's held control capacity; cancellation remains possible

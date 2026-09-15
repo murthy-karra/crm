@@ -49,31 +49,31 @@ fn limit(p: &Page, max: u16) -> Result<i64, MigrationError> {
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Binding {
-    actor: Uuid,
-    owner: Uuid,
-    endpoint: String,
-    plan: Option<Uuid>,
-    revision: Option<i64>,
-    digest: Option<Vec<u8>>,
-    filter: Option<String>,
-    limit: i64,
+pub(super) struct Binding {
+    pub(super) actor: Uuid,
+    pub(super) owner: Uuid,
+    pub(super) endpoint: String,
+    pub(super) plan: Option<Uuid>,
+    pub(super) revision: Option<i64>,
+    pub(super) digest: Option<Vec<u8>>,
+    pub(super) filter: Option<String>,
+    pub(super) limit: i64,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Position {
-    id: Uuid,
-    time: Option<DateTime<Utc>>,
+pub(super) struct Position {
+    pub(super) id: Uuid,
+    pub(super) time: Option<DateTime<Utc>>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Cursor {
-    binding: Binding,
-    last: Position,
-    upper: Option<Position>,
-    offset: usize,
+pub(super) struct Cursor {
+    pub(super) binding: Binding,
+    pub(super) last: Position,
+    pub(super) upper: Option<Position>,
+    pub(super) offset: usize,
 }
-fn binding(
+pub(super) fn binding(
     ctx: &CommandContext,
     owner: Uuid,
     endpoint: &str,
@@ -92,7 +92,7 @@ fn binding(
         limit,
     }
 }
-fn decode(
+pub(super) fn decode(
     key: &RawPayloadKey,
     ctx: &CommandContext,
     expected: &Binding,
@@ -126,7 +126,7 @@ fn decode(
         })
         .transpose()
 }
-fn encode(
+pub(super) fn encode(
     key: &RawPayloadKey,
     ctx: &CommandContext,
     binding: Binding,
@@ -185,7 +185,12 @@ async fn resource(
     let parent =
         history_capture_store::parent(conn, ctx.organization_id, row.get("parent_import_id"))
             .await?;
-    if row.get::<String, _>("engine_version") != s::ENGINE
+    if row.get::<String, _>("engine_version")
+        != if super::people_recovery::is_recovery(&row) {
+            super::people_recovery::ENGINE
+        } else {
+            s::ENGINE
+        }
         || parent.get::<Option<Uuid>, _>("confirmed_plan_id") != Some(row.get("parent_plan_id"))
         || parent.get::<i64, _>("workspace_revision") != row.get::<i64, _>("workspace_revision")
     {
@@ -200,7 +205,7 @@ async fn plan(
     id: Uuid,
     want: Option<Uuid>,
 ) -> Result<PgRow, MigrationError> {
-    let r=sqlx::query("SELECT id,admission_id,organization_id,revision,state,digest,total_count,eligible_count,already_imported_count,already_admitted_count,excluded_original_count,held_count,intended_contact_count,prepared_bytes,sealed_at,expires_at FROM migration_people_admission_plan WHERE admission_id=$1 AND organization_id=$2 AND ($3::uuid IS NULL OR id=$3) ORDER BY revision DESC LIMIT 1").bind(id).bind(ctx.organization_id.0).bind(want).fetch_optional(conn).await?.ok_or(MigrationError::NotFound)?;
+    let r=sqlx::query("SELECT id,admission_id,organization_id,revision,state,digest,total_count,eligible_count,already_imported_count,already_admitted_count,excluded_original_count,held_count,intended_contact_count,prepared_bytes,recovery_candidate_count,recovery_unassigned_count,sealed_at,expires_at FROM migration_people_admission_plan WHERE admission_id=$1 AND organization_id=$2 AND ($3::uuid IS NULL OR id=$3) ORDER BY revision DESC LIMIT 1").bind(id).bind(ctx.organization_id.0).bind(want).fetch_optional(conn).await?.ok_or(MigrationError::NotFound)?;
     if r.get::<String, _>("state") == "building"
         || r.get::<Option<DateTime<Utc>>, _>("sealed_at").is_none()
         || r.get::<Option<Vec<u8>>, _>("digest")
@@ -226,7 +231,7 @@ async fn finish(
     Ok(value)
 }
 fn overview(r: &PgRow) -> Value {
-    json!({"id":r.get::<Uuid,_>("id"),"parent_import_id":r.get::<Uuid,_>("parent_import_id"),"report_id":r.get::<Uuid,_>("report_id"),"state":r.get::<String,_>("state"),"lifecycle_revision":r.get::<i64,_>("lifecycle_revision").to_string(),"newer_snapshot_id":r.get::<Uuid,_>("newer_snapshot_id"),"newer_sequence":r.get::<i64,_>("newer_sequence").to_string(),"created_at":r.get::<DateTime<Utc>,_>("created_at"),"updated_at":r.get::<DateTime<Utc>,_>("updated_at"),"completed_at":r.get::<Option<DateTime<Utc>>,_>("completed_at"),"pause_reason":r.get::<Option<String>,_>("pause_reason"),"progress":{"settled_items":r.get::<i64,_>("settled_items").to_string()},"retained_bytes":r.get::<i64,_>("retained_bytes").to_string(),"reserved_bytes":r.get::<i64,_>("reserved_bytes").to_string()})
+    json!({"id":r.get::<Uuid,_>("id"),"mode":r.get::<String,_>("mode"),"confirmed_admission_plan_id":r.get::<Option<Uuid>,_>("confirmed_admission_plan_id"),"parent_import_id":r.get::<Uuid,_>("parent_import_id"),"report_id":r.get::<Uuid,_>("report_id"),"state":r.get::<String,_>("state"),"lifecycle_revision":r.get::<i64,_>("lifecycle_revision").to_string(),"newer_snapshot_id":r.get::<Uuid,_>("newer_snapshot_id"),"newer_sequence":r.get::<i64,_>("newer_sequence").to_string(),"created_at":r.get::<DateTime<Utc>,_>("created_at"),"updated_at":r.get::<DateTime<Utc>,_>("updated_at"),"completed_at":r.get::<Option<DateTime<Utc>>,_>("completed_at"),"pause_reason":r.get::<Option<String>,_>("pause_reason"),"progress":{"settled_items":r.get::<i64,_>("settled_items").to_string()},"retained_bytes":r.get::<i64,_>("retained_bytes").to_string(),"reserved_bytes":r.get::<i64,_>("reserved_bytes").to_string()})
 }
 fn projection(
     key: &RawPayloadKey,
@@ -316,11 +321,21 @@ pub async fn detail(
         "original":{"snapshot_id":r.get::<Uuid,_>("original_snapshot_id"),"sequence":r.get::<i64,_>("original_sequence").to_string(),"started_at":original.get::<Option<DateTime<Utc>>,_>("started_at"),"completed_at":original.get::<Option<DateTime<Utc>>,_>("completed_at")},
         "newer":{"snapshot_id":r.get::<Uuid,_>("newer_snapshot_id"),"sequence":r.get::<i64,_>("newer_sequence").to_string(),"started_at":r.get::<DateTime<Utc>,_>("newer_started_at"),"completed_at":r.get::<DateTime<Utc>,_>("newer_completed_at")}
     });
+    v["recovery"] = if super::people_recovery::is_recovery(&r) {
+        super::people_recovery::frozen(&r)
+    } else {
+        Value::Null
+    };
     v["coverage"] = json!({"covered_families":["Person core values","contacts","initial stage","initial assignment","admission provenance"],"deferred_families":["notes","tasks","tags","custom fields","historical events/calls/texts","later refresh"],"review_hold":true});
-    if let Some(p)=sqlx::query("SELECT id,admission_id,organization_id,revision,state,digest,total_count,eligible_count,already_imported_count,already_admitted_count,excluded_original_count,held_count,intended_contact_count,prepared_bytes,sealed_at,expires_at FROM migration_people_admission_plan WHERE admission_id=$1 AND organization_id=$2 ORDER BY revision DESC LIMIT 1").bind(id).bind(ctx.organization_id.0).fetch_optional(&mut *tx).await?{if p.get::<Option<DateTime<Utc>>,_>("sealed_at").is_some(){let d:Vec<u8>=p.get("digest");v["plan"]=json!({"id":p.get::<Uuid,_>("id"),"revision":p.get::<i64,_>("revision").to_string(),"digest":d.iter().map(|b|format!("{b:02x}")).collect::<String>(),"expires_at":p.get::<Option<DateTime<Utc>>,_>("expires_at"),"counts":{"total":p.get::<i64,_>("total_count").to_string(),"eligible":p.get::<i64,_>("eligible_count").to_string(),"already_imported":p.get::<i64,_>("already_imported_count").to_string(),"already_admitted":p.get::<i64,_>("already_admitted_count").to_string(),"excluded_original":p.get::<i64,_>("excluded_original_count").to_string(),"held":p.get::<i64,_>("held_count").to_string(),"intended_contacts":p.get::<i64,_>("intended_contact_count").to_string()}})}}
+    if let Some(p)=sqlx::query("SELECT id,admission_id,organization_id,revision,state,digest,total_count,eligible_count,already_imported_count,already_admitted_count,excluded_original_count,held_count,intended_contact_count,prepared_bytes,recovery_candidate_count,recovery_unassigned_count,sealed_at,expires_at FROM migration_people_admission_plan WHERE admission_id=$1 AND organization_id=$2 ORDER BY revision DESC LIMIT 1").bind(id).bind(ctx.organization_id.0).fetch_optional(&mut *tx).await?{if p.get::<Option<DateTime<Utc>>,_>("sealed_at").is_some(){let d:Vec<u8>=p.get("digest");v["plan"]=json!({"id":p.get::<Uuid,_>("id"),"revision":p.get::<i64,_>("revision").to_string(),"digest":d.iter().map(|b|format!("{b:02x}")).collect::<String>(),"expires_at":p.get::<Option<DateTime<Utc>>,_>("expires_at"),"counts":{"total":p.get::<i64,_>("total_count").to_string(),"eligible":p.get::<i64,_>("eligible_count").to_string(),"already_imported":p.get::<i64,_>("already_imported_count").to_string(),"already_admitted":p.get::<i64,_>("already_admitted_count").to_string(),"excluded_original":p.get::<i64,_>("excluded_original_count").to_string(),"held":p.get::<i64,_>("held_count").to_string(),"intended_contacts":p.get::<i64,_>("intended_contact_count").to_string(),"recovery_candidates":p.get::<i64,_>("recovery_candidate_count").to_string(),"recovery_unassigned":p.get::<i64,_>("recovery_unassigned_count").to_string()}})}}
+    if super::people_recovery::is_recovery(&r) {
+        v["coverage"]["follow_on"] =
+            super::people_recovery::coverage::coverage(&mut tx, ctx, &r).await?;
+        v["coverage"]["deferred_families"] = json!([]);
+    }
     let state = r.get::<String, _>("state");
     let initiator = r.get::<Uuid, _>("initiated_by_user_id") == ctx.actor_user_id.0;
-    v["actions"] = json!({"confirm":initiator&&state=="ready"&&v["plan"]["counts"]["eligible"]!="0","repreview":initiator&&state=="ready","retry":initiator&&state=="paused","cancel":!matches!(state.as_str(),"completed"|"cancelled")});
+    v["actions"] = json!({"confirm":initiator&&state=="ready"&&v["plan"]["counts"]["eligible"]!="0","repreview":initiator&&state=="ready"&&!super::people_recovery::is_recovery(&r),"retry":initiator&&state=="paused"&&r.get::<Option<String>,_>("pause_reason").as_deref()!=Some("awaiting_mapping_choices"),"cancel":!matches!(state.as_str(),"completed"|"cancelled")});
     finish(tx, v, SUMMARY_BYTES).await
 }
 pub async fn items(
@@ -611,14 +626,14 @@ pub async fn results(
     };
     finish(tx, json!({"results":values,"next_cursor":next}), PAGE_BYTES).await
 }
-fn prefix(t: &str, n: usize) -> &str {
+pub(super) fn prefix(t: &str, n: usize) -> &str {
     let mut n = t.len().min(n);
     while !t.is_char_boundary(n) {
         n -= 1
     }
     &t[..n]
 }
-fn field_limit(p: &Page) -> Result<usize, MigrationError> {
+pub(super) fn field_limit(p: &Page) -> Result<usize, MigrationError> {
     let n = usize::from(p.limit.unwrap_or(FIELD_BYTES as u16));
     if n == 0
         || n > FIELD_BYTES
@@ -631,7 +646,7 @@ fn field_limit(p: &Page) -> Result<usize, MigrationError> {
     }
     Ok(n)
 }
-fn fragment(
+pub(super) fn fragment(
     key: &RawPayloadKey,
     ctx: &CommandContext,
     bind: Binding,

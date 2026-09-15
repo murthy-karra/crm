@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { provideAdmittedActivityReaders } from './activityFamily'
 import { useQuery } from '@tanstack/vue-query'
 import Card from '../Card.vue'
@@ -64,6 +64,10 @@ const detailKey = computed(() => [...access.prefix.value, 'detail', selectedId.v
 const parents = useQuery({ queryKey: parentsKey, enabled: access.enabled, retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(parentsKey.value, () => parentsKey.value, () => fetchImports(parentCursors.value.at(-1) || undefined, signal)) })
 const parent = useQuery({ queryKey: parentKey, enabled: computed(() => access.enabled.value && !!parentId.value), retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(parentKey.value, () => parentKey.value, () => fetchImport(parentId.value, signal)) })
 const admissions = useQuery({ queryKey: admissionsKey, enabled: computed(() => access.enabled.value && !!parentId.value), retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(admissionsKey.value, () => admissionsKey.value, () => fetchPeopleAdmissions(parentId.value, admissionCursors.value.at(-1) || undefined, signal)) })
+const handedCohort=ref<import('../../api/peopleAdmissions').PeopleAdmission>()
+const cohortOptions=computed(()=>{const rows=admissions.data.value?.items??[];const selected=handedCohort.value;return selected&&selected.parent_import_id===parentId.value&&!rows.some(r=>r.id===selected.id)?[selected,...rows]:rows})
+watch(access.scope,()=>{handedCohort.value=undefined},{flush:'sync'})
+
 const admission = useQuery({ queryKey: admissionKey, enabled: computed(() => access.enabled.value && !!admissionId.value), retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(admissionKey.value, () => admissionKey.value, () => fetchPeopleAdmission(admissionId.value, signal)) })
 const reports = useQuery({ queryKey: reportsKey, enabled: computed(() => access.enabled.value && !!parentId.value), retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(reportsKey.value, () => reportsKey.value, () => fetchCoreChangeReports(parentId.value, reportCursors.value.at(-1) || undefined, signal)) })
 const report = useQuery({ queryKey: reportKey, enabled: computed(() => access.enabled.value && !!reportId.value), retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(reportKey.value, () => reportKey.value, () => fetchCoreChangeReport(reportId.value, signal)) })
@@ -163,6 +167,21 @@ function confirm() { if (current.value && confirmation.value && canConfirm.value
 function resume() { if (current.value?.actions.retry && !busy.value) void submit({ kind: 'retry', identity: access.identity.value, id: current.value.id, body: { request_id: crypto.randomUUID(), expected_revision: current.value.revision } }) }
 function cancel() { if (current.value?.actions.cancel && !busy.value) void submit({ kind: 'cancel', identity: access.identity.value, id: current.value.id, body: { request_id: crypto.randomUUID(), expected_revision: current.value.revision } }) }
 function remainder() { if (current.value?.actions.remainder && !busy.value) void submit({ kind: 'remainder', identity: access.identity.value, id: current.value.id, body: { request_id: crypto.randomUUID(), expected_revision: current.value.revision } }) }
+async function openRecovery(step:import('../../api/peopleAdmissions').RecoveryFollowOn){
+ if(!access.enabled.value||busy.value||dirty.value)return false
+ const scope=access.scope.value
+ const selection=[parentId.value,admissionId.value,selectedId.value].join(':')
+ const cohort=await fetchPeopleAdmission(step.admission_id)
+ if(scope!==access.scope.value||cohort.parent_import_id!==step.parent_import_id||busy.value||dirty.value||selection!==[parentId.value,admissionId.value,selectedId.value].join(':'))return false
+ handedCohort.value=cohort
+ parentId.value=step.parent_import_id;await nextTick()
+ if(scope!==access.scope.value)return false
+ admissionId.value=step.admission_id;await nextTick()
+ if(scope!==access.scope.value)return false
+ selectedId.value=step.root_id??''
+ return true
+}
+defineExpose({openRecovery})
 </script>
 
 <template>
@@ -277,12 +296,12 @@ function remainder() { if (current.value?.actions.remainder && !busy.value) void
                   Choose an admission cohort
                 </option>
                 <option
-                  v-for="row in admissions.data.value?.items ?? []"
+                  v-for="row in cohortOptions"
                   :key="row.id"
                   :value="row.id"
                   :disabled="!['completed', 'cancelled'].includes(row.state) || BigInt(row.progress.settled_items) === 0n"
                 >
-                  {{ snapshotTime(row.created_at) }} · {{ snapshotLabel(row.state) }} · {{ row.progress.settled_items }} settled People · {{ row.id }}
+                  {{ row.mode==='mapping_recovery'?'Recovery':'Admission' }} · {{ snapshotTime(row.created_at) }} · {{ snapshotLabel(row.state) }} · {{ row.progress.settled_items }} settled People · {{ row.id }}
                 </option>
               </select>
             </FormField>

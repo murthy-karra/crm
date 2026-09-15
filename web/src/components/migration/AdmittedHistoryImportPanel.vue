@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import Card from '../Card.vue'
 import ConfirmDialog from '../ConfirmDialog.vue'
@@ -7,7 +7,7 @@ import FormField from '../FormField.vue'
 import { buttonClasses, INPUT_CLASSES } from '../../lib/controls'
 import { ApiError } from '../../api/client'
 import { describeApiError } from '../../lib/errors'
-import { fetchPeopleAdmissions } from '../../api/peopleAdmissions'
+import { fetchPeopleAdmission, fetchPeopleAdmissions } from '../../api/peopleAdmissions'
 import { fetchImport, fetchImports } from '../../api/imports'
 import { fetchHistoryCaptures } from '../../api/historyCaptures'
 import { createAdmittedHistoryRemainder, confirmAdmittedHistory, fetchAdmittedHistoryImport, fetchAdmittedHistoryImports, fetchAdmittedHistoryPage, historyAction, historyActive, increaseAdmittedHistoryBudget, prepareAdmittedHistory, useAdmittedHistoryAccess, type Disposition, type Family, type HistoryIssue, type HistoryManifest, type HistoryResult, type Root } from '../../api/admittedHistoryImports'
@@ -26,6 +26,10 @@ const intent = ref<Intent | null>(null)
 const parents = useQuery({ queryKey: computed(() => [...access.prefix.value, 'parents']), enabled: access.enabled, retry: false, queryFn: ({ signal }) => access.read([], () => [], () => fetchImports(undefined, signal)) })
 const parent = useQuery({ queryKey: computed(() => [...access.prefix.value, 'parent', parentId.value]), enabled: computed(() => access.enabled.value && !!parentId.value), retry: false, queryFn: ({ signal }) => access.read([], () => [], () => fetchImport(parentId.value, signal)) })
 const admissions = useQuery({ queryKey: computed(() => [...access.prefix.value, 'admissions', parentId.value]), enabled: computed(() => access.enabled.value && !!parentId.value), retry: false, queryFn: ({ signal }) => access.read([], () => [], () => fetchPeopleAdmissions(parentId.value, undefined, signal)) })
+const handedCohort=ref<import('../../api/peopleAdmissions').PeopleAdmission>()
+const cohortOptions=computed(()=>{const rows=admissions.data.value?.items??[];const selected=handedCohort.value;return selected&&selected.parent_import_id===parentId.value&&!rows.some(r=>r.id===selected.id)?[selected,...rows]:rows})
+watch(access.scope,()=>{handedCohort.value=undefined},{flush:'sync'})
+
 const captures = useQuery({ queryKey: computed(() => [...access.prefix.value, 'history-captures', parentId.value]), enabled: computed(() => access.enabled.value && !!parentId.value), retry: false, queryFn: ({ signal }) => access.read([], () => [], () => fetchHistoryCaptures(parentId.value, undefined, signal)) })
 const roots = useQuery({ queryKey: computed(() => [...access.prefix.value, 'admitted-history', admissionId.value]), enabled: computed(() => access.enabled.value && !!admissionId.value), retry: false, queryFn: ({ signal }) => access.read([], () => [], () => fetchAdmittedHistoryImports(admissionId.value, undefined, signal)), refetchInterval: query => query.state.data?.imports.some(historyActive) ? 2000 : false, refetchOnWindowFocus: 'always', refetchOnReconnect: 'always' })
 const detail = useQuery({ queryKey: computed(() => [...access.prefix.value, 'admitted-history-detail', selectedId.value]), enabled: computed(() => access.enabled.value && !!selectedId.value), retry: false, queryFn: ({ signal }) => access.read([], () => [], async () => { const value = await fetchAdmittedHistoryImport(selectedId.value, signal); if (value.workspace_revision !== access.org.value?.workspace_revision) { await props.refreshWorkspace(); throw new Error('Workspace status was refreshed') }; return value }), refetchInterval: query => historyActive(query.state.data) ? 2000 : false, refetchOnWindowFocus: 'always', refetchOnReconnect: 'always' })
@@ -33,7 +37,7 @@ const current = computed(() => detail.data.value?.id === selectedId.value ? deta
 const pages = useQuery({ queryKey: computed(() => [...access.prefix.value, 'admitted-history-page', selectedId.value, plan.value?.id, mode.value, family.value, disposition.value, pageCursor.value]), enabled: computed(() => access.enabled.value && !!selectedId.value && !!plan.value?.id && pageReady.value), retry: false, queryFn: ({ signal }) => fetchAdmittedHistoryPage<HistoryManifest | HistoryResult | HistoryIssue>(selectedId.value, plan.value!.id, mode.value, { family: mode.value === 'issues' || !family.value ? undefined : family.value, disposition: mode.value === 'issues' || !disposition.value ? undefined : disposition.value }, pageCursor.value, signal) })
 
 const qualified = computed(() => captures.data.value?.captures.filter(c => c.parent_import_id === parentId.value && c.state === 'completed_with_gaps' && ['events', 'calls', 'text_messages'].every(stream => c.streams.some(s => s.family === stream && s.state === 'enumerated'))) ?? [])
-const allowedAdmission = computed(() => admissions.data.value?.items.filter(a => a.parent_import_id === parentId.value && ['completed', 'cancelled'].includes(a.state) && BigInt(a.progress.settled_items) > 0n) ?? [])
+const allowedAdmission = computed(() => cohortOptions.value.filter(a => a.parent_import_id === parentId.value && ['completed', 'cancelled'].includes(a.state) && BigInt(a.progress.settled_items) > 0n) ?? [])
 const canPrepare = computed(() => !!parentId.value && parent.data.value?.state === 'completed' && !!parent.data.value.confirmed_plan_id && !!admissionId.value && !!captureId.value && !pending.value && roots.isSuccess.value && !roots.data.value?.imports.some(historyActive))
 const canConfirm = computed(() => !!current.value && pageReady.value && current.value.actions.confirm && held.value && coverage.value && !pending.value)
 const busy = computed(() => pending.value || !!intent.value)
@@ -89,6 +93,21 @@ function confirm() { const root = current.value; const selectedPlan = plan.value
 function action(actionName: 'resume' | 'cancel') { const root = current.value; if (!root) return; const body = { request_id: crypto.randomUUID(), expected_revision: root.revision }; void run(() => historyAction(root.id, actionName, body)) }
 function remainder() { const root = current.value; if (!root?.current_attempt_id) return; const body = { request_id: crypto.randomUUID(), attempt_id: root.current_attempt_id, expected_revision: root.revision }; void run(() => createAdmittedHistoryRemainder(root.id, body)) }
 function increase() { const root = current.value; if (!root || !budget.value) return; const body = { request_id: crypto.randomUUID(), expected_revision: root.revision, run_byte_limit: budget.value }; void run(() => increaseAdmittedHistoryBudget(root.id, body)) }
+async function openRecovery(step:import('../../api/peopleAdmissions').RecoveryFollowOn){
+ if(!access.enabled.value||busy.value)return false
+ const scope=access.scope.value
+ const selection=[parentId.value,admissionId.value,selectedId.value].join(':')
+ const cohort=await fetchPeopleAdmission(step.admission_id)
+ if(scope!==access.scope.value||cohort.parent_import_id!==step.parent_import_id||busy.value||selection!==[parentId.value,admissionId.value,selectedId.value].join(':'))return false
+ handedCohort.value=cohort
+ parentId.value=step.parent_import_id;await nextTick()
+ if(scope!==access.scope.value)return false
+ admissionId.value=step.admission_id;await nextTick()
+ if(scope!==access.scope.value)return false
+ selectedId.value=step.root_id??''
+ return true
+}
+defineExpose({openRecovery})
 </script>
 
 <template>

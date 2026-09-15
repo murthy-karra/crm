@@ -46,7 +46,7 @@ use crate::import_support::Fixture;
 use crm_api::domain::migration::{admitted_metadata_worker, snapshot_source::Stream};
 use serde_json::Value;
 
-async fn drain_preparation(f: &Fixture, root: Uuid) {
+pub(super) async fn drain_preparation(f: &Fixture, root: Uuid) {
     for _ in 0..1000 {
         let ready:bool=sqlx::query_scalar("SELECT p.state='ready' FROM migration_admitted_metadata_plan p JOIN migration_admitted_metadata_import i ON i.latest_plan_id=p.id WHERE i.id=$1").bind(root).fetch_one(&f.pool).await.unwrap();
         if ready {
@@ -123,7 +123,7 @@ async fn prepared_typed_native(migrator: &PgPool, native: bool) -> (Fixture, Uui
     assert!(sqlx::query_scalar::<_,bool>("SELECT i.snapshot_id=r.newer_snapshot_id AND i.capture_sequence=r.newer_sequence FROM migration_admitted_metadata_import i JOIN migration_core_change_report r ON r.id=i.source_report_id WHERE i.id=$1").bind(root).fetch_one(&f.pool).await.unwrap());
     (f, root, plan, person)
 }
-async fn approve_all(f: &Fixture, root: Uuid, _plan: Uuid) -> Uuid {
+pub(super) async fn approve_all(f: &Fixture, root: Uuid, _plan: Uuid) -> Uuid {
     let ids = sqlx::query_scalar::<_, Uuid>(
         "SELECT id FROM migration_admitted_metadata_mapping WHERE import_id=$1 ORDER BY kind,id",
     )
@@ -194,7 +194,7 @@ async fn approve_all(f: &Fixture, root: Uuid, _plan: Uuid) -> Uuid {
     .unwrap();
     plan
 }
-async fn finish(f: &Fixture, root: Uuid) {
+pub(super) async fn finish(f: &Fixture, root: Uuid) {
     for _ in 0..30 {
         let state: String =
             sqlx::query_scalar("SELECT state FROM migration_admitted_metadata_import WHERE id=$1")
@@ -654,9 +654,15 @@ async fn admitted_metadata_hot_units_seek_past_settled_people_at_d050(migrator: 
         .fetch_one(&mut *c)
         .await
         .unwrap();
-    sqlx::query("CREATE TEMP TABLE admitted_scale AS SELECT n,gen_random_uuid() AS person,gen_random_uuid() AS manifest,gen_random_uuid() AS result FROM generate_series(1,$1::bigint) n").bind(25_000-count).execute(&mut *c).await.unwrap();
+    sqlx::query("CREATE TEMP TABLE admitted_scale AS SELECT n,gen_random_uuid() AS person,gen_random_uuid() AS manifest,gen_random_uuid() AS result,gen_random_uuid() AS admission_item,gen_random_uuid() AS admission_result FROM generate_series(1,$1::bigint) n").bind(25_000-count).execute(&mut *c).await.unwrap();
     sqlx::query("INSERT INTO person(id,organization_id,first_name,last_name,stage_id,assigned_user_id) SELECT person,$1,'Synthetic','Metadata '||n,$2,$3 FROM admitted_scale").bind(f.org).bind(f.lead_stage).bind(f.actor).execute(&mut *c).await.unwrap();
-    sqlx::query("INSERT INTO migration_admitted_metadata_manifest(id,import_id,plan_id,organization_id,admission_result_id,person_id,source_person_id,disposition,baseline_nonce,baseline_ciphertext,item_byte_bound,settled_at) SELECT x.manifest,m.import_id,m.plan_id,m.organization_id,m.admission_result_id,x.person,(1000000+x.n)::text,'settled',m.baseline_nonce,m.baseline_ciphertext,m.item_byte_bound,clock_timestamp() FROM admitted_scale x CROSS JOIN migration_admitted_metadata_manifest m WHERE m.import_id=$1 AND m.plan_id=(SELECT confirmed_plan_id FROM migration_admitted_metadata_import WHERE id=$1) AND m.person_id=$2").bind(root).bind(person).execute(&mut *c).await.unwrap();
+    // D-085 requires each scale Person to retain its own exact admission tuple.
+    // These are inert EXPLAIN rows only. Restore the build guard before probes.
+    sqlx::query("ALTER TABLE migration_people_admission_item DISABLE TRIGGER migration_people_admission_item_building").execute(&mut *c).await.unwrap();
+    sqlx::query("INSERT INTO migration_people_admission_item SELECT (jsonb_populate_record(NULL::migration_people_admission_item,to_jsonb(i)||jsonb_build_object('id',x.admission_item,'source_key',(1000000+x.n)::text,'source_id',(1000000+x.n)::text,'prospective_person_id',x.person,'settled_result_id',x.admission_result))).* FROM admitted_scale x CROSS JOIN migration_admitted_metadata_manifest m JOIN migration_people_admission_item i ON i.id=m.admission_item_id WHERE m.import_id=$1 AND m.plan_id=(SELECT confirmed_plan_id FROM migration_admitted_metadata_import WHERE id=$1) AND m.person_id=$2").bind(root).bind(person).execute(&mut *c).await.unwrap();
+    sqlx::query("ALTER TABLE migration_people_admission_item ENABLE TRIGGER migration_people_admission_item_building").execute(&mut *c).await.unwrap();
+    sqlx::query("INSERT INTO migration_people_admission_result SELECT (jsonb_populate_record(NULL::migration_people_admission_result,to_jsonb(r)||jsonb_build_object('id',x.admission_result,'item_id',x.admission_item,'source_id',(1000000+x.n)::text,'person_id',x.person))).* FROM admitted_scale x CROSS JOIN migration_admitted_metadata_manifest m JOIN migration_people_admission_result r ON r.id=m.admission_result_id WHERE m.import_id=$1 AND m.plan_id=(SELECT confirmed_plan_id FROM migration_admitted_metadata_import WHERE id=$1) AND m.person_id=$2").bind(root).bind(person).execute(&mut *c).await.unwrap();
+    sqlx::query("INSERT INTO migration_admitted_metadata_manifest(id,import_id,plan_id,organization_id,admission_result_id,person_id,expected_person_id,source_person_id,disposition,baseline_nonce,baseline_ciphertext,item_byte_bound,settled_at) SELECT x.manifest,m.import_id,m.plan_id,m.organization_id,x.admission_result,x.person,x.person,(1000000+x.n)::text,'settled',m.baseline_nonce,m.baseline_ciphertext,m.item_byte_bound,clock_timestamp() FROM admitted_scale x CROSS JOIN migration_admitted_metadata_manifest m WHERE m.import_id=$1 AND m.plan_id=(SELECT confirmed_plan_id FROM migration_admitted_metadata_import WHERE id=$1) AND m.person_id=$2").bind(root).bind(person).execute(&mut *c).await.unwrap();
     sqlx::query("INSERT INTO migration_admitted_metadata_operation(id,manifest_id,import_id,plan_id,organization_id,kind,mapping_id,source_key,target_id,disposition,nonce,ciphertext) SELECT gen_random_uuid(),x.manifest,o.import_id,o.plan_id,o.organization_id,o.kind,o.mapping_id,o.source_key,o.target_id,o.disposition,o.nonce,o.ciphertext FROM admitted_scale x CROSS JOIN migration_admitted_metadata_operation o WHERE o.import_id=$1 AND o.manifest_id=(SELECT id FROM migration_admitted_metadata_manifest WHERE import_id=$1 AND plan_id=(SELECT confirmed_plan_id FROM migration_admitted_metadata_import WHERE id=$1) AND person_id=$2)").bind(root).bind(person).execute(&mut *c).await.unwrap();
     sqlx::query("INSERT INTO migration_admitted_metadata_result(id,import_id,plan_id,unit_id,manifest_id,organization_id,kind,disposition,person_id,nonce,ciphertext) SELECT x.result,r.import_id,r.plan_id,x.manifest,x.manifest,r.organization_id,'people',r.disposition,x.person,r.nonce,r.ciphertext FROM admitted_scale x CROSS JOIN migration_admitted_metadata_result r WHERE r.import_id=$1 AND r.kind='people'").bind(root).execute(&mut *c).await.unwrap();
     sqlx::query("INSERT INTO person_custom_field_value(organization_id,person_id,field_id,field_type,text_value,number_value,date_value,option_id,updated_by_user_id,origin,correlation_id) SELECT v.organization_id,x.person,v.field_id,v.field_type,v.text_value,v.number_value,v.date_value,v.option_id,v.updated_by_user_id,v.origin,v.correlation_id FROM admitted_scale x CROSS JOIN person_custom_field_value v WHERE v.organization_id=$1 AND v.person_id=$2").bind(f.org).bind(person).execute(&mut *c).await.unwrap();

@@ -54,7 +54,7 @@ onMounted(() => document.addEventListener('keydown', onKeydown))
 onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 defineExpose({ focus: () => props.readOnly ? reviewPreview.value?.focus() : root.value?.focus() })
 
-const icons = { person_admitted: Inbox, person_imported: Inbox, inquiry_received: Inbox, routing_decision: Route, assignment_changed: UserCheck, stage_changed: Flag, contact_attempted: Phone, call_completed: Phone, correspondence: Mail }
+const icons = { person_recovered: Inbox, person_admitted: Inbox, person_imported: Inbox, inquiry_received: Inbox, routing_decision: Route, assignment_changed: UserCheck, stage_changed: Flag, contact_attempted: Phone, call_completed: Phone, correspondence: Mail }
 // SLICE_015 §1 / SLICE_016.md §8: notes and completed tasks are out of
 // scope for the People preview card (unlike PersonDetailView's History
 // card). `recent`'s own type-narrowing filter below excludes both kinds
@@ -64,6 +64,7 @@ const icons = { person_admitted: Inbox, person_imported: Inbox, inquiry_received
 type PreviewableHistoryEntry = Exclude<HistoryEntry, { kind: 'note' | 'task_completed' }>
 function activity(entry: PreviewableHistoryEntry): { title: string; description: string } {
   switch (entry.kind) {
+    case 'person_recovered': return { title: 'Person recovered after mapping hold', description: 'Review imported coverage in full profile' }
     case 'person_admitted': return { title: 'Newly observed Person added', description: 'Core details only; review coverage in full profile' }
     case 'person_imported': return { title: 'Imported from Follow Up Boss', description: 'Review provenance in full profile' }
     case 'inquiry_received': return { title: 'Inquiry received', description: entry.detail.source }

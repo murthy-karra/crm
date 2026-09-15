@@ -140,7 +140,10 @@ async fn admission_real_release_partial_schema_and_unknown_engine_fail_closed(mi
         tx.rollback().await.unwrap();
     }
     let mut tx = migrator.begin().await.unwrap();
-    sqlx::query("ALTER TABLE migration_people_admission DROP CONSTRAINT migration_people_admission_engine_version_check").execute(&mut *tx).await.unwrap();
+    sqlx::query("ALTER TABLE migration_people_admission DROP CONSTRAINT people_recovery_mode")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
     sqlx::query("UPDATE migration_people_admission SET engine_version='unsupported-synthetic-engine' WHERE id=$1").bind(id).execute(&mut *tx).await.unwrap();
     assert!(workspace::startup_compatible(&mut tx).await.is_err());
     assert!(valid.require_people_admission(&mut tx).await.is_err());

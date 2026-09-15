@@ -8,7 +8,7 @@ SELECT COALESCE(
  ('crm_mapping_repair_owned_write()','04b7b1e067d213e9b121e650c2fe84dc'),
  ('crm_mapping_repair_head_write()','cd7471fa3e11f9ca4ed9a315492e7d5a'),
  ('crm_mapping_repair_capability(uuid)','2304c820dcef6dbca2a656adc1c05b05'),
- ('crm_workspace_shared(uuid)','c35c0e9aa618dcf87998215725a1b98a'),
+ ('crm_workspace_shared(uuid)','3e6c72a0128430ada6eed65780883bca'),
  ('crm_mapping_repair_write_fence()','653877ec38a79e5dbac2cef61c8d80c4'),
  ('crm_people_refresh_mutation_allowed(uuid,text,text,text,jsonb)','66b6271e33f3320844097953a59d4328'),
  ('crm_admitted_people_refresh_mutation_allowed(uuid,text,text,text,jsonb,jsonb)','0195d2a8bf721ea25939bffcf71724b6')) expected(signature,body_md5))

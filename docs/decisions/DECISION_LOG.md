@@ -3017,3 +3017,38 @@ and plan never-imported People recovery with “Ok go for it.” This authorizes
 the existing shared-development release recorded in
 [010e5 release](../tasks/SLICE_010e5_RELEASE.md). Production, live FUB/customer
 processing, activation and implementation of new recovery contracts remain separate.
+
+### D-089 — Never-imported People recovery planning (2026-09-15)
+
+After 010e5 local integration, the user asked what was next. The recommendation
+was to plan recovery of People never imported because of missing stage/agent
+mappings, with duplicate prevention, safe retries and follow-on family steps;
+it also named the pending 010e5 push/deploy. The user replied “Ok go for it.”
+
+This authorizes that shared-development release and preparation of the
+[010e6 recovery plan/specification](../plans/SLICE_010e6_NEVER_IMPORTED_RECOVERY.md)
+and cream Lavish companion. The proposed recovery admission mode, positive hold
+anchors, initial mapping approvals, shared identity/provenance changes and expanded
+family qualifiers are declared contracts awaiting review and implementation
+acceptance. This is not approval of unpresented implementation details or policy.
+No live FUB/customer processing, activation or production rollout follows.
+
+### D-090 — Never-imported People recovery implementation accepted (2026-09-15)
+
+The user reviewed the cream Lavish 010e6 plan and submitted “ok go ahead and
+implement.” with Send & End. This accepts the
+[recovery plan/specification](../plans/SLICE_010e6_NEVER_IMPORTED_RECOVERY.md),
+including explicit recovery admission, positive original/admission mapping-hold
+authority, never-materialized identity checks, immutable initial mapping approval,
+full preview, atomic creation/retry/remainder, honest recovery provenance and
+follow-on family qualification. Preserve normal admission's original-absence rule.
+
+This explicitly amends 010e3's original-presence exclusion for recovery mode only,
+010e5's admitted initial-mapping resolver to recognize recovery approvals, and
+010e4/010f3/010f4/010d3 cohort guards for genuine successful recovery admissions.
+Concrete compatible schema/DTO/permit and reader changes are owned implementation
+work. One primary writer and the user's previously authorized single reviewer
+perform bounded independent review and isolated synthetic verification. Publication
+and deployment of this new recovery slice, live source/customer processing,
+activation and production remain separate. The user ended the Lavish session;
+do not reopen it for routine updates.

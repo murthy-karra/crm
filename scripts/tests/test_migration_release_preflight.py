@@ -67,6 +67,24 @@ class PreflightTests(unittest.TestCase):
         values[0]["artifacts"][0]["capabilities"] = [TIMELINE, capability]
         self.assertFalse(check(values)["launch_allowed"])
 
+    def test_people_recovery_capability_is_independent_and_survives_zero_facts(self):
+        capability = "fub-people-recovery-v1"
+        for count in ["0", "1"]:
+            for capabilities in [[], [TIMELINE], [capability], [TIMELINE, capability]]:
+                values = fixtures("1")
+                values[3].update(people_recovery_schema_present=True,
+                                 people_recovery_binding_count=count,
+                                 people_recovery_unsupported_count="0")
+                values[0]["artifacts"][0]["capabilities"] = capabilities
+                report = check(values)
+                self.assertEqual(report["launch_allowed"], count == "0" or capability in capabilities)
+                self.assertEqual(report["people_recovery_confirmation_ready"], capability in capabilities)
+        values = fixtures("1")
+        values[3].update(people_recovery_schema_present=True,
+                         people_recovery_binding_count="1", people_recovery_unsupported_count="1")
+        values[0]["artifacts"][0]["capabilities"] = [TIMELINE, capability]
+        self.assertFalse(check(values)["launch_allowed"])
+
     def test_admitted_history_capability_is_independent_and_survives_zero_facts(self):
         capability = "fub-admitted-history-v1"
         for count in ["0", "1"]:
@@ -423,12 +441,12 @@ class PreflightTests(unittest.TestCase):
                      {"count": "8", "unsupported_count": "0"}, {"present": True, "compatible": True},
                      {"count": "9", "unsupported_count": "0"}, {"present": True, "compatible": True},
                      {"count": "10", "unsupported_count": "0"}, {"present": True, "compatible": True},
-                     {"count": "11", "unsupported_count": "0"}, {"present": True, "compatible": True}, {"count": "12", "unsupported_count": "0"}][len(calls)-1]
+                     {"count": "11", "unsupported_count": "0"}, {"present": True, "compatible": True}, {"count": "12", "unsupported_count": "0"}, {"present": True, "compatible": True}, {"count": "13", "unsupported_count": "0"}][len(calls)-1]
             return mock.Mock(returncode=0, stdout=json.dumps(value).encode())
         with mock.patch.object(MODULE["subprocess"], "run", side_effect=fake_run):
             result = MODULE["database_state"]()
         self.assertEqual(result["binding_count"], "1")
-        self.assertEqual(len(calls), 24)
+        self.assertEqual(len(calls), 26)
         self.assertEqual(result["activity_binding_count"], "2")
         self.assertIn("confirmed_plan_id IS NOT NULL", calls[3][0][-1])
         self.assertNotIn("state=", calls[3][0][-1])
@@ -943,7 +961,7 @@ class PreflightTests(unittest.TestCase):
                          "crm_people_admission_lock_stage(uuid,uuid)"]:
             self.assertIn(required, schema)
         observed = next(query for query in sql if "FROM public.migration_people_admission" in query)
-        self.assertIn("engine_version<>'fub-people-admission-v1'", observed)
+        self.assertIn("engine_version NOT IN ('fub-people-admission-v1','fub-people-recovery-v1')", observed)
         self.assertNotIn("state=", observed)
 
     def test_partial_people_admission_schema_cannot_hide_retained_bindings(self):
@@ -980,6 +998,8 @@ class PreflightTests(unittest.TestCase):
         for compatible in [True, False]:
             queries = []
             def answer(query):
+                if "migration_people_recovery" in query:
+                    return {"present": False, "compatible": False}
                 if "migration_mapping_repair" in query:
                     return {"present": False, "compatible": False}
                 if "migration_admitted_activity" in query or "migration_admitted_history" in query:

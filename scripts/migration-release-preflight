@@ -89,10 +89,11 @@ ADMITTED_METADATA_CAPABILITY = "fub-admitted-metadata-v1"
 ADMITTED_ACTIVITY_CAPABILITY = "fub-admitted-activity-v1"
 ADMITTED_HISTORY_CAPABILITY = "fub-admitted-history-v1"
 MAPPING_REPAIR_CAPABILITY = "fub-people-mapping-repair-v1"
+PEOPLE_RECOVERY_CAPABILITY = "fub-people-recovery-v1"
 CAPABILITIES = frozenset({METADATA_CAPABILITY, ACTIVITY_CAPABILITY, HISTORY_CAPABILITY,
                         TIMELINE_CAPABILITY, CORE_CHANGE_CAPABILITY, PEOPLE_REFRESH_CAPABILITY,
                         PEOPLE_ADMISSION_CAPABILITY, ADMITTED_PEOPLE_REFRESH_CAPABILITY,
-                        ADMITTED_METADATA_CAPABILITY, ADMITTED_ACTIVITY_CAPABILITY, ADMITTED_HISTORY_CAPABILITY, MAPPING_REPAIR_CAPABILITY})
+                        ADMITTED_METADATA_CAPABILITY, ADMITTED_ACTIVITY_CAPABILITY, ADMITTED_HISTORY_CAPABILITY, MAPPING_REPAIR_CAPABILITY, PEOPLE_RECOVERY_CAPABILITY})
 MAX_JSON_BYTES = 1024 * 1024
 MAX_ENTRIES = 4096
 MAX_AGE_SECONDS = 300
@@ -220,6 +221,10 @@ def validate_state(state):
                                 "mapping_repair_unsupported_count"}
     if mapping_repair_fields.intersection(state):
         fields |= mapping_repair_fields
+    people_recovery_fields = {"people_recovery_binding_count", "people_recovery_schema_present",
+                                "people_recovery_unsupported_count"}
+    if people_recovery_fields.intersection(state):
+        fields |= people_recovery_fields
     object_fields(state, fields)
     if (type(state.get("activity_schema_present", False)) is not bool
             or not isinstance(state.get("activity_binding_count", "0"), str)
@@ -322,6 +327,16 @@ def validate_state(state):
             or int(mapping_repair_unsupported) > int(mapping_repair_count)
             or (not state.get("mapping_repair_schema_present", False)
                 and int(mapping_repair_count) != 0)):
+        fail("database_evidence_invalid")
+    people_recovery_count = state.get("people_recovery_binding_count", "0")
+    people_recovery_unsupported = state.get("people_recovery_unsupported_count", "0")
+    if (type(state.get("people_recovery_schema_present", False)) is not bool
+            or any(not isinstance(value, str)
+                   or re.fullmatch(r"0|[1-9][0-9]{0,19}", value) is None
+                   for value in [people_recovery_count, people_recovery_unsupported])
+            or int(people_recovery_unsupported) > int(people_recovery_count)
+            or (not state.get("people_recovery_schema_present", False)
+                and int(people_recovery_count) != 0)):
         fail("database_evidence_invalid")
     count = state["binding_count"]
     if (type(state["schema_present"]) is not bool
@@ -500,6 +515,13 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
         reasons.add("mapping_repair_binding_requires_compatible_artifacts")
     if int(state.get("mapping_repair_unsupported_count", "0")) > 0:
         reasons.add("mapping_repair_engine_unsupported")
+    people_recovery_missing = any(item["role"] in {"api", "worker"}
+                                 and PEOPLE_RECOVERY_CAPABILITY not in item["capabilities"]
+                                 for item in selected + processes)
+    if int(state.get("people_recovery_binding_count", "0")) > 0 and people_recovery_missing:
+        reasons.add("people_recovery_binding_requires_compatible_artifacts")
+    if int(state.get("people_recovery_unsupported_count", "0")) > 0:
+        reasons.add("people_recovery_engine_unsupported")
     launch_allowed = not reasons
     confirmation_reasons = set(reasons)
     if not state["schema_present"]:
@@ -590,6 +612,13 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
         mapping_repair_reasons.add("mapping_repair_candidate_missing")
     if not state.get("mapping_repair_schema_present", False):
         mapping_repair_reasons.add("mapping_repair_schema_missing")
+    people_recovery_reasons = set(confirmation_reasons)
+    if people_recovery_missing:
+        people_recovery_reasons.add("people_recovery_capability_missing")
+    if not any(item["role"] in {"api", "worker"} for item in selected):
+        people_recovery_reasons.add("people_recovery_candidate_missing")
+    if not state.get("people_recovery_schema_present", False):
+        people_recovery_reasons.add("people_recovery_schema_missing")
     return {
         "version": 1,
         "gate_version": GATE,
@@ -642,12 +671,16 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
         "admitted_activity_unsupported_count": state.get("admitted_activity_unsupported_count", "0"),
         "admitted_history_confirmation_ready": not admitted_history_reasons,
         "mapping_repair_confirmation_ready": not mapping_repair_reasons,
+        "people_recovery_confirmation_ready": not people_recovery_reasons,
         "admitted_history_schema_present": state.get("admitted_history_schema_present", False),
         "mapping_repair_schema_present": state.get("mapping_repair_schema_present", False),
+        "people_recovery_schema_present": state.get("people_recovery_schema_present", False),
         "admitted_history_binding_count": state.get("admitted_history_binding_count", "0"),
         "mapping_repair_binding_count": state.get("mapping_repair_binding_count", "0"),
+        "people_recovery_binding_count": state.get("people_recovery_binding_count", "0"),
         "admitted_history_unsupported_count": state.get("admitted_history_unsupported_count", "0"),
         "mapping_repair_unsupported_count": state.get("mapping_repair_unsupported_count", "0"),
+        "people_recovery_unsupported_count": state.get("people_recovery_unsupported_count", "0"),
         "launch_reasons": sorted(reasons),
         "confirmation_reasons": sorted(confirmation_reasons),
         "metadata_confirmation_reasons": sorted(metadata_reasons),
@@ -661,6 +694,7 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
         "admitted_activity_confirmation_reasons": sorted(admitted_activity_reasons),
         "admitted_history_confirmation_reasons": sorted(admitted_history_reasons),
         "mapping_repair_confirmation_reasons": sorted(mapping_repair_reasons),
+        "people_recovery_confirmation_reasons": sorted(people_recovery_reasons),
         "admitted_people_refresh_confirmation_reasons": sorted(admitted_people_refresh_reasons),
     }
 
@@ -825,7 +859,7 @@ def database_state():
     state["people_admission_binding_count"] = "0"
     state["people_admission_unsupported_count"] = "0"
     if people_admission["present"]:
-        observed = sql_json("SELECT json_build_object('count',count(*)::text,'unsupported_count',count(*) FILTER (WHERE engine_version<>'fub-people-admission-v1')::text) FROM public.migration_people_admission")
+        observed = sql_json("SELECT json_build_object('count',count(*)::text,'unsupported_count',count(*) FILTER (WHERE engine_version NOT IN ('fub-people-admission-v1','fub-people-recovery-v1'))::text) FROM public.migration_people_admission")
         object_fields(observed, {"count", "unsupported_count"})
         state["people_admission_binding_count"] = observed["count"]
         state["people_admission_unsupported_count"] = observed["unsupported_count"]
@@ -916,6 +950,23 @@ def database_state():
         object_fields(observed, {"count", "unsupported_count"})
         state["mapping_repair_binding_count"] = observed["count"]
         state["mapping_repair_unsupported_count"] = observed["unsupported_count"]
+    people_recovery_schema_path = Path(__file__).resolve().parents[1] / "backend/crates/crm-app/src/auth/people_recovery_schema.sql"
+    try:
+        people_recovery_schema = people_recovery_schema_path.read_text(encoding="utf-8").strip()
+    except OSError:
+        fail("people_recovery_schema_inventory_unavailable")
+    people_recovery = sql_json("SELECT json_build_object('present',(to_regclass('public.migration_people_recovery_requirement') IS NOT NULL OR to_regprocedure('public.crm_people_recovery_owned_write()') IS NOT NULL),'compatible',(" + people_recovery_schema + "))")
+    object_fields(people_recovery, {"present", "compatible"})
+    if any(type(people_recovery[k]) is not bool for k in ["present", "compatible"]) or people_recovery["present"] != people_recovery["compatible"]:
+        fail("people_recovery_schema_incomplete")
+    state["people_recovery_schema_present"] = people_recovery["present"]
+    state["people_recovery_binding_count"] = "0"
+    state["people_recovery_unsupported_count"] = "0"
+    if people_recovery["present"]:
+        observed = sql_json("SELECT json_build_object('count',count(*)::text,'unsupported_count',count(*) FILTER (WHERE capability<>'fub-people-recovery-v1')::text) FROM public.migration_people_recovery_requirement")
+        object_fields(observed, {"count", "unsupported_count"})
+        state["people_recovery_binding_count"] = observed["count"]
+        state["people_recovery_unsupported_count"] = observed["unsupported_count"]
     return state
 
 
@@ -951,6 +1002,7 @@ def main(argv=None):
                           "admitted_activity_confirmation_ready": False,
                           "admitted_history_confirmation_ready": False,
                           "mapping_repair_confirmation_ready": False,
+                          "people_recovery_confirmation_ready": False,
                           "error": str(error)}, sort_keys=True))
         return 2
 

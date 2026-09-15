@@ -322,6 +322,13 @@ function coverageLabel(check: FubAssessmentCheck) {
 function checkStatusLabel(check: FubAssessmentCheck) {
   return PROFILE_CHECKS.has(check.check_key) ? statusLabel(check.state) : 'Not checked'
 }
+const recoveryPanels={core:ref<InstanceType<typeof AdmittedPeopleRefreshPanel>>(),metadata:ref<InstanceType<typeof AdmittedMetadataImportPanel>>(),activity:ref<InstanceType<typeof AdmittedActivityImportPanel>>(),history:ref<InstanceType<typeof AdmittedHistoryImportPanel>>()}
+const recoveryHandoffError=ref('')
+async function openRecoveryStep(step:import('../api/peopleAdmissions').RecoveryFollowOn){
+ const panel=recoveryPanels[step.family as keyof typeof recoveryPanels]?.value
+ if(await panel?.openRecovery(step).catch(()=>false)){recoveryHandoffError.value='';document.getElementById(`recovery-${step.family}`)?.scrollIntoView({behavior:'smooth',block:'start'})}
+ else recoveryHandoffError.value='Finish or resolve the outstanding request in that import step before switching its selected group.'
+}
 </script>
 
 <template>
@@ -484,8 +491,16 @@ function checkStatusLabel(check: FubAssessmentCheck) {
     <PeopleImportPanel :refresh-workspace="refreshWorkspace" />
     <MetadataImportPanel :refresh-workspace="refreshWorkspace" />
     <ActivityImportPanel :refresh-workspace="refreshWorkspace" />
-    <AdmittedActivityImportPanel :refresh-workspace="refreshWorkspace" />
-    <AdmittedHistoryImportPanel :refresh-workspace="refreshWorkspace" />
+    <AdmittedActivityImportPanel
+      id="recovery-activity"
+      :ref="el=>recoveryPanels.activity.value=el as InstanceType<typeof AdmittedActivityImportPanel>"
+      :refresh-workspace="refreshWorkspace"
+    />
+    <AdmittedHistoryImportPanel
+      id="recovery-history"
+      :ref="el=>recoveryPanels.history.value=el as InstanceType<typeof AdmittedHistoryImportPanel>"
+      :refresh-workspace="refreshWorkspace"
+    />
     <HistoryCapturePanel
       :connection="connection"
       :refresh-workspace="refreshWorkspace"
@@ -505,17 +520,30 @@ function checkStatusLabel(check: FubAssessmentCheck) {
       @review-snapshot="openCoreSnapshot"
     />
 
+    <p
+      v-if="recoveryHandoffError"
+      role="alert"
+    >
+      {{ recoveryHandoffError }}
+    </p>
     <PeopleAdmissionPanel
       :refresh-workspace="refreshWorkspace"
+      @follow-on="openRecoveryStep"
       @review-snapshot="openCoreSnapshot"
     />
 
     <AdmittedPeopleRefreshPanel
+      id="recovery-core"
+      :ref="el=>recoveryPanels.core.value=el as InstanceType<typeof AdmittedPeopleRefreshPanel>"
       :refresh-workspace="refreshWorkspace"
       @review-snapshot="openCoreSnapshot"
     />
 
-    <AdmittedMetadataImportPanel @review-snapshot="openCoreSnapshot" />
+    <AdmittedMetadataImportPanel
+      id="recovery-metadata"
+      :ref="el=>recoveryPanels.metadata.value=el as InstanceType<typeof AdmittedMetadataImportPanel>"
+      @review-snapshot="openCoreSnapshot"
+    />
 
     <CoreSnapshotPanel
       v-if="canRead"

@@ -146,7 +146,7 @@ async fn admitted_activity_freezes_terminal_cohort_full_source_and_global_owner(
     )
     .await
     .expect("mapped plan is ready");
-    admitted_activity::confirm(
+    let confirmed = admitted_activity::confirm(
         &fixture.pool,
         &fixture.key,
         &fixture.ctx,
@@ -169,12 +169,47 @@ async fn admitted_activity_freezes_terminal_cohort_full_source_and_global_owner(
     )
     .await
     .expect("confirm admitted activity");
+    let cancelled = admitted_activity::action(
+        &fixture.pool,
+        &fixture.key,
+        &fixture.ctx,
+        root,
+        admitted_activity::AdmittedActivityAction {
+            request_id: Uuid::new_v4(),
+            expected_revision: confirmed["import"]["revision"]
+                .as_str()
+                .expect("revision")
+                .into(),
+        },
+        false,
+        &fixture.policy,
+    )
+    .await
+    .expect("cancel the confirmed attempt before a worker unit settles");
+    let successor = admitted_activity::create_remainder(
+        &fixture.pool,
+        &fixture.key,
+        &fixture.ctx,
+        root,
+        admitted_activity::CreateAdmittedActivityRemainder {
+            request_id: Uuid::new_v4(),
+            expected_revision: cancelled["import"]["revision"]
+                .as_str()
+                .expect("revision")
+                .into(),
+        },
+        &fixture.policy,
+    )
+    .await
+    .expect("construct exact never-settled successor");
+    let successor_id = uuid(&successor["import"]["id"]);
+    let successor_plan = uuid(&successor["import"]["latest_plan"]["id"]);
     drain(&fixture).await;
     let completed = admitted_activity::detail(
         &fixture.pool,
         &fixture.key,
         &fixture.ctx,
-        root,
+        successor_id,
         &fixture.policy,
     )
     .await
@@ -182,7 +217,7 @@ async fn admitted_activity_freezes_terminal_cohort_full_source_and_global_owner(
     assert_eq!(completed["state"], "completed");
     assert_eq!(completed["activity_revision"], "2");
     let admitted_identities: i64 = sqlx::query_scalar("SELECT count(*) FROM migration_activity_identity WHERE organization_id=$1 AND admitted_import_id=$2 AND admitted_plan_id=$3 AND import_id IS NULL AND plan_id IS NULL AND manifest_id IS NULL")
-        .bind(fixture.org).bind(root).bind(plan).fetch_one(&fixture.pool).await.expect("admitted identity owners");
+        .bind(fixture.org).bind(successor_id).bind(successor_plan).fetch_one(&fixture.pool).await.expect("admitted identity owners");
     assert_eq!(
         admitted_identities, 2,
         "native inserts own the global identities exclusively"

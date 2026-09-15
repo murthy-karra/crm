@@ -244,7 +244,11 @@ final class FieldFlowTests: XCTestCase {
         app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: false); app.buttons["sync"].tap()
         XCTAssertTrue(app.staticTexts["100 people available offline"].waitForExistence(timeout: 240))
         app.tabBars.buttons["Settings"].tap(); setSwitch(app.switches["offlineToggle"], to: true)
-        app.buttons["qaPrepareMetadataConflict"].tap()
+        let prepare = app.buttons["qaPrepareMetadataConflict"]
+        XCTAssertTrue(prepare.waitForExistence(timeout: 10))
+        expectation(for: NSPredicate(format: "isEnabled == 1"), evaluatedWith: prepare)
+        waitForExpectations(timeout: 30)
+        prepare.tap()
         XCTAssertTrue(app.staticTexts["qaMetadataConflictStage"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.staticTexts["qaMetadataConflictStage"].label, "local metadata conflict ready")
         app.tabBars.buttons["Saved work"].tap()
@@ -261,6 +265,7 @@ final class FieldFlowTests: XCTestCase {
         let revised = app.buttons["Prepare revised proposal against current values"]
         XCTAssertTrue(revised.waitForExistence(timeout: 10)); revised.tap()
         XCTAssertTrue(app.staticTexts["metadataDraftStatus"].label.contains("Revised proposal saved on device"))
+        for _ in 0..<6 where !app.buttons["saveMetadata"].exists { app.swipeUp() }
         XCTAssertTrue(app.buttons["saveMetadata"].exists, "The reset editor retains the revised proposal and controls")
         let saved = XCTAttachment(screenshot: app.screenshot()); saved.name = "mobile006-revised-metadata-proposal"; saved.lifetime = .keepAlways; add(saved)
     }

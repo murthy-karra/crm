@@ -100,16 +100,23 @@ struct StageProposal: Identifiable {
     /// no second server mutation is needed to verify that the UI renders the
     /// three protected values and saves a revised proposal.
     func prepareQAMetadataConflictReview() {
-        guard let store,
-              let person = try? store.activePeople().first?.person,
-              let baseline = try? store.editableMetadata(person: person) else { qaMetadataConflictStage = "sealed metadata unavailable"; return }
-        let selected = Set(baseline["tags"].list.map { $0["id"].text })
-        guard let candidate = baseline["catalog_tags"].list.first(where: { !selected.contains($0["id"].text) }) ?? baseline["catalog_tags"].list.first else {
+        guard let store else { qaMetadataConflictStage = "protected store unavailable"; return }
+        do {
+            let people = try store.activePeople()
+            guard let selected = people.lazy.compactMap({ bundle -> (String, JSON)? in
+                guard let baseline = try? store.editableMetadata(person: bundle.person) else { return nil }
+                return (bundle.person, baseline)
+            }).first else {
+                qaMetadataConflictStage = "sealed metadata unavailable people=" + String(people.count) + " active=" + (try store.meta("active") ?? "none")
+                return
+            }
+            let (person, baseline) = selected
+        let selectedTags = Set(baseline["tags"].list.map { $0["id"].text })
+        guard let candidate = baseline["catalog_tags"].list.first(where: { !selectedTags.contains($0["id"].text) }) ?? baseline["catalog_tags"].list.first else {
             qaMetadataConflictStage = "catalog has no tag"; return
         }
-        let adding = !selected.contains(candidate["id"].text)
+        let adding = !selectedTags.contains(candidate["id"].text)
         let action: JSON = adding ? .object(["kind": .s("add_tag"), "tag_id": .s(candidate["id"].text)]) : .object(["kind": .s("remove_tag"), "tag_id": .s(candidate["id"].text)])
-        do {
             let draft = try store.saveDraft(Draft(id: UUID().uuidString.lowercased(), person: person, kind: "update_person_metadata", revision: 0,
                                                   expectedRevision: baseline["metadata_revision"].text, expectedCatalogRevision: baseline["catalog_revision"].text,
                                                   baseline: baseline, proposal: .object(["actions": .array([action])])) )

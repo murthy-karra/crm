@@ -130,6 +130,15 @@ class Binding(
             (0 until capabilities.length()).any { capabilities.getString(it) == wanted }
         }
     }
+
+    /** Metadata is deliberately an all-or-nothing feature. Older bootstrap responses remain
+     * readable, but can never make an omitted tag/value section look like an empty baseline. */
+    fun supportsMetadata(): Boolean {
+        val capabilities = JSONObject(bootstrap).getJSONArray("capabilities")
+        return listOf("update_person_metadata", "metadata_revisions", "metadata_catalog").all { wanted ->
+            (0 until capabilities.length()).any { capabilities.getString(it) == wanted }
+        }
+    }
     companion object {
         fun parse(value: JSONObject, actor: String, org: String, installation: String): Binding {
             if (value.getString("protocol") != PROTOCOL)
@@ -176,6 +185,10 @@ fun errorMessage(code: String): String =
             "The reported contact time is later than the server clock. Correct the time to create a new saved contact; the original is preserved."
         "invalid_stage" -> "That stage is no longer available. Choose a stage from the current catalog in a new saved proposal."
         "invalid_person_details" -> "Those profile changes could not be accepted. The saved proposal remains available for review."
+        "catalog_revision_conflict" ->
+            "The tag or field catalog changed. Review the current catalog before preparing a new saved edit."
+        "invalid_metadata" ->
+            "A selected tag, field, or choice is no longer available. The saved proposal remains available for review."
         "dependency_pending" -> "Waiting for the original task creation."
         "generation_changed",
         "generation_expired" ->

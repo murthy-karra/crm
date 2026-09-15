@@ -59,6 +59,9 @@ android {
         mobile005qa { dimension 'origin'; applicationId 'org.crm.field.mobile005qa'; testApplicationId 'org.crm.field.mobile005qa.test'; buildConfigField 'String','API_BASE','"http://10.0.2.2:3103"'; buildConfigField 'String','VAULT_NAMESPACE','"vaultfield.mobile005qa"' }
         mobile005reviewupgradeqa { dimension 'origin'; applicationId 'org.crm.field.mobile005reviewupgradeqa'; testApplicationId 'org.crm.field.mobile005reviewupgradeqa.test'; buildConfigField 'String','API_BASE','"http://10.0.2.2:3103"'; buildConfigField 'String','VAULT_NAMESPACE','"vaultfield.mobile005reviewupgradeqa"' }
         mobile005upgradeqa { dimension 'origin'; applicationId 'org.crm.field.mobile005upgradeqa'; testApplicationId 'org.crm.field.mobile005upgradeqa.test'; buildConfigField 'String','API_BASE','"http://10.0.2.2:3103"'; buildConfigField 'String','VAULT_NAMESPACE','"vaultfield.mobile005upgradeqa"' }
+        // Mobile006 is an isolated package, encrypted vault and API listener. Production/debug
+        // defaults remain untouched for the retained demo and historical proof stores.
+        mobile006qa { dimension 'origin'; applicationId 'org.crm.field.mobile006qa'; testApplicationId 'org.crm.field.mobile006qa.test'; buildConfigField 'String','API_BASE','"http://10.0.2.2:3106"'; buildConfigField 'String','VAULT_NAMESPACE','"vaultfield.mobile006qa"' }
     }
     buildFeatures { compose = true; buildConfig = true }
     buildTypes {
@@ -79,6 +82,9 @@ if (providers.gradleProperty('CRM_MOBILE005_ANDROID_BUILD_DIR').isPresent()) {
     layout.buildDirectory.set(file(providers.gradleProperty('CRM_MOBILE003_ANDROID_BUILD_DIR').get()))
 } else if (providers.gradleProperty('CRM_MOBILE002_ANDROID_BUILD_DIR').isPresent()) {
     layout.buildDirectory.set(file(providers.gradleProperty('CRM_MOBILE002_ANDROID_BUILD_DIR').get()))
+}
+if (providers.gradleProperty('CRM_MOBILE006_ANDROID_BUILD_DIR').isPresent()) {
+    layout.buildDirectory.set(file(providers.gradleProperty('CRM_MOBILE006_ANDROID_BUILD_DIR').get()))
 }
 dependencyLocking { lockAllConfigurations() }
 ksp { arg('room.schemaLocation', "$projectDir/schemas") }

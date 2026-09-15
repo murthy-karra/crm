@@ -10,6 +10,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.UUID
 
 class FieldUi(
     val locked: Boolean = true,
@@ -36,6 +37,12 @@ class FieldUi(
     val profileDrafts: List<ProfileDraftRow> = emptyList(),
     val profileContexts: List<ProfileContextRow> = emptyList(),
     val profileEditingEnabled: Boolean = false,
+    val metadataDrafts: List<MetadataDraftRow> = emptyList(),
+    val metadataContexts: List<MetadataContextRow> = emptyList(),
+    val metadataTags: List<MetadataTagRow> = emptyList(),
+    val metadataFields: List<MetadataFieldRow> = emptyList(),
+    val metadataOptions: List<MetadataOptionRow> = emptyList(),
+    val metadataEditingEnabled: Boolean = false,
 )
 
 class ActiveAccount(
@@ -423,6 +430,36 @@ class FieldRepository(
         check(account); account.store.binding.supportsPersonDetails() && account.store.dao.person(selected ?: return@withContext false)?.let(account.store::detailsQualified) == true
     }
 
+    suspend fun metadataDraft(id: String): MetadataDraftRow? = withContext(Dispatchers.IO) {
+        val account = active ?: throw AccessLocked(); check(account)
+        account.store.dao.metadataDraft(id)?.also { if (account.store.dao.person(it.person) == null) throw AccessLocked() }
+    }
+
+    suspend fun saveMetadataDraft(id: String, person: String, proposal: JSONArray, revision: Long = 0, baseline: JSONObject? = null): MetadataDraftRow = withContext(Dispatchers.IO) {
+        val account = active ?: throw AccessLocked(); check(account)
+        if (!account.store.binding.supportsMetadata()) throw ApiFailure(409, "metadata_unsupported")
+        try { account.store.saveMetadataDraft(id, person, proposal, revision, baseline).also { refreshView("Tag and field proposal saved on this device") } }
+        catch (error: Exception) { if (error is AccessLocked || error is ApiFailure) throw error; throw StorageFailure() }
+    }
+
+    suspend fun submitMetadataDraft(id: String, revision: Long): OperationRow = withContext(Dispatchers.IO) {
+        val account = active ?: throw AccessLocked(); check(account)
+        if (!account.store.binding.supportsMetadata()) throw ApiFailure(409, "metadata_unsupported")
+        account.store.submitMetadataDraft(id, revision).also { refreshView("Metadata update saved on this device. Waiting for server acceptance."); FieldSyncJob.schedule(context) }
+    }
+
+    suspend fun metadataEditingSupported(): Boolean = withContext(Dispatchers.IO) { active?.store?.binding?.supportsMetadata() == true }
+
+    suspend fun reviseMetadataConflict(operation: String): MetadataDraftRow = withContext(Dispatchers.IO) {
+        val account = active ?: throw AccessLocked(); check(account)
+        account.store.reviseMetadataConflict(operation, UUID.randomUUID().toString()).also { refreshView("Review the refreshed metadata catalog and proposal") }
+    }
+
+    suspend fun discardMetadataConflict(operation: String) = withContext(Dispatchers.IO) {
+        val account = active ?: throw AccessLocked(); check(account)
+        account.store.discardMetadataConflict(operation); refreshView("Saved metadata proposal discarded; current values remain unchanged")
+    }
+
     suspend fun reviseProfileConflict(operation: String): ProfileDraftRow = withContext(Dispatchers.IO) {
         val account = active ?: throw AccessLocked(); check(account)
         account.store.reviseProfileConflict(operation, java.util.UUID.randomUUID().toString()).also { refreshView("Review the new profile proposal") }
@@ -660,7 +697,7 @@ class FieldRepository(
                     check(account)
                     if (authorized.context != account.store.binding.context) throw ProtocolFailure()
                 }
-                if (error is ApiFailure && error.code == "revision_conflict" && row.kind in setOf("edit_note", "update_task", "change_person_stage", "update_person_details")) {
+                if (error is ApiFailure && error.code in setOf("revision_conflict", "catalog_revision_conflict") && row.kind in setOf("edit_note", "update_task", "change_person_stage", "update_person_details", "update_person_metadata")) {
                     // The conflict response is deliberately content-free.  Fetching comparison
                     // data is a separate authorized, identity-fenced request; a failure leaves
                     // the immutable proposal in attention instead of inventing a new baseline.
@@ -673,10 +710,12 @@ class FieldRepository(
                             else if (row.kind == "update_task")
                                 account.api.currentTask(account.store.binding, row.person, payload.getString("task_id"))
                             else if (row.kind == "change_person_stage") account.api.currentStage(account.store.binding, row.person)
-                            else currentProfile(account, row)
+                            else if (row.kind == "update_person_details") currentProfile(account, row)
+                            else currentMetadata(account, row)
                         check(account)
                         if (row.kind == "change_person_stage") account.store.recordCurrentStage(row.id, current)
                         else if (row.kind == "update_person_details") account.store.recordCurrentProfile(row.id, current)
+                        else if (row.kind == "update_person_metadata") account.store.recordCurrentMetadata(row.id, current)
                         else account.store.recordCurrent(row.id, current)
                     } catch (_: Exception) {
                         // The explicit conflict remains reviewable without a guessed current version.
@@ -754,6 +793,12 @@ class FieldRepository(
         return requireNotNull(output).put("items", all).put("next_cursor", JSONObject.NULL).put("complete", true)
     }
 
+    internal suspend fun currentMetadata(account: ActiveAccount, row: OperationRow): JSONObject {
+        val response = account.api.call("GET", "/api/mobile/v1/people/${uuid(row.person)}/metadata", account.store.binding.context, maximumBytes = 131_072)
+        if (response.getString("context_id") != account.store.binding.context || response.getString("person_id") != row.person || !response.getBoolean("complete")) throw ProtocolFailure()
+        return response
+    }
+
     private suspend fun download(account: ActiveAccount) {
         val store = account.store
         val dao = store.dao
@@ -777,6 +822,7 @@ class FieldRepository(
                             "installation_id" to store.binding.installation,
                             "pinned_person_ids" to JSONArray(dao.pins()),
                             "include_stage_catalog" to store.binding.supportsStageChanges(),
+                            "include_metadata" to store.binding.supportsMetadata(),
                         )
                         .toString(),
                 )
@@ -804,6 +850,13 @@ class FieldRepository(
                 check(account); store.stageCatalogPage(id, cursor, page)
             }
         }
+        if (generation.has("metadata")) {
+            for (section in listOf("tags", "fields", "options")) while (true) {
+                val cursor = store.nextMetadataCatalogPage(id, section) ?: break
+                val page = account.api.page("/api/mobile/v1/reconciliations/$id/metadata/catalog/$section", store.binding, cursor, 524_288)
+                check(account); store.metadataCatalogPage(id, section, cursor, page)
+            }
+        }
         for ((index, item) in manifest.withIndex()) {
             check(account)
             if (
@@ -815,6 +868,7 @@ class FieldRepository(
                         // is current. Only a server that advertises Mobile005 details must fetch
                         // the complete contact traversal to qualify that new baseline.
                         (!store.binding.supportsPersonDetails() || store.detailsQualified(it))
+                        && (!store.binding.supportsMetadata() || store.metadataQualified(it))
                 } == true
             ) continue
             if (vault.root.usableSpace < 16 * 1024 * 1024) throw StorageFailure()
@@ -830,6 +884,12 @@ class FieldRepository(
                     check(account)
                     store.stagePage(id, item.person, section, cursor, page)
                 }
+            }
+                if (generation.has("metadata")) {
+                val cursor = store.nextPage(id, item.person, "metadata") ?: ""
+                if (cursor.isNotEmpty()) throw ProtocolFailure()
+                val page = account.api.page("/api/mobile/v1/reconciliations/$id/people/${item.person}/metadata", store.binding, "", 524_288)
+                check(account); store.stagePage(id, item.person, "metadata", "", page)
             }
             if (index % 10 == 0)
                 refreshView(
@@ -878,6 +938,8 @@ class FieldRepository(
                 val stageContexts = dao.stageContexts().map { if (it.person in visibleIds) it else it.copy(baseline = "", proposal = "", current = "") }
                 val profiles = dao.profileDrafts().map { if (it.person in visibleIds) it else it.copy(baseline = "", proposal = "") }
                 val profileContexts = dao.profileContexts().map { if (it.person in visibleIds) it else it.copy(baseline = "", proposal = "", current = "") }
+                val metadataDrafts = dao.metadataDrafts().map { if (it.person in visibleIds) it else it.copy(baseline = "", proposal = "") }
+                val metadataContexts = dao.metadataContexts().map { if (it.person in visibleIds) it else it.copy(baseline = "", proposal = "", current = "") }
                 registry.put(
                     "pending",
                     ops.count { it.status != "accepted" } +
@@ -912,6 +974,12 @@ class FieldRepository(
                         profiles,
                         profileContexts,
                         account.store.binding.supportsPersonDetails(),
+                        metadataDrafts,
+                        metadataContexts,
+                        dao.metadataTags(),
+                        dao.metadataFields(),
+                        dao.allMetadataOptions(),
+                        account.store.binding.supportsMetadata(),
                     )
                 if (active === account) mutable.value = result
             } catch (_: Exception) {

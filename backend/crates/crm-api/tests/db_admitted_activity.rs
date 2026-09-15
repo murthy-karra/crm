@@ -647,6 +647,109 @@ async fn admitted_activity_authority_loss_two_workers_and_exact_remainder_replay
 
 #[sqlx::test]
 #[ignore = "requires isolated PostgreSQL migrator"]
+async fn admitted_activity_remainder_skips_settled_manifest_one_checkpoint_at_a_time(
+    migrator: PgPool,
+) {
+    let (f, _, root, ready) = prepared(&migrator, 1).await;
+    confirm_ready(&f, root, &ready).await;
+    assert!(
+        admitted_activity_worker::run_once(&f.pool, &f.key, &f.policy)
+            .await
+            .unwrap()
+    );
+    let settled: Uuid = sqlx::query_scalar(
+        "SELECT manifest_id FROM migration_admitted_activity_result WHERE import_id=$1",
+    )
+    .bind(root)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    let cancelled = admitted_activity::action(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        root,
+        action(&current(&f, root).await),
+        false,
+        &f.policy,
+    )
+    .await
+    .unwrap();
+    assert_eq!(cancelled["import"]["actions"]["remainder"], true);
+    let child = admitted_activity::create_remainder(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        root,
+        admitted_activity::CreateAdmittedActivityRemainder {
+            request_id: Uuid::new_v4(),
+            expected_revision: cancelled["import"]["revision"].as_str().unwrap().into(),
+        },
+        &f.policy,
+    )
+    .await
+    .unwrap();
+    let child_id = uuid(&child["import"]["id"]);
+    for _ in 0..100 {
+        if current(&f, child_id).await["latest_plan"]["phase"] == "manifests" {
+            break;
+        }
+        assert!(
+            admitted_activity_worker::run_once(&f.pool, &f.key, &f.policy)
+                .await
+                .unwrap()
+        );
+    }
+    assert_eq!(
+        current(&f, child_id).await["latest_plan"]["phase"],
+        "manifests"
+    );
+    assert!(
+        admitted_activity_worker::run_once(&f.pool, &f.key, &f.policy)
+            .await
+            .unwrap()
+    );
+    let checkpoint: Uuid = sqlx::query_scalar(
+        "SELECT checkpoint_id FROM migration_admitted_activity_plan WHERE import_id=$1",
+    )
+    .bind(child_id)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        checkpoint, settled,
+        "one already-settled row still consumes one bounded checkpoint unit"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_admitted_activity_manifest WHERE import_id=$1"
+        )
+        .bind(child_id)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap(),
+        0
+    );
+    drain(&f).await;
+    let done = current(&f, child_id).await;
+    assert_eq!(done["state"], "completed");
+    let applied = done["counts"]["notes"]["applied"]
+        .as_str()
+        .unwrap()
+        .parse::<i64>()
+        .unwrap()
+        + done["counts"]["tasks"]["applied"]
+            .as_str()
+            .unwrap()
+            .parse::<i64>()
+            .unwrap();
+    assert_eq!(applied, 1);
+    assert_bytes(&f, root).await;
+    assert_bytes(&f, child_id).await;
+}
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
 async fn admitted_activity_partial_remainder_copy_cancel_preserves_complete_source(
     migrator: PgPool,
 ) {

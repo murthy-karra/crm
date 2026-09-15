@@ -48,9 +48,7 @@ pub async fn create(
         let (source_import, old_plan) = copy_source(&old)?;
         let source = s::run(&mut tx, ctx.organization_id, source_import).await?;
         let base = s::plan(&mut tx, ctx.organization_id, source_import, old_plan).await?;
-        let remaining: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM migration_admitted_activity_manifest m WHERE m.plan_id=$1 AND m.organization_id=$2 AND m.disposition<>'excluded' AND NOT EXISTS(SELECT 1 FROM migration_admitted_activity_result r WHERE r.import_id=$3 AND r.manifest_id=m.id AND r.organization_id=m.organization_id))")
-            .bind(old_plan).bind(ctx.organization_id.0).bind(source_import).fetch_one(&mut *tx).await?;
-        if !remaining { return Err(MigrationError::ImportConflict); }
+        if !has_pending(&source)? { return Err(MigrationError::ImportConflict); }
         let id = Uuid::new_v4();
         let plan = Uuid::new_v4();
         let snapshot: Uuid = old.get("snapshot_id");
@@ -70,6 +68,14 @@ pub async fn create(
         s::receipt(&mut tx,key,ctx,"remainder",cmd.request_id,&(predecessor,&cmd),id,snapshot,plan,&mut response).await?;
         tx.commit().await?; Ok(response)
     }).await
+}
+
+/// Counts are committed atomically with every native result/checkpoint. The
+/// canonical cancelled source is stable, including while a successor copy is
+/// incomplete. Availability never scans that source's manifest or result tail.
+pub(crate) fn has_pending(row: &sqlx::postgres::PgRow) -> Result<bool, MigrationError> {
+    let counts = Counts::load(row.get("counts"))?;
+    Ok(counts.notes.pending > 0 || counts.tasks.pending > 0)
 }
 
 /// A cancelled partial copy continues from its complete immutable source plan,
@@ -139,7 +145,7 @@ pub(crate) async fn copy_unit(
     let row=match phase.as_str() {
         "copying_choices" => sqlx::query("SELECT * FROM migration_admitted_activity_mapping WHERE plan_id=$1 AND organization_id=$2 AND id>$3 ORDER BY id LIMIT 1").bind(old_plan).bind(ctx.organization_id.0).bind(after).fetch_optional(&mut *conn).await?,
         "captures" => sqlx::query("SELECT * FROM migration_admitted_activity_source WHERE plan_id=$1 AND organization_id=$2 AND id>$3 ORDER BY id LIMIT 1").bind(old_plan).bind(ctx.organization_id.0).bind(after).fetch_optional(&mut *conn).await?,
-        "manifests" => sqlx::query("SELECT m.* FROM migration_admitted_activity_manifest m WHERE m.plan_id=$1 AND m.organization_id=$2 AND m.id>$3 AND NOT EXISTS(SELECT 1 FROM migration_admitted_activity_result r WHERE r.import_id=$4 AND r.manifest_id=m.id AND r.organization_id=m.organization_id) ORDER BY m.id LIMIT 1").bind(old_plan).bind(ctx.organization_id.0).bind(after).bind(source_import).fetch_optional(&mut *conn).await?,
+        "manifests" => sqlx::query("SELECT * FROM migration_admitted_activity_manifest WHERE plan_id=$1 AND organization_id=$2 AND id>$3 ORDER BY id LIMIT 1").bind(old_plan).bind(ctx.organization_id.0).bind(after).fetch_optional(&mut *conn).await?,
         _ => return Err(MigrationError::SourceNotEligible),
     };
     if let Some(row) = row {
@@ -193,6 +199,10 @@ pub(crate) async fn copy_unit(
                 )?;
                 sqlx::query("INSERT INTO migration_admitted_activity_source(id,plan_id,import_id,snapshot_id,organization_id,family,source_id,record_id,capture_id,capture_sequence,ordinal,stream,representation,semantic_hmac,negative,source_only_counts,nonce,ciphertext,source_person_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)").bind(new_id).bind(plan).bind(id).bind(snapshot).bind(ctx.organization_id.0).bind(row.get::<String,_>("family")).bind(row.get::<Option<String>,_>("source_id")).bind(row.get::<Option<Uuid>,_>("record_id")).bind(row.get::<Uuid,_>("capture_id")).bind(row.get::<i64,_>("capture_sequence")).bind(row.get::<i32,_>("ordinal")).bind(row.get::<String,_>("stream")).bind(row.get::<String,_>("representation")).bind(row.get::<Vec<u8>,_>("semantic_hmac")).bind(row.get::<bool,_>("negative")).bind(row.get::<Value,_>("source_only_counts")).bind(sealed.nonce.as_slice()).bind(sealed.ciphertext).bind(row.get::<Option<String>,_>("source_person_id")).execute(&mut *conn).await?;
             }
+            // Even a fully settled tail advances one checkpoint per unit. An
+            // anti-join inside LIMIT 1 could walk the whole tail in one unit.
+            "manifests" if sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM migration_admitted_activity_result WHERE import_id=$1 AND organization_id=$2 AND manifest_id=$3)")
+                .bind(source_import).bind(ctx.organization_id.0).bind(old_id).fetch_one(&mut *conn).await? => {}
             "manifests" => {
                 let mut counts = Counts::load(p.get("counts"))?;
                 let source_row:Uuid=sqlx::query_scalar("SELECT c.id FROM migration_admitted_activity_source a JOIN migration_admitted_activity_source c ON c.plan_id=$1 AND c.organization_id=a.organization_id AND c.capture_id=a.capture_id AND c.ordinal=a.ordinal WHERE a.id=$2 AND a.plan_id=$3 AND a.organization_id=$4").bind(plan).bind(row.get::<Uuid,_>("source_row_id")).bind(old_plan).bind(ctx.organization_id.0).fetch_optional(&mut *conn).await?.ok_or(MigrationError::SourceNotEligible)?;

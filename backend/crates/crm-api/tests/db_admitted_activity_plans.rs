@@ -283,13 +283,12 @@ async fn admitted_activity_hot_queries_25k_people_50_members(migrator: PgPool) {
     probe!(
         &mut r,
         &mut conn,
-        "remainder_availability",
-        ACTIONS,
-        "SELECT EXISTS(SELECT 1 FROM migration_admitted_activity_manifest m WHERE m.plan_id=$1",
+        "remainder_availability_source",
+        STORE,
+        "SELECT * FROM migration_admitted_activity_import WHERE id=$1",
         1,
-        plan,
-        org,
-        child
+        child,
+        org
     );
     probe!(&mut r,&mut conn,"selected_person_qualification",WORKER,"SELECT * FROM migration_admitted_activity_source WHERE plan_id=$1 AND organization_id=$2 AND family='people'",101,plan,org,"104");
     probe!(&mut r,&mut conn,"cohort_coverage",WORKER,"SELECT EXISTS(SELECT 1 FROM migration_admitted_activity_source s JOIN migration_people_admission_result ar",1,plan,org,"tasks","1024001",admission);
@@ -388,13 +387,50 @@ async fn admitted_activity_hot_queries_25k_people_50_members(migrator: PgPool) {
         &mut conn,
         "remainder_manifest",
         REMAINDER,
-        "SELECT m.* FROM migration_admitted_activity_manifest m WHERE",
+        "SELECT * FROM migration_admitted_activity_manifest WHERE",
         1,
         plan,
         org,
-        nil,
-        child
+        nil
     );
+    let last: Uuid = sqlx::query_scalar("SELECT id FROM migration_admitted_activity_manifest WHERE plan_id=$1 AND organization_id=$2 ORDER BY id DESC LIMIT 1")
+        .bind(plan).bind(org).fetch_one(&mut *conn).await.unwrap();
+    let penultimate: Uuid = sqlx::query_scalar("SELECT id FROM migration_admitted_activity_manifest WHERE plan_id=$1 AND organization_id=$2 ORDER BY id DESC OFFSET 1 LIMIT 1")
+        .bind(plan).bind(org).fetch_one(&mut *conn).await.unwrap();
+    let settled: Uuid = sqlx::query_scalar("SELECT manifest_id FROM migration_admitted_activity_result WHERE import_id=$1 AND organization_id=$2 LIMIT 1")
+        .bind(child).bind(org).fetch_one(&mut *conn).await.unwrap();
+    for (label, after) in [
+        ("remainder_manifest_late", penultimate),
+        ("remainder_manifest_empty", last),
+    ] {
+        probe!(
+            &mut r,
+            &mut conn,
+            label,
+            REMAINDER,
+            "SELECT * FROM migration_admitted_activity_manifest WHERE",
+            1,
+            plan,
+            org,
+            after
+        );
+    }
+    for (label, manifest) in [
+        ("remainder_result_present", settled),
+        ("remainder_result_absent", Uuid::new_v4()),
+    ] {
+        probe!(
+            &mut r,
+            &mut conn,
+            label,
+            REMAINDER,
+            "SELECT EXISTS(SELECT 1 FROM migration_admitted_activity_result WHERE import_id=$1",
+            1,
+            child,
+            org,
+            manifest
+        );
+    }
     for (label, prefix) in [
         (
             "records_page",

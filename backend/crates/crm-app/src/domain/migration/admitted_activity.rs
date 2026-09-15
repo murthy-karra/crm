@@ -233,19 +233,23 @@ pub(crate) async fn view(
     } else {
         (id, latest)
     };
-    let remainder_available: bool = state == "cancelled"
+    let remainder_available: bool = if state == "cancelled"
         && confirmed.is_some()
         && !sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM migration_admitted_activity_import WHERE predecessor_import_id=$1 AND organization_id=$2)")
             .bind(id)
             .bind(org.0)
             .fetch_one(&mut *conn)
             .await?
-        && sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM migration_admitted_activity_manifest m WHERE m.plan_id=$1 AND m.organization_id=$2 AND m.disposition<>'excluded' AND NOT EXISTS(SELECT 1 FROM migration_admitted_activity_result x WHERE x.import_id=$3 AND x.manifest_id=m.id AND x.organization_id=m.organization_id))")
-            .bind(remainder_source.1)
-            .bind(org.0)
-            .bind(remainder_source.0)
-            .fetch_one(&mut *conn)
-            .await?;
+    {
+        if remainder_source.0 == id {
+            super::admitted_activity_remainder::has_pending(r)?
+        } else {
+            let source = s::run(conn, org, remainder_source.0).await?;
+            super::admitted_activity_remainder::has_pending(&source)?
+        }
+    } else {
+        false
+    };
     let expires: Option<DateTime<Utc>> = p.get("expires_at");
     let mut response = json!({"id":id,"parent_import_id":r.get::<Uuid,_>("parent_import_id"),"parent_plan_id":r.get::<Uuid,_>("parent_plan_id"),"snapshot_id":r.get::<Uuid,_>("snapshot_id"),"source_account_id":r.get::<i64,_>("source_account_id").to_string(),"capture_sequence":r.get::<i64,_>("capture_sequence").to_string(),"workspace_revision":r.get::<i64,_>("workspace_revision").to_string(),"revision":r.get::<i64,_>("revision").to_string(),"activity_revision":r.get::<i64,_>("activity_revision").to_string(),"engine_version":ENGINE,"state":state,"phase":r.get::<String,_>("phase"),"pause_reason":r.get::<Option<String>,_>("pause_reason"),"created_at":r.get::<DateTime<Utc>,_>("created_at"),"updated_at":r.get::<DateTime<Utc>,_>("updated_at"),"confirmed_at":r.get::<Option<DateTime<Utc>>,_>("confirmed_at"),"confirmed_plan_id":confirmed,"completed_at":r.get::<Option<DateTime<Utc>>,_>("completed_at"),"retained_bytes":r.get::<i64,_>("retained_bytes").to_string(),"reserved_bytes":r.get::<i64,_>("reserved_bytes").to_string(),"native_row_bytes":r.get::<i64,_>("native_bytes").to_string(),"cancellation_reserved_bytes":cancel.to_string(),"release_ready":false,"counts":counts.wire(),
  "policy":{"run_byte_limit":storage.get::<i64,_>("run_byte_limit").to_string(),"org_byte_limit":storage.get::<i64,_>("byte_limit").to_string(),"run_ceiling_bytes":policy.run_ceiling_bytes.to_string(),"org_ceiling_bytes":policy.org_ceiling_bytes.to_string(),"run_retained_bytes":storage.get::<i64,_>("retained_bytes").to_string(),"run_reserved_bytes":storage.get::<i64,_>("reserved_bytes").to_string(),"org_retained_bytes":storage.get::<i64,_>("org_retained").to_string(),"org_reserved_bytes":storage.get::<i64,_>("org_reserved").to_string(),"unit_byte_limit":s::UNIT.to_string(),"policy_revision":policy.revision()},

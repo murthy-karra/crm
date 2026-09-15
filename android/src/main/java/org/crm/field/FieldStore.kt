@@ -487,8 +487,19 @@ class FieldStore(val db: FieldDatabase, val binding: Binding, private val clock:
         val context = dao.metadataContext(operationId) ?: throw ProtocolFailure()
         require(op.kind == "update_person_metadata" && op.status == "attention" &&
             op.lastError in setOf("revision_conflict", "catalog_revision_conflict") && context.current.isNotEmpty())
-        require(dao.supersede(operationId) == 1)
         val current = JSONObject(context.current)
+        // A conflict comparison is not a catalog refresh.  Never let a current-record response
+        // attach a newer token to editor labels/options from an older sealed catalog.  The next
+        // reconciliation must qualify this Person against that exact current baseline first.
+        val installedCatalog = dao.meta("metadata_catalog_revision") ?: throw ProtocolFailure()
+        require(current.getString("catalog_revision") == installedCatalog) {
+            "Refresh the metadata catalog before preparing a replacement"
+        }
+        val cached = dao.person(op.person) ?: throw AccessLocked()
+        require(metadataQualified(cached, installedCatalog, current.getString("metadata_revision"))) {
+            "Refresh this Person against the current metadata catalog before preparing a replacement"
+        }
+        require(dao.supersede(operationId) == 1)
         val row = MetadataDraftRow(draftId, op.person, current.toString(), context.proposal,
             revision(current.getString("metadata_revision")), revision(current.getString("catalog_revision")), 1)
         dao.insertMetadataDraft(row); row

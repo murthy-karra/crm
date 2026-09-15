@@ -29,6 +29,7 @@ journey are complete. Native UI boundary walk-through remains.
 | corrected metadata parser + unit tests + `Mobile006StorageTest` | PASS, 5 emulator tests, 1m23s | `/private/tmp/crm-mobile006-010f4-thyhauvv/android006-storage-parser.log` |
 | catalog-only revision requalification regression | PASS, 6 emulator tests, 1m06s | `/private/tmp/crm-mobile006-010f4-thyhauvv/android006-r1-storage.log` |
 | archived/deleted catalog, key-loss, access-expiry and late-identity metadata boundaries | PASS, 9 emulator tests, 1m24s | `/private/tmp/crm-mobile006-010f4-thyhauvv/android006-storage-boundary-final.log` |
+| replacement waits for a matching sealed catalog/metadata baseline, then CAS recovery | PASS, 9 emulator tests, 1m20s | `/private/tmp/crm-mobile006-010f4-thyhauvv/android006-r2-catalog-replacement-retry.log` |
 | historical populated schema-6 APK/test build | PASS, 41s | `/private/tmp/crm-mobile006-010f4-thyhauvv/android005-upgradeproof-build.log` |
 | current schema-8 APK/test build | PASS, 44s | `/private/tmp/crm-mobile006-010f4-thyhauvv/android006-upgradeproof-build.log` |
 | actual installed schema-6 seed | PASS, 5.681s | direct `adb shell am instrument` on `org.crm.field.mobile006upgradeproofqa.legacytest` |
@@ -57,6 +58,11 @@ deleted tag cannot enter a new proposal. It proves exact keystore-wrapped key
 loss leaves only ciphertext, an elapsed offline lease persists the locked marker
 even when the rejected write's transaction rolls back, and a late bootstrap with
 a different actor identity cannot bind to the protected account.
+
+Catalog-conflict recovery also requires a causally later sealed catalog whose
+revision matches the authorized current-metadata response and a Person component
+qualified against that exact metadata revision. A conflict read alone preserves
+the immutable proposal and cannot expose stale labels/options for replacement.
 
 ## Remaining required evidence
 

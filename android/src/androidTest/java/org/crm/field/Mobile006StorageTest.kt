@@ -88,6 +88,16 @@ class Mobile006StorageTest {
         store.dao.operationState(operation.id, "attention", 1, 0, "catalog_revision_conflict")
         val current = baseline().put("metadata_revision", "4").put("catalog_revision", "5")
         store.recordCurrentMetadata(operation.id, json("context_id" to store.binding.context, "person_id" to person, "person_revision" to "10", "metadata_revision" to "4", "catalog_revision" to "5", "tags" to current.getJSONArray("tags"), "values" to current.getJSONArray("values"), "complete" to true))
+        // A conflict read alone must not rebind the editor to labels/options from catalog 3.
+        store.dao.meta(MetaRow("metadata_catalog_revision", "3"))
+        assertThrows(IllegalArgumentException::class.java) {
+            store.reviseMetadataConflict(operation.id, UUID.randomUUID().toString())
+        }
+        assertEquals("attention", store.dao.operation(operation.id)!!.status)
+        // Model the causally later sealed reconciliation: exact catalog and Person metadata
+        // component have both been promoted before the user can create a replacement.
+        store.dao.meta(MetaRow("metadata_catalog_revision", "5"))
+        store.dao.person(store.dao.person(person)!!.copy(revision = "10", metadata = current.toString(), metadataRevisionsQualified = true))
         val replacement = store.reviseMetadataConflict(operation.id, UUID.randomUUID().toString())
         assertEquals("superseded", store.dao.operation(operation.id)!!.status)
         val second = store.submitMetadataDraft(replacement.id, replacement.revision)

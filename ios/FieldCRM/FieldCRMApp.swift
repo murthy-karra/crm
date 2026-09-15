@@ -721,6 +721,14 @@ struct MetadataComposerView: View {
                 Section("Tags") {
                     ForEach(Array(allTags.enumerated()), id: \.offset) { _, tag in Toggle(tag["name"].text, isOn: Binding(get: { tags.contains(tag["id"].text) }, set: { selected in if selected { tags.insert(tag["id"].text) } else { tags.remove(tag["id"].text) }; autosave() })).accessibilityIdentifier("metadataTag_\(tag["id"].text)") }
                 }
+                #if MOBILE006_UPGRADE_QA
+                Button("Stage metadata upgrade proof") {
+                    guard let tag = allTags.first else { return }
+                    if let missing = allTags.first(where: { !tags.contains($0["id"].text) }) { tags.insert(missing["id"].text) }
+                    else { tags.remove(tag["id"].text) }
+                    autosave()
+                }.accessibilityIdentifier("stageMetadataUpgradeProof")
+                #endif
                 ForEach(Array(baseline["fields"].list.enumerated()), id: \.offset) { _, field in fieldEditor(field) }
             }
             Section { Text(status).font(.caption).foregroundStyle(failed ? .red : .secondary).accessibilityIdentifier("metadataDraftStatus") }

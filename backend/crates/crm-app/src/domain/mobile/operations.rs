@@ -7,9 +7,13 @@ use crate::domain::{
     },
     custom_field::{self, CustomFieldValue, FieldType},
     envelope::{CommandContext, Origin},
-    note, tag, task,
+    note,
+    person_metadata::{
+        self, MetadataAction as TypedMetadataAction, MetadataError, UpdatePersonMetadata,
+    },
+    tag, task,
 };
-use crate::ids::{ContactMethodId, PersonId, TagId, TaskId, UserId};
+use crate::ids::{ContactMethodId, CustomFieldId, PersonId, TagId, TaskId, UserId};
 use crate::realtime::{PersonChange, Publication, Publisher, RealtimeEvent};
 
 #[derive(Deserialize)]
@@ -602,6 +606,36 @@ fn revision(raw: &str) -> Result<i64, MobileError> {
     }
     Ok(n)
 }
+fn metadata_error(error: MetadataError) -> MobileError {
+    match error {
+        MetadataError::InvalidMetadata => code(422, "invalid_metadata"),
+        MetadataError::NotFound => missing(),
+        MetadataError::Forbidden => code(403, "forbidden"),
+        MetadataError::RevisionConflict => code(409, "revision_conflict"),
+        MetadataError::CatalogRevisionConflict => code(409, "catalog_revision_conflict"),
+        MetadataError::Tag(crate::domain::tag::TagError::PersonTagLimitReached) => {
+            code(422, "tag_limit_reached")
+        }
+        MetadataError::Tag(crate::domain::tag::TagError::NotFound)
+        | MetadataError::Field(crate::domain::custom_field::CustomFieldError::NotFound)
+        | MetadataError::Field(crate::domain::custom_field::CustomFieldError::FieldArchived)
+        | MetadataError::Field(crate::domain::custom_field::CustomFieldError::TypeMismatch)
+        | MetadataError::Field(crate::domain::custom_field::CustomFieldError::InvalidValue)
+        | MetadataError::Field(crate::domain::custom_field::CustomFieldError::UnknownOption) => {
+            code(422, "invalid_metadata")
+        }
+        MetadataError::Tag(crate::domain::tag::TagError::Forbidden)
+        | MetadataError::Field(crate::domain::custom_field::CustomFieldError::Forbidden) => {
+            code(403, "forbidden")
+        }
+        MetadataError::Database(error)
+        | MetadataError::Tag(crate::domain::tag::TagError::Database(error))
+        | MetadataError::Field(crate::domain::custom_field::CustomFieldError::Database(error)) => {
+            error.into()
+        }
+        _ => code(503, "unavailable"),
+    }
+}
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Receipt {
     pub operation_id: Uuid,
@@ -740,14 +774,12 @@ pub async fn execute(
             return Err(code(503, "intake_busy"));
         }
     }
-    if kind == "update_person_metadata" {
-        crate::domain::mobile::metadata::acquire_shared(&mut tx, auth.active_organization_id)
-            .await?;
+    if kind != "update_person_metadata" {
+        crate::domain::person::queries::lock_person(&mut tx, person, auth.active_organization_id)
+            .await?
+            .ok_or_else(missing)?;
+        authority(&mut tx, auth, true).await?;
     }
-    crate::domain::person::queries::lock_person(&mut tx, person, auth.active_organization_id)
-        .await?
-        .ok_or_else(missing)?;
-    authority(&mut tx, auth, true).await?;
     let mut ctx = CommandContext::from_auth(auth);
     ctx.origin = Origin::MobileSession;
     let mut metadata_change = None;
@@ -965,7 +997,37 @@ pub async fn execute(
             )
         }
         Payload::UpdatePersonMetadata(v) => {
-            let result = update_metadata_in_transaction(&mut tx, &ctx, person, v).await?;
+            let actions = v
+                .actions
+                .into_iter()
+                .map(|action| match action {
+                    MetadataAction::AddTag { tag_id } => TypedMetadataAction::AddTag {
+                        tag_id: TagId::new(tag_id),
+                    },
+                    MetadataAction::RemoveTag { tag_id } => TypedMetadataAction::RemoveTag {
+                        tag_id: TagId::new(tag_id),
+                    },
+                    MetadataAction::SetField { field_id, value } => TypedMetadataAction::SetField {
+                        field_id: CustomFieldId::new(field_id),
+                        value,
+                    },
+                    MetadataAction::ClearField { field_id } => TypedMetadataAction::ClearField {
+                        field_id: CustomFieldId::new(field_id),
+                    },
+                })
+                .collect();
+            let result = person_metadata::update_person_metadata_in_transaction(
+                &mut tx,
+                &ctx,
+                UpdatePersonMetadata {
+                    person_id: person,
+                    expected_metadata_revision: revision(&v.expected_metadata_revision)?,
+                    expected_catalog_revision: revision(&v.expected_catalog_revision)?,
+                    actions,
+                },
+            )
+            .await
+            .map_err(metadata_error)?;
             let changed = result.tags || result.fields;
             metadata_change = Some(result);
             ("person_metadata", person.0, changed, Vec::new())

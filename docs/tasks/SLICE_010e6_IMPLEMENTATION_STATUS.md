@@ -2,7 +2,8 @@
 
 **Implementation and verification complete — D-090, 2026-09-15.** User approved implementation through Lavish and ended that session.
 
-- Branch: `codex/010e6-recovery`, based on `512bc4a`; changes uncommitted.
+- Implementation commit `2a4c207`, fast-forward merged into local `main` from
+  `codex/010e6-recovery` (base `512bc4a`) on the user’s commit/merge instruction.
 - [Accepted specification](../plans/SLICE_010e6_NEVER_IMPORTED_RECOVERY.md) and
   [concrete contract](SLICE_010e6_CONTRACT.md) own scope and compatibility.
 - Implemented schema fences, bounded candidate discovery, explicit immutable
@@ -20,7 +21,8 @@
   synthetic databases remain retained. No live FUB calls, shared `crm_dev` writes,
   installed native-store changes or shared-runtime replacement.
 - Shared development remains on [010e5](SLICE_010e5_RELEASE.md).
-- No commit, push or deployment of 010e6 has been performed or authorized.
+- Local commit and merge are complete. Push and deployment remain pending;
+  feature branch and unrelated local artifacts are retained.
 
 Recovery covers positively proven mapping-held People. Later family imports need
 separate previews/confirmation. Identity repair, resurrection, arbitrary skipped

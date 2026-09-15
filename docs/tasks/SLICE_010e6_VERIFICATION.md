@@ -103,9 +103,12 @@ binary compiles and executes separately. No unrelated helper suppression was add
 
 ## Tested source and cleanup
 
-The uncommitted source tree is inventoried in
+The tested source tree, committed as `2a4c207`, is inventoried in
 `/private/tmp/crm-010e6-tested-source.json` (42 changed/new backend, Web and script
 files; SHA256 `c0d49eef46be505144fe04f38e886a2450818998b8c9a8a55c161bdb1f3505a6`).
 Final `git diff --check` passed. QA API3107 and Web5187 listeners stopped;
 browser tab closed and viewport reset. Synthetic databases and private evidence
-remain retained. No commit, merge, push or deployment was performed.
+remain retained. Implementation commit `2a4c207` was fast-forward merged into
+local `main` on the subsequent user instruction. All 42 source hashes still
+match the tested inventory; no merge conflicts or code changes required retesting.
+Push and deployment have not been performed.

@@ -1,6 +1,6 @@
 # Project state
 
-Updated: 2026-09-15 — 010e5 deployed; 010e6 implemented and verified; uncommitted.
+Updated: 2026-09-15 — 010e5 deployed; 010e6 verified and merged locally.
 Current status and live residuals only. [History](PROJECT_HISTORY.md) preserves
 completed chronology. Decisions remain authoritative; use the
 [reading index](../decisions/DECISION_INDEX.md).
@@ -8,7 +8,7 @@ completed chronology. Decisions remain authoritative; use the
 ## Current state
 
 **010e6 recovery is accepted under D-090 and implemented on
-`codex/010e6-recovery`; final verification passed and changes are uncommitted.** It creates positively
+`main` as `2a4c207`; final verification passed and the local fast-forward merge is complete.** It creates positively
 proven mapping-held People once and supplies separate family handoffs. Independent
 implementation review is READY, round 2. [Status](../tasks/SLICE_010e6_IMPLEMENTATION_STATUS.md)
 and [verification](../tasks/SLICE_010e6_VERIFICATION.md) own current evidence.
@@ -42,7 +42,8 @@ Mobile004/010e4 and preceding slices remain documented in history.
 
 ## Current branch and retained resources
 
-`codex/010e6-recovery` is based on main `512bc4a`; changes remain uncommitted.
+`main` includes 010e6 implementation `2a4c207`, fast-forwarded from `512bc4a`.
+The feature branch remains retained; publication and deployment are pending.
 `main` contains the 010e5 release as well as Mobile007 / 010d3. Its runtime identity and smoke
 checks are recorded in [the release record](../tasks/MOBILE_007_010d3_RELEASE.md).
 Private verification services and build outputs remain retained.
@@ -61,7 +62,7 @@ existing People first. Implementation and local verification are complete under
 D-088; [evidence](../tasks/SLICE_010e5_VERIFICATION.md) records the gates. Commit `05abffa`
 is merged, pushed and deployed to shared development;
 [release evidence](../tasks/SLICE_010e5_RELEASE.md) owns current runtime identity. Never-imported People recovery is implemented and verified under D-090, awaiting
-its separate commit/release step.
+its separate publication/deployment step.
 Remaining family deltas, activation and complete migration fidelity retain their
 own scope in the [family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md).
 
@@ -202,8 +203,8 @@ linked verification records; they are not claims about present runtime health.
 
 ## Next recommended action
 
-Finish the remaining 010e6 verification and record final evidence. Commit/merge,
-push and deployment of 010e6 require a subsequent user instruction. The current
+010e6 verification and local commit/merge are complete. Push and deployment
+require a subsequent user instruction. The current
 shared-development runtime is recorded by [010e5](../tasks/SLICE_010e5_RELEASE.md).
 
 The [family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md) retains the sequential

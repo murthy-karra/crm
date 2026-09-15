@@ -67,6 +67,8 @@ class Mobile006UiProofTest {
                 val replacementCard = "metadata-draft-${replacementDraft.id}"
                 // The card tag is nested inside its clickable semantics node. Query that action
                 // in the unmerged tree so the test invokes the card, not an off-screen child.
+                compose.onNodeWithTag("saved-work-list")
+                    .performScrollToNode(hasTestTag(replacementCard))
                 compose.onNode(
                     hasClickAction() and hasAnyDescendant(hasTestTag(replacementCard)),
                     useUnmergedTree = true,

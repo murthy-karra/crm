@@ -345,6 +345,106 @@ async fn mobile006_metadata_reader_establishes_snapshot_after_catalog_barrier(po
     assert_eq!(changed["error"], "generation_changed");
 }
 
+#[sqlx::test]
+#[ignore]
+async fn mobile006_metadata_receipt_and_current_authority_gates(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let tag: Uuid = sqlx::query_scalar("INSERT INTO tag(organization_id,created_by_user_id,name) VALUES($1,$2,'Mobile006 authority tag') RETURNING id")
+        .bind(f.org).bind(f.actor).fetch_one(&f.app).await.unwrap();
+    let (metadata, catalog): (i64, i64) = sqlx::query_as("SELECT p.metadata_revision,c.revision FROM person p JOIN mobile_metadata_catalog c ON c.organization_id=p.organization_id WHERE p.id=$1")
+        .bind(f.person).fetch_one(&f.app).await.unwrap();
+    let operation = f.operation("update_person_metadata", json!({"person_id":f.person,"expected_metadata_revision":metadata.to_string(),"expected_catalog_revision":catalog.to_string(),"actions":[{"kind":"add_tag","tag_id":tag}]}));
+    assert_eq!(
+        f.post("/api/mobile/v1/operations", operation.clone())
+            .await
+            .0,
+        StatusCode::OK
+    );
+    let mut altered = operation.clone();
+    altered["payload"]["actions"][0]["kind"] = json!("remove_tag");
+    assert_eq!(
+        f.post("/api/mobile/v1/operations", altered).await.1["error"],
+        "operation_payload_mismatch"
+    );
+    let other_cookie = crate::common::login_cookie(&f.router, "second@fixture.test", PW).await;
+    let (status, other_bootstrap) = request(
+        &f.router,
+        &other_cookie,
+        None,
+        "POST",
+        "/api/mobile/v1/bootstrap",
+        json!({"protocol":"mobile-v1","installation_id":Uuid::new_v4()}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let receipt = format!("/api/mobile/v1/operations/{}", operation["operation_id"]);
+    assert_eq!(
+        request(
+            &f.router,
+            &other_cookie,
+            Some(id(&other_bootstrap, "context_id")),
+            "GET",
+            &receipt,
+            json!(null)
+        )
+        .await
+        .0,
+        StatusCode::NOT_FOUND
+    );
+    let current = format!("/api/mobile/v1/people/{}/metadata", f.person);
+    assert_eq!(
+        request(
+            &f.router,
+            &f.cookie,
+            Some(f.context),
+            "GET",
+            &current,
+            json!(null)
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    sqlx::query("UPDATE organization SET workspace_mode='migration_review',workspace_revision=workspace_revision+1 WHERE id=$1").bind(f.org).execute(&pool).await.unwrap();
+    assert_eq!(
+        request(
+            &f.router,
+            &f.cookie,
+            Some(f.context),
+            "GET",
+            &current,
+            json!(null)
+        )
+        .await
+        .1["error"],
+        "workspace_in_migration_review"
+    );
+}
+
+#[sqlx::test]
+#[ignore]
+async fn mobile006_current_metadata_rejects_more_than_one_hundred_values(pool: PgPool) {
+    let f = fixture(&pool).await;
+    for n in 0..101 {
+        let field: Uuid = sqlx::query_scalar("INSERT INTO custom_field(organization_id,label,field_type,position,created_by_user_id) VALUES($1,$2,'text',$3,$4) RETURNING id")
+            .bind(f.org).bind(format!("Mobile006 bound {n}")).bind(n).bind(f.actor).fetch_one(&f.app).await.unwrap();
+        sqlx::query("INSERT INTO person_custom_field_value(organization_id,person_id,field_id,field_type,text_value,updated_by_user_id,origin,correlation_id) VALUES($1,$2,$3,'text','bound',$4,'mobile_session',gen_random_uuid())")
+            .bind(f.org).bind(f.person).bind(field).bind(f.actor).execute(&f.app).await.unwrap();
+    }
+    let path = format!("/api/mobile/v1/people/{}/metadata", f.person);
+    let (status, error) = request(
+        &f.router,
+        &f.cookie,
+        Some(f.context),
+        "GET",
+        &path,
+        json!(null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{error}");
+    assert_eq!(error["error"], "over_limit");
+}
+
 #[cfg(feature = "perf-harness")]
 #[sqlx::test]
 #[ignore = "coordinator-owned M6-09 isolated hot-plan run"]
@@ -352,7 +452,7 @@ async fn mobile006_metadata_hot_query_plans(pool: PgPool) {
     use sha2::{Digest, Sha256};
 
     let f = fixture(&pool).await;
-    for n in 0..49 {
+    for n in 0..48 {
         let email = format!("mobile006-plan-member-{n}@fixture.test");
         let user = crate::common::create_user(&pool, &email, "Plan Member", PW).await;
         crate::common::add_membership_with(
@@ -364,18 +464,26 @@ async fn mobile006_metadata_hot_query_plans(pool: PgPool) {
         )
         .await;
     }
+    assert_eq!(sqlx::query_scalar::<_, i64>("SELECT count(*) FROM organization_membership WHERE organization_id=$1 AND status='active'").bind(f.org).fetch_one(&f.app).await.unwrap(), 50);
     sqlx::query("INSERT INTO person(organization_id,first_name,stage_id,assigned_user_id) SELECT $1,'Mobile006 plan',p.stage_id,$2 FROM person p CROSS JOIN generate_series(1,24999) WHERE p.id=$3")
         .bind(f.org).bind(f.actor).bind(f.person).execute(&f.app).await.unwrap();
     let _tag: Uuid = sqlx::query_scalar("INSERT INTO tag(organization_id,created_by_user_id,name) VALUES($1,$2,'Mobile006 plan tag') RETURNING id")
         .bind(f.org).bind(f.actor).fetch_one(&f.app).await.unwrap();
     let _field: Uuid = sqlx::query_scalar("INSERT INTO custom_field(organization_id,label,field_type,position,created_by_user_id) VALUES($1,'Mobile006 plan field','text',1,$2) RETURNING id")
         .bind(f.org).bind(f.actor).fetch_one(&f.app).await.unwrap();
+    sqlx::query("INSERT INTO person_tag(organization_id,person_id,tag_id,created_by_user_id) VALUES($1,$2,$3,$4)")
+        .bind(f.org).bind(f.person).bind(_tag).bind(f.actor).execute(&f.app).await.unwrap();
+    sqlx::query("INSERT INTO person_custom_field_value(organization_id,person_id,field_id,field_type,text_value,updated_by_user_id,origin,correlation_id) VALUES($1,$2,$3,'text','plan',$4,'mobile_session',gen_random_uuid())")
+        .bind(f.org).bind(f.person).bind(_field).bind(f.actor).execute(&f.app).await.unwrap();
     let statements = [
         ("membership", "SELECT role FROM organization_membership WHERE organization_id=$1 AND user_id=$2 AND status='active' FOR SHARE"),
         ("person_token", "SELECT metadata_revision FROM person WHERE organization_id=$1 AND id=$2"),
-        ("catalog_token", "SELECT revision FROM mobile_metadata_catalog WHERE organization_id=$1"),
+        ("catalog_token", "SELECT crm_mobile_metadata_catalog_revision($1)"),
         ("tags", "SELECT t.id,t.name FROM person_tag pt JOIN tag t ON t.id=pt.tag_id AND t.organization_id=pt.organization_id WHERE pt.organization_id=$1 AND pt.person_id=$2 ORDER BY t.id LIMIT 101"),
         ("values", "SELECT field_id,field_type,text_value,number_value,date_value,option_id,updated_at FROM person_custom_field_value WHERE organization_id=$1 AND person_id=$2 ORDER BY field_id LIMIT 101"),
+        ("catalog_tags", "SELECT id,name FROM tag WHERE organization_id=$1 ORDER BY id LIMIT 10001"),
+        ("catalog_fields", "SELECT id,label,field_type,position,archived_at FROM custom_field WHERE organization_id=$1 ORDER BY position,id LIMIT 10001"),
+        ("catalog_options", "SELECT id,field_id,label,position,archived_at FROM custom_field_option WHERE organization_id=$1 ORDER BY field_id,position,id LIMIT 10001"),
     ];
     let mut evidence = Vec::new();
     for (name, sql) in statements {
@@ -403,7 +511,11 @@ async fn mobile006_metadata_hot_query_plans(pool: PgPool) {
             }
         }
         .unwrap();
-        evidence.push(json!({"name":name,"sql":sql,"sha256":format!("{:x}",Sha256::digest(sql.as_bytes())),"plan":plan}));
+        let sha256: String = Sha256::digest(sql.as_bytes())
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        evidence.push(json!({"name":name,"sql":sql,"sha256":sha256,"plan":plan}));
     }
     println!(
         "MOBILE006_HOT {}",

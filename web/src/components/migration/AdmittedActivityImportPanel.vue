@@ -414,7 +414,7 @@ function remainder() { if (current.value?.actions.remainder && !busy.value) void
           type="button"
           :class="buttonClasses('primary')"
           :disabled="!canCreate"
-          class="mt-3"
+          class="mt-3 max-w-full max-sm:h-auto max-sm:min-h-10 max-sm:whitespace-normal max-sm:py-2"
           @click="plan"
         >
           Prepare admitted notes and tasks plan

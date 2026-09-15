@@ -31,12 +31,22 @@ class Mobile006UiProofTest {
         val stage = JSONObject(File(compose.activity.filesDir, "mobile006-conflict-stage.json").readText())
         assertEquals("catalog_conflict_ready_for_ui_review", stage.getString("state"))
         val stale = stage.getString("stale")
+        val current = JSONObject(requireNotNull(active().store.dao.metadataContext(stale)).current)
+        // The current-record read is intentionally insufficient after a catalog rename. Drive a
+        // normal visible reconciliation before opening the replacement editor.
+        if (!metadataCurrentIsSealed(stage.getString("person"), current)) {
+            compose.waitUntil(30_000) { !repository.ui.value.busy }
+            compose.onNodeWithText("Sync now").assertIsEnabled().performClick()
+            compose.waitUntil(120_000) { metadataCurrentIsSealed(stage.getString("person"), current) }
+        }
         compose.onNodeWithTag("nav-Saved work").performClick()
         compose.waitUntil(20_000) { active().store.dao.metadataContext(stale)?.current?.isNotEmpty() == true }
+        screenshot("mobile006-ui-catalog-conflict")
         compose.onNodeWithText("Review and replace").assertIsEnabled().performClick()
-        compose.waitUntil(20_000) { compose.onNodeWithTag("metadata-text-d9d979a3-5015-4cc9-9252-a58e1d109548").fetchSemanticsNode().config.isMergingSemanticsOfDescendants }
+        // OutlinedTextField carries its tag in the dialog's unmerged semantics tree.
+        compose.waitUntil(20_000) { compose.onAllNodesWithTag("metadata-text-d9d979a3-5015-4cc9-9252-a58e1d109548", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
         screenshot("mobile006-ui-catalog-conflict-editor")
-        compose.onNodeWithTag("metadata-text-d9d979a3-5015-4cc9-9252-a58e1d109548")
+        compose.onNodeWithTag("metadata-text-d9d979a3-5015-4cc9-9252-a58e1d109548", useUnmergedTree = true)
             .performTextReplacement("Android UI replacement ${java.util.UUID.randomUUID()}")
         compose.onNodeWithText("Save and sync").assertIsEnabled().performClick()
         compose.waitUntil(20_000) {
@@ -63,6 +73,11 @@ class Mobile006UiProofTest {
     }
 
     private fun active(): ActiveAccount = FieldRepository::class.java.getDeclaredField("active").apply { isAccessible = true }.get(repository) as ActiveAccount
+
+    private fun metadataCurrentIsSealed(person: String, current: JSONObject): Boolean {
+        val cached = active().store.dao.person(person) ?: return false
+        return active().store.metadataQualified(cached, current.getString("catalog_revision"), current.getString("metadata_revision"))
+    }
 
     private fun screenshot(name: String) {
         compose.runOnUiThread { compose.activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }

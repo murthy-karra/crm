@@ -14,6 +14,7 @@ pub mod intake;
 pub mod migration;
 pub mod note;
 pub mod person;
+pub mod person_metadata;
 pub mod raw_payload;
 pub mod saved_list;
 pub mod stage;

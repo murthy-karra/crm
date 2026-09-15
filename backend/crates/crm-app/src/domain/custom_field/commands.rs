@@ -749,11 +749,53 @@ async fn set_person_custom_field_value_attempt(
     cmd: SetPersonCustomFieldValue,
 ) -> Result<PersonCustomFieldOutcome, CustomFieldError> {
     let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
-    crate::domain::mobile::metadata::acquire_shared(&mut tx, ctx.organization_id).await?;
-    person_queries::lock_person(&mut tx, cmd.person_id, ctx.organization_id)
+    let person_id = cmd.person_id;
+    let prepared = prepare_set_person_value(&mut tx, ctx, cmd).await?;
+    let changed = apply_prepared_person_value(&mut tx, prepared).await?;
+    let values = queries::values_for_person(&mut tx, ctx.organization_id, person_id).await?;
+    tx.commit().await?;
+    if changed {
+        publish_custom_field_changed(publisher, ctx, person_id).await;
+    }
+    Ok(PersonCustomFieldOutcome { values, changed })
+}
+
+/// Validated only by this module, then applied in the caller's same transaction.
+/// Values deliberately have no Debug implementation.
+pub(crate) struct PreparedPersonValue {
+    organization_id: OrganizationId,
+    person_id: PersonId,
+    field_id: CustomFieldId,
+    value: Option<PreparedValue>,
+    actor_user_id: UserId,
+    origin: &'static str,
+    correlation_id: uuid::Uuid,
+}
+struct PreparedValue {
+    field_type: FieldType,
+    text_value: Option<String>,
+    number_text: Option<String>,
+    date_value: Option<chrono::NaiveDate>,
+    option_id: Option<uuid::Uuid>,
+}
+
+pub(crate) async fn prepare_set_person_value(
+    conn: &mut PgConnection,
+    ctx: &CommandContext,
+    cmd: SetPersonCustomFieldValue,
+) -> Result<PreparedPersonValue, CustomFieldError> {
+    crate::auth::workspace::ordinary(conn, ctx.organization_id).await?;
+    crate::domain::mobile::metadata::acquire_shared(conn, ctx.organization_id).await?;
+    person_queries::lock_person(conn, cmd.person_id, ctx.organization_id)
         .await?
         .ok_or(CustomFieldError::NotFound)?;
-    let field = queries::lock_field_for_share(&mut tx, ctx.organization_id, cmd.field_id)
+    if lock_current_membership(conn, ctx.organization_id, ctx.actor_user_id)
+        .await?
+        .is_none()
+    {
+        return Err(CustomFieldError::Forbidden);
+    }
+    let field = queries::lock_field_for_share(conn, ctx.organization_id, cmd.field_id)
         .await?
         .ok_or(CustomFieldError::NotFound)?;
     if field.archived_at.is_some() {
@@ -784,7 +826,7 @@ async fn set_person_custom_field_value_attempt(
     let option_id = match &cmd.value {
         CustomFieldValue::Choice(option_id) => {
             let live = queries::option_is_live_for_field(
-                &mut tx,
+                conn,
                 ctx.organization_id,
                 cmd.field_id,
                 *option_id,
@@ -798,29 +840,55 @@ async fn set_person_custom_field_value_attempt(
         _ => None,
     };
 
-    let changed = queries::upsert_value(
-        &mut tx,
-        ctx.organization_id,
-        cmd.person_id,
-        cmd.field_id,
-        field.field_type,
-        text_value.as_deref(),
-        number_text.as_deref(),
-        date_value,
-        option_id,
-        ctx.actor_user_id,
-        ctx.origin.as_str(),
-        ctx.correlation_id.as_uuid(),
-    )
-    .await?;
+    Ok(PreparedPersonValue {
+        organization_id: ctx.organization_id,
+        person_id: cmd.person_id,
+        field_id: cmd.field_id,
+        value: Some(PreparedValue {
+            field_type: field.field_type,
+            text_value,
+            number_text,
+            date_value,
+            option_id,
+        }),
+        actor_user_id: ctx.actor_user_id,
+        origin: ctx.origin.as_str(),
+        correlation_id: ctx.correlation_id.as_uuid(),
+    })
+}
 
-    let values = queries::values_for_person(&mut tx, ctx.organization_id, cmd.person_id).await?;
-    tx.commit().await?;
-
-    if changed {
-        publish_custom_field_changed(publisher, ctx, cmd.person_id).await;
+pub(crate) async fn apply_prepared_person_value(
+    conn: &mut PgConnection,
+    prepared: PreparedPersonValue,
+) -> Result<bool, CustomFieldError> {
+    match prepared.value {
+        Some(value) => {
+            queries::upsert_value(
+                conn,
+                prepared.organization_id,
+                prepared.person_id,
+                prepared.field_id,
+                value.field_type,
+                value.text_value.as_deref(),
+                value.number_text.as_deref(),
+                value.date_value,
+                value.option_id,
+                prepared.actor_user_id,
+                prepared.origin,
+                prepared.correlation_id,
+            )
+            .await
+        }
+        None => {
+            queries::delete_value(
+                conn,
+                prepared.organization_id,
+                prepared.person_id,
+                prepared.field_id,
+            )
+            .await
+        }
     }
-    Ok(PersonCustomFieldOutcome { values, changed })
 }
 
 // --- ClearPersonCustomFieldValue -----------------------------------------------
@@ -872,24 +940,46 @@ async fn clear_person_custom_field_value_attempt(
     cmd: ClearPersonCustomFieldValue,
 ) -> Result<PersonCustomFieldOutcome, CustomFieldError> {
     let mut tx = crate::auth::workspace::begin(pool, ctx.organization_id).await?;
-    crate::domain::mobile::metadata::acquire_shared(&mut tx, ctx.organization_id).await?;
-    person_queries::lock_person(&mut tx, cmd.person_id, ctx.organization_id)
-        .await?
-        .ok_or(CustomFieldError::NotFound)?;
-    // Any state (spec §3): permitted on an archived field.
-    if !queries::field_exists(&mut tx, ctx.organization_id, cmd.field_id).await? {
-        return Err(CustomFieldError::NotFound);
-    }
-
-    let changed =
-        queries::delete_value(&mut tx, ctx.organization_id, cmd.person_id, cmd.field_id).await?;
-    let values = queries::values_for_person(&mut tx, ctx.organization_id, cmd.person_id).await?;
+    let person_id = cmd.person_id;
+    let prepared = prepare_clear_person_value(&mut tx, ctx, cmd).await?;
+    let changed = apply_prepared_person_value(&mut tx, prepared).await?;
+    let values = queries::values_for_person(&mut tx, ctx.organization_id, person_id).await?;
     tx.commit().await?;
-
     if changed {
-        publish_custom_field_changed(publisher, ctx, cmd.person_id).await;
+        publish_custom_field_changed(publisher, ctx, person_id).await;
     }
     Ok(PersonCustomFieldOutcome { values, changed })
+}
+
+pub(crate) async fn prepare_clear_person_value(
+    conn: &mut PgConnection,
+    ctx: &CommandContext,
+    cmd: ClearPersonCustomFieldValue,
+) -> Result<PreparedPersonValue, CustomFieldError> {
+    crate::auth::workspace::ordinary(conn, ctx.organization_id).await?;
+    crate::domain::mobile::metadata::acquire_shared(conn, ctx.organization_id).await?;
+    person_queries::lock_person(conn, cmd.person_id, ctx.organization_id)
+        .await?
+        .ok_or(CustomFieldError::NotFound)?;
+    if lock_current_membership(conn, ctx.organization_id, ctx.actor_user_id)
+        .await?
+        .is_none()
+    {
+        return Err(CustomFieldError::Forbidden);
+    }
+    // Clearing is allowed even if the definition is archived.
+    if !queries::field_exists(conn, ctx.organization_id, cmd.field_id).await? {
+        return Err(CustomFieldError::NotFound);
+    }
+    Ok(PreparedPersonValue {
+        organization_id: ctx.organization_id,
+        person_id: cmd.person_id,
+        field_id: cmd.field_id,
+        value: None,
+        actor_user_id: ctx.actor_user_id,
+        origin: ctx.origin.as_str(),
+        correlation_id: ctx.correlation_id.as_uuid(),
+    })
 }
 
 #[cfg(test)]

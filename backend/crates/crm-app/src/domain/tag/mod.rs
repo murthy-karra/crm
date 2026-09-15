@@ -9,11 +9,15 @@ mod model;
 mod queries;
 
 pub use commands::{
-    add_person_tag, apply_person_tag_in_transaction, create_tag, delete_tag,
-    normalize_and_validate_name, remove_person_tag, rename_tag, AddPersonTag, CreateTag,
-    CreateTagOutcome, DeleteTag, DeleteTagOutcome, PersonTagOutcome, RemovePersonTag, RenameTag,
-    RenameTagOutcome,
+    add_person_tag, create_tag, delete_tag, normalize_and_validate_name, remove_person_tag,
+    rename_tag, AddPersonTag, CreateTag, CreateTagOutcome, DeleteTag, DeleteTagOutcome,
+    PersonTagOutcome, RemovePersonTag, RenameTag, RenameTagOutcome,
 };
 pub use error::TagError;
 pub use model::{can_manage, Tag, TagRef};
 pub use queries::{exists, list_for_organization, list_for_person, names_for, TagRow};
+
+pub(crate) use commands::{
+    apply_person_tag_in_transaction, apply_prepared_person_tag, prepare_person_tag,
+    validate_person_tag_capacity,
+};

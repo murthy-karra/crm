@@ -27,3 +27,7 @@ pub use queries::{
     filter_names_for_fields, list_definitions, live_field_type_for_filter, load_custom_field,
     option_ids_belong_to_field_for_filter, values_for_person,
 };
+
+pub(crate) use commands::{
+    apply_prepared_person_value, prepare_clear_person_value, prepare_set_person_value,
+};

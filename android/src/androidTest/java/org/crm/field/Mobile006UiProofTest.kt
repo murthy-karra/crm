@@ -42,12 +42,26 @@ class Mobile006UiProofTest {
         compose.onNodeWithTag("nav-Saved work").performClick()
         compose.waitUntil(20_000) { active().store.dao.metadataContext(stale)?.current?.isNotEmpty() == true }
         screenshot("mobile006-ui-catalog-conflict")
-        compose.onNodeWithText("Review and replace").assertIsEnabled().performClick()
+        val metadataDraft = repository.ui.value.metadataDrafts.single { it.operation == stale }
+        val metadataCard = "metadata-draft-${metadataDraft.id}"
+        // Saved work can also contain a profile conflict with an identically labelled action.
+        // The proof must exercise the metadata operation that the staged server conflict named.
+        compose.onNode(
+            hasText("Review and replace") and hasAnyAncestor(hasTestTag(metadataCard)),
+            useUnmergedTree = true,
+        ).assertIsEnabled().performClick()
+        delay(1_500)
+        recordEditorDiagnostic("after_metadata_review_click", stale, metadataCard)
         // Retain the exact projection and dialog state before asserting individual controls;
         // this makes a failed native proof distinguish a rejected revision from a missing row.
-        compose.waitUntil(20_000) {
-            compose.onAllNodesWithText("Save and sync", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() ||
-                compose.onAllNodesWithText("The original metadata proposal remains protected; a replacement could not be prepared.", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+        try {
+            compose.waitUntil(20_000) {
+                compose.onAllNodesWithText("Save and sync", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() ||
+                    compose.onAllNodesWithText("The original metadata proposal remains protected; a replacement could not be prepared.", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+            }
+        } catch (error: Throwable) {
+            recordEditorDiagnostic("metadata_review_wait_failed", stale, metadataCard)
+            throw error
         }
         val editorState = repository.ui.value
         File(compose.activity.filesDir, "mobile006-ui-evidence.txt").appendText(
@@ -97,5 +111,24 @@ class Mobile006UiProofTest {
         compose.waitForIdle()
         val file = File(compose.activity.getExternalFilesDir(null), "$name.png")
         compose.onRoot().captureToImage().asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, file.outputStream())
+    }
+
+    private fun recordEditorDiagnostic(phase: String, stale: String, metadataCard: String) {
+        val account = active()
+        val ui = repository.ui.value
+        val saveControls = compose.onAllNodesWithText("Save and sync", useUnmergedTree = true).fetchSemanticsNodes().size
+        val protectedNotice = compose.onAllNodesWithText(
+            "The original metadata proposal remains protected; a replacement could not be prepared.",
+            useUnmergedTree = true,
+        ).fetchSemanticsNodes().size
+        val card = compose.onAllNodesWithTag(metadataCard, useUnmergedTree = true).fetchSemanticsNodes().size
+        File(compose.activity.filesDir, "mobile006-ui-evidence.txt").appendText(
+            "$phase stale=$stale metadata_card=$metadataCard card_nodes=$card dao_fields=${account.store.dao.metadataFields().size} " +
+                "ui_fields=${ui.metadataFields.size} ui_drafts=${ui.metadataDrafts.size} metadata_contexts=${ui.metadataContexts.size} " +
+                "operation=${account.store.dao.operation(stale)?.status} error=${account.store.dao.operation(stale)?.lastError} " +
+                "save_controls=$saveControls protected_notice=$protectedNotice\n",
+        )
+        compose.onRoot(useUnmergedTree = true).printToLog("Mobile006UiProof-$phase")
+        screenshot("mobile006-ui-$phase")
     }
 }

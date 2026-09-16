@@ -2181,3 +2181,149 @@ async fn family_refresh_missing_activity_holds_absence_and_preserves_owned_perso
         .unwrap();
     worker::release(&f.pool, &claim).await.unwrap();
 }
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn family_refresh_metadata_catalog_qualifies_complete_names_and_choices(pool: PgPool) {
+    use crm_api::domain::migration::{
+        family_refresh::{
+            cohort, core_source, mapping_inventory,
+            metadata_catalog::{self, Qualification},
+            model::Hold,
+        },
+        snapshot_source::Stream,
+    };
+    let f = import_support::fixture_with_book(&pool, db_activity_source::book()).await;
+    let parent = db_activity_source::completed_parent(&f).await;
+    f.reader.set_records(Stream::CustomFields,vec![
+        json!({"id":10,"name":"customUnique","label":"Unique","type":"dropdown","choices":(0..70).map(|n|format!("Option {n}")).collect::<Vec<_>>()}),
+        json!({"id":11,"name":"customDuplicate","label":"First","type":"text"}),
+        json!({"id":12,"name":"customDuplicate","label":"Second","type":"text"}),
+        json!({"id":13,"name":"customLocale","label":"Locale","type":"dropdown","choices":["İ","i"]}),
+        json!({"id":14,"name":"customVariant","label":"Before","type":"text"}),
+        json!({"id":14,"name":"customVariant","label":"After","type":"text"}),
+        json!({"id":15,"name":"customduplicate","label":"Exact case differs","type":"text"}),
+        json!({"id":16,"name":"customOther","label":"Variant one","type":"text"}),
+        json!({"id":16,"name":"customHidden","label":"Variant two","type":"text"}),
+        json!({"id":17,"name":"customHidden","label":"Must see second occurrence","type":"text"}),
+    ]);
+    let report = admission::report(
+        &f,
+        parent,
+        vec![json!({"id":101,"firstName":"Synthetic","stage":"Lead","assignedUserId":3})],
+    )
+    .await;
+    let draft = commands::prepare(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &f.ctx,
+        PrepareFamilyRefresh {
+            request_id: Uuid::new_v4(),
+            parent_import_id: parent,
+            core_report_id: Some(report),
+            history_capture_id: None,
+            families: vec![Family::Metadata],
+        },
+    )
+    .await
+    .unwrap();
+    let claim = worker::claim_next(&f.pool).await.unwrap().unwrap();
+    assert_eq!(claim.plan, draft.families[0].plan_id);
+    cohort::freeze_page(&f.pool, &claim, &f.policy, 50)
+        .await
+        .unwrap();
+    for step in 0..30 {
+        if core_source::index_page(&f.pool, &f.key, &claim, &f.policy)
+            .await
+            .unwrap()
+            == core_source::Progress::Finished
+        {
+            break;
+        }
+        assert!(step < 29);
+    }
+    assert!(matches!(
+        metadata_catalog::qualify_field(&f.pool, &f.key, &claim, "10").await,
+        Err(MigrationError::ImportBusy)
+    ));
+    for step in 0..30 {
+        if mapping_inventory::run_once(&f.pool, &f.key, &f.policy, &claim)
+            .await
+            .unwrap()
+            == mapping_inventory::Progress::Finished
+        {
+            break;
+        }
+        assert!(step < 29);
+    }
+    for id in ["10", "15"] {
+        assert!(matches!(metadata_catalog::qualify_field(&f.pool,&f.key,&claim,id).await.unwrap(),Qualification::Ready(_)),"valid definitions remain eligible independent of create limits and exact-case-distinct names");
+    }
+    for id in ["11", "12", "14", "16", "17"] {
+        assert!(matches!(
+            metadata_catalog::qualify_field(&f.pool, &f.key, &claim, id)
+                .await
+                .unwrap(),
+            Qualification::Held(Hold::SourceConflict)
+        ));
+    }
+    let folded: bool = sqlx::query_scalar("SELECT lower('İ')=lower('i')")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let locale = metadata_catalog::qualify_field(&f.pool, &f.key, &claim, "13")
+        .await
+        .unwrap();
+    assert!(
+        matches!(locale, Qualification::Held(Hold::SourceConflict)) == folded,
+        "source choices follow the native database collation"
+    );
+    assert!(matches!(
+        metadata_catalog::qualify_field(&f.pool, &f.key, &claim, "99")
+            .await
+            .unwrap(),
+        Qualification::Held(Hold::SourceNotObserved)
+    ));
+    let foreign = cohort::Claim {
+        organization: OrganizationId(Uuid::new_v4()),
+        ..claim
+    };
+    assert!(
+        metadata_catalog::qualify_field(&f.pool, &f.key, &foreign, "10")
+            .await
+            .is_err()
+    );
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_family_refresh_source WHERE plan_id=$1 AND field_name_hmac IS NOT NULL").bind(claim.plan).fetch_one(&pool).await.unwrap(),10);
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM custom_field WHERE organization_id=$1")
+            .bind(f.org)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        0,
+        "qualification creates no native catalog objects"
+    );
+    // Simulate a retained pre-017 index without rewriting source ciphertext.
+    let mut legacy = pool.begin().await.unwrap();
+    sqlx::raw_sql("ALTER TABLE migration_family_refresh_source DISABLE TRIGGER USER")
+        .execute(&mut *legacy)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE migration_family_refresh_source SET catalog_names_indexed=false WHERE bundle_id=$1 AND kind='field'").bind(claim.bundle).execute(&mut *legacy).await.unwrap();
+    sqlx::raw_sql("ALTER TABLE migration_family_refresh_source ENABLE TRIGGER USER")
+        .execute(&mut *legacy)
+        .await
+        .unwrap();
+    legacy.commit().await.unwrap();
+    assert!(matches!(
+        metadata_catalog::qualify_field(&f.pool, &f.key, &claim, "10")
+            .await
+            .unwrap(),
+        Qualification::Held(Hold::SourceUnavailable)
+    ));
+    sqlx::raw_sql(include_str!("fixtures/family_refresh_byte_inventory.sql"))
+        .execute(&pool)
+        .await
+        .unwrap();
+}

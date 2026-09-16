@@ -7,8 +7,8 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 - Branch `codex/010g1-family-refresh`, base `dd140b0`; one primary writer and the
   previously authorized single reviewer. Planning review READY, round 1.
-- Current milestone: missing-activity ownership traversal following source
-  traversal at **`aaccd81`** and persisted proposals at **`b2cd149`**.
+- Current milestone: metadata catalog qualification following missing-activity
+  ownership traversal at **`c7e456b`**.
   The combined feature is unfinished. No merge/push/deploy.
 - Foundation: comparison policies, source ordering, bounded encrypted evidence,
   exact decimal counts, draft persistence ownership and native/lease guards.
@@ -188,6 +188,15 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   outside the cohort. Native rows and heads do not change. Refresh-owned initial
   identities must extend this selector when their owner shape lands. Complete-
   plan sealing remains pending; exhausted preparation is not confirmation.
+- Complete metadata field-name qualification now indexes every retained field
+  occurrence, including conflicting second definitions, under the existing exact
+  source-name namespace. Migration 017 meters those tokens and adds bounded name
+  and incomplete-index probes. A read-only adapter resolves the complete source
+  group, detects another source ID claiming the same name, authenticates the
+  selected name token, and checks choice labels with native database folding.
+  Native creation limits remain separate from field eligibility. Older source
+  indices hold until a new bundle is prepared. Catalog destination validation,
+  persisted catalog/Person proposals and metadata dispatch remain pending.
 - No refresh HTTP commands or Web workflow are exposed yet.
 
 ## Evidence and isolation
@@ -209,6 +218,14 @@ traversal evidence through `aaccd81` is archived in
   fencing, replay and byte-inventory checks passed
   (`/private/tmp/010g1-activity-missing-db.log`). Library Clippy passed with
   warnings denied (`/private/tmp/010g1-activity-missing-clippy.log`).
+
+- Complete field-name qualification: all **37** family-refresh database tests
+  passed serially (`/private/tmp/010g1-metadata-catalog-family-db.log`), including
+  conflicting second names, exact-case distinctions, database-folded option
+  collisions, older-index holds, tenant boundaries and byte accounting. Library
+  Clippy passed with warnings denied (`/private/tmp/010g1-metadata-catalog-clippy.log`);
+  formatting and diff checks passed. The first focused run found a stale fixture
+  count after expanding the occurrence set; corrected before the passing suite.
 
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB

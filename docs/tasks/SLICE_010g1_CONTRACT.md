@@ -465,3 +465,20 @@ it to hold. Historical authors/creators may reference inactive Organization
 members, while assignees must be active. Read summaries authenticate encrypted
 choices against relational disposition/target/source/parent/value bindings.
 HTTP exposure, complete classification and native application remain pending.
+
+### Complete metadata field-name qualification
+
+Retained core indexing stores an exact `field-name` HMAC for every parsed field
+occurrence, using the existing Organization/account namespace. Migration 017 adds
+an indexed equality token and a fixed-width indexing marker on the source row;
+the variable-width token participates in the common byte inventory and atomic
+source-page settlement. Conflicting occurrences of one source ID are not reduced
+to the first mapping's name. Qualification uses all occurrences before counting
+at most two distinct source IDs, then verifies the selected encrypted definition
+against its stored name token. Choice-label comparison additionally uses the
+native database's `lower` semantics over one bounded source definition.
+
+This is a read-only preparation prerequisite, not a native catalog grant. An old
+immutable source index without the marker holds as source unavailable and needs
+a newly prepared bundle; mapping revisions reuse that old index and cannot
+silently upgrade it. No unchecked backfill or native catalog mutation occurs.

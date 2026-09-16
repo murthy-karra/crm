@@ -10,7 +10,7 @@ use super::{
 use crate::{
     config::RawPayloadKey,
     domain::migration::{
-        activity_source, core_change_store, crypto, metadata_source,
+        activity_source, core_change_store, crypto, metadata_source, metadata_store,
         snapshot::SnapshotPolicy,
         snapshot_source::{self, Cursor, Request, Stream},
         MigrationError,
@@ -238,7 +238,16 @@ pub async fn index_page(
     };
     let (progress, checkpoint, next_phase) = if let Some(c) = c {
         let sequence: i64 = c.get("sequence");
-        let progress = index_capture(&mut tx, key, scope, snapshot, report_id, &c).await?;
+        let progress = index_capture(
+            &mut tx,
+            key,
+            scope,
+            snapshot,
+            report_id,
+            b.get("source_account_id"),
+            &c,
+        )
+        .await?;
         (progress, sequence, "capture")
     } else {
         (Progress::Finished, p.get("capture_checkpoint"), "mappings")
@@ -266,6 +275,7 @@ async fn index_capture(
     scope: Scope,
     snapshot: Uuid,
     report: Uuid,
+    account: i64,
     c: &PgRow,
 ) -> Result<Progress, MigrationError> {
     let stream =
@@ -396,8 +406,23 @@ async fn index_capture(
             }
             Err(e) => return Err(e),
         };
-        sqlx::query("INSERT INTO migration_family_refresh_source(id,bundle_id,plan_id,organization_id,core_page_id,capture_id,capture_sequence,ordinal,representation,kind,source_id,source_person_id,semantic_hmac,qualified,reason,nonce,ciphertext) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)")
-            .bind(id).bind(scope.bundle).bind(scope.plan).bind(scope.organization.0).bind(page).bind(c.get::<Uuid,_>("id")).bind(c.get::<i64,_>("sequence")).bind(ordinal as i32).bind(stream.representation()).bind(kind(stream)).bind(row.source).bind(row.person).bind(row.semantic.as_slice()).bind(why.is_none()).bind(why).bind(sealed.nonce.as_slice()).bind(sealed.ciphertext).execute(&mut *conn).await?;
+        let field_name_key = match &row.derived {
+            Derived::Metadata(record) => match &record.entity {
+                metadata_source::Entity::Field(field) => field.name.as_ref().map(|name| {
+                    metadata_store::source_key(
+                        key,
+                        scope.organization,
+                        account,
+                        "field-name",
+                        name.as_bytes(),
+                    )
+                }),
+                _ => None,
+            },
+            _ => None,
+        };
+        sqlx::query("INSERT INTO migration_family_refresh_source(id,bundle_id,plan_id,organization_id,core_page_id,capture_id,capture_sequence,ordinal,representation,kind,source_id,source_person_id,semantic_hmac,qualified,reason,nonce,ciphertext,field_name_hmac,catalog_names_indexed) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)")
+            .bind(id).bind(scope.bundle).bind(scope.plan).bind(scope.organization.0).bind(page).bind(c.get::<Uuid,_>("id")).bind(c.get::<i64,_>("sequence")).bind(ordinal as i32).bind(stream.representation()).bind(kind(stream)).bind(row.source).bind(row.person).bind(row.semantic.as_slice()).bind(why.is_none()).bind(why).bind(sealed.nonce.as_slice()).bind(sealed.ciphertext).bind(field_name_key).bind(stream==Stream::CustomFields).execute(&mut *conn).await?;
         qualified += usize::from(why.is_none());
     }
     Ok(Progress::Indexed {

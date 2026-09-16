@@ -377,6 +377,7 @@ async fn activity_source_imports_exact_notes_tasks_roles_and_confirmed_date_poli
         let done = confirm(&f, child, &final_plan).await;
         assert_eq!(done["counts"]["notes"]["applied"], "1");
         assert_eq!(done["counts"]["tasks"]["applied"], "3");
+        crate::db_family_refresh::assert_activity_after_states(&f, child, false).await;
         let native = sqlx::query("SELECT * FROM note WHERE organization_id=$1")
             .bind(f.org)
             .fetch_one(&f.pool)

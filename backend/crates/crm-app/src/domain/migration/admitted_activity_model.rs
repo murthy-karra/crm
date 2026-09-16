@@ -137,6 +137,8 @@ pub(crate) struct Manifest {
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct ResultData {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub after_state: Option<super::family_refresh::activity_baseline::AfterState>,
     pub source: BTreeMap<String, String>,
     pub native: Value,
     pub reasons: Vec<String>,

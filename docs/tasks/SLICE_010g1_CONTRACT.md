@@ -218,3 +218,41 @@ a terminal state by that boundary. Application cohort inserts and cursor/count
 updates require the current payer-plan preparation token, an unexpired lease and
 an active admin executor. Migrator maintenance access does not bypass the frozen
 identity/terminal proof checks. These checks supplement the page transaction.
+
+### Core evidence indexing and activity after-state checkpoint
+
+The payer plan indexes each selected retained core capture once per bundle.
+`migration_family_refresh_core_page` retains authenticated request/cursor evidence
+for successful, empty, rejected and inaccessible pages. Its immutable scoped raw
+reference supplies the original bytes; a page and its derived occurrences share
+one transaction, checkpoint and exact settlement. Source rows bind that page by
+composite FK. The database checks the live payer lease, source snapshot and frozen
+report sequence boundary. The runner revalidates the report's authenticated input
+tuple, source identity scope, raw AEAD/length, request HMAC, parser representation,
+ordinals and every retained semantic HMAC. No capture or Person is fetched live.
+
+The walk includes every occurrence before cohort filtering, including conflicting
+Person associations. Metadata/activity conversion uses the existing lossless
+parsers; raw canonical buffers are cleared before encrypting derived records.
+Oversized derived units retain the raw reference and an explicit hold. A 404 note
+detail is an inaccessible page, never a note-list fallback. Pagination resumes
+from authenticated accepted-page cursors, not inferred source IDs. The new index
+is an internal preparation runner; common mapping/classification and later plan
+revision reuse are not yet integrated. History has a separate source walk pending.
+
+New positively applied original/admitted note/task results now include optional
+`after_state: {version: 1, native: ...}` inside their existing encrypted result.
+The native JSON is read after INSERT under the same transaction and retains the
+initial revision and complete persisted fields. Already-present/held results do
+not acquire this proof. Existing ciphertext measuring/settlement includes these
+bytes; existing result HTTP projections remain unchanged. Old payloads deserialize
+with no after-state and are not backfilled from mutable native rows.
+
+Activity baseline discovery uses the current worker/admin/workspace admission,
+the frozen Person cohort, global identity, exact original/admitted manifest and
+successful first-owner result. It requires terminal first coverage and verifies
+the authenticated after-state's complete native binding/equality/revision. A local
+edit-and-revert is held; a missing record is erased; missing legacy evidence is
+unproven. Existing refresh heads take precedence (the first-result adapter returns
+`stale_head` for those targets). Prior-refresh-result and provable legacy adapters,
+metadata baselines and execution-time revalidation remain subsequent work.

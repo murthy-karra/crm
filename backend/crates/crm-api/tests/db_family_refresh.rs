@@ -263,13 +263,13 @@ async fn shared_evidence_is_charged_once_and_reservations_roll_back(pool: PgPool
     .await
     .unwrap();
     assert!(reserved);
-    sqlx::query("INSERT INTO migration_family_refresh_source(id,bundle_id,plan_id,organization_id,capture_id,capture_sequence,ordinal,representation,kind,source_id,source_person_id,semantic_hmac,qualified,nonce,ciphertext) VALUES($1,$2,$3,$4,$5,1,0,'synthetic','task','1','101',decode(repeat('00',32),'hex'),true,decode(repeat('00',24),'hex'),decode(repeat('00',16),'hex'))")
-        .bind(Uuid::new_v4()).bind(bundle).bind(plan).bind(f.org).bind(Uuid::new_v4()).execute(&mut *tx).await.unwrap();
+    sqlx::query("INSERT INTO migration_family_refresh_mapping(id,bundle_id,plan_id,organization_id,kind,source_key_hmac,disposition,nonce,ciphertext) VALUES($1,$2,$3,$4,'note_author',decode(repeat('00',32),'hex'),'hold',decode(repeat('00',24),'hex'),decode(repeat('00',16),'hex'))")
+        .bind(Uuid::new_v4()).bind(bundle).bind(plan).bind(f.org).execute(&mut *tx).await.unwrap();
     assert!(sqlx::query("SELECT 1/0").execute(&mut *tx).await.is_err());
     tx.rollback().await.unwrap();
     assert_eq!(
         sqlx::query_scalar::<_, i64>(
-            "SELECT count(*) FROM migration_family_refresh_source WHERE plan_id=$1"
+            "SELECT count(*) FROM migration_family_refresh_mapping WHERE plan_id=$1"
         )
         .bind(plan)
         .fetch_one(&pool)
@@ -301,15 +301,15 @@ async fn shared_evidence_is_charged_once_and_reservations_roll_back(pool: PgPool
     crm_api::auth::workspace::shared(&mut app_tx, crm_api::ids::OrganizationId::new(f.org))
         .await
         .unwrap();
-    sqlx::query("INSERT INTO migration_family_refresh_source(id,bundle_id,plan_id,organization_id,capture_id,capture_sequence,ordinal,representation,kind,source_id,semantic_hmac,qualified,nonce,ciphertext) VALUES($1,$2,$3,$4,$5,1,0,'synthetic','task','1',decode(repeat('00',32),'hex'),true,decode(repeat('00',24),'hex'),decode(repeat('00',16),'hex'))")
-        .bind(Uuid::new_v4()).bind(bundle).bind(plan).bind(f.org).bind(Uuid::new_v4()).execute(&mut *app_tx).await.unwrap();
+    sqlx::query("INSERT INTO migration_family_refresh_mapping(id,bundle_id,plan_id,organization_id,kind,source_key_hmac,disposition,nonce,ciphertext) VALUES($1,$2,$3,$4,'note_author',decode(repeat('00',32),'hex'),'hold',decode(repeat('00',24),'hex'),decode(repeat('00',16),'hex'))")
+        .bind(Uuid::new_v4()).bind(bundle).bind(plan).bind(f.org).execute(&mut *app_tx).await.unwrap();
     assert!(
         app_tx.commit().await.is_err(),
         "application cannot commit evidence without settling its charge"
     );
     assert_eq!(
         sqlx::query_scalar::<_, i64>(
-            "SELECT count(*) FROM migration_family_refresh_source WHERE plan_id=$1"
+            "SELECT count(*) FROM migration_family_refresh_mapping WHERE plan_id=$1"
         )
         .bind(plan)
         .fetch_one(&pool)
@@ -646,4 +646,379 @@ async fn cohort_recovers_proven_people_and_respects_terminal_boundary(pool: PgPo
         .await
         .unwrap();
     assert!(rows.is_empty());
+}
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn core_index_authenticates_all_occurrences_and_rolls_back_failed_pages(pool: PgPool) {
+    use crm_api::{
+        config::RawPayloadKey,
+        domain::migration::{
+            family_refresh::{
+                cohort::{self, Claim},
+                core_source,
+                evidence::{Purpose, Scope},
+                model::Family,
+            },
+            snapshot_source::Stream,
+        },
+        ids::OrganizationId,
+    };
+    let f = import_support::fixture_with_book(&pool, db_activity_source::book()).await;
+    let parent = db_activity_source::completed_parent(&f).await;
+    let mut tasks: Vec<_> = (0..100)
+        .map(|i| db_activity_source::task(500 + i))
+        .collect();
+    let mut duplicate = db_activity_source::task(500);
+    duplicate["personId"] = json!(999);
+    duplicate["name"] = json!("Distinct retained occurrence outside frozen People");
+    tasks.push(duplicate);
+    tasks.push(db_activity_source::task(700));
+    f.reader.set_records(Stream::TasksOpen, tasks);
+    f.reader
+        .set_records(Stream::Notes, vec![json!({"id":11,"personId":101})]);
+    f.reader
+        .set_raw(Stream::NoteDetail, 0, 404, b"{}".to_vec(), false);
+    let (bundle, plan, _) = draft_cohort(&pool, &f, parent, false).await;
+    let control = Uuid::new_v4();
+    assert!(sqlx::query_scalar::<_, bool>(
+        "SELECT crm_family_refresh_reserve($1,$2,$3,$4,0,16384,'control',2147483648,4294967296)"
+    )
+    .bind(f.org)
+    .bind(bundle)
+    .bind(plan)
+    .bind(control)
+    .fetch_one(&pool)
+    .await
+    .unwrap());
+    sqlx::query("SELECT crm_family_refresh_settle($1,$2,$3,$4,0,false)")
+        .bind(f.org)
+        .bind(bundle)
+        .bind(plan)
+        .bind(control)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let token = Uuid::new_v4();
+    sqlx::query("UPDATE migration_family_refresh_plan SET lease_token=$2,lease_epoch=1,lease_expires_at=clock_timestamp()+interval '60 seconds' WHERE id=$1").bind(plan).bind(token).execute(&pool).await.unwrap();
+    let claim = Claim {
+        organization: OrganizationId::new(f.org),
+        bundle,
+        plan,
+        token,
+        epoch: 1,
+    };
+    assert!(matches!(
+        cohort::freeze_page(&f.pool, &claim, &f.policy, 50)
+            .await
+            .unwrap(),
+        cohort::Progress::Advanced { finished: true, .. }
+    ));
+    let snapshot = sqlx::query_scalar::<_, Uuid>(
+        "SELECT source_snapshot_id FROM migration_family_refresh_plan WHERE id=$1",
+    )
+    .bind(plan)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let state = |pool: PgPool| async move {
+        sqlx::query_scalar::<_,serde_json::Value>("SELECT jsonb_build_object('plan',to_jsonb(p),'bundle',to_jsonb(b),'org',to_jsonb(s),'snapshot',to_jsonb(c),'pages',(SELECT count(*) FROM migration_family_refresh_core_page WHERE bundle_id=b.id),'sources',(SELECT count(*) FROM migration_family_refresh_source WHERE bundle_id=b.id)) FROM migration_family_refresh_plan p JOIN migration_family_refresh_bundle b ON b.id=p.bundle_id JOIN migration_snapshot_storage s ON s.organization_id=p.organization_id JOIN migration_snapshot c ON c.id=p.source_snapshot_id WHERE p.id=$1")
+            .bind(plan).fetch_one(&pool).await.unwrap()
+    };
+    let before = state(pool.clone()).await;
+    let calls = f.reader.calls();
+    assert!(
+        core_source::index_page(&f.pool, &RawPayloadKey::new([98; 32]), &claim, &f.policy)
+            .await
+            .is_err()
+    );
+    assert_eq!(state(pool.clone()).await, before);
+    // Corrupt one immutable source record only in this synthetic migrator-owned
+    // database, then restore it before asserting the failure.
+    let source=sqlx::query("SELECT r.id,r.semantic_hmac FROM migration_snapshot_record r JOIN migration_snapshot_capture c ON c.id=r.capture_id WHERE r.snapshot_id=$1 AND c.stream='users' ORDER BY c.sequence,r.ordinal LIMIT 1").bind(snapshot).fetch_one(&pool).await.unwrap();
+    sqlx::raw_sql("ALTER TABLE migration_snapshot_record DISABLE TRIGGER USER")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE migration_snapshot_record SET semantic_hmac=decode(repeat('00',32),'hex') WHERE id=$1").bind(source.get::<Uuid,_>("id")).execute(&pool).await.unwrap();
+    let failure = core_source::index_page(&f.pool, &f.key, &claim, &f.policy).await;
+    sqlx::query("UPDATE migration_snapshot_record SET semantic_hmac=$2 WHERE id=$1")
+        .bind(source.get::<Uuid, _>("id"))
+        .bind(source.get::<Vec<u8>, _>("semantic_hmac"))
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::raw_sql("ALTER TABLE migration_snapshot_record ENABLE TRIGGER USER")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(failure.is_err());
+    assert_eq!(state(pool.clone()).await, before);
+    sqlx::raw_sql("CREATE FUNCTION test_capture_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.capture_checkpoint>OLD.capture_checkpoint THEN RAISE EXCEPTION 'synthetic capture checkpoint failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER test_capture_fault BEFORE UPDATE ON migration_family_refresh_plan FOR EACH ROW EXECUTE FUNCTION test_capture_fault()")
+        .execute(&pool).await.unwrap();
+    assert!(core_source::index_page(&f.pool, &f.key, &claim, &f.policy)
+        .await
+        .is_err());
+    assert_eq!(state(pool.clone()).await, before);
+    sqlx::raw_sql("DROP TRIGGER test_capture_fault ON migration_family_refresh_plan; DROP FUNCTION test_capture_fault()").execute(&pool).await.unwrap();
+    let mut pages = 0;
+    loop {
+        match core_source::index_page(&f.pool, &f.key, &claim, &f.policy)
+            .await
+            .unwrap()
+        {
+            core_source::Progress::Indexed { .. } => {
+                pages += 1;
+                assert!(pages < 30);
+            }
+            core_source::Progress::Finished => break,
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+    assert!(pages >= 8);
+    assert_eq!(
+        f.reader.calls(),
+        calls,
+        "indexing must use retained evidence only"
+    );
+    let variants=sqlx::query("SELECT count(*) AS n,count(DISTINCT semantic_hmac) AS variants,count(DISTINCT source_person_id) AS people FROM migration_family_refresh_source WHERE bundle_id=$1 AND kind='task' AND source_id='500'").bind(bundle).fetch_one(&pool).await.unwrap();
+    assert_eq!(variants.get::<i64, _>("n"), 2);
+    assert_eq!(variants.get::<i64, _>("variants"), 2);
+    assert_eq!(
+        variants.get::<i64, _>("people"),
+        2,
+        "do not hide conflicting Person links by cohort filtering"
+    );
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_family_refresh_core_page WHERE bundle_id=$1 AND stream='note_detail' AND reason='source_unavailable'").bind(bundle).fetch_one(&pool).await.unwrap(),1);
+    let cursor=sqlx::query("SELECT id,nonce,ciphertext FROM migration_family_refresh_core_page WHERE bundle_id=$1 AND stream='tasks_open' AND checkpoint=1").bind(bundle).fetch_one(&pool).await.unwrap();
+    let scope = Scope {
+        organization: claim.organization,
+        bundle,
+        plan,
+        family: Family::Activity,
+        revision: 1,
+    };
+    let payload: serde_json::Value = scope
+        .open(
+            &f.key,
+            cursor.get("id"),
+            Purpose::Binding,
+            cursor.get("nonce"),
+            cursor.get("ciphertext"),
+        )
+        .unwrap();
+    assert_eq!(payload["cursor"]["offset"], 100);
+    let after = state(pool.clone()).await;
+    assert_eq!(after["plan"]["phase"], "mappings");
+    assert_eq!(
+        after["plan"]["measured_bytes"],
+        after["plan"]["retained_bytes"]
+    );
+    assert_eq!(
+        core_source::index_page(&f.pool, &f.key, &claim, &f.policy)
+            .await
+            .unwrap(),
+        core_source::Progress::Finished
+    );
+    assert_eq!(state(pool.clone()).await, after);
+}
+
+pub(super) async fn assert_activity_after_states(
+    f: &import_support::Fixture,
+    root: Uuid,
+    admitted: bool,
+) {
+    use crm_api::{
+        domain::migration::{
+            crypto,
+            family_refresh::activity_baseline::{self, AfterState, Binding},
+        },
+        ids::OrganizationId,
+    };
+    let prefix = if admitted {
+        "migration_admitted_activity"
+    } else {
+        "migration_activity"
+    };
+    let rows=sqlx::query(&format!("SELECT r.*,a.snapshot_id,m.native_source_key FROM {prefix}_result r JOIN {prefix}_import a ON a.id=r.import_id AND a.organization_id=r.organization_id JOIN {prefix}_manifest m ON m.id=r.manifest_id AND m.plan_id=r.plan_id AND m.organization_id=r.organization_id WHERE r.import_id=$1 AND r.organization_id=$2 AND r.disposition='applied'"))
+        .bind(root).bind(f.org).fetch_all(&f.pool).await.unwrap();
+    assert!(!rows.is_empty());
+    for r in rows {
+        let plan: Uuid = r.get("plan_id");
+        let bytes = crypto::open_snapshot(
+            &f.key,
+            OrganizationId::new(f.org),
+            r.get("snapshot_id"),
+            r.get("id"),
+            &format!("activity-v1:{plan}:result"),
+            r.get("nonce"),
+            r.get("ciphertext"),
+        )
+        .unwrap();
+        let result: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let proof: AfterState = serde_json::from_value(result["after_state"].clone()).unwrap();
+        let query = match r.get::<String, _>("kind").as_str() {
+            "note" => "SELECT to_jsonb(n) FROM note n WHERE id=$1 AND organization_id=$2",
+            "task" => "SELECT to_jsonb(t) FROM task t WHERE id=$1 AND organization_id=$2",
+            _ => panic!("unexpected kind"),
+        };
+        let native: serde_json::Value = sqlx::query_scalar(query)
+            .bind(r.get::<Uuid, _>("target_id"))
+            .bind(f.org)
+            .fetch_one(&f.pool)
+            .await
+            .unwrap();
+        let baseline = activity_baseline::verify(
+            Some(&proof),
+            Binding {
+                organization: OrganizationId::new(f.org),
+                person: r.get("person_id"),
+                target: r.get("target_id"),
+                result: r.get("id"),
+                first_import: root,
+                native_source_key: &r.get::<String, _>("native_source_key"),
+            },
+            Some(&native),
+        )
+        .unwrap();
+        assert_eq!(baseline.native, native);
+        assert!(baseline.owned);
+    }
+}
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn admitted_activity_retains_exact_initial_after_state(pool: PgPool) {
+    let (f, _, root, ready) = crate::db_admitted_activity::prepared(&pool, 1).await;
+    crate::db_admitted_activity::confirm_ready(&f, root, &ready).await;
+    crate::db_admitted_activity::drain(&f).await;
+    assert_activity_after_states(&f, root, true).await;
+    use crm_api::domain::migration::family_refresh::{
+        activity_baseline::{self, Discovery},
+        model::{Hold, Kind},
+    };
+    let parent: Uuid = sqlx::query_scalar(
+        "SELECT parent_import_id FROM migration_admitted_activity_import WHERE id=$1",
+    )
+    .bind(root)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let claim = prepared_indexed_refresh(&pool, &f, parent).await;
+    let bundle = claim.bundle;
+    let cohort:Uuid=sqlx::query_scalar("SELECT id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND source_person_id='104'").bind(bundle).fetch_one(&pool).await.unwrap();
+    for (kind, source) in [(Kind::Note, "11"), (Kind::Task, "21")] {
+        assert!(matches!(
+            activity_baseline::discover(&f.pool, &f.key, &claim, cohort, kind, source)
+                .await
+                .unwrap(),
+            Discovery::Proven(_)
+        ));
+    }
+    let wrong:Uuid=sqlx::query_scalar("SELECT id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND source_person_id='101'").bind(bundle).fetch_one(&pool).await.unwrap();
+    assert!(matches!(
+        activity_baseline::discover(&f.pool, &f.key, &claim, wrong, Kind::Note, "11")
+            .await
+            .unwrap(),
+        Discovery::Held(Hold::IdentityMismatch)
+    ));
+
+    let row=sqlx::query("SELECT retained_bytes,measured_bytes,reserved_bytes FROM migration_admitted_activity_import WHERE id=$1").bind(root).fetch_one(&pool).await.unwrap();
+    assert_eq!(
+        row.get::<i64, _>("retained_bytes"),
+        row.get::<i64, _>("measured_bytes")
+    );
+    assert_eq!(row.get::<i64, _>("reserved_bytes"), 0);
+}
+
+async fn prepared_indexed_refresh(
+    pool: &PgPool,
+    f: &import_support::Fixture,
+    parent: Uuid,
+) -> crm_api::domain::migration::family_refresh::cohort::Claim {
+    use crm_api::{
+        domain::migration::family_refresh::{
+            cohort::{self, Claim},
+            core_source,
+        },
+        ids::OrganizationId,
+    };
+    let (bundle, plan, _) = draft_cohort(pool, f, parent, false).await;
+    let control = Uuid::new_v4();
+    assert!(sqlx::query_scalar::<_, bool>(
+        "SELECT crm_family_refresh_reserve($1,$2,$3,$4,0,16384,'control',2147483648,4294967296)"
+    )
+    .bind(f.org)
+    .bind(bundle)
+    .bind(plan)
+    .bind(control)
+    .fetch_one(pool)
+    .await
+    .unwrap());
+    sqlx::query("SELECT crm_family_refresh_settle($1,$2,$3,$4,0,false)")
+        .bind(f.org)
+        .bind(bundle)
+        .bind(plan)
+        .bind(control)
+        .execute(pool)
+        .await
+        .unwrap();
+    let token = Uuid::new_v4();
+    sqlx::query("UPDATE migration_family_refresh_plan SET lease_token=$2,lease_epoch=1,lease_expires_at=clock_timestamp()+interval '60 seconds' WHERE id=$1").bind(plan).bind(token).execute(pool).await.unwrap();
+    let claim = Claim {
+        organization: OrganizationId::new(f.org),
+        bundle,
+        plan,
+        token,
+        epoch: 1,
+    };
+    cohort::freeze_page(&f.pool, &claim, &f.policy, 50)
+        .await
+        .unwrap();
+    for step in 0..30 {
+        if core_source::index_page(&f.pool, &f.key, &claim, &f.policy)
+            .await
+            .unwrap()
+            == core_source::Progress::Finished
+        {
+            break;
+        }
+        assert!(step < 29);
+    }
+    claim
+}
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn original_activity_discovers_only_its_proven_baseline(pool: PgPool) {
+    use crm_api::domain::migration::{
+        family_refresh::{
+            activity_baseline::{self, Discovery},
+            model::{Hold, Kind},
+        },
+        snapshot_source::Stream,
+    };
+    let book = db_activity_source::book();
+    book.set_records(Stream::TasksOpen, vec![db_activity_source::task(21)]);
+    let f = import_support::fixture_with_book(&pool, book).await;
+    let parent = db_activity_source::completed_parent(&f).await;
+    let (child, ready) = db_activity_source::prepare(&f, parent).await;
+    let choices = db_activity_source::choices(&f, child).await;
+    let ready = db_activity_source::replan(&f, child, &ready, choices, None).await;
+    db_activity_source::confirm(&f, child, &ready).await;
+    assert_activity_after_states(&f, child, false).await;
+    let claim = prepared_indexed_refresh(&pool, &f, parent).await;
+    let cohort:Uuid=sqlx::query_scalar("SELECT id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND source_person_id='101'").bind(claim.bundle).fetch_one(&pool).await.unwrap();
+    assert!(matches!(
+        activity_baseline::discover(&f.pool, &f.key, &claim, cohort, Kind::Task, "21")
+            .await
+            .unwrap(),
+        Discovery::Proven(_)
+    ));
+    assert!(matches!(
+        activity_baseline::discover(&f.pool, &f.key, &claim, cohort, Kind::Task, "999")
+            .await
+            .unwrap(),
+        Discovery::Held(Hold::BaselineUnproven)
+    ));
 }

@@ -39,6 +39,15 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   with the checkpoint. Database guards also enforce the frozen identity/terminal
   boundary and reject application cohort/progress writes without a live payer
   claim. Dispatcher integration remains pending.
+- Core capture indexing now retains authenticated page/cursor evidence and every
+  source occurrence before Person filtering, with scoped raw references, lease
+  fences and atomic accounting/checkpoints. It reuses the existing metadata and
+  activity parsers and performs no source calls. Dispatcher/classification and
+  plan-revision reuse remain unwired; history indexing is still pending.
+- New positively applied original/admitted activity results retain exact encrypted
+  native after-state/revision. A first-result discovery adapter checks frozen
+  cohort/identity/manifest/result ownership and current equality/revision; missing
+  legacy evidence holds. Metadata and previous-refresh baseline adapters remain.
 - No refresh HTTP commands, family worker or Web workflow are exposed yet.
 
 ## Evidence and isolation
@@ -90,6 +99,20 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   application, formatting and diff checks passed. Logs:
   `/private/tmp/010g1-cohort-fences-db-tests.log` and
   `/private/tmp/010g1-cohort-fences-schema.log`.
+- Core indexing/activity baseline checkpoint: all 9 family database tests, the
+  existing original activity fidelity regression (plain/HTML long notes and task
+  date/role policy), and all 29 focused Rust tests passed. Tests cover authenticated
+  pagination, conflicting Person occurrences, inaccessible detail, corrupted source
+  HMAC, injected checkpoint rollback, replay, exact byte inventory/settlement,
+  original/admitted baseline discovery and wrong-cohort rejection. Fresh schema,
+  `crm-app --lib` Clippy with warnings denied, formatting and diff checks passed.
+  Initial request serialization/trigger-record-shape errors and synthetic fixture
+  assumptions were corrected and rerun. Logs:
+  `/private/tmp/010g1-core-index-db-tests.log`,
+  `/private/tmp/010g1-after-state-original-regression.log`,
+  `/private/tmp/010g1-index-baseline-unit.log`,
+  `/private/tmp/010g1-index-baseline-clippy.log`, and
+  `/private/tmp/010g1-core-index-schema.log`. No end-to-end refresh claim.
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB
   `crm_010g1_schema_20260915`. Database tests run serially.
@@ -97,6 +120,7 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   No live FUB/customer processing. Linker reports the large `__eh_frame` warning.
 
 Remaining: final capability inventories and refresh-owned initial identities;
-source and baseline discovery; cohort dispatcher integration; metadata/activity/history execution; typed
+history source indexing, index plan-revision reuse, legacy/metadata/prior-refresh
+baselines; cohort/index dispatcher integration; metadata/activity/history execution; typed
 commands and bounded readers; common Web workflow; independent implementation
 review; full database/browser/performance/final gates. Do not report 010g1 done.

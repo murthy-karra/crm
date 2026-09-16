@@ -7,8 +7,8 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 - Branch `codex/010g1-family-refresh`, base `dd140b0`; one primary writer and the
   previously authorized single reviewer. Planning review READY, round 1.
-- Current milestone: retained activity mapping conversion following typed
-  mapping revisions at **`8371c7b`**.
+- Current milestone: persisted activity proposals following mapping conversion
+  at **`4690233`** and typed mapping revisions at **`8371c7b`**.
   The combined feature is unfinished. No merge/push/deploy.
 - Foundation: comparison policies, source ordering, bounded encrypted evidence,
   exact decimal counts, draft persistence ownership and native/lease guards.
@@ -170,7 +170,12 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   validates explicit kind/timezone choices and reconciles source-user timezone
   evidence. Missing timezone and conflicting evidence hold date-only tasks. It
   returns native proposal inputs and exact mapping/source references without
-  source calls or native writes; persisted activity classification remains next.
+  source calls or native writes. A typed activity-unit runner now persists
+  encrypted insert/update/current or held outcomes with exact first-coverage,
+  baseline/head/revision and mapping evidence. Replay preserves earlier holds and
+  prospective IDs before mutable checks. Manifest/count/position/byte settlement
+  is atomic; native rows/identities/heads remain unchanged. Bounded traversal,
+  absent-owned classification and complete-plan sealing remain pending.
 - No refresh HTTP commands or Web workflow are exposed yet.
 
 ## Evidence and isolation
@@ -248,6 +253,15 @@ archived in [Project history](../plans/PROJECT_HISTORY.md#010g1-preparation-and-
   Logs: `/private/tmp/010g1-activity-mapping-conflict-final-db.log` and
   `/private/tmp/010g1-activity-mapping-final-clippy.log`. Runner: serial
   `all family_refresh_plan_choices`; preceding regression evidence remains above.
+- Activity-unit persistence: the new serial database scenario and API-library
+  Clippy passed, with formatting/diff checks. It verifies an imported task update,
+  new-task prospective ID, inactive-assignee hold, exact encrypted/relational
+  counts, capacity/injected-failure rollback and replay after mapping revocation.
+  Native task snapshots and refresh heads remain unchanged. Initial Clippy enum
+  size findings were resolved with boxed evidence before the passing run. Logs:
+  `/private/tmp/010g1-activity-plan-db.log` and
+  `/private/tmp/010g1-activity-plan-final-clippy.log`. Runner: serial
+  `all family_refresh_activity_proposals`; this new adapter is not dispatched yet.
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB
   `crm_010g1_schema_20260915`. Database tests run serially.

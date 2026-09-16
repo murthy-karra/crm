@@ -7,8 +7,8 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 - Branch `codex/010g1-family-refresh`, base `dd140b0`; one primary writer and the
   previously authorized single reviewer. Planning review READY, round 1.
-- Current milestone: metadata catalog qualification following missing-activity
-  ownership traversal at **`c7e456b`**.
+- Current milestone: catalog destination inspection following complete source
+  field-name qualification at **`fbbb0aa`**.
   The combined feature is unfinished. No merge/push/deploy.
 - Foundation: comparison policies, source ordering, bounded encrypted evidence,
   exact decimal counts, draft persistence ownership and native/lease guards.
@@ -197,6 +197,17 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   Native creation limits remain separate from field eligibility. Older source
   indices hold until a new bundle is prepared. Catalog destination validation,
   persisted catalog/Person proposals and metadata dispatch remain pending.
+- Catalog destination inspection now authenticates mapping/parent evidence,
+  rechecks native snapshots and exact original/admitted registry claims, rejects
+  competing field/option targets, preserves prospective IDs, checks native label
+  and capacity limits, and requires complete option choices for new fields. It
+  requires an already-ready shared catalog registry; typed refresh admission
+  still needs to wire its handover. Migration 018 indexes target collision probes.
+  This adapter grants no native permission and persists no catalog unit.
+- Before catalog execution, mapping discovery must preserve first retained tag
+  representative order across People. Its current UUID source traversal must be
+  replaced for new bundles while preserving old in-progress cursor semantics;
+  this is identified follow-up work, not a verified capability.
 - No refresh HTTP commands or Web workflow are exposed yet.
 
 ## Evidence and isolation
@@ -226,6 +237,15 @@ traversal evidence through `aaccd81` is archived in
   Clippy passed with warnings denied (`/private/tmp/010g1-metadata-catalog-clippy.log`);
   formatting and diff checks passed. The first focused run found a stale fixture
   count after expanding the occurrence set; corrected before the passing suite.
+
+- Catalog destination inspection: all **39** family-refresh database tests
+  passed serially (`/private/tmp/010g1-metadata-destination-family-db.log`),
+  including real admitted registry reuse/conflict, missing readiness, complete
+  option creation, unrelated label-collision isolation, duplicate destinations,
+  stable IDs, changed snapshots, native capacity and lease/tenant boundaries.
+  Library Clippy passed with warnings denied
+  (`/private/tmp/010g1-metadata-destination-final-clippy.log`); formatting and diff
+  checks passed. Native execution and persistence of these proposals remain.
 
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB

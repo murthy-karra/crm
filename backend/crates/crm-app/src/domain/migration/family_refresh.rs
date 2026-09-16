@@ -52,3 +52,5 @@ pub mod activity_walk;
 pub mod activity_missing;
 
 pub mod metadata_catalog;
+
+pub mod metadata_destination;

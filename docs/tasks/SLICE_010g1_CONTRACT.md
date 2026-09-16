@@ -482,3 +482,20 @@ This is a read-only preparation prerequisite, not a native catalog grant. An old
 immutable source index without the marker holds as source unavailable and needs
 a newly prepared bundle; mapping revisions reuse that old index and cannot
 silently upgrade it. No unchecked backfill or native catalog mutation occurs.
+
+### Catalog destination inspection
+
+The read-only catalog adapter authenticates the selected mapping and its parent,
+rechecks native destination snapshots and existing original/admitted registry
+claims, and preserves Plan's prospective IDs. It requires the completed shared
+catalog handover; it never treats an inactive registry as empty or initiates that
+handover from a reader. Refresh preparation still needs to wire the existing
+handover into its typed admission path before exposing this workflow.
+
+Distinct field/option source keys cannot claim one destination. Creation checks
+use bounded prospective sets and native database folding, preserve the 200-tag,
+50-field and 50-option limits, and require all captured options to be explicitly
+created together for a new choice field. Colliding labels hold the affected
+candidates rather than unrelated definitions. Migration 018 supports scoped
+bounded target probes. Inspection produces evidence only; final catalog units,
+refresh-owned claims and execution revalidation are separate remaining work.

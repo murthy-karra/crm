@@ -3523,3 +3523,161 @@ async fn family_refresh_metadata_admitted_discovery_preserves_coverage_and_owner
             .is_err()
     );
 }
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn family_refresh_catalog_authenticates_existing_admitted_claims(migrator: PgPool) {
+    use crm_api::domain::migration::family_refresh::{
+        commands::{self, PrepareFamilyRefresh},
+        mapping_selection::{MappingPatch, Selection},
+        metadata_destination::{self, Inspection},
+        model::{Family, Hold},
+        plan_commands::{self, PlanFamilyRefresh},
+        preparation_worker::{self as worker, Progress},
+    };
+    let (f, root, plan, _) = prepared_typed(&migrator).await;
+    approve_all(&f, root, plan).await;
+    finish(&f, root).await;
+    let parent: Uuid = sqlx::query_scalar(
+        "SELECT parent_import_id FROM migration_admitted_metadata_import WHERE id=$1",
+    )
+    .bind(root)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    let selected=report(&f,parent,vec![json!({"id":104,"firstName":"Admitted","lastName":"Person","stage":"Lead","assignedUserId":3,"tags":["PAST CLIENT"]})]).await;
+    let before:serde_json::Value=sqlx::query_scalar("SELECT jsonb_agg(to_jsonb(c) ORDER BY kind,source_key) FROM migration_metadata_catalog_claim c WHERE organization_id=$1").bind(f.org).fetch_one(&migrator).await.unwrap();
+    let draft = commands::prepare(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &f.ctx,
+        PrepareFamilyRefresh {
+            request_id: Uuid::new_v4(),
+            parent_import_id: parent,
+            core_report_id: Some(selected),
+            history_capture_id: None,
+            families: vec![Family::Metadata],
+        },
+    )
+    .await
+    .unwrap();
+    for step in 0..40 {
+        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+            break;
+        }
+        assert!(step < 39);
+    }
+    let rows=sqlx::query("SELECT m.id,c.target_id FROM migration_family_refresh_mapping m JOIN migration_metadata_catalog_claim c ON c.organization_id=m.organization_id AND c.kind=m.kind AND c.source_key=m.source_key_hmac JOIN migration_family_refresh_bundle b ON b.id=m.bundle_id AND b.organization_id=m.organization_id AND b.source_account_id=c.source_account_id WHERE m.plan_id=$1").bind(draft.families[0].plan_id).fetch_all(&migrator).await.unwrap();
+    assert_eq!(rows.len(), 7);
+    let mut current = plan_commands::plan(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &f.ctx,
+        draft.bundle_id,
+        PlanFamilyRefresh {
+            request_id: Uuid::new_v4(),
+            expected_revision: draft.revision,
+            family: Family::Metadata,
+            patches: rows
+                .into_iter()
+                .map(|r| MappingPatch {
+                    mapping_id: r.get("id"),
+                    choice: Selection::Existing {
+                        target_id: r.get("target_id"),
+                    },
+                })
+                .collect(),
+            source_timezone: None,
+        },
+    )
+    .await
+    .unwrap();
+    for step in 0..40 {
+        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+            break;
+        }
+        assert!(step < 39);
+    }
+    let claim = crate::db_family_refresh_commands::claim_metadata_inspection(
+        &f,
+        current.bundle_id,
+        current.families[0].plan_id,
+    )
+    .await;
+    let rows = sqlx::query(
+        "SELECT id,kind,target_id FROM migration_family_refresh_mapping WHERE plan_id=$1",
+    )
+    .bind(claim.plan)
+    .fetch_all(&migrator)
+    .await
+    .unwrap();
+    let mut tag = Uuid::nil();
+    for row in rows {
+        if row.get::<String, _>("kind") == "tag" {
+            tag = row.get("id");
+        }
+        let inspected = metadata_destination::inspect(&f.pool, &f.key, &claim, row.get("id"))
+            .await
+            .unwrap();
+        let Inspection::Ready(evidence) = inspected else {
+            panic!("an explicit exact admitted claim must remain reusable");
+        };
+        assert_eq!(evidence.target, row.get::<Uuid, _>("target_id"));
+    }
+    worker::release(&f.pool, &claim).await.unwrap();
+    current = plan_commands::plan(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &f.ctx,
+        current.bundle_id,
+        PlanFamilyRefresh {
+            request_id: Uuid::new_v4(),
+            expected_revision: current.revision.clone(),
+            family: Family::Metadata,
+            patches: vec![MappingPatch {
+                mapping_id: tag,
+                choice: Selection::CreateMatching,
+            }],
+            source_timezone: None,
+        },
+    )
+    .await
+    .unwrap();
+    for step in 0..40 {
+        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+            break;
+        }
+        assert!(step < 39);
+    }
+    let claim = crate::db_family_refresh_commands::claim_metadata_inspection(
+        &f,
+        current.bundle_id,
+        current.families[0].plan_id,
+    )
+    .await;
+    let tag: Uuid = sqlx::query_scalar(
+        "SELECT id FROM migration_family_refresh_mapping WHERE plan_id=$1 AND kind='tag'",
+    )
+    .bind(claim.plan)
+    .fetch_one(&migrator)
+    .await
+    .unwrap();
+    assert!(
+        matches!(
+            metadata_destination::inspect(&f.pool, &f.key, &claim, tag)
+                .await
+                .unwrap(),
+            Inspection::Held(Hold::SourceConflict)
+        ),
+        "a new prospective ID cannot replace an immutable claim"
+    );
+    let after:serde_json::Value=sqlx::query_scalar("SELECT jsonb_agg(to_jsonb(c) ORDER BY kind,source_key) FROM migration_metadata_catalog_claim c WHERE organization_id=$1").bind(f.org).fetch_one(&migrator).await.unwrap();
+    assert_eq!(
+        after, before,
+        "inspection preserves exact original owner and encrypted registry evidence"
+    );
+    worker::release(&f.pool, &claim).await.unwrap();
+}

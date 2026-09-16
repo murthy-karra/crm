@@ -1359,6 +1359,7 @@ async fn family_refresh_plan_choices_are_versioned_atomic_and_inherited(pool: Pg
             .await
             .unwrap()
     );
+    assert_metadata_destination_inspection(&pool, &f, bundle, successor).await;
     let third = plan_commands::plan(
         &f.pool,
         &f.key,
@@ -2326,4 +2327,367 @@ async fn family_refresh_metadata_catalog_qualifies_complete_names_and_choices(po
         .execute(&pool)
         .await
         .unwrap();
+}
+
+async fn assert_metadata_destination_inspection(
+    pool: &PgPool,
+    f: &import_support::Fixture,
+    bundle: Uuid,
+    plan: Uuid,
+) {
+    use crm_api::domain::migration::family_refresh::{
+        cohort::Claim,
+        metadata_destination::{self, Inspection},
+        model::Hold,
+    };
+    let token = Uuid::new_v4();
+    let mut tx = f.pool.begin().await.unwrap();
+    sqlx::query("SELECT set_config('crm.family_refresh_reader','fub-family-refresh-v1',true)")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let epoch:i64=sqlx::query_scalar("UPDATE migration_family_refresh_plan SET lease_token=$3,lease_epoch=lease_epoch+1,lease_expires_at=clock_timestamp()+interval '60 seconds' WHERE id=$1 AND organization_id=$2 RETURNING lease_epoch").bind(plan).bind(f.org).bind(token).fetch_one(&mut *tx).await.unwrap();
+    tx.commit().await.unwrap();
+    let claim = Claim {
+        organization: f.ctx.organization_id,
+        bundle,
+        plan,
+        token,
+        epoch,
+    };
+    let rows=sqlx::query("SELECT id,kind,target_id FROM migration_family_refresh_mapping WHERE plan_id=$1 ORDER BY kind").bind(plan).fetch_all(pool).await.unwrap();
+    let first: Uuid = rows[0].get("id");
+    assert!(matches!(
+        metadata_destination::inspect(&f.pool, &f.key, &claim, first).await,
+        Err(MigrationError::ReleaseNotReady)
+    ));
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_metadata_identity WHERE organization_id=$1"
+        )
+        .bind(f.org)
+        .fetch_one(pool)
+        .await
+        .unwrap(),
+        0
+    );
+    // Synthetic ready empty registry; production handover remains a typed,
+    // workspace-exclusive operation and must never occur in a read adapter.
+    sqlx::query("INSERT INTO migration_metadata_catalog_readiness(organization_id,state,activated_at,activated_by_user_id,engine_version) VALUES($1,'ready',clock_timestamp(),$2,'fub-admitted-metadata-v1')").bind(f.org).bind(f.actor).execute(pool).await.unwrap();
+    let mut tag = Uuid::nil();
+    let mut field = Uuid::nil();
+    let mut option = Uuid::nil();
+    let mut native_field = Uuid::nil();
+    let calls = f.reader.calls();
+    for row in rows {
+        let id: Uuid = row.get("id");
+        let Inspection::Ready(evidence) =
+            metadata_destination::inspect(&f.pool, &f.key, &claim, id)
+                .await
+                .unwrap()
+        else {
+            panic!("explicit valid catalog choice must qualify");
+        };
+        assert_eq!(evidence.target, row.get::<Uuid, _>("target_id"));
+        let Inspection::Ready(replay) = metadata_destination::inspect(&f.pool, &f.key, &claim, id)
+            .await
+            .unwrap()
+        else {
+            panic!("unchanged catalog choice must remain ready");
+        };
+        assert_eq!(
+            serde_json::to_value(&evidence).unwrap(),
+            serde_json::to_value(&replay).unwrap()
+        );
+        match row.get::<String, _>("kind").as_str() {
+            "tag" => tag = id,
+            "field" => {
+                field = id;
+                native_field = evidence.target;
+            }
+            "option" => option = id,
+            _ => panic!("unexpected kind"),
+        }
+    }
+    assert_eq!(
+        f.reader.calls(),
+        calls,
+        "catalog validation never contacts FUB"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM tag WHERE organization_id=$1")
+            .bind(f.org)
+            .fetch_one(pool)
+            .await
+            .unwrap(),
+        0,
+        "prospective tag stays absent"
+    );
+    let original:serde_json::Value=sqlx::query_scalar("SELECT jsonb_build_object('label',label,'updated_at',updated_at) FROM custom_field WHERE id=$1").bind(native_field).fetch_one(pool).await.unwrap();
+    sqlx::query("UPDATE custom_field SET label='Changed destination' WHERE id=$1")
+        .bind(native_field)
+        .execute(pool)
+        .await
+        .unwrap();
+    for id in [field, option] {
+        assert!(
+            matches!(
+                metadata_destination::inspect(&f.pool, &f.key, &claim, id)
+                    .await
+                    .unwrap(),
+                Inspection::Held(Hold::TargetUnavailable)
+            ),
+            "a changed field also holds dependent options"
+        );
+    }
+    sqlx::query("UPDATE custom_field SET label=$2,updated_at=($3::text)::timestamptz WHERE id=$1")
+        .bind(native_field)
+        .bind(original["label"].as_str().unwrap())
+        .bind(original["updated_at"].as_str().unwrap())
+        .execute(pool)
+        .await
+        .unwrap();
+    let conflicting = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO tag(id,organization_id,name,created_by_user_id) VALUES($1,$2,'NEW LABEL',$3)",
+    )
+    .bind(conflicting)
+    .bind(f.org)
+    .bind(f.actor)
+    .execute(pool)
+    .await
+    .unwrap();
+    assert!(
+        matches!(
+            metadata_destination::inspect(&f.pool, &f.key, &claim, tag)
+                .await
+                .unwrap(),
+            Inspection::Held(Hold::TargetUnavailable)
+        ),
+        "native database label collision holds create matching"
+    );
+    sqlx::query("DELETE FROM tag WHERE id=$1")
+        .bind(conflicting)
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO tag(organization_id,name,created_by_user_id) SELECT $1,'Capacity '||n,$2 FROM generate_series(1,200) n").bind(f.org).bind(f.actor).execute(pool).await.unwrap();
+    assert!(
+        matches!(
+            metadata_destination::inspect(&f.pool, &f.key, &claim, tag)
+                .await
+                .unwrap(),
+            Inspection::Held(Hold::TargetUnavailable)
+        ),
+        "full native tag capacity holds creation"
+    );
+    sqlx::query("DELETE FROM tag WHERE organization_id=$1 AND name LIKE 'Capacity %'")
+        .bind(f.org)
+        .execute(pool)
+        .await
+        .unwrap();
+    let foreign = Claim {
+        organization: OrganizationId(Uuid::new_v4()),
+        ..claim
+    };
+    assert!(
+        metadata_destination::inspect(&f.pool, &f.key, &foreign, tag)
+            .await
+            .is_err()
+    );
+    assert!(worker::release(&f.pool, &claim).await.unwrap());
+    assert!(metadata_destination::inspect(&f.pool, &f.key, &claim, tag)
+        .await
+        .is_err());
+}
+
+pub(crate) async fn claim_metadata_inspection(
+    f: &import_support::Fixture,
+    bundle: Uuid,
+    plan: Uuid,
+) -> crm_api::domain::migration::family_refresh::cohort::Claim {
+    let token = Uuid::new_v4();
+    let mut tx = f.pool.begin().await.unwrap();
+    sqlx::query("SELECT set_config('crm.family_refresh_reader','fub-family-refresh-v1',true)")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let epoch:i64=sqlx::query_scalar("UPDATE migration_family_refresh_plan SET lease_token=$3,lease_epoch=lease_epoch+1,lease_expires_at=clock_timestamp()+interval '60 seconds' WHERE id=$1 AND organization_id=$2 RETURNING lease_epoch").bind(plan).bind(f.org).bind(token).fetch_one(&mut *tx).await.unwrap();
+    tx.commit().await.unwrap();
+    crm_api::domain::migration::family_refresh::cohort::Claim {
+        organization: f.ctx.organization_id,
+        bundle,
+        plan,
+        token,
+        epoch,
+    }
+}
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn family_refresh_catalog_creation_requires_all_options_and_distinct_targets(pool: PgPool) {
+    use crm_api::domain::migration::{
+        family_refresh::{
+            mapping_selection::{MappingPatch, Selection},
+            metadata_destination::{self, Inspection},
+            model::Hold,
+            plan_commands::{self, PlanFamilyRefresh},
+        },
+        snapshot_source::Stream,
+    };
+    let f = import_support::fixture_with_book(&pool, db_activity_source::book()).await;
+    let parent = db_activity_source::completed_parent(&f).await;
+    f.reader.set_records(Stream::CustomFields,vec![
+        json!({"id":10,"name":"customChoice","label":"Complete choice","type":"dropdown","choices":["First","Second"]}),
+        json!({"id":11,"name":"customLeft","label":"Same label","type":"text"}),
+        json!({"id":12,"name":"customRight","label":"SAME LABEL","type":"text"}),
+    ]);
+    let report = admission::report(
+        &f,
+        parent,
+        vec![json!({"id":101,"firstName":"Synthetic","stage":"Lead","assignedUserId":3})],
+    )
+    .await;
+    let draft = commands::prepare(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &f.ctx,
+        PrepareFamilyRefresh {
+            request_id: Uuid::new_v4(),
+            parent_import_id: parent,
+            core_report_id: Some(report),
+            history_capture_id: None,
+            families: vec![Family::Metadata],
+        },
+    )
+    .await
+    .unwrap();
+    for step in 0..40 {
+        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+            break;
+        }
+        assert!(step < 39);
+    }
+    sqlx::query("INSERT INTO migration_metadata_catalog_readiness(organization_id,state,activated_at,activated_by_user_id,engine_version) VALUES($1,'ready',clock_timestamp(),$2,'fub-admitted-metadata-v1')").bind(f.org).bind(f.actor).execute(&pool).await.unwrap();
+    let mut current = draft;
+    for round in 0..2 {
+        let rows=sqlx::query("SELECT m.id,m.kind,m.source_element FROM migration_family_refresh_mapping m WHERE m.plan_id=$1 ORDER BY m.id").bind(current.families[0].plan_id).fetch_all(&pool).await.unwrap();
+        let patches = rows
+            .iter()
+            .filter(|r| {
+                round == 1
+                    || r.get::<String, _>("kind") != "option"
+                    || r.get::<i32, _>("source_element") == 1
+            })
+            .map(|r| MappingPatch {
+                mapping_id: r.get("id"),
+                choice: Selection::CreateMatching,
+            })
+            .collect();
+        current = plan_commands::plan(
+            &f.pool,
+            &f.key,
+            &f.policy,
+            &f.ctx,
+            current.bundle_id,
+            PlanFamilyRefresh {
+                request_id: Uuid::new_v4(),
+                expected_revision: current.revision.clone(),
+                family: Family::Metadata,
+                patches,
+                source_timezone: None,
+            },
+        )
+        .await
+        .unwrap();
+        for step in 0..40 {
+            if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+                break;
+            }
+            assert!(step < 39);
+        }
+        let claim =
+            claim_metadata_inspection(&f, current.bundle_id, current.families[0].plan_id).await;
+        let rows=sqlx::query("SELECT m.id,m.kind,m.target_id,s.source_id FROM migration_family_refresh_mapping m JOIN migration_family_refresh_source s ON s.id=m.source_row_id AND s.organization_id=m.organization_id WHERE m.plan_id=$1 ORDER BY m.kind,m.id").bind(claim.plan).fetch_all(&pool).await.unwrap();
+        for row in rows {
+            let inspected = metadata_destination::inspect(&f.pool, &f.key, &claim, row.get("id"))
+                .await
+                .unwrap();
+            if row.get::<String, _>("source_id") == "10" && round == 1 {
+                let Inspection::Ready(evidence) = inspected else {
+                    panic!("complete explicit field and options should qualify independently of another label collision");
+                };
+                assert_eq!(evidence.target, row.get::<Uuid, _>("target_id"));
+                assert_eq!(
+                    evidence.field.is_some(),
+                    row.get::<String, _>("kind") == "option"
+                );
+            } else {
+                assert!(
+                    matches!(inspected, Inspection::Held(Hold::TargetUnavailable)),
+                    "partial choice creation and colliding field labels remain held"
+                );
+            }
+        }
+        worker::release(&f.pool, &claim).await.unwrap();
+    }
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM custom_field WHERE organization_id=$1")
+            .bind(f.org)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        0
+    );
+    let native = Uuid::new_v4();
+    sqlx::query("INSERT INTO custom_field(id,organization_id,label,field_type,position,created_by_user_id) VALUES($1,$2,'Explicit existing','text',1,$3)").bind(native).bind(f.org).bind(f.actor).execute(&pool).await.unwrap();
+    let ids:Vec<Uuid>=sqlx::query_scalar("SELECT m.id FROM migration_family_refresh_mapping m JOIN migration_family_refresh_source s ON s.id=m.source_row_id AND s.organization_id=m.organization_id WHERE m.plan_id=$1 AND m.kind='field' AND s.source_id IN ('11','12')").bind(current.families[0].plan_id).fetch_all(&pool).await.unwrap();
+    current = plan_commands::plan(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &f.ctx,
+        current.bundle_id,
+        PlanFamilyRefresh {
+            request_id: Uuid::new_v4(),
+            expected_revision: current.revision.clone(),
+            family: Family::Metadata,
+            patches: ids
+                .into_iter()
+                .map(|id| MappingPatch {
+                    mapping_id: id,
+                    choice: Selection::Existing { target_id: native },
+                })
+                .collect(),
+            source_timezone: None,
+        },
+    )
+    .await
+    .unwrap();
+    for step in 0..40 {
+        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+            break;
+        }
+        assert!(step < 39);
+    }
+    let claim = claim_metadata_inspection(&f, current.bundle_id, current.families[0].plan_id).await;
+    let ids: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM migration_family_refresh_mapping WHERE plan_id=$1 AND target_id=$2",
+    )
+    .bind(claim.plan)
+    .bind(native)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(ids.len(), 2);
+    for id in ids {
+        assert!(matches!(
+            metadata_destination::inspect(&f.pool, &f.key, &claim, id)
+                .await
+                .unwrap(),
+            Inspection::Held(Hold::SourceConflict)
+        ));
+    }
+    worker::release(&f.pool, &claim).await.unwrap();
 }

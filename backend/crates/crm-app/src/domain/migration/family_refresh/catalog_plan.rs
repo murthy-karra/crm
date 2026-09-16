@@ -45,6 +45,22 @@ pub async fn prepare_unit(
     claim: &Claim,
     mapping_id: Uuid,
 ) -> Result<Prepared, MigrationError> {
+    prepare(pool, key, policy, claim, mapping_id, None).await
+}
+pub(super) async fn prepare(
+    pool: &PgPool,
+    key: &RawPayloadKey,
+    policy: &SnapshotPolicy,
+    claim: &Claim,
+    mapping_id: Uuid,
+    walk: Option<super::catalog_walk::Position>,
+) -> Result<Prepared, MigrationError> {
+    if walk
+        .as_ref()
+        .is_some_and(|position| position.id != mapping_id)
+    {
+        return Err(MigrationError::Conflict);
+    }
     let (mut tx, _, p) = preparation::begin(pool, claim).await?;
     if p.get::<String, _>("family") != "metadata" || !p.get::<bool, _>("mappings_complete") {
         return Err(MigrationError::ImportBusy);
@@ -73,7 +89,10 @@ pub async fn prepare_unit(
     if let Some(existing)=sqlx::query("SELECT id,mapping_id,source_row_id FROM migration_family_refresh_manifest WHERE plan_id=$1 AND organization_id=$2 AND kind='catalog' AND source_key_hmac=$3")
         .bind(claim.plan).bind(claim.organization.0).bind(&mapping.source_key).fetch_optional(&mut *tx).await? {
         if existing.get::<Option<Uuid>,_>("mapping_id")!=Some(mapping_id) || existing.get::<Option<Uuid>,_>("source_row_id")!=Some(source){return Err(MigrationError::Crypto);}
-        return Ok(Prepared::Unit(existing.get("id")));
+        let id=existing.get("id");
+        super::catalog_walk::advance(&mut tx,claim,walk).await?;
+        tx.commit().await?;
+        return Ok(Prepared::Unit(id));
     }
     let dependency = if let Some(parent) = row.get::<Option<Uuid>, _>("parent_id") {
         let parent:Option<String>=sqlx::query_scalar("SELECT disposition FROM migration_family_refresh_manifest WHERE plan_id=$1 AND organization_id=$2 AND mapping_id=$3 AND kind='catalog'")
@@ -180,6 +199,7 @@ pub async fn prepare_unit(
         .bind(claim.epoch)
         .execute(&mut *tx)
         .await?;
+    super::catalog_walk::advance(&mut tx, claim, walk).await?;
     tx.commit().await?;
     tracing::info!(organization_id=%claim.organization,plan_id=%claim.plan,manifest_id=%id,disposition,"Family refresh catalog outcome prepared");
     Ok(Prepared::Unit(id))

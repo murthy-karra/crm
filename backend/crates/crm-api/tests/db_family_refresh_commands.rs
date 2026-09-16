@@ -2406,7 +2406,7 @@ async fn assert_metadata_destination_inspection(
         ),
         "parent catalog outcome precedes an option outcome"
     );
-    let checkpoint_sql="SELECT jsonb_build_object('position',position,'counts',counts,'measured',measured_bytes,'retained',retained_bytes,'reserved',reserved_bytes) FROM migration_family_refresh_plan WHERE id=$1";
+    let checkpoint_sql="SELECT jsonb_build_object('position',position,'counts',counts,'measured',measured_bytes,'retained',retained_bytes,'reserved',reserved_bytes,'cursor',catalog_after,'catalog_complete',catalog_walk_complete) FROM migration_family_refresh_plan WHERE id=$1";
     let before: serde_json::Value = sqlx::query_scalar(checkpoint_sql)
         .bind(plan)
         .fetch_one(pool)
@@ -2541,6 +2541,61 @@ async fn assert_metadata_destination_inspection(
         "application SQL cannot omit the typed catalog mapping owner"
     );
     forged.rollback().await.unwrap();
+    use crm_api::domain::migration::family_refresh::catalog_walk::{
+        self, Progress as CatalogProgress,
+    };
+    for statement in ["UPDATE migration_family_refresh_plan SET catalog_walk_complete=true WHERE id=$1", "UPDATE migration_family_refresh_plan SET catalog_after=(SELECT id FROM migration_family_refresh_mapping WHERE plan_id=$1 ORDER BY source_sequence DESC,source_ordinal DESC,source_row_id DESC,source_element DESC,id DESC LIMIT 1) WHERE id=$1"] {
+        let mut forbidden=f.pool.begin().await.unwrap();
+        sqlx::query("SELECT set_config('crm.family_refresh_reader','fub-family-refresh-v1',true),set_config('crm.family_refresh_lease',$1,true)").bind(token.to_string()).execute(&mut *forbidden).await.unwrap();
+        assert!(sqlx::query(statement).bind(plan).execute(&mut *forbidden).await.is_err(),"cannot skip catalog outcomes or prematurely complete the walk");
+        forbidden.rollback().await.unwrap();
+    }
+    let before_walk: serde_json::Value = sqlx::query_scalar(checkpoint_sql)
+        .bind(plan)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    sqlx::raw_sql("CREATE FUNCTION test_catalog_walk_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.catalog_after IS DISTINCT FROM OLD.catalog_after THEN RAISE EXCEPTION 'synthetic catalog walk fault'; END IF; RETURN NEW; END $$; CREATE TRIGGER test_catalog_walk_fault BEFORE UPDATE ON migration_family_refresh_plan FOR EACH ROW EXECUTE FUNCTION test_catalog_walk_fault()").execute(pool).await.unwrap();
+    assert!(catalog_walk::run_once(&f.pool, &f.key, &tiny, &claim)
+        .await
+        .is_err());
+    sqlx::raw_sql("DROP TRIGGER test_catalog_walk_fault ON migration_family_refresh_plan; DROP FUNCTION test_catalog_walk_fault()").execute(pool).await.unwrap();
+    let failed_walk: serde_json::Value = sqlx::query_scalar(checkpoint_sql)
+        .bind(plan)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    assert_eq!(failed_walk, before_walk);
+    for _ in 0..3 {
+        assert_eq!(
+            catalog_walk::run_once(&f.pool, &f.key, &tiny, &claim)
+                .await
+                .unwrap(),
+            CatalogProgress::Advanced
+        );
+    }
+    assert_eq!(
+        catalog_walk::run_once(&f.pool, &f.key, &tiny, &claim)
+            .await
+            .unwrap(),
+        CatalogProgress::Finished
+    );
+    assert_eq!(
+        catalog_walk::run_once(&f.pool, &f.key, &tiny, &claim)
+            .await
+            .unwrap(),
+        CatalogProgress::Finished
+    );
+    let completed: serde_json::Value = sqlx::query_scalar(checkpoint_sql)
+        .bind(plan)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    assert_eq!(completed["catalog_complete"], true);
+    for key in ["position", "counts", "measured", "retained", "reserved"] {
+        assert_eq!(completed[key],before_walk[key],"replaying units into a fixed-width checkpoint neither duplicates outcomes nor charges bytes");
+    }
+    assert!(sqlx::query_scalar::<_,bool>("SELECT state='preparing' AND digest IS NULL AND NOT source_walk_complete AND NOT owned_walk_complete FROM migration_family_refresh_plan WHERE id=$1").bind(plan).fetch_one(pool).await.unwrap(),"catalog exhaustion is not complete Person preparation or readiness");
     let original:serde_json::Value=sqlx::query_scalar("SELECT jsonb_build_object('label',label,'updated_at',updated_at) FROM custom_field WHERE id=$1").bind(native_field).fetch_one(pool).await.unwrap();
     sqlx::query("UPDATE custom_field SET label='Changed destination' WHERE id=$1")
         .bind(native_field)
@@ -2760,6 +2815,16 @@ async fn family_refresh_catalog_creation_requires_all_options_and_distinct_targe
             }
             assert!(step < 39);
         }
+        assert!(
+            sqlx::query_scalar::<_, bool>(
+                "SELECT catalog_walk_complete FROM migration_family_refresh_plan WHERE id=$1"
+            )
+            .bind(current.families[0].plan_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+            "ready shared registry permits bounded worker catalog preparation"
+        );
         let claim =
             claim_metadata_inspection(&f, current.bundle_id, current.families[0].plan_id).await;
         let rows=sqlx::query("SELECT m.id,m.kind,m.target_id,s.source_id FROM migration_family_refresh_mapping m JOIN migration_family_refresh_source s ON s.id=m.source_row_id AND s.organization_id=m.organization_id WHERE m.plan_id=$1 ORDER BY m.kind,m.id").bind(claim.plan).fetch_all(&pool).await.unwrap();

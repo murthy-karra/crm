@@ -531,3 +531,17 @@ readiness/sealing must distinguish these prerequisites from useful Person work;
 existing catalog mappings alone must not turn an otherwise all-held Person
 family into actionable refresh work. Worker dispatch and Person preparation are
 still separate integration work.
+
+### Bounded catalog preparation traversal
+
+Migration 021 derives fixed-width capture-order projections from each mapping's
+scoped immutable source. Its keyset index and exact-next selector drive one
+catalog outcome per scheduler turn. The catalog cursor advances in the same
+transaction as a new outcome and its charge, or replays an existing outcome
+without charging again. SQL rejects skipped outcomes, incomplete ordering
+projections, premature completion and stale leases.
+
+The worker enters this stage only with a compatible ready shared registry.
+Exhaustion records catalog completion only; it does not complete Person walks,
+seal a digest, confirm work or authorize native writes. Existing immutable
+mapping choices and logical byte charges are unchanged by the fixed projections.

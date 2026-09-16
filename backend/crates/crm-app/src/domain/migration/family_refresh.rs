@@ -56,3 +56,5 @@ pub mod metadata_catalog;
 pub mod metadata_destination;
 
 pub mod catalog_plan;
+
+pub mod catalog_walk;

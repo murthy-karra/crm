@@ -5,8 +5,8 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 ## Working constraints
 
-- Branch `codex/010g1-family-refresh`, base `dd140b0`; the catalog-unit checkpoint
-  follows **`fad4761`**. One primary writer; the previously authorized single
+- Branch `codex/010g1-family-refresh`, base `dd140b0`; the bounded catalog-walk checkpoint
+  follows **`d1252f2`**. One primary writer; the previously authorized single
   implementation reviewer remains reserved for the final review. Planning review
   READY, round 1. Preserve D-050's two review/fix rounds and final performance gate.
 - Do not merge, push or deploy. Preserve unrelated `docs/prompts/MODEL_ROUTING.md`
@@ -49,25 +49,25 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 ## Current verified milestone
 
-Catalog preparation now persists an encrypted outcome, counts, position and byte
-settlement together, with replay before mutable checks. Migration 020 binds each
-catalog manifest to its exact mapping/source and live lease. Options require a
-parent catalog outcome, and a held parent holds its options. No catalog/native
-rows, claims or heads are written by this runner. Native execution must recheck
-ready evidence; these prerequisites alone do not seal a family.
+Catalog preparation now runs one exact mapping per existing scheduler turn.
+Migration 021 supplies scoped capture-order projections and an indexed selector;
+SQL fences prevent skipped outcomes and premature completion. New outcomes,
+counts, byte settlement and the cursor commit together. Existing outcomes replay
+without additional charges. The worker requires ready shared catalog state.
+Catalog exhaustion does not seal or confirm the family or complete Person walks.
 
-The production-code full family suite passed **39 tests** serially at this
-milestone (`/private/tmp/010g1-catalog-plan-family-db.log`). Additional test-only
-coverage for held dependencies and forged SQL owners passed in both focused
-scenarios (`/private/tmp/010g1-catalog-plan-final-db.log`).
-Final library Clippy passed with warnings denied
-(`/private/tmp/010g1-catalog-plan-final-clippy.log`); formatting and diff checks
-also passed.
+The affected database suite passed **21 tests** serially
+(`/private/tmp/010g1-catalog-walk-family-db.log`), including catalog dependencies,
+worker dispatch, cursor rollback, no-skip fences and replay under exhausted
+capacity. The focused Plan scenario also passed
+(`/private/tmp/010g1-catalog-walk-db.log`). Library Clippy passed with warnings
+denied (`/private/tmp/010g1-catalog-walk-final-clippy.log`); formatting and diff
+checks passed. The preceding catalog-unit checkpoint passed the full 39-test
+family suite (`/private/tmp/010g1-catalog-plan-family-db.log`).
 
 ## Remaining implementation
 
-1. Wire shared catalog handover into authorized typed refresh admission; drive
-   persisted catalog preparation in bounded worker steps. Convert and persist
+1. Wire shared catalog handover into authorized typed refresh admission. Convert and persist
    atomic Person metadata proposals, source gaps and missing-source outcomes.
 2. Bootstrap legacy baselines only where independently provable. Add refresh-owned
    initial activity/history identities and catalog claims with exclusive typed

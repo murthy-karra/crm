@@ -86,6 +86,13 @@ pub async fn discover(
     if !live {
         return Ok(Discovery::Held(Hold::TargetErased));
     }
+    if kind.family() == super::model::Family::History {
+        if let Err(hold) =
+            source_policy::qualify_history_creation(&mut tx, claim.organization, &p, &c).await?
+        {
+            return Ok(Discovery::Held(hold));
+        }
+    }
     let account: i64 = b.get("source_account_id");
     let consumed = if let Some(identity) = history_identity {
         sqlx::query_scalar::<_,bool>("SELECT EXISTS(SELECT 1 FROM migration_history_import_identity WHERE organization_id=$1 AND identity_hmac=$2)")

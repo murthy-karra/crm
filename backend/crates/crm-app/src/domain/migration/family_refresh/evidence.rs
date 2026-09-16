@@ -14,6 +14,7 @@ pub enum Purpose {
     Manifest,
     Result,
     HistoryDisplay,
+    Receipt,
 }
 impl Purpose {
     fn label(self) -> &'static str {
@@ -24,11 +25,12 @@ impl Purpose {
             Self::Manifest => "manifest",
             Self::Result => "result",
             Self::HistoryDisplay => "history-display",
+            Self::Receipt => "receipt",
         }
     }
     fn limit(self) -> usize {
         match self {
-            Self::Binding | Self::Mapping => 64 * 1024,
+            Self::Binding | Self::Mapping | Self::Receipt => 64 * 1024,
             Self::Source => 4 * 1024 * 1024,
             Self::Manifest | Self::Result => 64 * 1024 * 1024,
             Self::HistoryDisplay => 4096,

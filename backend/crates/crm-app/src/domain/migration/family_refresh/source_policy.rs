@@ -161,6 +161,45 @@ pub(super) async fn qualify_accepted_scan(
     })
 }
 
+/// A new cohort does not invalidate another cohort's history source index.
+/// Eligibility still requires this Person's own creation capture to precede it.
+pub(super) async fn qualify_history_creation(
+    conn: &mut sqlx::PgConnection,
+    organization: crate::ids::OrganizationId,
+    plan: &sqlx::postgres::PgRow,
+    cohort: &sqlx::postgres::PgRow,
+) -> Result<Result<(), Hold>, crate::domain::migration::MigrationError> {
+    use sqlx::Row;
+    let row = sqlx::query("SELECT h.source_account_id AS history_account,h.started_at AS history_start,s.source_account_id,s.started_at,s.completed_at,s.state FROM migration_history_capture_run h JOIN migration_snapshot s ON s.id=$3 AND s.organization_id=h.organization_id WHERE h.id=$1 AND h.organization_id=$2")
+        .bind(plan.get::<Uuid,_>("history_capture_id")).bind(organization.0).bind(cohort.get::<Uuid,_>("creation_snapshot_id")).fetch_optional(conn).await?;
+    let Some(row) = row else {
+        return Ok(Err(Hold::SourceUnavailable));
+    };
+    if row.get::<i64, _>("history_account") != row.get::<i64, _>("source_account_id") {
+        return Ok(Err(Hold::IdentityMismatch));
+    }
+    let (Some(start), Some(end), Some(history_start)) = (
+        row.get::<Option<DateTime<Utc>>, _>("started_at"),
+        row.get::<Option<DateTime<Utc>>, _>("completed_at"),
+        row.get::<Option<DateTime<Utc>>, _>("history_start"),
+    ) else {
+        return Ok(Err(Hold::SourceUnavailable));
+    };
+    if end < start
+        || !matches!(
+            row.get::<String, _>("state").as_str(),
+            "completed" | "completed_with_gaps"
+        )
+    {
+        return Ok(Err(Hold::SourceUnavailable));
+    }
+    Ok(if history_start > end {
+        Ok(())
+    } else {
+        Err(Hold::SourceNotNewer)
+    })
+}
+
 pub struct Occurrence<'a> {
     pub identity: &'a [u8],
     pub semantic: &'a [u8],

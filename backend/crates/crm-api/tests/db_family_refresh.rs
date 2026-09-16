@@ -1810,6 +1810,13 @@ async fn history_baseline_authenticates_admitted_owner(pool: PgPool) {
     capture::confirm(&f, newer).await;
     capture::drain(&f, &book).await;
     let claim = draft_history_refresh(&pool, &f, newer).await;
+    let anchor = sqlx::query("SELECT s.id,s.completed_at,h.started_at FROM migration_people_admission a JOIN migration_snapshot s ON s.id=a.confirmed_snapshot_id JOIN migration_history_capture_run h ON h.id=$2 WHERE a.id=$1").bind(admission).bind(newer).fetch_one(&pool).await.unwrap();
+    sqlx::query("UPDATE migration_snapshot SET completed_at=$2 WHERE id=$1")
+        .bind(anchor.get::<Uuid, _>("id"))
+        .bind(anchor.get::<Option<chrono::DateTime<chrono::Utc>>, _>("started_at"))
+        .execute(&pool)
+        .await
+        .unwrap();
     for i in 0..10 {
         if history_index::index_page(&f.pool, &f.key, &claim, &f.policy)
             .await
@@ -1821,6 +1828,40 @@ async fn history_baseline_authenticates_admitted_owner(pool: PgPool) {
         assert!(i < 9);
     }
     let cohort:Uuid=sqlx::query_scalar("SELECT id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND source_person_id='104' AND admission_id=$2").bind(claim.bundle).bind(admission).fetch_one(&pool).await.unwrap();
+    use crm_api::domain::migration::family_refresh::{model::Hold, new_identity};
+    assert!(matches!(
+        new_identity::discover(&f.pool, &f.key, &claim, cohort, Kind::Event, "82")
+            .await
+            .unwrap(),
+        new_identity::Discovery::Held(Hold::SourceNotNewer)
+    ));
+    let old_source = match history_resolution::resolve(&f.pool, &f.key, &claim, Kind::Event, "81")
+        .await
+        .unwrap()
+    {
+        Resolution::Ready(r) => r,
+        _ => panic!("retained source must resolve"),
+    };
+    assert!(matches!(
+        history_baseline::discover(
+            &f.pool,
+            &f.key,
+            &claim,
+            cohort,
+            Kind::Event,
+            &old_source.evidence.identity_hmac
+        )
+        .await
+        .unwrap(),
+        Discovery::Held(Hold::SourceNotNewer)
+    ));
+    // Indexing succeeds independently of this cohort's late creation boundary.
+    sqlx::query("UPDATE migration_snapshot SET completed_at=$2 WHERE id=$1")
+        .bind(anchor.get::<Uuid, _>("id"))
+        .bind(anchor.get::<Option<chrono::DateTime<chrono::Utc>>, _>("completed_at"))
+        .execute(&pool)
+        .await
+        .unwrap();
     assert_new_candidate(&f, &claim, cohort, Kind::Event, "82").await;
     let selected = match history_resolution::resolve(&f.pool, &f.key, &claim, Kind::Event, "81")
         .await

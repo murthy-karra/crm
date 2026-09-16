@@ -19,6 +19,7 @@ pub mod core_resolution;
 pub mod core_source;
 mod preparation;
 
+pub mod commands;
 mod first_coverage;
 pub mod history_plan;
 pub mod new_identity;

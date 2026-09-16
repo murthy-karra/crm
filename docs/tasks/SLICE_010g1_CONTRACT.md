@@ -416,3 +416,26 @@ inserted initial state, not an additional native completion action. Revision zer
 in the proposal means no existing row; the initial row has revision one. Future
 write-proof construction must canonicalize proposed typed rows through PostgreSQL
 before digesting them, including PostgreSQL's timestamp representation.
+
+### Typed preparation admission
+
+`PrepareFamilyRefresh` now creates the bundle and family plans from scoped,
+completed retained evidence. The closed request accepts only parent/source IDs
+and a unique family selection. Authority comes from the active admin command
+context under the common workspace barrier; one active bundle serializes a
+parent. Core report bindings are authenticated before admission, and history
+profile/account/parent/interval bindings are frozen for full indexed validation.
+
+Preparation seals source/profile/conversion/tzdb bindings, allocates immutable
+family plan IDs, chooses a core payer when selected (otherwise history), records
+an actor-scoped encrypted receipt and reserves measured evidence plus 8 KiB of
+remaining cancellation capacity per plan. The whole command rolls back if any
+family cannot fit. Authorized same-body receipt replay precedes fresh capacity
+checks; a changed body with the same request ID conflicts. Preparation does not
+install the durable native-refresh capability or confirm work. HTTP/release
+admission and worker dispatch remain integration work.
+
+History-only indexing uses the original parent's core anchor. Each Person's
+history eligibility independently checks its frozen creation capture, so a later
+admission/recovery can be held without preventing other cohorts' source indexing.
+Combined history still must start after the selected core capture.

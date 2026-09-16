@@ -7,8 +7,9 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 - Branch `codex/010g1-family-refresh`, base `dd140b0`; one primary writer and the
   previously authorized single reviewer. Planning review READY, round 1.
-- Current milestone: verified qualified history unit preparation and native
-  activity insertion planning, following new-identity eligibility at **`26323f6`**.
+- Current milestone: verified typed bundle preparation and per-cohort history
+  ordering, following qualified-unit planning at **`d9d2a43`** and new-identity
+  eligibility at **`26323f6`**.
   The combined feature is unfinished. No merge/push/deploy.
 - Foundation: comparison policies, source ordering, bounded encrypted evidence,
   exact decimal counts, draft persistence ownership and native/lease guards.
@@ -107,6 +108,11 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 - Native activity planning also builds initial note/task rows for qualified new
   identities, with content/role validation and source completion attribution.
   Retained mapping conversion, persisted activity units and execution remain.
+- Typed bundle preparation now validates retained selections, freezes encrypted
+  bindings and plan IDs, meters admission/cancellation capacity and records an
+  authorized replay receipt atomically. History-only indexing no longer treats
+  the latest cohort's creation boundary as a global blocker; existing and new
+  identity eligibility enforce each cohort's own boundary.
 - No refresh HTTP commands, family dispatcher or Web workflow are exposed yet.
 
 ## Evidence and isolation
@@ -130,6 +136,20 @@ is archived in [Project history](../plans/PROJECT_HISTORY.md#010g1-foundation-an
   family_refresh --locked -- --ignored --test-threads=1`; `cargo test -p crm-app
   --lib family_refresh --locked`; `cargo clippy -p crm-app --lib --locked --
   -D warnings`. All used the isolated target/database below.
+- Typed preparation/per-cohort history ordering: all 27 serial family database
+  regressions and 40 focused Rust tests passed, plus `crm-app --lib` Clippy with
+  warnings denied, formatting and diff checks. The three new command scenarios
+  cover combined/history-only payers, encrypted frozen bindings, exact retained
+  and reserved bytes, whole-admission rollback, same-request replay despite a
+  newly restrictive budget, changed-body/active-bundle conflicts, invalid fields,
+  unauthorized callers and another Organization's real source report. The history
+  fixture proves indexing still succeeds when an admitted cohort's creation
+  interval overlaps, while both its new and existing identities stay held until
+  the boundary is valid. No native-refresh capability is installed by preparation.
+  Logs: `/private/tmp/010g1-command-family-db.log`,
+  `/private/tmp/010g1-command-unit.log`, `/private/tmp/010g1-command-clippy.log`.
+  Runners match the previous milestone: serial `all family_refresh` database
+  tests, focused library tests and library Clippy in the isolated target/database.
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB
   `crm_010g1_schema_20260915`. Database tests run serially.

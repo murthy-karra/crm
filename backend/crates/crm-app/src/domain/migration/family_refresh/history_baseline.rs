@@ -64,6 +64,11 @@ pub async fn discover(
     {
         return Ok(Discovery::Held(hold));
     }
+    if let Err(hold) =
+        super::source_policy::qualify_history_creation(&mut tx, claim.organization, &p, &c).await?
+    {
+        return Ok(Discovery::Held(hold));
+    }
     if c.get::<Option<Uuid>, _>("live_person").is_none() {
         return Ok(Discovery::Held(Hold::TargetErased));
     }

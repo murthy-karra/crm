@@ -102,7 +102,9 @@ async fn binding(
     {
         sqlx::query_scalar("SELECT completed_at FROM migration_snapshot WHERE id=$1 AND organization_id=$2 AND state IN ('completed','completed_with_gaps')").bind(snapshot).bind(claim.organization.0).fetch_one(&mut *conn).await?
     } else {
-        sqlx::query_scalar("SELECT max(s.completed_at) FROM migration_family_refresh_cohort c JOIN migration_snapshot s ON s.id=c.creation_snapshot_id AND s.organization_id=c.organization_id WHERE c.bundle_id=$1 AND c.organization_id=$2").bind(claim.bundle).bind(claim.organization.0).fetch_one(&mut *conn).await?
+        // A later cohort may lack eligible history without blocking the entire
+        // retained index. Each unit separately checks its own creation anchor.
+        sqlx::query_scalar("SELECT s.completed_at FROM migration_import i JOIN migration_snapshot s ON s.id=i.snapshot_id AND s.organization_id=i.organization_id WHERE i.id=$1 AND i.organization_id=$2").bind(b.get::<Uuid,_>("parent_import_id")).bind(claim.organization.0).fetch_one(&mut *conn).await?
     };
     if anchor.is_none() || started <= anchor {
         return Err(MigrationError::SourceNotEligible);

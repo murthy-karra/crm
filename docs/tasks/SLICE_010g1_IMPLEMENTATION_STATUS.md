@@ -10,7 +10,7 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 - User requested “commit and proceed”; foundation checkpoint **`8b5959e`** is
   committed; accounting checkpoint **`0ef822f`** is also committed. History
   correction storage is committed as **`047e3e5`**; native delta planning is
-  committed as **`cbae4c6`**. The combined feature is unfinished. No merge/push/deploy.
+  committed as **`cbae4c6`**. Cohort preparation is committed as **`b949ffe`**. The combined feature is unfinished. No merge/push/deploy.
 - Foundation: comparison policies, source ordering, bounded encrypted evidence,
   exact decimal counts, draft persistence ownership and native/lease guards.
 - Accounting now measures family and shared evidence separately. One frozen plan
@@ -36,7 +36,9 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 - Cohort preparation now has a bounded transactional page runner. It freezes
   original/admitted/recovered identity proofs behind a workspace boundary, records
   exclusions, fences current admin/lease ownership, and settles exact byte charges
-  with the checkpoint. Dispatcher integration remains pending.
+  with the checkpoint. Database guards also enforce the frozen identity/terminal
+  boundary and reject application cohort/progress writes without a live payer
+  claim. Dispatcher integration remains pending.
 - No refresh HTTP commands, family worker or Web workflow are exposed yet.
 
 ## Evidence and isolation
@@ -83,6 +85,11 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   `/private/tmp/010g1-cohort-db-tests.log`,
   `/private/tmp/010g1-cohort-clippy.log`, and
   `/private/tmp/010g1-cohort-schema.log`. Full workflow gates remain outstanding.
+- Cohort database fences: the strengthened 6-test family suite passed, including
+  direct application inserts and progress updates without lease context. Migration
+  application, formatting and diff checks passed. Logs:
+  `/private/tmp/010g1-cohort-fences-db-tests.log` and
+  `/private/tmp/010g1-cohort-fences-schema.log`.
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB
   `crm_010g1_schema_20260915`. Database tests run serially.

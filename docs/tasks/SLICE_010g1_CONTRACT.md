@@ -211,3 +211,10 @@ together. Failed units roll back; expired older reservations use the existing
 fenced reclaim operation. Completed cohort preparation is replay-safe. The
 nullable initial counter avoids retroactive uncharged bytes on existing plans.
 This does not yet expose an HTTP command or dispatch a production worker.
+
+Database cohort guards additionally require the identity to predate the frozen
+boundary, the native Person to remain present, and any admission to have reached
+a terminal state by that boundary. Application cohort inserts and cursor/count
+updates require the current payer-plan preparation token, an unexpired lease and
+an active admin executor. Migrator maintenance access does not bypass the frozen
+identity/terminal proof checks. These checks supplement the page transaction.

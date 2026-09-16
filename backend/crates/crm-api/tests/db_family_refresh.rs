@@ -499,6 +499,22 @@ async fn cohort_pages_are_atomic_metered_and_replay_safe(pool: PgPool) {
             .bind(plan).fetch_one(&pool).await.unwrap()
     };
     let before = snapshot(pool.clone()).await;
+    let rejected =
+        sqlx::query("UPDATE migration_family_refresh_plan SET cohort_after='101' WHERE id=$1")
+            .bind(plan)
+            .execute(&f.pool)
+            .await
+            .unwrap_err();
+    assert_eq!(
+        rejected.as_database_error().unwrap().message(),
+        "stale family cohort preparation claim"
+    );
+    let rejected = sqlx::query("INSERT INTO migration_family_refresh_cohort(id,bundle_id,organization_id,source_person_id,person_id,original_result_id,creation_snapshot_id) SELECT $1,$2,r.organization_id,r.source_id,r.person_id,r.id,i.snapshot_id FROM migration_import_result r JOIN migration_import i ON i.id=r.import_id AND i.organization_id=r.organization_id WHERE r.import_id=$3 AND r.organization_id=$4 AND r.source_id='101'")
+        .bind(Uuid::new_v4()).bind(bundle).bind(parent).bind(f.org).execute(&f.pool).await.unwrap_err();
+    assert_eq!(
+        rejected.as_database_error().unwrap().message(),
+        "stale family cohort preparation claim"
+    );
     claim.token = Uuid::new_v4();
     assert!(cohort::freeze_page(&f.pool, &claim, &f.policy, 1)
         .await

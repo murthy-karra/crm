@@ -254,6 +254,7 @@ async fn execute(f: &Fixture, id: Uuid, ready: &Value, parent: Uuid) -> Value {
     drain(f).await;
     let value = detail(f, id).await;
     assert_eq!(value["state"], "completed");
+    crate::db_family_refresh::assert_metadata_after_states(f, id, false).await;
     assert_eq!(
         parent_state(f, parent).await,
         before,

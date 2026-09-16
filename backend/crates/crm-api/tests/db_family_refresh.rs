@@ -1022,3 +1022,125 @@ async fn original_activity_discovers_only_its_proven_baseline(pool: PgPool) {
         Discovery::Held(Hold::BaselineUnproven)
     ));
 }
+
+/// Exercise proof production through both real first-import executors. The
+/// existing callers also verify native fidelity, retry and exact byte ledgers.
+pub(super) async fn assert_metadata_after_states(
+    f: &import_support::Fixture,
+    root: Uuid,
+    admitted: bool,
+) {
+    use crm_api::domain::migration::{
+        crypto,
+        family_refresh::{
+            metadata_baseline::{self, AfterState, Binding},
+            metadata_delta::Snapshot,
+            model::Hold,
+        },
+    };
+    let prefix = if admitted {
+        "migration_admitted_metadata"
+    } else {
+        "migration_metadata"
+    };
+    let rows = sqlx::query(&format!("SELECT r.*,i.snapshot_id FROM {prefix}_result r JOIN {prefix}_import i ON i.id=r.import_id AND i.organization_id=r.organization_id WHERE r.import_id=$1 AND r.organization_id=$2 AND r.kind='people'"))
+        .bind(root).bind(f.org).fetch_all(&f.pool).await.unwrap();
+    assert!(!rows.is_empty());
+    for r in rows {
+        let plan: Uuid = r.get("plan_id");
+        let namespace = if admitted {
+            "admitted-metadata-v1"
+        } else {
+            "metadata-v1"
+        };
+        let bytes = crypto::open_snapshot(
+            &f.key,
+            f.ctx.organization_id,
+            r.get("snapshot_id"),
+            r.get("id"),
+            &format!("{namespace}:{plan}:result"),
+            &r.get::<Vec<u8>, _>("nonce"),
+            &r.get::<Vec<u8>, _>("ciphertext"),
+        )
+        .unwrap();
+        let data: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        if r.get::<String, _>("disposition") == "held" {
+            assert!(
+                data["after_state"].is_null(),
+                "held units do not create a baseline"
+            );
+            continue;
+        }
+        let proof: AfterState = serde_json::from_value(data["after_state"].clone()).unwrap();
+        let snapshot: Snapshot =
+            serde_json::from_value(data["after_state"]["snapshot"].clone()).unwrap();
+        let person: Uuid = r.get("person_id");
+        let revision: i64 = sqlx::query_scalar(
+            "SELECT metadata_revision FROM person WHERE id=$1 AND organization_id=$2",
+        )
+        .bind(person)
+        .bind(f.org)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap();
+        assert_eq!(snapshot.revision, revision);
+        let tags: Vec<Uuid> = sqlx::query_scalar("SELECT tag_id FROM person_tag WHERE person_id=$1 AND organization_id=$2 ORDER BY tag_id").bind(person).bind(f.org).fetch_all(&f.pool).await.unwrap();
+        assert_eq!(snapshot.state.tags, tags.into_iter().collect());
+        let fields = sqlx::query("SELECT field_id,field_type,text_value,number_value::text AS number_value,date_value::text AS date_value,option_id FROM person_custom_field_value WHERE person_id=$1 AND organization_id=$2").bind(person).bind(f.org).fetch_all(&f.pool).await.unwrap();
+        assert_eq!(snapshot.state.fields.len(), fields.len());
+        for field in fields {
+            let id: Uuid = field.get("field_id");
+            let actual = serde_json::to_value(&snapshot.state.fields[&id]).unwrap();
+            let expected = match field.get::<String, _>("field_type").as_str() {
+                "text" => json!({"text":field.get::<String,_>("text_value")}),
+                "number" => json!({"number":field.get::<String,_>("number_value")}),
+                "date" => json!({"date":field.get::<String,_>("date_value")}),
+                "choice" => json!({"option_id":field.get::<Uuid,_>("option_id")}),
+                _ => panic!("unsupported native type"),
+            };
+            assert_eq!(actual, expected);
+        }
+        let binding = Binding {
+            organization: f.ctx.organization_id,
+            import: root,
+            manifest: r.get("manifest_id"),
+            person,
+        };
+        let (_, owned) = metadata_baseline::verify(Some(&proof), &binding, Some(&snapshot))
+            .unwrap_or_else(|_| panic!("exact persisted after-state must verify"));
+        let applied_tags = data["operations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|op| {
+                op["kind"] == "tag_link"
+                    && op[if admitted { "outcome" } else { "disposition" }] == "applied"
+            })
+            .count();
+        let applied_fields = data["operations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|op| {
+                op["kind"] == "value"
+                    && op[if admitted { "outcome" } else { "disposition" }] == "applied"
+            })
+            .count();
+        assert_eq!(owned.tags.len(), applied_tags);
+        assert_eq!(owned.fields.len(), applied_fields);
+        let mut reverted = snapshot.clone();
+        reverted.revision += 2;
+        assert!(matches!(
+            metadata_baseline::verify(Some(&proof), &binding, Some(&reverted)),
+            Err(Hold::LocalChange)
+        ));
+        let foreign = Binding {
+            organization: crm_api::ids::OrganizationId::new(Uuid::new_v4()),
+            ..binding
+        };
+        assert!(matches!(
+            metadata_baseline::verify(Some(&proof), &foreign, Some(&snapshot)),
+            Err(Hold::BaselineUnproven)
+        ));
+    }
+}

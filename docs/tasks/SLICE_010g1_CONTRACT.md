@@ -256,3 +256,21 @@ edit-and-revert is held; a missing record is erased; missing legacy evidence is
 unproven. Existing refresh heads take precedence (the first-result adapter returns
 `stale_head` for those targets). Prior-refresh-result and provable legacy adapters,
 metadata baselines and execution-time revalidation remain subsequent work.
+
+
+### First-import metadata after-state checkpoint
+
+Successful original/admitted metadata Person results now carry an optional,
+versioned encrypted `after_state` with exact Organization/import/manifest/Person
+binding, complete tag and typed-field values, native metadata revision and
+insertion ownership. The format remains backward-readable; absent old evidence
+holds `baseline_unproven`. Existing result HTTP projections are unchanged.
+
+Only actual inserted link/value receipts grant ownership. Already-present tags
+can contribute an additional source alias to a link positively inserted in that
+same unit; they cannot grant ownership of a preexisting link. Held Person units,
+including partial first-import outcomes, publish no usable baseline. All native
+state and the proof settle in the existing transaction and ciphertext ledger.
+Verification compares the complete state and revision, including unowned cells,
+and requires the exact immutable result binding. Metadata baseline discovery,
+legacy bootstrap and refresh execution remain unwired.

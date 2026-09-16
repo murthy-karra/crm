@@ -16,7 +16,7 @@ pub struct State {
     pub fields: BTreeMap<Uuid, CustomFieldValue>,
 }
 impl State {
-    fn matches(&self, other: &Self) -> bool {
+    pub(super) fn matches(&self, other: &Self) -> bool {
         self.tags == other.tags
             && self.fields.len() == other.fields.len()
             && self.fields.iter().all(|(id, value)| {

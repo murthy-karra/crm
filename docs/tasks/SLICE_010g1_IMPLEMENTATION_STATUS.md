@@ -47,7 +47,15 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 - New positively applied original/admitted activity results retain exact encrypted
   native after-state/revision. A first-result discovery adapter checks frozen
   cohort/identity/manifest/result ownership and current equality/revision; missing
-  legacy evidence holds. Metadata and previous-refresh baseline adapters remain.
+  legacy evidence holds. Metadata discovery and previous-refresh adapters remain.
+- New successful original/admitted metadata Person results retain encrypted full
+  tag/typed-field state, metadata revision, exact Organization/import/manifest/Person
+  binding and insertion ownership. Already-present cells remain unowned; owned
+  tags retain all supporting source-key aliases. Held units publish no baseline.
+  The verifier rejects missing legacy proof, binding mismatch, local changes/ABA
+  and refresh-head replacement. Original planning budgets now include the existing
+  native state; exact ciphertext is charged through each existing result ledger.
+  These proofs are not yet connected to refresh classification/discovery.
 - No refresh HTTP commands, family worker or Web workflow are exposed yet.
 
 ## Evidence and isolation
@@ -113,6 +121,22 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   `/private/tmp/010g1-index-baseline-unit.log`,
   `/private/tmp/010g1-index-baseline-clippy.log`, and
   `/private/tmp/010g1-core-index-schema.log`. No end-to-end refresh claim.
+- Metadata after-state checkpoint: all 33 focused family Rust tests and 11
+  database regressions passed (8 original metadata source/fidelity scenarios,
+  admitted typed metadata, and original/admitted result-failure rollback). The
+  actual executors produce decrypted proofs matching native revisions, tags and
+  all four field types; tests also reject foreign bindings and edit/revert,
+  preserve local ownership and supporting aliases, and verify exact ledger/retry
+  behavior. `crm-app --lib` Clippy with warnings denied, formatting and diff
+  checks passed. Logs: `/private/tmp/010g1-metadata-baseline-unit.log`,
+  `/private/tmp/010g1-metadata-baseline-db.log`,
+  `/private/tmp/010g1-metadata-baseline-clippy.log`, and
+  `/private/tmp/010g1-{admitted_metadata_typed_units_preserve_types_and_settle_together,admitted_metadata_result_failure_rolls_back_native_claim_checkpoint_and_bytes,metadata_concurrency_person_failure_rolls_back_all_cells_result_cursor_and_bytes}.log`.
+  Runners: `cargo test -p crm-app --lib family_refresh --locked`,
+  `cargo test -p crm-api --features test-support --test all metadata_source_
+  --locked -- --ignored --test-threads=1`, then three exact tests using that
+  freshly compiled `debug/deps/all-07593333edaca6c2` binary, serially against the
+  owned synthetic database. No refresh discovery/execution or final-gate claim.
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB
   `crm_010g1_schema_20260915`. Database tests run serially.
@@ -120,7 +144,7 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   No live FUB/customer processing. Linker reports the large `__eh_frame` warning.
 
 Remaining: final capability inventories and refresh-owned initial identities;
-history source indexing, index plan-revision reuse, legacy/metadata/prior-refresh
-baselines; cohort/index dispatcher integration; metadata/activity/history execution; typed
+history source indexing, index plan-revision reuse, legacy/prior-refresh
+baselines and metadata discovery; cohort/index dispatcher integration; metadata/activity/history execution; typed
 commands and bounded readers; common Web workflow; independent implementation
 review; full database/browser/performance/final gates. Do not report 010g1 done.

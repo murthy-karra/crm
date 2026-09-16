@@ -3,6 +3,7 @@
 use super::{
     admitted_metadata::{self as a, FrozenMapping, FrozenOperation},
     crypto,
+    family_refresh::metadata_baseline as baseline,
     metadata_source::NativeValue,
     metadata_worker, MigrationError,
 };
@@ -554,6 +555,7 @@ async fn people(
     }
     let tag_cap = tags.len() + new_tags.len() > 20;
     let mut results = Vec::new();
+    let mut proof_operations = Vec::new();
     for (o, mut data, map, ready) in prepared {
         let mut outcome = o.get::<String, _>("disposition");
         let kind: String = o.get("kind");
@@ -650,6 +652,12 @@ async fn people(
                 outcome = "held".into();
             }
         }
+        proof_operations.push((
+            kind.clone(),
+            o.get::<Vec<u8>, _>("source_key"),
+            o.get::<Option<Uuid>, _>("target_id"),
+            outcome.clone(),
+        ));
         results.push(json!({"operation_id":o.get::<Uuid,_>("id"),"mapping_id":o.get::<Option<Uuid>,_>("mapping_id"),"kind":kind,"planned_disposition":o.get::<String,_>("disposition"),"outcome":outcome,"reason":reason}));
     }
     let outcome = if results.iter().any(|r| r["outcome"] == "held")
@@ -666,7 +674,21 @@ async fn people(
     } else {
         "not_supplied"
     };
-    let bytes=j.result(c,key,unit,"people",outcome,live_person,json!({"admission_result_id":m.get::<Uuid,_>("admission_result_id"),"source_person_id":m.get::<String,_>("source_person_id"),"operations":results,"outcome":outcome})).await?;
+    let after_state = if outcome != "held" && identity {
+        let receipts: Vec<_> = proof_operations
+            .iter()
+            .map(|(kind, source_key, target, outcome)| baseline::Receipt {
+                kind,
+                source_key,
+                target: *target,
+                outcome,
+            })
+            .collect();
+        Some(baseline::capture(c, j.org, j.root, unit, person, &receipts).await?)
+    } else {
+        None
+    };
+    let bytes=j.result(c,key,unit,"people",outcome,live_person,json!({"admission_result_id":m.get::<Uuid,_>("admission_result_id"),"source_person_id":m.get::<String,_>("source_person_id"),"operations":results,"outcome":outcome,"after_state":after_state})).await?;
     sqlx::query("UPDATE migration_admitted_metadata_manifest SET disposition='settled',settled_at=clock_timestamp() WHERE id=$1 AND import_id=$2 AND organization_id=$3").bind(unit).bind(j.root).bind(j.org.0).execute(c).await?;
     Ok(bytes)
 }

@@ -241,6 +241,7 @@ async fn admitted_metadata_typed_units_preserve_types_and_settle_together(migrat
         calls,
         "execution uses retained evidence only"
     );
+    crate::db_family_refresh::assert_metadata_after_states(&f, root, true).await;
     let values:Value=sqlx::query_scalar("SELECT jsonb_object_agg(f.external_key,jsonb_build_object('type',v.field_type,'text',v.text_value,'number',v.number_value::text,'date',v.date_value::text,'choice',o.label,'origin',v.origin)) FROM person_custom_field_value v JOIN custom_field f ON f.id=v.field_id LEFT JOIN custom_field_option o ON o.id=v.option_id WHERE v.person_id=$1").bind(person).fetch_one(&f.pool).await.unwrap();
     assert_eq!(values["customText"]["text"], "Exact retained text");
     assert_eq!(values["customNumber"]["number"], "123456.1250");

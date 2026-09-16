@@ -4,6 +4,7 @@ pub mod activity_delta;
 pub mod cohort;
 pub mod evidence;
 pub mod history_source;
+pub mod metadata_baseline;
 pub mod metadata_delta;
 pub mod model;
 pub mod source_policy;

@@ -134,20 +134,24 @@ pub fn verify(
     {
         return Err(Hold::LocalChange);
     }
+    verify_ownership(&proof.snapshot, &proof.ownership)?;
+    Ok((proof.snapshot.clone(), proof.ownership.clone()))
+}
+
+pub(super) fn verify_ownership(snapshot: &Snapshot, ownership: &Ownership) -> Result<(), Hold> {
     let mut aliases = BTreeSet::new();
-    if proof.ownership.tags.iter().any(|(target, support)| {
-        !proof.snapshot.state.tags.contains(target)
+    if ownership.tags.iter().any(|(target, support)| {
+        !snapshot.state.tags.contains(target)
             || support.is_empty()
             || support.iter().any(|alias| !aliases.insert(*alias))
-    }) || proof
-        .ownership
+    }) || ownership
         .fields
         .iter()
-        .any(|id| !proof.snapshot.state.fields.contains_key(id))
+        .any(|id| !snapshot.state.fields.contains_key(id))
     {
         return Err(Hold::BaselineUnproven);
     }
-    Ok((proof.snapshot.clone(), proof.ownership.clone()))
+    Ok(())
 }
 
 #[cfg(test)]

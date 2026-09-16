@@ -50,7 +50,7 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 - New positively applied original/admitted activity results retain exact encrypted
   native after-state/revision. A first-result discovery adapter checks frozen
   cohort/identity/manifest/result ownership and current equality/revision; missing
-  legacy evidence holds. Metadata discovery and previous-refresh adapters remain.
+  legacy evidence holds. Legacy bootstrap and refresh execution remain.
 - New successful original/admitted metadata Person results retain encrypted full
   tag/typed-field state, metadata revision, exact Organization/import/manifest/Person
   binding and insertion ownership. Already-present cells remain unowned; owned
@@ -62,7 +62,7 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   and checks terminal first coverage, Person identity, proof binding and current
   revision. Metadata/activity discovery now also requires capture ordering after
   first-family coverage; activity coverage must have terminated before bundle
-  creation. Legacy and previous-refresh adapters/classification remain pending.
+  creation. Legacy adapters and classification remain pending.
 - Core source resolution reconciles all occurrences before cohort filtering,
   rejects conflicting Person links/open-versus-completed task streams, and
   requires note detail. Shared manifest references remain bundle/Org/kind/Person
@@ -81,6 +81,12 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 - Core resolution independently checks each family's exhausted streams and the
   final authenticated cursor, including settled note-detail work. Shared indexing
   does not make an unfinished activity stream a metadata prerequisite.
+- Prior-refresh metadata/note/task discovery now authenticates the current
+  successful result in its original AEAD scope, verifies the exact frozen cohort,
+  terminal predecessor and source ordering, and checks complete native state and
+  revision. Metadata retains separate ownership/aliases; activity requires explicit
+  positive ownership. Invalid heads never fall back to first-import evidence.
+  These read adapters do not yet produce results through a refresh executor.
 - No refresh HTTP commands, family dispatcher or Web workflow are exposed yet.
 
 ## Evidence and isolation
@@ -202,6 +208,27 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   `cargo test -p crm-app --lib family_refresh --locked`, all in the isolated
   target/database. Prior-correction discovery still needs authenticated fixture
   evidence. This is not a final workflow/release gate.
+- Prior-refresh native discovery: the three new database regressions passed
+  under the application role with scoped preparation claims. They cover metadata
+  ownership/aliases, authenticated note/task after-states at revision 2, exact
+  previous capture ordering, edit/revert, foreign Organization/cohort/token,
+  corrupted result AEAD, unowned-head rejection without older-result fallback,
+  and repeated discovery without new results. Successful refresh results are
+  migrator-built fixtures; this is not refresh-executor evidence. All 36 focused
+  Rust tests, all 18 serial family database regressions, `crm-app --lib` Clippy
+  with warnings denied, formatting and diff checks passed. Initial
+  fixture omissions (no captured note, control settlement using its old rather
+  than current lease epoch) and two Clippy findings were corrected. A proposed
+  lookup index duplicated the existing index and was removed; no schema change
+  is included. Logs: `/private/tmp/010g1-prior-baseline-db.log`,
+  `/private/tmp/010g1-prior-baseline-family-db.log`,
+  `/private/tmp/010g1-prior-baseline-unit.log`, and
+  `/private/tmp/010g1-prior-baseline-clippy.log`.
+  Runners: `cargo test -p crm-api --features test-support --test all prior_
+  --locked -- --ignored --test-threads=1`; `cargo test -p crm-app --lib
+  family_refresh --locked`. The full family database rerun used the freshly
+  compiled `debug/deps/all-07593333edaca6c2 family_refresh --ignored
+  --test-threads=1` binary. Same isolated target/database as below.
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB
   `crm_010g1_schema_20260915`. Database tests run serially.
@@ -209,7 +236,8 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   No live FUB/customer processing. Linker reports the large `__eh_frame` warning.
 
 Remaining: final capability inventories and refresh-owned initial identities;
-new-identity first-coverage classification and prior-correction discovery evidence, legacy/prior-refresh
-baselines; cohort/index dispatcher integration; metadata/activity/history execution; typed
-commands and bounded readers; common Web workflow; independent implementation
+new-identity first-coverage classification and prior-correction discovery evidence, legacy
+baselines and refresh-executor after-state production; cohort/index dispatcher
+integration; metadata/activity/history execution; typed commands and bounded
+readers; common Web workflow; independent implementation
 review; full database/browser/performance/final gates. Do not report 010g1 done.

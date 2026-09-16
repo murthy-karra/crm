@@ -11,6 +11,7 @@ pub mod metadata_baseline;
 pub mod metadata_delta;
 pub mod metadata_discovery;
 pub mod model;
+pub mod native_baseline;
 pub mod source_policy;
 
 pub mod activity_baseline;

@@ -51,9 +51,40 @@ pub async fn discover(
     if !live {
         return Ok(Discovery::Held(Hold::TargetErased));
     }
-    if sqlx::query_scalar::<_,bool>("SELECT EXISTS(SELECT 1 FROM migration_family_refresh_head WHERE organization_id=$1 AND source_account_id=$2 AND kind='metadata' AND target_id=$3)")
-        .bind(claim.organization.0).bind(b.get::<i64,_>("source_account_id")).bind(person).fetch_one(&mut *tx).await? {
-        return Ok(Discovery::Held(Hold::StaleHead));
+    match super::native_baseline::load(
+        &mut tx,
+        key,
+        super::native_baseline::Request {
+            organization: claim.organization,
+            bundle: &b,
+            plan: &p,
+            cohort: &c,
+            kind: super::model::Kind::Metadata,
+            target: person,
+            source_id: &c.get::<String, _>("source_person_id"),
+        },
+    )
+    .await?
+    {
+        super::native_baseline::Selection::Absent => {}
+        super::native_baseline::Selection::Held(hold) => return Ok(Discovery::Held(hold)),
+        super::native_baseline::Selection::Proven(proven) => {
+            let mut current =
+                metadata_baseline::observe(&mut tx, claim.organization, person).await?;
+            current.head = Some(proven.result);
+            return Ok(
+                match super::native_baseline::verify_metadata(&proven, &current) {
+                    Ok((baseline, ownership)) => Discovery::Proven(Proven {
+                        result: proven.result,
+                        source_snapshot: proven.snapshot,
+                        capture_sequence: proven.sequence,
+                        baseline,
+                        ownership,
+                    }),
+                    Err(hold) => Discovery::Held(hold),
+                },
+            );
+        }
     }
     let admitted = c.get::<Option<Uuid>, _>("admission_result_id").is_some();
     // All SQL identifiers are closed server-owned alternatives, never input.

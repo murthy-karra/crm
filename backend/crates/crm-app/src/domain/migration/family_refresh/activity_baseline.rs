@@ -127,6 +127,7 @@ pub async fn discover(
         activity_model, activity_store, admitted_activity_model, admitted_activity_store,
     };
     use sqlx::Row;
+    let kind_enum = kind;
     let kind = match kind {
         super::model::Kind::Note => "note",
         super::model::Kind::Task => "task",
@@ -149,8 +150,47 @@ pub async fn discover(
         return Ok(Discovery::Held(Hold::BaselineUnproven));
     };
     let target: Uuid = identity.get("target_id");
-    if sqlx::query_scalar::<_,bool>("SELECT EXISTS(SELECT 1 FROM migration_family_refresh_head WHERE organization_id=$1 AND source_account_id=$2 AND kind=$3 AND target_id=$4)")
-        .bind(claim.organization.0).bind(b.get::<i64,_>("source_account_id")).bind(kind).bind(target).fetch_one(&mut *tx).await? {return Ok(Discovery::Held(Hold::StaleHead));}
+    match super::native_baseline::load(
+        &mut tx,
+        key,
+        super::native_baseline::Request {
+            organization: claim.organization,
+            bundle: &b,
+            plan: &p,
+            cohort: &c,
+            kind: kind_enum,
+            target,
+            source_id,
+        },
+    )
+    .await?
+    {
+        super::native_baseline::Selection::Absent => {}
+        super::native_baseline::Selection::Held(hold) => return Ok(Discovery::Held(hold)),
+        super::native_baseline::Selection::Proven(proven) => {
+            let sql = if kind == "note" {
+                "SELECT to_jsonb(n) FROM note n WHERE id=$1 AND organization_id=$2"
+            } else {
+                "SELECT to_jsonb(t) FROM task t WHERE id=$1 AND organization_id=$2"
+            };
+            let current: Option<Value> = sqlx::query_scalar(sql)
+                .bind(target)
+                .bind(claim.organization.0)
+                .fetch_optional(&mut *tx)
+                .await?;
+            return Ok(
+                match super::native_baseline::verify_activity(
+                    *proven,
+                    claim.organization,
+                    b.get("source_account_id"),
+                    current.as_ref(),
+                ) {
+                    Ok(baseline) => Discovery::Proven(baseline),
+                    Err(hold) => Discovery::Held(hold),
+                },
+            );
+        }
+    }
     let admitted = identity
         .get::<Option<Uuid>, _>("admitted_import_id")
         .is_some();

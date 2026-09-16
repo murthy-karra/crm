@@ -305,3 +305,28 @@ native evidence. Only metadata is copied into the derived index; raw bodies and
 full canonical values remain in their existing encrypted captures. Page sources,
 checkpoints and exact byte charges commit together behind the current lease.
 This stage supplies preparation components, not native execution or HTTP admission.
+
+
+### Prior-refresh native baseline discovery
+
+Successful refresh results use the versioned, family-typed
+`native_baseline::ResultData` after-state payload under the existing result AEAD
+scope (Organization, bundle, plan, plan revision and result ID). The payload also
+binds its manifest, source ID, Person, target and family. Metadata retains the
+complete snapshot/revision, current result head and separate insertion ownership;
+notes/tasks retain the complete native row/revision and positive ownership flag.
+Unowned or absent after-state cannot become a mutation baseline.
+
+Discovery requires the current head's successful result, exact manifest/cohort,
+original parent/account, terminal confirmed predecessor family and bundle, and a
+result/bundle completion boundary no later than the new bundle's freeze. The
+selected capture must be strictly newer than that result's selected capture.
+The existing target index bounds lookup; multiple source-key heads for one target
+hold. A present but invalid head never falls back to an older first-import result.
+AEAD failure fails closed; local edits, including edit/revert and task-local state,
+hold without writing any new result. Application-role reads use the existing
+current-admin/workspace/preparation-lease admission.
+
+This defines the successful native-result payload and read adapter for the
+forthcoming executor. Synthetic successful-result fixtures are migrator-owned;
+no new native execution, HTTP admission or capability advertisement is enabled.

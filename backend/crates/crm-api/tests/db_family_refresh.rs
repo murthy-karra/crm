@@ -1845,3 +1845,354 @@ async fn history_baseline_authenticates_admitted_owner(pool: PgPool) {
     .unwrap();
     assert_eq!(owner, root);
 }
+
+/// Migrator-only construction of successful refresh evidence; no native refresh
+/// executor exists yet. The reader runs with the application role and real lease.
+pub(super) async fn prior_native_fixture(
+    pool: &PgPool,
+    f: &import_support::Fixture,
+    parent: Uuid,
+    claim: &crm_api::domain::migration::family_refresh::cohort::Claim,
+    mut proofs: Vec<crm_api::domain::migration::family_refresh::native_baseline::AfterState>,
+) -> (
+    crm_api::domain::migration::family_refresh::cohort::Claim,
+    Uuid,
+    Vec<Uuid>,
+) {
+    use crm_api::domain::migration::family_refresh::{
+        cohort::Claim,
+        evidence::{Purpose, Scope},
+        model::Family,
+        native_baseline::{ResultData, State},
+    };
+    let report = db_people_admission_execution::report(
+        f,
+        parent,
+        vec![json!({"id":101,"firstName":"Synthetic successor","stage":"Lead","assignedUserId":3})],
+    )
+    .await;
+    let family: String =
+        sqlx::query_scalar("SELECT family FROM migration_family_refresh_plan WHERE id=$1")
+            .bind(claim.plan)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    let metadata = family == "metadata";
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("SELECT set_config('crm.family_refresh_reader','fub-family-refresh-v1',true),set_config('crm.family_refresh_lease',$1,true)").bind(claim.token.to_string()).execute(&mut *tx).await.unwrap();
+    let cohort: Uuid = sqlx::query_scalar("SELECT id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND source_person_id='101'").bind(claim.bundle).fetch_one(&mut *tx).await.unwrap();
+    let mut entries = Vec::new();
+    let scope = Scope {
+        organization: claim.organization,
+        bundle: claim.bundle,
+        plan: claim.plan,
+        family: if metadata {
+            Family::Metadata
+        } else {
+            Family::Activity
+        },
+        revision: 1,
+    };
+    for (position, proof) in proofs.iter_mut().enumerate() {
+        let result = Uuid::new_v4();
+        let (kind, revision) = match &mut proof.state {
+            State::Metadata { snapshot, .. } => {
+                snapshot.head = Some(result);
+                ("metadata", snapshot.revision)
+            }
+            State::Note { native, .. } => ("note", native["revision"].as_i64().unwrap()),
+            State::Task { native, .. } => ("task", native["revision"].as_i64().unwrap()),
+        };
+        let source_key = vec![position as u8 + 1; 32];
+        sqlx::query("INSERT INTO migration_family_refresh_manifest(id,bundle_id,plan_id,organization_id,cohort_id,position,kind,source_key_hmac,person_id,target_id,disposition,counts,nonce,ciphertext,added_byte_bound) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'already_current','{}',decode(repeat('00',24),'hex'),decode(repeat('00',16),'hex'),8192)")
+            .bind(proof.manifest).bind(claim.bundle).bind(claim.plan).bind(f.org).bind(cohort).bind(position as i64+1).bind(kind).bind(&source_key).bind(proof.person).bind(proof.target).execute(&mut *tx).await.unwrap();
+        let sealed = scope
+            .seal(
+                &f.key,
+                result,
+                Purpose::Result,
+                &ResultData {
+                    after_state: Some(proof.clone()),
+                },
+            )
+            .unwrap();
+        entries.push((result, kind, revision, source_key, sealed));
+    }
+    sqlx::query("INSERT INTO migration_family_refresh_requirement(organization_id,capability,bundle_id) VALUES($1,'fub-family-refresh-v1',$2) ON CONFLICT DO NOTHING").bind(f.org).bind(claim.bundle).execute(&mut *tx).await.unwrap();
+    sqlx::query("UPDATE migration_family_refresh_bundle SET state='running',confirmed_at=clock_timestamp(),digest=decode(repeat('00',32),'hex') WHERE id=$1").bind(claim.bundle).execute(&mut *tx).await.unwrap();
+    sqlx::query("UPDATE migration_family_refresh_plan SET state='running',phase='apply',confirmed_at=clock_timestamp(),digest=decode(repeat('00',32),'hex') WHERE id=$1").bind(claim.plan).execute(&mut *tx).await.unwrap();
+    for (proof, (result, kind, revision, source_key, sealed)) in proofs.iter().zip(&entries) {
+        sqlx::query("INSERT INTO migration_family_refresh_result(id,bundle_id,plan_id,organization_id,manifest_id,disposition,person_id,target_id,native_revision,nonce,ciphertext) VALUES($1,$2,$3,$4,$5,'already_current',$6,$7,$8,$9,$10)")
+            .bind(result).bind(claim.bundle).bind(claim.plan).bind(f.org).bind(proof.manifest).bind(proof.person).bind(proof.target).bind(revision).bind(sealed.nonce.as_slice()).bind(&sealed.ciphertext).execute(&mut *tx).await.unwrap();
+        sqlx::query("INSERT INTO migration_family_refresh_head(organization_id,source_account_id,kind,source_key_hmac,person_id,target_id,result_id,version) SELECT organization_id,source_account_id,$2,$3,$4,$5,$6,1 FROM migration_family_refresh_bundle WHERE id=$1")
+            .bind(claim.bundle).bind(kind).bind(source_key).bind(proof.person).bind(proof.target).bind(result).execute(&mut *tx).await.unwrap();
+    }
+    sqlx::query("UPDATE migration_family_refresh_plan SET state='completed',lease_token=NULL,lease_expires_at=NULL WHERE id=$1").bind(claim.plan).execute(&mut *tx).await.unwrap();
+    sqlx::query("UPDATE migration_family_refresh_bundle SET state='completed',updated_at=clock_timestamp() WHERE id=$1").bind(claim.bundle).execute(&mut *tx).await.unwrap();
+    sqlx::query("SELECT crm_family_refresh_settle(organization_id,bundle_id,plan_id,token,$2,true) FROM migration_family_refresh_reservation WHERE plan_id=$1 AND purpose='control'").bind(claim.plan).bind(claim.epoch).execute(&mut *tx).await.unwrap();
+    let bundle = Uuid::new_v4();
+    let plan = Uuid::new_v4();
+    let token = Uuid::new_v4();
+    let successor_cohort = Uuid::new_v4();
+    let control = Uuid::new_v4();
+    sqlx::query("INSERT INTO migration_family_refresh_bundle(id,organization_id,parent_import_id,parent_plan_id,source_account_id,executor_user_id,engine_version,core_report_id,core_snapshot_id,state,source_nonce,source_ciphertext) SELECT $1,r.organization_id,r.parent_import_id,r.parent_plan_id,r.source_account_id,$2,'fub-family-refresh-v1',r.id,r.newer_snapshot_id,'preparing',decode(repeat('00',24),'hex'),decode(repeat('00',16),'hex') FROM migration_core_change_report r WHERE r.id=$3 AND r.organization_id=$4")
+        .bind(bundle).bind(f.actor).bind(report).bind(f.org).execute(&mut *tx).await.unwrap();
+    sqlx::query("INSERT INTO migration_family_refresh_plan(id,bundle_id,organization_id,family,revision,state,phase,source_snapshot_id,nonce,ciphertext) SELECT $1,id,organization_id,$3,1,'preparing','classify',core_snapshot_id,source_nonce,source_ciphertext FROM migration_family_refresh_bundle WHERE id=$2")
+        .bind(plan).bind(bundle).bind(&family).execute(&mut *tx).await.unwrap();
+    sqlx::query("UPDATE migration_family_refresh_bundle SET payer_plan_id=$2 WHERE id=$1")
+        .bind(bundle)
+        .bind(plan)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO migration_family_refresh_cohort(id,bundle_id,organization_id,source_person_id,person_id,original_result_id,admission_id,admission_result_id,creation_snapshot_id) SELECT $1,$2,organization_id,source_person_id,person_id,original_result_id,admission_id,admission_result_id,creation_snapshot_id FROM migration_family_refresh_cohort WHERE id=$3")
+        .bind(successor_cohort).bind(bundle).bind(cohort).execute(&mut *tx).await.unwrap();
+    sqlx::query("UPDATE migration_family_refresh_plan SET lease_token=$2,lease_epoch=1,lease_expires_at=clock_timestamp()+interval '60 seconds' WHERE id=$1").bind(plan).bind(token).execute(&mut *tx).await.unwrap();
+    sqlx::query("SELECT set_config('crm.family_refresh_lease',$1,true)")
+        .bind(token.to_string())
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    assert!(sqlx::query_scalar::<_, bool>(
+        "SELECT crm_family_refresh_reserve($1,$2,$3,$4,1,16384,'control',2147483648,4294967296)"
+    )
+    .bind(f.org)
+    .bind(bundle)
+    .bind(plan)
+    .bind(control)
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap());
+    sqlx::query("SELECT crm_family_refresh_settle($1,$2,$3,$4,1,false)")
+        .bind(f.org)
+        .bind(bundle)
+        .bind(plan)
+        .bind(control)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    (
+        Claim {
+            organization: claim.organization,
+            bundle,
+            plan,
+            token,
+            epoch: 1,
+        },
+        successor_cohort,
+        entries.iter().map(|v| v.0).collect(),
+    )
+}
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn prior_refresh_activity_baselines_are_authenticated_and_revision_fenced(pool: PgPool) {
+    use crm_api::domain::migration::{
+        family_refresh::{
+            activity_baseline::{self, Discovery},
+            model::{Hold, Kind},
+            native_baseline::{AfterState, State},
+        },
+        snapshot_source::Stream,
+    };
+    let book = db_activity_source::book();
+    book.set_records(Stream::TasksOpen, vec![db_activity_source::task(21)]);
+    let note = json!({"id":11,"personId":101,"createdById":3,"body":"Synthetic initial note","isHtml":false,"created":"2026-09-01T12:00:00Z","updated":null,"type":"Note"});
+    book.set_records(Stream::Notes, vec![note.clone()]);
+    book.set_raw(
+        Stream::NoteDetail,
+        0,
+        200,
+        serde_json::to_vec(&note).unwrap(),
+        false,
+    );
+    let f = import_support::fixture_with_book(&pool, book).await;
+    let parent = db_activity_source::completed_parent(&f).await;
+    let (child, ready) = db_activity_source::prepare(&f, parent).await;
+    let choices = db_activity_source::choices(&f, child).await;
+    let ready = db_activity_source::replan(&f, child, &ready, choices, None).await;
+    db_activity_source::confirm(&f, child, &ready).await;
+    let claim = prepared_indexed_refresh(&pool, &f, parent).await;
+    // Construct a later native state to distinguish it from the first-import
+    // result. The future executor must produce this evidence transactionally.
+    sqlx::query("UPDATE note SET body='Synthetic refreshed note' WHERE organization_id=$1")
+        .bind(f.org)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE task SET title='Synthetic refreshed task' WHERE organization_id=$1")
+        .bind(f.org)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let mut proofs = Vec::new();
+    for (kind, table) in [(Kind::Note, "note"), (Kind::Task, "task")] {
+        let rows=sqlx::query(&format!("SELECT to_jsonb(n) AS native,i.source_id FROM {table} n JOIN migration_activity_identity i ON i.target_id=n.id AND i.organization_id=n.organization_id AND i.kind=$2 WHERE n.organization_id=$1"))
+            .bind(f.org).bind(table).fetch_all(&pool).await.unwrap();
+        assert_eq!(rows.len(), 1);
+        let row = &rows[0];
+        let native: serde_json::Value = row.get("native");
+        proofs.push(AfterState {
+            version: 1,
+            manifest: Uuid::new_v4(),
+            source_id: row.get("source_id"),
+            person: Uuid::parse_str(native["person_id"].as_str().unwrap()).unwrap(),
+            target: Uuid::parse_str(native["id"].as_str().unwrap()).unwrap(),
+            state: if kind == Kind::Note {
+                State::Note {
+                    native,
+                    owned: true,
+                }
+            } else {
+                State::Task {
+                    native,
+                    owned: true,
+                }
+            },
+        });
+    }
+    let (next, cohort, results) =
+        prior_native_fixture(&pool, &f, parent, &claim, proofs.clone()).await;
+    for (index, kind) in [Kind::Note, Kind::Task].into_iter().enumerate() {
+        for _ in 0..2 {
+            let b = match activity_baseline::discover(
+                &f.pool,
+                &f.key,
+                &next,
+                cohort,
+                kind,
+                &proofs[index].source_id,
+            )
+            .await
+            .unwrap()
+            {
+                Discovery::Proven(b) => b,
+                Discovery::Held(h) => panic!("{h:?}"),
+            };
+            assert_eq!(b.revision, 2);
+            assert_eq!(b.result_id, results[index]);
+            assert_eq!(b.head_id, Some(results[index]));
+        }
+    }
+    assert!(
+        activity_baseline::discover(&f.pool, &f.key, &next, Uuid::new_v4(), Kind::Task, "21")
+            .await
+            .is_err()
+    );
+    let mut wrong = crm_api::domain::migration::family_refresh::cohort::Claim { ..next };
+    wrong.token = Uuid::new_v4();
+    assert!(
+        activity_baseline::discover(&f.pool, &f.key, &wrong, cohort, Kind::Task, "21")
+            .await
+            .is_err()
+    );
+    wrong = crm_api::domain::migration::family_refresh::cohort::Claim { ..next };
+    wrong.organization = crm_api::ids::OrganizationId::new(Uuid::new_v4());
+    assert!(
+        activity_baseline::discover(&f.pool, &f.key, &wrong, cohort, Kind::Task, "21")
+            .await
+            .is_err()
+    );
+    // Native migrator mutation exercises the database revision trigger, including ABA.
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("SELECT set_config('crm.family_refresh_reader','fub-family-refresh-v1',true)")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE task SET title=title||' local' WHERE id=$1")
+        .bind(proofs[1].target)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE task SET title=left(title,length(title)-6) WHERE id=$1")
+        .bind(proofs[1].target)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    assert!(matches!(
+        activity_baseline::discover(&f.pool, &f.key, &next, cohort, Kind::Task, "21")
+            .await
+            .unwrap(),
+        Discovery::Held(Hold::LocalChange)
+    ));
+    let count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM migration_family_refresh_result WHERE bundle_id=$1",
+    )
+    .bind(next.bundle)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        count, 0,
+        "read-only discovery/replay must not advance a baseline"
+    );
+}
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn prior_refresh_unowned_head_cannot_fall_back_to_first_import(pool: PgPool) {
+    use crm_api::domain::migration::{
+        family_refresh::{
+            activity_baseline::{self, Discovery},
+            model::{Hold, Kind},
+            native_baseline::{AfterState, State},
+        },
+        snapshot_source::Stream,
+    };
+    let book = db_activity_source::book();
+    book.set_records(Stream::TasksOpen, vec![db_activity_source::task(21)]);
+    let f = import_support::fixture_with_book(&pool, book).await;
+    let parent = db_activity_source::completed_parent(&f).await;
+    let (child, ready) = db_activity_source::prepare(&f, parent).await;
+    let choices = db_activity_source::choices(&f, child).await;
+    let ready = db_activity_source::replan(&f, child, &ready, choices, None).await;
+    db_activity_source::confirm(&f, child, &ready).await;
+    let claim = prepared_indexed_refresh(&pool, &f, parent).await;
+    let cohort:Uuid=sqlx::query_scalar("SELECT id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND source_person_id='101'").bind(claim.bundle).fetch_one(&pool).await.unwrap();
+    let baseline =
+        match activity_baseline::discover(&f.pool, &f.key, &claim, cohort, Kind::Task, "21")
+            .await
+            .unwrap()
+        {
+            Discovery::Proven(b) => b,
+            Discovery::Held(h) => panic!("{h:?}"),
+        };
+    let proof = AfterState {
+        version: 1,
+        manifest: Uuid::new_v4(),
+        source_id: "21".into(),
+        person: baseline.person_id,
+        target: baseline.target_id,
+        state: State::Task {
+            native: baseline.native,
+            owned: false,
+        },
+    };
+    let (next, cohort, _) = prior_native_fixture(&pool, &f, parent, &claim, vec![proof]).await;
+    assert!(
+        matches!(
+            activity_baseline::discover(&f.pool, &f.key, &next, cohort, Kind::Task, "21")
+                .await
+                .unwrap(),
+            Discovery::Held(Hold::BaselineUnproven)
+        ),
+        "equality and a usable older result cannot confer ownership after an unproven newer head"
+    );
+    assert!(
+        matches!(
+            activity_baseline::discover(
+                &f.pool,
+                &crm_api::config::RawPayloadKey::new([82; 32]),
+                &next,
+                cohort,
+                Kind::Task,
+                "21"
+            )
+            .await,
+            Err(crm_api::domain::migration::MigrationError::Crypto)
+        ),
+        "corrupted or foreign result evidence must not fall back either"
+    );
+}

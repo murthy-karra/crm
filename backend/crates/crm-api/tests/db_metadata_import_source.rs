@@ -907,3 +907,129 @@ async fn family_refresh_metadata_original_discovery_is_bound_and_conservative(mi
         Discovery::Held(Hold::LocalChange)
     ));
 }
+
+#[sqlx::test(migrations = "./migrations")]
+#[ignore]
+async fn family_refresh_metadata_prior_result_preserves_ownership_and_source_boundary(
+    migrator: PgPool,
+) {
+    use crm_api::domain::migration::family_refresh::{
+        metadata_discovery::{self, Discovery},
+        model::Hold,
+        native_baseline::{AfterState, State},
+    };
+    let mut p = person(101);
+    p["tags"] = json!(["Imported"]);
+    p["customText"] = json!("Native baseline");
+    let f = support::fixture_with_book(
+        &migrator,
+        book(vec![p], vec![field(10, "customText", "Text", "text")]),
+    )
+    .await;
+    let parent = complete_parent(&f).await;
+    let (child, first) = propose(&f, parent).await;
+    let ready = replan(
+        &f,
+        child,
+        &first,
+        matching_choices(&f, plan_id(&first)).await,
+    )
+    .await;
+    execute(&f, child, &ready, parent).await;
+    let claim =
+        crate::db_family_refresh::prepared_family_refresh(&migrator, &f, parent, "metadata").await;
+    let cohort:Uuid=sqlx::query_scalar("SELECT id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND source_person_id='101'").bind(claim.bundle).fetch_one(&f.pool).await.unwrap();
+    let first = match metadata_discovery::discover(&f.pool, &f.key, &claim, cohort)
+        .await
+        .unwrap()
+    {
+        Discovery::Proven(p) => p,
+        Discovery::Held(h) => panic!("{h:?}"),
+    };
+    let person = first.baseline.person;
+    let field = *first.ownership.fields.iter().next().unwrap();
+    let proof = AfterState {
+        version: 1,
+        manifest: Uuid::new_v4(),
+        source_id: "101".into(),
+        person,
+        target: person,
+        state: State::Metadata {
+            snapshot: first.baseline.clone(),
+            ownership: first.ownership.clone(),
+        },
+    };
+    let (next, cohort, results) =
+        crate::db_family_refresh::prior_native_fixture(&migrator, &f, parent, &claim, vec![proof])
+            .await;
+    for _ in 0..2 {
+        let found = match metadata_discovery::discover(&f.pool, &f.key, &next, cohort)
+            .await
+            .unwrap()
+        {
+            Discovery::Proven(p) => p,
+            Discovery::Held(h) => panic!("{h:?}"),
+        };
+        assert_eq!(found.result, results[0]);
+        assert_eq!(found.baseline.head, Some(results[0]));
+        assert_ne!(found.source_snapshot, first.source_snapshot);
+        assert_eq!(found.ownership.tags, first.ownership.tags);
+        assert_eq!(found.ownership.fields, first.ownership.fields);
+        assert_eq!(found.baseline.revision, first.baseline.revision);
+    }
+    assert!(
+        metadata_discovery::discover(
+            &f.pool,
+            &crm_api::config::RawPayloadKey::new([82; 32]),
+            &next,
+            cohort
+        )
+        .await
+        .is_err(),
+        "result AEAD must authenticate before using its baseline"
+    );
+    let interval=sqlx::query("SELECT n.id,n.started_at,o.completed_at FROM migration_family_refresh_plan p JOIN migration_snapshot n ON n.id=p.source_snapshot_id JOIN migration_family_refresh_plan old ON old.id=$2 JOIN migration_snapshot o ON o.id=old.source_snapshot_id WHERE p.id=$1").bind(next.plan).bind(claim.plan).fetch_one(&migrator).await.unwrap();
+    sqlx::query("UPDATE migration_snapshot SET started_at=$2 WHERE id=$1")
+        .bind(interval.get::<Uuid, _>("id"))
+        .bind(interval.get::<Option<chrono::DateTime<chrono::Utc>>, _>("completed_at"))
+        .execute(&migrator)
+        .await
+        .unwrap();
+    assert!(
+        matches!(
+            metadata_discovery::discover(&f.pool, &f.key, &next, cohort)
+                .await
+                .unwrap(),
+            Discovery::Held(Hold::SourceNotNewer)
+        ),
+        "must compare against prior refresh capture, not older first import"
+    );
+    sqlx::query("UPDATE migration_snapshot SET started_at=$2 WHERE id=$1")
+        .bind(interval.get::<Uuid, _>("id"))
+        .bind(interval.get::<Option<chrono::DateTime<chrono::Utc>>, _>("started_at"))
+        .execute(&migrator)
+        .await
+        .unwrap();
+    let mut tx = migrator.begin().await.unwrap();
+    sqlx::query("SELECT set_config('crm.family_refresh_reader','fub-family-refresh-v1',true)")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE person_custom_field_value SET text_value='local edit' WHERE organization_id=$1 AND person_id=$2 AND field_id=$3").bind(f.org).bind(person).bind(field).execute(&mut *tx).await.unwrap();
+    sqlx::query("UPDATE person_custom_field_value SET text_value='Native baseline' WHERE organization_id=$1 AND person_id=$2 AND field_id=$3").bind(f.org).bind(person).bind(field).execute(&mut *tx).await.unwrap();
+    tx.commit().await.unwrap();
+    assert!(matches!(
+        metadata_discovery::discover(&f.pool, &f.key, &next, cohort)
+            .await
+            .unwrap(),
+        Discovery::Held(Hold::LocalChange)
+    ));
+    let count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM migration_family_refresh_result WHERE bundle_id=$1",
+    )
+    .bind(next.bundle)
+    .fetch_one(&migrator)
+    .await
+    .unwrap();
+    assert_eq!(count, 0);
+}

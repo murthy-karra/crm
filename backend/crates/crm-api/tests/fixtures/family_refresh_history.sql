@@ -5,7 +5,7 @@ DECLARE org UUID:=current_setting('test.family_org')::uuid; actor UUID:=current_
  parent UUID:=current_setting('test.family_parent')::uuid; capture UUID; round INTEGER:=0;
  bundle UUID:=gen_random_uuid(); plan UUID:=gen_random_uuid(); lease UUID:=gen_random_uuid(); control UUID:=gen_random_uuid();
  c RECORD; f RECORD; raw RECORD; h RECORD; page UUID; source UUID; manifest UUID; outcome UUID; display UUID; cohort UUID; position BIGINT:=0;
- rejected BOOLEAN; frozen TEXT; after_frozen TEXT; before_counts JSONB; after_counts JSONB; before_bytes BIGINT; after_bytes BIGINT; charged BIGINT;
+ rejected BOOLEAN; frozen TEXT; after_frozen TEXT; before_counts JSONB; after_counts JSONB; before_bytes BIGINT; after_bytes BIGINT; charged BIGINT; before_capture_bytes BIGINT; after_capture_bytes BIGINT;
 BEGIN
  FOREACH capture IN ARRAY ARRAY[current_setting('test.family_capture')::uuid,current_setting('test.family_successor_capture')::uuid] LOOP
  round:=round+1; bundle:=gen_random_uuid(); plan:=gen_random_uuid(); lease:=gen_random_uuid(); control:=gen_random_uuid(); position:=0;
@@ -101,9 +101,12 @@ BEGIN
  UPDATE migration_family_refresh_bundle SET state='completed' WHERE id=bundle;
  PERFORM crm_family_refresh_settle(org,bundle,plan,control,1,true);
  END LOOP;
+ SELECT sum(retained_bytes) INTO before_capture_bytes FROM migration_history_capture_run WHERE organization_id=org;
  SELECT retained_bytes INTO before_bytes FROM migration_snapshot_storage WHERE organization_id=org;
  UPDATE migration_history_import_identity SET erased_at=clock_timestamp() WHERE organization_id=org AND family='events' AND erased_at IS NULL;
  SELECT retained_bytes INTO after_bytes FROM migration_snapshot_storage WHERE organization_id=org;
+ SELECT sum(retained_bytes) INTO after_capture_bytes FROM migration_history_capture_run WHERE organization_id=org;
+ IF before_capture_bytes-after_capture_bytes<>80 THEN RAISE EXCEPTION 'erasure did not refund original history captures'; END IF;
  IF before_bytes-after_bytes<>80 THEN RAISE EXCEPTION 'erasure did not refund exact display bytes: %',before_bytes-after_bytes; END IF;
  IF EXISTS(SELECT 1 FROM migration_family_refresh_history_display d JOIN migration_history_import_identity i ON i.id=d.identity_id AND i.organization_id=d.organization_id WHERE d.organization_id=org AND i.family='events' AND d.nonce IS NOT NULL) THEN RAISE EXCEPTION 'erasure retained display'; END IF;
  IF EXISTS(SELECT 1 FROM migration_history_review_state WHERE organization_id=org AND ((counts->>'fub_event_record_imported_known')::bigint<>0 OR (counts->>'fub_event_record_imported_unknown')::bigint<>0)) THEN RAISE EXCEPTION 'erasure decremented initial date bucket'; END IF;

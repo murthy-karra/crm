@@ -16,7 +16,9 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 - Accounting now measures family and shared evidence separately. One frozen plan
   pays shared costs; original head storage ownership survives head replacement.
   Core-derived charges reach the selected snapshot and Organization ledgers;
-  history plans use their independent plan and Organization budgets.
+  history plans also charge the selected history capture run. Migration 009 adds
+  that source budget to admission, settlement, reclaim and erasure, including
+  backfill of existing refresh evidence without duplicating Organization charges.
 - Reservation/settlement functions preserve cancellation capacity, reject stale
   unit leases, and atomically charge/refund capacity. Deferred checks reject an
   application commit with unsettled evidence or inconsistent reservations.
@@ -58,7 +60,9 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   native state; exact ciphertext is charged through each existing result ledger.
   A scoped metadata discovery adapter now selects exact original/admitted results
   and checks terminal first coverage, Person identity, proof binding and current
-  revision. Legacy and previous-refresh adapters/classification remain pending.
+  revision. Metadata/activity discovery now also requires capture ordering after
+  first-family coverage; activity coverage must have terminated before bundle
+  creation. Legacy and previous-refresh adapters/classification remain pending.
 - Core source resolution reconciles all occurrences before cohort filtering,
   rejects conflicting Person links/open-versus-completed task streams, and
   requires note detail. Shared manifest references remain bundle/Org/kind/Person
@@ -68,6 +72,15 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   anchor. It retains all parsed occurrences, explicit diagnostic page evidence,
   raw references and metadata-only displays, with transaction/lease/ledger fences.
   It does not create native history facts or corrections.
+- History selection reconciles the complete occurrence set and authenticates
+  original-namespace identity hashes and metadata-only evidence. Baseline discovery
+  verifies original/admitted first ownership, current typed correction bindings,
+  display authentication/erasure and strictly newer capture ordering. Original and
+  admitted owner paths have database evidence; authenticated prior-correction
+  discovery and new-identity first-coverage classification remain outstanding.
+- Core resolution independently checks each family's exhausted streams and the
+  final authenticated cursor, including settled note-detail work. Shared indexing
+  does not make an unfinished activity stream a metadata prerequisite.
 - No refresh HTTP commands, family dispatcher or Web workflow are exposed yet.
 
 ## Evidence and isolation
@@ -168,6 +181,27 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   Runners: `cargo test -p crm-api --features test-support --test all family_refresh
   --locked -- --ignored --test-threads=1`; `cargo test -p crm-app --lib
   family_refresh --locked`; isolated target/database as below. No final workflow gate claim.
+- Baseline/source-boundary and history-budget checkpoint: 33 focused Rust tests
+  and all 15 family database regressions have passing evidence. The final suite
+  passed 14; the new takeover fixture initially attempted replacement before lease
+  expiry and was correctly rejected. After explicitly expiring that lease, the
+  affected regression passed on the final tree. Checks cover original/admitted
+  history ownership, body-only corrections, new-identity holds, overlapping source
+  intervals, late first-coverage completion, independent family stream exhaustion,
+  exact history capture charges, source budget rejection, one-time takeover
+  refunds and erasure refunds to both original captures. Clippy (`crm-app --lib`,
+  warnings denied), migration application, formatting and diff checks passed.
+  Logs: `/private/tmp/010g1-final-baseline-db.log`,
+  `/private/tmp/010g1-history-budget-takeover-db.log`,
+  `/private/tmp/010g1-baseline-boundaries-unit.log`,
+  `/private/tmp/010g1-baseline-budget-clippy.log`, and
+  `/private/tmp/010g1-history-budget-schema.log`.
+  Runners: serial `cargo test -p crm-api --features test-support --test all
+  family_refresh --locked -- --ignored --test-threads=1`, then the exact affected
+  `history_index_preserves_pages_privacy_and_atomic_accounting` test; focused
+  `cargo test -p crm-app --lib family_refresh --locked`, all in the isolated
+  target/database. Prior-correction discovery still needs authenticated fixture
+  evidence. This is not a final workflow/release gate.
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB
   `crm_010g1_schema_20260915`. Database tests run serially.
@@ -175,7 +209,7 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   No live FUB/customer processing. Linker reports the large `__eh_frame` warning.
 
 Remaining: final capability inventories and refresh-owned initial identities;
-history source resolution/first-coverage classification, legacy/prior-refresh
+new-identity first-coverage classification and prior-correction discovery evidence, legacy/prior-refresh
 baselines; cohort/index dispatcher integration; metadata/activity/history execution; typed
 commands and bounded readers; common Web workflow; independent implementation
 review; full database/browser/performance/final gates. Do not report 010g1 done.

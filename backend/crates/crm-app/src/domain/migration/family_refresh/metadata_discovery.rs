@@ -100,6 +100,18 @@ pub async fn discover(
     if r.get::<String, _>("disposition") == "held" {
         return Ok(Discovery::Held(Hold::BaselineUnproven));
     }
+    if let Err(hold) = super::source_policy::qualify_core_snapshots(
+        &mut tx,
+        claim.organization,
+        b.get("source_account_id"),
+        p.get::<Option<Uuid>, _>("source_snapshot_id")
+            .ok_or(MigrationError::SourceNotEligible)?,
+        r.get("snapshot_id"),
+    )
+    .await?
+    {
+        return Ok(Discovery::Held(hold));
+    }
     let proof = if admitted {
         #[derive(serde::Deserialize)]
         struct Payload {

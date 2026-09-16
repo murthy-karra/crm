@@ -28,14 +28,7 @@ pub fn qualify_boundary(
     previous: Boundary,
     core_anchor: Option<Boundary>,
 ) -> Result<(), Hold> {
-    selected.complete()?;
-    let previous_end = previous.complete()?;
-    if selected.account != previous.account {
-        return Err(Hold::IdentityMismatch);
-    }
-    if selected.capture == previous.capture || selected.started <= previous_end {
-        return Err(Hold::SourceNotNewer);
-    }
+    qualify_newer_capture(selected, previous)?;
     if family == Family::History {
         let core = core_anchor.ok_or(Hold::FirstCoverageRequired)?;
         let core_end = core.complete()?;
@@ -47,6 +40,53 @@ pub fn qualify_boundary(
         }
     }
     Ok(())
+}
+
+/// Common ordering check, independent of the additional history/core anchor.
+pub fn qualify_newer_capture(selected: Boundary, previous: Boundary) -> Result<(), Hold> {
+    selected.complete()?;
+    let previous_end = previous.complete()?;
+    if selected.account != previous.account {
+        return Err(Hold::IdentityMismatch);
+    }
+    if selected.capture == previous.capture || selected.started <= previous_end {
+        return Err(Hold::SourceNotNewer);
+    }
+    Ok(())
+}
+
+/// Compare retained snapshot intervals inside the caller's preparation transaction.
+/// Report completion alone does not establish ordering after a family's baseline.
+pub(super) async fn qualify_core_snapshots(
+    conn: &mut sqlx::PgConnection,
+    organization: crate::ids::OrganizationId,
+    account: i64,
+    selected: Uuid,
+    previous: Uuid,
+) -> Result<Result<(), Hold>, crate::domain::migration::MigrationError> {
+    use sqlx::Row;
+    let rows=sqlx::query("SELECT id,source_account_id,started_at,completed_at,state FROM migration_snapshot WHERE organization_id=$1 AND id=ANY($2)")
+        .bind(organization.0).bind(vec![selected,previous]).fetch_all(conn).await?;
+    let boundary = |id: Uuid| -> Option<Boundary> {
+        let row = rows.iter().find(|r| r.get::<Uuid, _>("id") == id)?;
+        Some(Boundary {
+            capture: id,
+            account: row.get("source_account_id"),
+            started: row.get::<Option<DateTime<Utc>>, _>("started_at")?,
+            completed: row.get("completed_at"),
+            terminal: matches!(
+                row.get::<String, _>("state").as_str(),
+                "completed" | "completed_with_gaps"
+            ),
+        })
+    };
+    let (Some(selected), Some(previous)) = (boundary(selected), boundary(previous)) else {
+        return Ok(Err(Hold::SourceUnavailable));
+    };
+    if selected.account != account || previous.account != account {
+        return Ok(Err(Hold::IdentityMismatch));
+    }
+    Ok(qualify_newer_capture(selected, previous))
 }
 
 pub struct Occurrence<'a> {

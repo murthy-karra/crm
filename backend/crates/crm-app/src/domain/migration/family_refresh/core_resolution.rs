@@ -113,6 +113,23 @@ pub async fn resolve(
         },
         revision: owner.get("revision"),
     };
+    let selected_family = if family == "metadata" {
+        Family::Metadata
+    } else {
+        Family::Activity
+    };
+    if let Err(hold) = super::core_source::qualify_family(
+        &mut tx,
+        key,
+        scope,
+        b.get::<Option<Uuid>, _>("core_snapshot_id")
+            .ok_or(MigrationError::SourceNotEligible)?,
+        selected_family,
+    )
+    .await?
+    {
+        return Ok(Resolution::Held(hold));
+    }
     let groups=sqlx::query("SELECT s.representation,count(*) AS observations,count(DISTINCT s.semantic_hmac) AS variants,count(DISTINCT s.source_person_id)+(bool_or(s.source_person_id IS NULL))::int AS people,min(s.source_person_id) AS person,bool_and(s.qualified) AS qualified,bool_or(s.reason='unit_too_large') AS oversized,count(DISTINCT page.stream) AS streams FROM migration_family_refresh_source s JOIN migration_family_refresh_core_page page ON page.id=s.core_page_id AND page.bundle_id=s.bundle_id AND page.organization_id=s.organization_id WHERE s.bundle_id=$1 AND s.organization_id=$2 AND s.plan_id=$3 AND s.kind=$4 AND s.source_id=$5 GROUP BY s.representation ORDER BY s.representation LIMIT 3")
         .bind(claim.bundle).bind(claim.organization.0).bind(payer).bind(kind.name()).bind(source_id).fetch_all(&mut *tx).await?;
     if groups.is_empty() {

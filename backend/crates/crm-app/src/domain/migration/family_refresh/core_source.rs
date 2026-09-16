@@ -405,3 +405,63 @@ async fn index_capture(
         qualified,
     })
 }
+
+/// Require exhausted streams for the selected family, independently of the
+/// report's terminal label. The index already authenticated each cursor chain;
+/// here its last accepted page must actually close that chain.
+pub(super) async fn qualify_family(
+    conn: &mut PgConnection,
+    key: &RawPayloadKey,
+    scope: Scope,
+    snapshot: Uuid,
+    family: Family,
+) -> Result<Result<(), super::model::Hold>, MigrationError> {
+    use super::model::Hold;
+    let streams: &[&str] = match family {
+        Family::Metadata => &["people", "custom_fields"],
+        Family::Activity => &[
+            "people",
+            "users",
+            "notes",
+            "note_detail",
+            "tasks_open",
+            "tasks_completed",
+        ],
+        Family::History => return Err(MigrationError::InvalidInput),
+    };
+    let rows=sqlx::query("SELECT s.stream,s.state,p.id,p.nonce,p.ciphertext FROM migration_snapshot_stream s LEFT JOIN LATERAL (SELECT id,nonce,ciphertext FROM migration_family_refresh_core_page p WHERE p.bundle_id=$1 AND p.organization_id=s.organization_id AND p.plan_id=$2 AND p.snapshot_id=s.snapshot_id AND p.stream=s.stream AND p.accepted ORDER BY p.checkpoint DESC LIMIT 1) p ON true WHERE s.snapshot_id=$3 AND s.organization_id=$4 AND s.stream=ANY($5)")
+        .bind(scope.bundle).bind(scope.plan).bind(snapshot).bind(scope.organization.0).bind(streams).fetch_all(&mut *conn).await?;
+    if rows.len() != streams.len() {
+        return Ok(Err(Hold::SourceUnavailable));
+    }
+    for row in rows {
+        if row.get::<String, _>("state") != "completed" {
+            return Ok(Err(Hold::SourceUnavailable));
+        }
+        let stream = row.get::<String, _>("stream");
+        if stream == "note_detail" {
+            let pending:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM migration_snapshot_note_detail WHERE snapshot_id=$1 AND organization_id=$2 AND NOT settled)").bind(snapshot).bind(scope.organization.0).fetch_one(&mut *conn).await?;
+            if pending {
+                return Ok(Err(Hold::SourceUnavailable));
+            }
+            continue;
+        }
+        let Some(id) = row.get::<Option<Uuid>, _>("id") else {
+            return Ok(Err(Hold::SourceUnavailable));
+        };
+        let page: PageEvidence = scope.open(
+            key,
+            id,
+            Purpose::Binding,
+            row.get("nonce"),
+            row.get("ciphertext"),
+        )?;
+        if page.stream.as_str() != stream {
+            return Err(MigrationError::Crypto);
+        }
+        if page.next.is_some() || page.classification != "success" {
+            return Ok(Err(Hold::SourceUnavailable));
+        }
+    }
+    Ok(Ok(()))
+}

@@ -124,8 +124,12 @@ FK. Private evidence uses each plan's corresponding counters. Head
 the permanent requirement records its installing bundle. Native content is
 reported separately from retained evidence, as in the existing activity ledger.
 
-Reservations count against the plan, Organization and (for core families) selected
-snapshot. Each reservation includes 512 bytes for its own control-row overhead;
+Reservations count against the plan, Organization and selected source: the core
+snapshot for core families or retained history capture run for history. Shared
+bundle evidence follows its one frozen payer. History erasure refunds the original
+capture as well as the owning plan and Organization; takeover reclamation refunds
+all three reservation counters. Migration 009 backfills already retained history
+refresh charges without recharging raw bytes or the Organization ledger. Each reservation includes 512 bytes for its own control-row overhead;
 control reservations start at least 8 KiB. Settlement charges actual measured
 deltas. Unit settlement refunds unused capacity; control settlement retains its
 remaining cancellation capacity until explicit release. A control reservation

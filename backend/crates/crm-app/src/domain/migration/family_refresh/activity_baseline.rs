@@ -181,7 +181,7 @@ pub async fn discover(
     } else {
         "parent_result_id"
     };
-    let query=format!("SELECT r.*,a.snapshot_id,a.state AS owner_state,m.native_source_key FROM {prefix}_result r JOIN {prefix}_import a ON a.id=r.import_id AND a.organization_id=r.organization_id AND a.confirmed_plan_id=r.plan_id JOIN {prefix}_manifest m ON m.id=r.manifest_id AND m.plan_id=r.plan_id AND m.import_id=r.import_id AND m.organization_id=r.organization_id WHERE r.organization_id=$1 AND r.import_id=$2 AND r.plan_id=$3 AND r.manifest_id=$4 AND a.parent_import_id=$5 AND a.parent_plan_id=$6 AND a.source_account_id=$7 AND m.{parent_column}=$8 AND m.source_person_id=$9 AND m.person_id=$10 AND r.person_id=$10 AND m.kind=$11 AND r.kind=$11 AND m.source_id=$12 AND r.source_id=$12 AND r.target_id=$13");
+    let query=format!("SELECT r.*,a.snapshot_id,a.state AS owner_state,CASE WHEN a.state='completed' THEN a.completed_at ELSE a.updated_at END AS terminal_at,m.native_source_key FROM {prefix}_result r JOIN {prefix}_import a ON a.id=r.import_id AND a.organization_id=r.organization_id AND a.confirmed_plan_id=r.plan_id JOIN {prefix}_manifest m ON m.id=r.manifest_id AND m.plan_id=r.plan_id AND m.import_id=r.import_id AND m.organization_id=r.organization_id WHERE r.organization_id=$1 AND r.import_id=$2 AND r.plan_id=$3 AND r.manifest_id=$4 AND a.parent_import_id=$5 AND a.parent_plan_id=$6 AND a.source_account_id=$7 AND m.{parent_column}=$8 AND m.source_person_id=$9 AND m.person_id=$10 AND r.person_id=$10 AND m.kind=$11 AND r.kind=$11 AND m.source_id=$12 AND r.source_id=$12 AND r.target_id=$13");
     let r = sqlx::query(&query)
         .bind(claim.organization.0)
         .bind(root)
@@ -204,11 +204,26 @@ pub async fn discover(
     if !matches!(
         r.get::<String, _>("owner_state").as_str(),
         "completed" | "cancelled"
-    ) {
+    ) || !r
+        .get::<Option<chrono::DateTime<chrono::Utc>>, _>("terminal_at")
+        .is_some_and(|at| at <= b.get::<chrono::DateTime<chrono::Utc>, _>("created_at"))
+    {
         return Ok(Discovery::Held(Hold::FirstCoverageRequired));
     }
     if r.get::<String, _>("disposition") != "applied" {
         return Ok(Discovery::Held(Hold::BaselineUnproven));
+    }
+    if let Err(hold) = super::source_policy::qualify_core_snapshots(
+        &mut tx,
+        claim.organization,
+        b.get("source_account_id"),
+        p.get::<Option<Uuid>, _>("source_snapshot_id")
+            .ok_or(MigrationError::SourceNotEligible)?,
+        r.get("snapshot_id"),
+    )
+    .await?
+    {
+        return Ok(Discovery::Held(hold));
     }
     let proof = if admitted {
         let payload: admitted_activity_model::ResultData = admitted_activity_store::open(

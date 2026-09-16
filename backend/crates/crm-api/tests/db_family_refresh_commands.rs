@@ -609,7 +609,15 @@ async fn family_refresh_mapping_inventory_is_bounded_atomic_and_reuses_shared_so
         },
         snapshot_source::Stream,
     };
-    let f = import_support::fixture_with_book(&pool, db_activity_source::book()).await;
+    let book = db_activity_source::book();
+    book.set_records(
+        Stream::People,
+        vec![
+            json!({"id":101,"firstName":"Synthetic","stage":"Lead","assignedUserId":3}),
+            json!({"id":102,"firstName":"Second","stage":"Lead","assignedUserId":3}),
+        ],
+    );
+    let f = import_support::fixture_with_book(&pool, book).await;
     let parent = db_activity_source::completed_parent(&f).await;
     f.reader.set_records(Stream::CustomFields,vec![json!({"id":10,"name":"customChoice","label":"Choice","type":"dropdown","choices":(0..70).map(|n|format!("Option {n}")).collect::<Vec<_>>()})]);
     let mut invalid_task = db_activity_source::task(22);
@@ -629,7 +637,7 @@ async fn family_refresh_mapping_inventory_is_bounded_atomic_and_reuses_shared_so
     );
     f.reader.set_records(Stream::Notes,vec![json!({"id":11,"personId":101,"createdById":999,"body":"List body must not seed mappings","created":"2026-09-01T12:00:00Z"})]);
     f.reader.set_raw(Stream::NoteDetail,0,200,serde_json::to_vec(&json!({"id":11,"personId":101,"createdById":3,"type":"Note","body":"Retained detail","isHtml":false,"created":"2026-09-01T12:00:00Z","updated":null})).unwrap(),false);
-    let report=admission::report(&f,parent,vec![json!({"id":101,"firstName":"Synthetic","stage":"Lead","assignedUserId":3,"tags":["Alpha"," alpha "]}),json!({"id":999,"firstName":"Outside cohort","tags":["Excluded tag"]})]).await;
+    let report=admission::report(&f,parent,vec![json!({"id":101,"firstName":"Synthetic","stage":"Lead","assignedUserId":3,"tags":["Alpha"," alpha "]}),json!({"id":102,"firstName":"Second","stage":"Lead","assignedUserId":3,"tags":["ALPHA"]}),json!({"id":999,"firstName":"Outside cohort","tags":["Excluded tag"]})]).await;
     let prepared = commands::prepare(
         &f.pool,
         &f.key,
@@ -660,6 +668,7 @@ async fn family_refresh_mapping_inventory_is_bounded_atomic_and_reuses_shared_so
         }
         assert!(step < 29);
     }
+    assert_mapping_capture_order(&pool, &claim).await;
     let before:serde_json::Value=sqlx::query_scalar("SELECT jsonb_build_object('after',mapping_after,'current',mapping_current,'offset',mapping_offset,'retained',retained_bytes,'reserved',reserved_bytes) FROM migration_family_refresh_plan WHERE id=$1").bind(claim.plan).fetch_one(&pool).await.unwrap();
     // UUID order may put an excluded Person first; advance that zero-cost row so
     // fault/capacity injection always exercises a real mapping insertion.
@@ -800,6 +809,13 @@ async fn family_refresh_mapping_inventory_is_bounded_atomic_and_reuses_shared_so
                 row.get("ciphertext"),
             )
             .unwrap();
+        if mapping.kind == "tag" {
+            assert_eq!(
+                mapping.label.as_deref(),
+                Some("Alpha"),
+                "first retained Person/item/element chooses the representative spelling"
+            );
+        }
         assert!(matches!(mapping.choice, Choice::Hold));
         assert_eq!(row.get::<String, _>("disposition"), "hold");
         assert_eq!(mapping.source_key, row.get::<Vec<u8>, _>("source_key_hmac"));
@@ -2486,6 +2502,37 @@ async fn assert_metadata_destination_inspection(
         .execute(pool)
         .await
         .unwrap();
+    for capture_order in [false, true] {
+        let mut compatibility = pool.begin().await.unwrap();
+        sqlx::raw_sql("ALTER TABLE migration_family_refresh_bundle DISABLE TRIGGER USER")
+            .execute(&mut *compatibility)
+            .await
+            .unwrap();
+        sqlx::query(
+            "UPDATE migration_family_refresh_bundle SET mapping_capture_order=$2 WHERE id=$1",
+        )
+        .bind(bundle)
+        .bind(capture_order)
+        .execute(&mut *compatibility)
+        .await
+        .unwrap();
+        sqlx::raw_sql("ALTER TABLE migration_family_refresh_bundle ENABLE TRIGGER USER")
+            .execute(&mut *compatibility)
+            .await
+            .unwrap();
+        compatibility.commit().await.unwrap();
+        let outcome = metadata_destination::inspect(&f.pool, &f.key, &claim, tag)
+            .await
+            .unwrap();
+        if capture_order {
+            assert!(matches!(outcome, Inspection::Ready(_)));
+        } else {
+            assert!(
+                matches!(outcome, Inspection::Held(Hold::SourceUnavailable)),
+                "old tag representatives cannot silently gain execution eligibility"
+            );
+        }
+    }
     let foreign = Claim {
         organization: OrganizationId(Uuid::new_v4()),
         ..claim
@@ -2690,4 +2737,71 @@ async fn family_refresh_catalog_creation_requires_all_options_and_distinct_targe
         ));
     }
     worker::release(&f.pool, &claim).await.unwrap();
+}
+
+async fn assert_mapping_capture_order(
+    pool: &PgPool,
+    claim: &crm_api::domain::migration::family_refresh::cohort::Claim,
+) {
+    assert!(sqlx::query_scalar::<_, bool>(
+        "SELECT mapping_capture_order FROM migration_family_refresh_bundle WHERE id=$1"
+    )
+    .bind(claim.bundle)
+    .fetch_one(pool)
+    .await
+    .unwrap());
+    for capture_order in [false, true] {
+        let mut compatibility = pool.begin().await.unwrap();
+        sqlx::raw_sql("ALTER TABLE migration_family_refresh_bundle DISABLE TRIGGER USER")
+            .execute(&mut *compatibility)
+            .await
+            .unwrap();
+        sqlx::query(
+            "UPDATE migration_family_refresh_bundle SET mapping_capture_order=$2 WHERE id=$1",
+        )
+        .bind(claim.bundle)
+        .bind(capture_order)
+        .execute(&mut *compatibility)
+        .await
+        .unwrap();
+        sqlx::raw_sql("ALTER TABLE migration_family_refresh_bundle ENABLE TRIGGER USER")
+            .execute(&mut *compatibility)
+            .await
+            .unwrap();
+        compatibility.commit().await.unwrap();
+        let order = if capture_order {
+            "capture_sequence,ordinal,id"
+        } else {
+            "id"
+        };
+        for family in ["metadata", "activity"] {
+            let expected:Vec<Uuid>=sqlx::query_scalar(&format!("SELECT id FROM migration_family_refresh_source WHERE bundle_id=$1 AND organization_id=$2 AND (($3='metadata' AND kind IN ('person','field')) OR ($3='activity' AND kind IN ('note','task'))) ORDER BY {order}")).bind(claim.bundle).bind(claim.organization.0).bind(family).fetch_all(pool).await.unwrap();
+            let mut after = None;
+            for id in expected {
+                let next: Option<Uuid> = sqlx::query_scalar(
+                    "SELECT crm_family_refresh_next_mapping_source($1,$2,$3,$4)",
+                )
+                .bind(claim.organization.0)
+                .bind(claim.bundle)
+                .bind(family)
+                .bind(after)
+                .fetch_one(pool)
+                .await
+                .unwrap();
+                assert_eq!(next, Some(id));
+                after = next;
+            }
+            assert!(sqlx::query_scalar::<_, Option<Uuid>>(
+                "SELECT crm_family_refresh_next_mapping_source($1,$2,$3,$4)"
+            )
+            .bind(claim.organization.0)
+            .bind(claim.bundle)
+            .bind(family)
+            .bind(after)
+            .fetch_one(pool)
+            .await
+            .unwrap()
+            .is_none());
+        }
+    }
 }

@@ -117,6 +117,9 @@ pub async fn inspect(
     if !matches!(data.kind.as_str(), "tag" | "field" | "option") {
         return Err(MigrationError::InvalidInput);
     }
+    if data.kind == "tag" && !b.get::<bool, _>("mapping_capture_order") {
+        return Ok(Inspection::Held(Hold::SourceUnavailable));
+    }
     let source = mapping_selection::source(&mut tx, key, scope, &data).await?;
     let mut frozen = frozen(&data, &source)?;
     drop(tx);

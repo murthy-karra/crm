@@ -499,3 +499,17 @@ created together for a new choice field. Colliding labels hold the affected
 candidates rather than unrelated definitions. Migration 018 supports scoped
 bounded target probes. Inspection produces evidence only; final catalog units,
 refresh-owned claims and execution revalidation are separate remaining work.
+
+### First retained mapping representatives
+
+Migration 019 freezes a fixed-width mapping-order mode on each bundle. Newly
+prepared bundles walk capture sequence, item ordinal and source ID, with bounded
+element order inside each source. Equivalent embedded tag spellings therefore
+use the first retained eligible occurrence instead of random source UUID order.
+Separate metadata/activity indexes support that keyset traversal; the existing
+live-lease/no-skip mapping fences use the same selector.
+
+Existing bundles retain UUID traversal so an in-progress cursor cannot silently
+skip records on upgrade. Their tag catalog choices remain source-unavailable and
+require a freshly prepared bundle. Replanning over the same shared old index is
+not a compatibility upgrade; existing immutable choices are not rewritten.

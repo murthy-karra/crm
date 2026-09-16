@@ -7,8 +7,8 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 - Branch `codex/010g1-family-refresh`, base `dd140b0`; one primary writer and the
   previously authorized single reviewer. Planning review READY, round 1.
-- Current milestone: catalog destination inspection following complete source
-  field-name qualification at **`fbbb0aa`**.
+- Current milestone: deterministic mapping representatives following catalog
+  destination inspection at **`8c76d5f`**.
   The combined feature is unfinished. No merge/push/deploy.
 - Foundation: comparison policies, source ordering, bounded encrypted evidence,
   exact decimal counts, draft persistence ownership and native/lease guards.
@@ -204,10 +204,11 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   requires an already-ready shared catalog registry; typed refresh admission
   still needs to wire its handover. Migration 018 indexes target collision probes.
   This adapter grants no native permission and persists no catalog unit.
-- Before catalog execution, mapping discovery must preserve first retained tag
-  representative order across People. Its current UUID source traversal must be
-  replaced for new bundles while preserving old in-progress cursor semantics;
-  this is identified follow-up work, not a verified capability.
+- Mapping discovery now preserves first retained tag representative order across
+  People for new bundles. Migration 019 freezes capture/item/element traversal
+  while preserving UUID traversal for older in-progress bundles; old tag choices
+  cannot qualify for catalog execution until a new bundle is prepared. Existing
+  immutable evidence and choices are not rewritten.
 - No refresh HTTP commands or Web workflow are exposed yet.
 
 ## Evidence and isolation
@@ -246,6 +247,15 @@ traversal evidence through `aaccd81` is archived in
   Library Clippy passed with warnings denied
   (`/private/tmp/010g1-metadata-destination-final-clippy.log`); formatting and diff
   checks passed. Native execution and persistence of these proposals remain.
+
+- Deterministic mapping order: focused inventory (including both compatibility
+  modes), typed Plan/old-tag hold, and combined preparation database tests passed
+  serially (`/private/tmp/010g1-mapping-order-db.log`,
+  `/private/tmp/010g1-mapping-order-plan-db.log`,
+  `/private/tmp/010g1-mapping-order-combined-db.log`). Library Clippy passed with
+  warnings denied (`/private/tmp/010g1-mapping-order-clippy.log`); formatting and
+  diff checks passed. The preceding full 39-test suite remains the broader
+  catalog checkpoint; final-tree verification is still required.
 
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB

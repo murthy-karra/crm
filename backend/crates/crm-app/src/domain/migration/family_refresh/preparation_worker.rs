@@ -25,7 +25,7 @@ pub enum Progress {
 
 // Core index ownership stays with the fixed payer. Other core plans wait for
 // that one index; history can advance once the shared cohort is frozen.
-const RUNNABLE: &str = "b.state='preparing' AND b.confirmed_at IS NULL AND p.state='preparing' AND p.confirmed_at IS NULL AND EXISTS(SELECT 1 FROM migration_workspace w WHERE w.organization_id=b.organization_id AND w.import_id=b.parent_import_id AND w.plan_id=b.parent_plan_id) AND (p.lease_token IS NULL OR p.lease_expires_at<=clock_timestamp()) AND ((p.phase='capture' AND (p.id=b.payer_plan_id OR p.family='history')) OR (p.phase='cohort' AND (p.id=b.payer_plan_id OR (owner.phase<>'cohort' AND (p.family='history' OR owner.phase NOT IN ('cohort','capture'))))))";
+const RUNNABLE: &str = "b.state='preparing' AND b.confirmed_at IS NULL AND p.state='preparing' AND p.confirmed_at IS NULL AND EXISTS(SELECT 1 FROM migration_workspace w WHERE w.organization_id=b.organization_id AND w.import_id=b.parent_import_id AND w.plan_id=b.parent_plan_id) AND (p.lease_token IS NULL OR p.lease_expires_at<=clock_timestamp()) AND ((p.family='history' AND p.phase IN ('mappings','classify') AND NOT p.source_walk_complete) OR (p.phase='capture' AND (p.id=b.payer_plan_id OR p.family='history')) OR (p.phase='cohort' AND (p.id=b.payer_plan_id OR (owner.phase<>'cohort' AND (p.family='history' OR owner.phase NOT IN ('cohort','capture'))))))";
 
 /// Server-owned 60-second lease; an active owner is never displaced. Epochs
 /// balance bounded steps among eligible families without trusting client input.
@@ -239,6 +239,12 @@ async fn step(
             cohort::freeze_page(pool, claim, policy, 50).await?,
             cohort::Progress::Capacity
         ));
+    }
+    if family == "history" && matches!(phase.as_str(), "mappings" | "classify") {
+        return Ok(
+            super::history_walk::run_once(pool, key, policy, claim).await?
+                != super::history_walk::Progress::Capacity,
+        );
     }
     if phase != "capture" {
         return Err(MigrationError::Conflict);

@@ -30,6 +30,7 @@ pub(super) struct Input {
     pub source_id: String,
     pub selected: Selected,
     pub reason: Hold,
+    pub walk: Option<super::history_walk::Position>,
 }
 pub(super) async fn prepare(
     pool: &PgPool,
@@ -62,6 +63,8 @@ pub(super) async fn prepare(
     if let Some(existing)=sqlx::query("SELECT id,cohort_id,source_row_id FROM migration_family_refresh_manifest WHERE plan_id=$1 AND organization_id=$2 AND kind=$3 AND source_key_hmac=$4")
         .bind(claim.plan).bind(claim.organization.0).bind(kind).bind(input.selected.evidence.identity_hmac.as_slice()).fetch_optional(&mut *tx).await? {
         if existing.get::<Option<Uuid>,_>("cohort_id")!=Some(input.cohort) || existing.get::<Option<Uuid>,_>("source_row_id")!=Some(input.selected.row) { return Err(MigrationError::Conflict); }
+        super::history_walk::advance(&mut tx,claim,input.walk).await?;
+        tx.commit().await?;
         return Ok(Prepared::Unit(existing.get("id")));
     }
     let scope = Scope {
@@ -122,6 +125,7 @@ pub(super) async fn prepare(
         .bind(claim.epoch)
         .execute(&mut *tx)
         .await?;
+    super::history_walk::advance(&mut tx, claim, input.walk).await?;
     tx.commit().await?;
     tracing::info!(organization_id=%claim.organization,bundle_id=%claim.bundle,plan_id=%claim.plan,manifest_id=%id,reason,"Family refresh history hold prepared");
     Ok(Prepared::Unit(id))

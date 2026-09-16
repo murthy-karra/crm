@@ -7,9 +7,9 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 - Branch `codex/010g1-family-refresh`, base `dd140b0`; one primary writer and the
   previously authorized single reviewer. Planning review READY, round 1.
-- Current milestone: persisted qualified history holds following bounded item
-  summaries at **`bcab991`**, preparation dispatch at **`f760907`** and typed
-  admission at **`108678c`**.
+- Current milestone: bounded history source classification following qualified
+  holds at **`18170d4`**, item summaries at **`bcab991`** and preparation dispatch
+  at **`f760907`**.
   The combined feature is unfinished. No merge/push/deploy.
 - Foundation: comparison policies, source ordering, bounded encrypted evidence,
   exact decimal counts, draft persistence ownership and native/lease guards.
@@ -77,8 +77,8 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   display authentication/erasure and strictly newer capture ordering. Original/admitted
   first owners and successive typed correction heads have authenticated database
   evidence. Prior corrections now verify the exact cohort, terminal/frozen boundary,
-  immediate predecessor and encrypted source/display agreement. Persisted new-identity
-  classification remains outstanding.
+  immediate predecessor and encrypted source/display agreement. Qualified new
+  history identities now classify through the source walker.
 - Core resolution independently checks each family's exhausted streams and the
   final authenticated cursor, including settled note-detail work. Shared indexing
   does not make an unfinished activity stream a metadata prerequisite.
@@ -97,13 +97,14 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   resolution with frozen/live Person checks, first-family successful-result and
   capture boundaries, accepted scans, and global/native collision rejection.
   Original and admitted/recovered cohorts use separate owner proofs. This is a
-  read-only candidate adapter; mapping/native validation, frozen target allocation
-  and persisted classification remain outstanding.
+  read-only candidate adapter; metadata/activity mapping conversion and persisted
+  classification remain outstanding. History proposals freeze prospective IDs.
 - Qualified history units can now persist encrypted addition/current/correction
   proposals, including exact prior-version evidence and stable prospective IDs.
   Replay keeps IDs/counts/charges unchanged; manifest, count/position and byte
-  settlement share one transaction. Unresolved-source diagnostic/excluded/source-gap settlement and complete-plan
-  sealing are still pending. Qualified identities with ineligible/unproven
+  settlement share one transaction. History source diagnostics and out-of-cohort
+  exclusions now persist through a bounded keyset walk; owned-but-missing source
+  gaps and complete-plan sealing remain pending. Qualified identities with ineligible/unproven
   baselines now persist encrypted, counted holds atomically without prospective
   native IDs or heads; replay preserves the held outcome even if prerequisites
   later become eligible.
@@ -120,14 +121,20 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   steps. Core plans reuse the payer's index. Exact token/epoch release protects a
   successor; capacity and integrity failures pause with metered control capacity.
   The existing one-second scheduler gives this adapter a finite turn without a
-  new polling loop. It stops at mappings; classification/execution dispatch,
-  revoked-executor pause/resume and release-readiness integration remain.
+  new polling loop. It now drives history source classification. Core mapping and
+  classification, execution, revoked-executor pause/resume and release-readiness
+  integration remain.
 - Item-summary reads now use scoped keyset pages with an immutable upper bound,
   25/default and 50/max rows, decimal counters, 4 KiB summary and 512 KiB response
   limits. Queries avoid manifest ciphertext; cursors bind actor, Organization,
   workspace, bundle/plan revisions, family, cohort/outcome filters, size and order.
   Current admin/workspace checks and ordered bundle/plan locks apply to every page.
   Other readers and full field/proof review remain pending.
+- Migration 010 adds a fixed-width source-walk completion flag and database
+  fences against skipped occurrences, missing outcomes, stale leases and cursor
+  regression. Each history outcome/checkpoint/charge commits together; equal
+  occurrences reuse the identity unit. Source exhaustion remains preparation,
+  with no ready digest or native writes.
 - No refresh HTTP commands or Web workflow are exposed yet.
 
 ## Evidence and isolation
@@ -166,6 +173,16 @@ is archived in [Project history](../plans/PROJECT_HISTORY.md#010g1-foundation-an
   `/private/tmp/010g1-held-unit.log`, `/private/tmp/010g1-held-clippy.log`.
   Runners: serial `all family_refresh`, library `family_refresh` tests and
   `cargo clippy -p crm-api --lib --locked -- -D warnings`, using isolation below.
+- Bounded history source walk: all 30 serial family database regressions and
+  API-library Clippy with warnings denied passed on the final implementation.
+  The 40 focused library tests also passed during this milestone. Tests cover
+  duplicate identity accounting, source diagnostics, cohort exclusions, storage
+  limits, injected transactional failure, forbidden cursor skips and replacement
+  plans reusing the bundle index under original encryption scopes. The replacement
+  fixture now uses authentic typed preparation after its placeholder ciphertext
+  caused an initial test failure. Logs: `/private/tmp/010g1-walk-final-family-db.log`,
+  `/private/tmp/010g1-walk-unit.log`, `/private/tmp/010g1-walk-revision-clippy.log`.
+  Runners match the preceding milestone; source exhaustion does not seal readiness.
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB
   `crm_010g1_schema_20260915`. Database tests run serially.

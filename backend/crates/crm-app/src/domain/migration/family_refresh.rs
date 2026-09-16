@@ -28,3 +28,5 @@ pub mod preparation_worker;
 pub mod item_queries;
 
 pub mod history_hold;
+
+pub mod history_walk;

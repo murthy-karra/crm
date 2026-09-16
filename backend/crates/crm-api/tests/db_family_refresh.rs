@@ -3005,3 +3005,338 @@ async fn assert_frozen_history_hold(
     assert_eq!(units, 1);
     id
 }
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn history_source_walk_is_atomic_bounded_and_counts_each_identity_once(pool: PgPool) {
+    use crate::{db_history_capture_support as capture, db_history_import_support as original};
+    use crm_api::domain::migration::{
+        family_refresh::{
+            core_source,
+            evidence::{Purpose, Scope},
+            history_index,
+            history_walk::{self, Progress},
+            model::{Counts, Family},
+        },
+        history_capture_source::Stream,
+    };
+    let (f, parent, first, book) = original::fixture(&pool).await;
+    let root = original::ready(&f, parent, first).await;
+    original::confirm(&f, root).await;
+    original::drain(&f).await;
+    book.set_records(Stream::Events,vec![
+        json!({"id":1,"personId":101,"type":"Inquiry","created":"2026-01-01T00:00:00Z","description":"WALK_CHANGED_PRIVATE"}),
+        json!({"id":50,"personId":101,"type":"Inquiry"}),
+        json!({"id":60,"personId":999,"type":"Inquiry"}),
+        json!({"id":61}),
+    ]);
+    let (capture, _) = capture::propose(&f, parent).await;
+    capture::confirm(&f, capture).await;
+    capture::drain(&f, &book).await;
+    use crm_api::domain::migration::family_refresh::{cohort, commands, preparation_worker};
+    commands::prepare(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &f.ctx,
+        commands::PrepareFamilyRefresh {
+            request_id: Uuid::new_v4(),
+            parent_import_id: parent,
+            core_report_id: None,
+            history_capture_id: Some(capture),
+            families: vec![Family::History],
+        },
+    )
+    .await
+    .unwrap();
+    let claim = preparation_worker::claim_next(&f.pool)
+        .await
+        .unwrap()
+        .unwrap();
+    cohort::freeze_page(&f.pool, &claim, &f.policy, 50)
+        .await
+        .unwrap();
+
+    for i in 0..10 {
+        if history_index::index_page(&f.pool, &f.key, &claim, &f.policy)
+            .await
+            .unwrap()
+            == core_source::Progress::Finished
+        {
+            break;
+        }
+        assert!(i < 9);
+    }
+    // A retained equivalent occurrence must be visited, but cannot allocate a
+    // second unit. Synthetic insertion uses migrator; the app cannot alter index.
+    let row=sqlx::query("SELECT * FROM migration_family_refresh_source WHERE plan_id=$1 AND kind='event' AND source_id='1'").bind(claim.plan).fetch_one(&pool).await.unwrap();
+    let scope = Scope {
+        organization: f.ctx.organization_id,
+        bundle: claim.bundle,
+        plan: claim.plan,
+        family: Family::History,
+        revision: 1,
+    };
+    let data: serde_json::Value = scope
+        .open(
+            &f.key,
+            row.get("id"),
+            Purpose::Source,
+            row.get("nonce"),
+            row.get("ciphertext"),
+        )
+        .unwrap();
+    let copy = Uuid::new_v4();
+    let sealed = scope.seal(&f.key, copy, Purpose::Source, &data).unwrap();
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("SELECT set_config('crm.family_refresh_lease',$1,true)")
+        .bind(claim.token.to_string())
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE migration_family_refresh_plan SET phase='capture' WHERE id=$1")
+        .bind(claim.plan)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO migration_family_refresh_source(id,bundle_id,plan_id,organization_id,capture_id,capture_sequence,ordinal,representation,kind,source_id,source_person_id,identity_hmac,semantic_hmac,qualified,reason,nonce,ciphertext,history_page_id) SELECT $2,bundle_id,plan_id,organization_id,capture_id,capture_sequence,ordinal+1000,representation,kind,source_id,source_person_id,identity_hmac,semantic_hmac,qualified,reason,$3,$4,history_page_id FROM migration_family_refresh_source WHERE id=$1")
+        .bind(row.get::<Uuid,_>("id")).bind(copy).bind(sealed.nonce.as_slice()).bind(sealed.ciphertext).execute(&mut *tx).await.unwrap();
+    sqlx::query("UPDATE migration_family_refresh_plan SET phase='mappings' WHERE id=$1")
+        .bind(claim.plan)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    // Settle the synthetic extra evidence with the same metering machinery.
+    let reservation = Uuid::new_v4();
+    let ok: bool =
+        sqlx::query_scalar("SELECT crm_family_refresh_reserve($1,$2,$3,$4,$5,65536,'unit',$6,$7)")
+            .bind(f.org)
+            .bind(claim.bundle)
+            .bind(claim.plan)
+            .bind(reservation)
+            .bind(claim.epoch)
+            .bind(f.policy.run_ceiling_bytes)
+            .bind(f.policy.org_ceiling_bytes)
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
+    assert!(ok);
+    sqlx::query("SELECT crm_family_refresh_settle($1,$2,$3,$4,$5,false)")
+        .bind(f.org)
+        .bind(claim.bundle)
+        .bind(claim.plan)
+        .bind(reservation)
+        .bind(claim.epoch)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    for (order, expected) in [
+        ("ASC", "outcome missing"),
+        ("DESC", "skipped an occurrence"),
+    ] {
+        let endpoint:Uuid=sqlx::query_scalar(&format!("SELECT id FROM migration_family_refresh_source WHERE plan_id=$1 ORDER BY id {order} LIMIT 1"))
+            .bind(claim.plan).fetch_one(&pool).await.unwrap();
+        let mut tx = f.pool.begin().await.unwrap();
+        sqlx::query("SELECT set_config('crm.family_refresh_reader','fub-family-refresh-v1',true),set_config('crm.family_refresh_lease',$1,true)")
+            .bind(claim.token.to_string()).execute(&mut *tx).await.unwrap();
+        let rejected =
+            sqlx::query("UPDATE migration_family_refresh_plan SET checkpoint_id=$2 WHERE id=$1")
+                .bind(claim.plan)
+                .bind(endpoint)
+                .execute(&mut *tx)
+                .await
+                .unwrap_err();
+        assert!(
+            rejected.to_string().contains(expected),
+            "unexpected checkpoint rejection: {rejected}"
+        );
+        tx.rollback().await.unwrap();
+    }
+    let before:serde_json::Value=sqlx::query_scalar("SELECT jsonb_build_object('position',position,'counts',counts,'checkpoint',checkpoint_id,'retained',retained_bytes,'reserved',reserved_bytes) FROM migration_family_refresh_plan WHERE id=$1").bind(claim.plan).fetch_one(&pool).await.unwrap();
+    let mut tiny = f.policy.clone();
+    tiny.run_ceiling_bytes = 1;
+    assert_eq!(
+        history_walk::run_once(&f.pool, &f.key, &tiny, &claim)
+            .await
+            .unwrap(),
+        Progress::Capacity
+    );
+    sqlx::raw_sql("CREATE FUNCTION test_walk_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.checkpoint_id IS DISTINCT FROM OLD.checkpoint_id THEN RAISE EXCEPTION 'synthetic walk fault'; END IF; RETURN NEW; END $$; CREATE TRIGGER test_walk_fault BEFORE UPDATE ON migration_family_refresh_plan FOR EACH ROW EXECUTE FUNCTION test_walk_fault()").execute(&pool).await.unwrap();
+    assert!(history_walk::run_once(&f.pool, &f.key, &f.policy, &claim)
+        .await
+        .is_err());
+    sqlx::raw_sql("DROP TRIGGER test_walk_fault ON migration_family_refresh_plan; DROP FUNCTION test_walk_fault()").execute(&pool).await.unwrap();
+    let after:serde_json::Value=sqlx::query_scalar("SELECT jsonb_build_object('position',position,'counts',counts,'checkpoint',checkpoint_id,'retained',retained_bytes,'reserved',reserved_bytes) FROM migration_family_refresh_plan WHERE id=$1").bind(claim.plan).fetch_one(&pool).await.unwrap();
+    assert_eq!(before, after);
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_family_refresh_manifest WHERE plan_id=$1"
+        )
+        .bind(claim.plan)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        0
+    );
+    let mut steps = 0;
+    loop {
+        match history_walk::run_once(&f.pool, &f.key, &f.policy, &claim)
+            .await
+            .unwrap()
+        {
+            Progress::Advanced => steps += 1,
+            Progress::Finished => break,
+            Progress::Capacity => panic!("unexpected capacity"),
+        };
+        assert!(steps < 20);
+    }
+    assert_eq!(
+        steps, 7,
+        "one step for every occurrence, including the repeat"
+    );
+    let p = sqlx::query("SELECT * FROM migration_family_refresh_plan WHERE id=$1")
+        .bind(claim.plan)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let counts: Counts = serde_json::from_value(p.get("counts")).unwrap();
+    assert!(counts.reconciles());
+    assert_eq!(counts.units, 6);
+    assert_eq!(counts.inserts, 1);
+    assert_eq!(counts.excluded, 1);
+    assert!(counts.held >= 1);
+    assert_eq!(p.get::<i64, _>("position"), 6);
+    assert!(p.get::<bool, _>("source_walk_complete"));
+    assert_eq!(p.get::<String, _>("state"), "preparing");
+    assert!(p.get::<Option<Vec<u8>>, _>("digest").is_none());
+    assert_eq!(
+        p.get::<i64, _>("measured_bytes"),
+        p.get::<i64, _>("retained_bytes")
+    );
+    assert_eq!(
+        history_walk::run_once(&f.pool, &f.key, &f.policy, &claim)
+            .await
+            .unwrap(),
+        Progress::Finished
+    );
+    let counts_after: serde_json::Value =
+        sqlx::query_scalar("SELECT counts FROM migration_family_refresh_plan WHERE id=$1")
+            .bind(claim.plan)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(counts_after, p.get::<serde_json::Value, _>("counts"));
+    let native: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM migration_family_refresh_result WHERE plan_id=$1")
+            .bind(claim.plan)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(native, 0);
+    // Replacement plan revisions reuse the original bundle index and AEAD scope.
+    let replacement = Uuid::new_v4();
+    let next_token = Uuid::new_v4();
+    let binding: serde_json::Value = scope
+        .open(
+            &f.key,
+            claim.plan,
+            Purpose::Binding,
+            p.get("nonce"),
+            p.get("ciphertext"),
+        )
+        .unwrap();
+    let next_scope = Scope {
+        plan: replacement,
+        revision: 2,
+        ..scope
+    };
+    let binding = next_scope
+        .seal(&f.key, replacement, Purpose::Binding, &binding)
+        .unwrap();
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("UPDATE migration_family_refresh_plan SET state='superseded',lease_token=NULL,lease_expires_at=NULL WHERE id=$1").bind(claim.plan).execute(&mut *tx).await.unwrap();
+    let old_control:Uuid=sqlx::query_scalar("SELECT token FROM migration_family_refresh_reservation WHERE plan_id=$1 AND purpose='control'").bind(claim.plan).fetch_one(&mut *tx).await.unwrap();
+    sqlx::query("SELECT crm_family_refresh_settle($1,$2,$3,$4,$5,false)")
+        .bind(f.org)
+        .bind(claim.bundle)
+        .bind(claim.plan)
+        .bind(old_control)
+        .bind(claim.epoch)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO migration_family_refresh_plan(id,bundle_id,organization_id,family,revision,state,phase,history_capture_id,predecessor_plan_id,nonce,ciphertext) VALUES($1,$2,$3,'history',2,'preparing','mappings',$4,$5,$6,$7)")
+        .bind(replacement).bind(claim.bundle).bind(f.org).bind(capture).bind(claim.plan).bind(binding.nonce.as_slice()).bind(binding.ciphertext).execute(&mut *tx).await.unwrap();
+    let amount: i64 = sqlx::query_scalar(
+        "SELECT measured_bytes+8192 FROM migration_family_refresh_plan WHERE id=$1",
+    )
+    .bind(replacement)
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap();
+    let control = Uuid::new_v4();
+    let reserved: bool =
+        sqlx::query_scalar("SELECT crm_family_refresh_reserve($1,$2,$3,$4,0,$5,'control',$6,$7)")
+            .bind(f.org)
+            .bind(claim.bundle)
+            .bind(replacement)
+            .bind(control)
+            .bind(amount)
+            .bind(f.policy.run_ceiling_bytes)
+            .bind(f.policy.org_ceiling_bytes)
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
+    assert!(reserved);
+    sqlx::query("SELECT crm_family_refresh_settle($1,$2,$3,$4,0,false)")
+        .bind(f.org)
+        .bind(claim.bundle)
+        .bind(replacement)
+        .bind(control)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE migration_family_refresh_plan SET lease_token=$2,lease_epoch=1,lease_expires_at=clock_timestamp()+interval '60 seconds' WHERE id=$1").bind(replacement).bind(next_token).execute(&mut *tx).await.unwrap();
+    tx.commit().await.unwrap();
+    let successor = crm_api::domain::migration::family_refresh::cohort::Claim {
+        organization: claim.organization,
+        bundle: claim.bundle,
+        plan: replacement,
+        token: next_token,
+        epoch: 1,
+    };
+    let mut visited = 0;
+    loop {
+        match history_walk::run_once(&f.pool, &f.key, &f.policy, &successor)
+            .await
+            .unwrap()
+        {
+            Progress::Advanced => visited += 1,
+            Progress::Finished => break,
+            _ => panic!("unexpected replacement capacity"),
+        };
+        assert!(visited < 20);
+    }
+    assert_eq!(visited, 7);
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_family_refresh_source WHERE plan_id=$1"
+        )
+        .bind(replacement)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        0
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_family_refresh_manifest WHERE plan_id=$1"
+        )
+        .bind(replacement)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        6
+    );
+}

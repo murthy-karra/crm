@@ -48,6 +48,39 @@ pub async fn prepare_unit(
     kind: Kind,
     source_id: &str,
 ) -> Result<Prepared, MigrationError> {
+    prepare(
+        pool,
+        key,
+        policy,
+        claim,
+        Unit {
+            cohort,
+            kind,
+            source_id,
+            walk: None,
+        },
+    )
+    .await
+}
+pub(super) struct Unit<'a> {
+    pub cohort: Uuid,
+    pub kind: Kind,
+    pub source_id: &'a str,
+    pub walk: Option<super::history_walk::Position>,
+}
+pub(super) async fn prepare(
+    pool: &PgPool,
+    key: &RawPayloadKey,
+    policy: &SnapshotPolicy,
+    claim: &Claim,
+    input: Unit<'_>,
+) -> Result<Prepared, MigrationError> {
+    let Unit {
+        cohort,
+        kind,
+        source_id,
+        walk,
+    } = input;
     let kind_name = match kind {
         Kind::Event => "event",
         Kind::Call => "call",
@@ -79,6 +112,8 @@ pub async fn prepare_unit(
             {
                 return Err(MigrationError::Conflict);
             }
+            super::history_walk::advance(&mut tx, claim, walk).await?;
+            tx.commit().await?;
             return Ok(Prepared::Unit(m.get("id")));
         }
     }
@@ -115,6 +150,7 @@ pub async fn prepare_unit(
                     source_id: source_id.to_owned(),
                     selected: *selected,
                     reason,
+                    walk,
                 },
             )
             .await
@@ -143,6 +179,8 @@ pub async fn prepare_unit(
         {
             return Err(MigrationError::Conflict);
         }
+        super::history_walk::advance(&mut tx, claim, walk).await?;
+        tx.commit().await?;
         return Ok(Prepared::Unit(existing.get("id")));
     }
     let change = super::model::compare_history(
@@ -243,6 +281,7 @@ pub async fn prepare_unit(
         .bind(claim.epoch)
         .execute(&mut *tx)
         .await?;
+    super::history_walk::advance(&mut tx, claim, walk).await?;
     tx.commit().await?;
     tracing::info!(organization_id=%claim.organization,bundle_id=%claim.bundle,plan_id=%claim.plan,manifest_id=%id,"Family refresh history proposal prepared");
     Ok(Prepared::Unit(id))

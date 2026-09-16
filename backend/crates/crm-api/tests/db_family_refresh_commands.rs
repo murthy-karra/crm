@@ -187,10 +187,15 @@ async fn family_refresh_prepare_combined_is_atomic_metered_and_replay_safe(pool:
         }
     }
     assert!(idle, "bounded preparation should exhaust runnable phases");
-    let plans=sqlx::query("SELECT phase,lease_token,measured_bytes,retained_bytes FROM migration_family_refresh_plan WHERE bundle_id=$1")
+    let plans=sqlx::query("SELECT family,source_walk_complete,phase,lease_token,measured_bytes,retained_bytes FROM migration_family_refresh_plan WHERE bundle_id=$1")
         .bind(prepared.bundle_id).fetch_all(&pool).await.unwrap();
     for plan in plans {
-        assert_eq!(plan.get::<String, _>("phase"), "mappings");
+        let history = plan.get::<String, _>("family") == "history";
+        assert_eq!(
+            plan.get::<String, _>("phase"),
+            if history { "classify" } else { "mappings" }
+        );
+        assert_eq!(plan.get::<bool, _>("source_walk_complete"), history);
         assert!(plan.get::<Option<Uuid>, _>("lease_token").is_none());
         assert_eq!(
             plan.get::<i64, _>("measured_bytes"),

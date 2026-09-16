@@ -44,7 +44,15 @@ async fn family_refresh_prepare_combined_is_atomic_metered_and_replay_safe(pool:
     let mut tiny = f.policy.clone();
     tiny.org_ceiling_bytes = 1;
     assert!(matches!(
-        commands::prepare(&f.pool, &f.key, &tiny, &f.ctx, input()).await,
+        commands::prepare(
+            &f.pool,
+            &f.key,
+            &tiny,
+            &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
+            &f.ctx,
+            input()
+        )
+        .await,
         Err(MigrationError::StorageLimit)
     ));
     let count: i64 = sqlx::query_scalar(
@@ -55,9 +63,28 @@ async fn family_refresh_prepare_combined_is_atomic_metered_and_replay_safe(pool:
     .await
     .unwrap();
     assert_eq!(count, 0, "failed admission leaves no bundle or receipt");
-    let prepared = commands::prepare(&f.pool, &f.key, &f.policy, &f.ctx, input())
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_metadata_catalog_readiness WHERE organization_id=$1"
+        )
+        .bind(f.org)
+        .fetch_one(&pool)
         .await
-        .unwrap();
+        .unwrap(),
+        0,
+        "failed refresh admission also rolls back the handover"
+    );
+    let prepared = commands::prepare(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
+        &f.ctx,
+        input(),
+    )
+    .await
+    .unwrap();
+    assert!(sqlx::query_scalar::<_,bool>("SELECT state='ready' AND engine_version='fub-admitted-metadata-v1' FROM migration_metadata_catalog_readiness WHERE organization_id=$1").bind(f.org).fetch_one(&pool).await.unwrap(), "typed admission prepares the shared catalog without a separate admitted import");
     assert_eq!(prepared.families.len(), 3);
     assert_eq!(prepared.families[0].family, Family::Metadata);
     assert_eq!(prepared.state, "preparing");
@@ -125,9 +152,16 @@ async fn family_refresh_prepare_combined_is_atomic_metered_and_replay_safe(pool:
     .fetch_one(&pool)
     .await
     .unwrap();
-    let replay = commands::prepare(&f.pool, &f.key, &tiny, &f.ctx, input())
-        .await
-        .unwrap();
+    let replay = commands::prepare(
+        &f.pool,
+        &f.key,
+        &tiny,
+        &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
+        &f.ctx,
+        input(),
+    )
+    .await
+    .unwrap();
     assert_eq!(
         serde_json::to_value(replay).unwrap(),
         serde_json::to_value(&prepared).unwrap()
@@ -143,28 +177,57 @@ async fn family_refresh_prepare_combined_is_atomic_metered_and_replay_safe(pool:
     let mut changed = input();
     changed.families.swap(0, 1);
     assert!(matches!(
-        commands::prepare(&f.pool, &f.key, &f.policy, &f.ctx, changed).await,
+        commands::prepare(
+            &f.pool,
+            &f.key,
+            &f.policy,
+            &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
+            &f.ctx,
+            changed
+        )
+        .await,
         Err(MigrationError::Conflict)
     ));
     let mut second = input();
     second.request_id = Uuid::new_v4();
     assert!(matches!(
-        commands::prepare(&f.pool, &f.key, &f.policy, &f.ctx, second).await,
+        commands::prepare(
+            &f.pool,
+            &f.key,
+            &f.policy,
+            &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
+            &f.ctx,
+            second
+        )
+        .await,
         Err(MigrationError::Conflict)
     ));
     let mut stranger = f.ctx.clone();
     stranger.actor_user_id = UserId::new(Uuid::new_v4());
     assert!(matches!(
-        commands::prepare(&f.pool, &f.key, &f.policy, &stranger, input()).await,
+        commands::prepare(
+            &f.pool,
+            &f.key,
+            &f.policy,
+            &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
+            &stranger,
+            input()
+        )
+        .await,
         Err(MigrationError::Forbidden)
     ));
     stranger = f.ctx.clone();
     stranger.organization_id = OrganizationId::new(Uuid::new_v4());
-    assert!(
-        commands::prepare(&f.pool, &f.key, &f.policy, &stranger, input())
-            .await
-            .is_err()
-    );
+    assert!(commands::prepare(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
+        &stranger,
+        input()
+    )
+    .await
+    .is_err());
     let installed: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM migration_family_refresh_requirement WHERE organization_id=$1",
     )
@@ -235,6 +298,7 @@ async fn family_refresh_prepare_history_only_uses_history_payer(pool: PgPool) {
         &f.pool,
         &f.key,
         &f.policy,
+        &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
         &f.ctx,
         PrepareFamilyRefresh {
             request_id: Uuid::new_v4(),
@@ -270,7 +334,15 @@ async fn family_refresh_prepare_rejects_invalid_selection_and_foreign_evidence(p
         families: vec![Family::Activity],
     };
     assert!(matches!(
-        commands::prepare(&f.pool, &f.key, &f.policy, &f.ctx, input()).await,
+        commands::prepare(
+            &f.pool,
+            &f.key,
+            &f.policy,
+            &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
+            &f.ctx,
+            input()
+        )
+        .await,
         Err(MigrationError::SourceNotEligible)
     ));
     let other = import_support::fixture_with_book(&pool, db_activity_source::book()).await;
@@ -284,7 +356,15 @@ async fn family_refresh_prepare_rejects_invalid_selection_and_foreign_evidence(p
     let mut foreign = input();
     foreign.core_report_id = Some(foreign_report);
     assert!(matches!(
-        commands::prepare(&f.pool, &f.key, &f.policy, &f.ctx, foreign).await,
+        commands::prepare(
+            &f.pool,
+            &f.key,
+            &f.policy,
+            &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
+            &f.ctx,
+            foreign
+        )
+        .await,
         Err(MigrationError::SourceNotEligible)
     ));
     for families in [
@@ -295,7 +375,15 @@ async fn family_refresh_prepare_rejects_invalid_selection_and_foreign_evidence(p
         let mut cmd = input();
         cmd.families = families;
         assert!(matches!(
-            commands::prepare(&f.pool, &f.key, &f.policy, &f.ctx, cmd).await,
+            commands::prepare(
+                &f.pool,
+                &f.key,
+                &f.policy,
+                &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
+                &f.ctx,
+                cmd
+            )
+            .await,
             Err(MigrationError::InvalidInput)
         ));
     }
@@ -312,6 +400,7 @@ async fn family_refresh_worker_pauses_without_losing_control_capacity(pool: PgPo
         &f.pool,
         &f.key,
         &f.policy,
+        &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
         &f.ctx,
         PrepareFamilyRefresh {
             request_id: Uuid::new_v4(),
@@ -353,6 +442,7 @@ async fn family_refresh_worker_authenticates_before_preparation(pool: PgPool) {
         &f.pool,
         &f.key,
         &f.policy,
+        &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
         &f.ctx,
         PrepareFamilyRefresh {
             request_id: Uuid::new_v4(),
@@ -401,9 +491,16 @@ async fn family_refresh_summaries_are_bounded_private_and_workspace_scoped(pool:
         history_capture_id: Some(history),
         families: vec![Family::History],
     };
-    let first = commands::prepare(&f.pool, &f.key, &f.policy, &f.ctx, prepare())
-        .await
-        .unwrap();
+    let first = commands::prepare(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
+        &f.ctx,
+        prepare(),
+    )
+    .await
+    .unwrap();
     // Synthetic terminal fixture; this is not a substitute for the pending
     // typed cancellation command. These equally sized state labels add no bytes.
     sqlx::query("UPDATE migration_family_refresh_bundle SET state='cancelled' WHERE id=$1")
@@ -411,9 +508,16 @@ async fn family_refresh_summaries_are_bounded_private_and_workspace_scoped(pool:
         .execute(&pool)
         .await
         .unwrap();
-    let second = commands::prepare(&f.pool, &f.key, &f.policy, &f.ctx, prepare())
-        .await
-        .unwrap();
+    let second = commands::prepare(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
+        &f.ctx,
+        prepare(),
+    )
+    .await
+    .unwrap();
     let page = |cursor| BundlePage {
         parent_import_id: parent,
         limit: Some(1),
@@ -430,9 +534,16 @@ async fn family_refresh_summaries_are_bounded_private_and_workspace_scoped(pool:
         .execute(&pool)
         .await
         .unwrap();
-    let third = commands::prepare(&f.pool, &f.key, &f.policy, &f.ctx, prepare())
-        .await
-        .unwrap();
+    let third = commands::prepare(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
+        &f.ctx,
+        prepare(),
+    )
+    .await
+    .unwrap();
     let last_page = queries::list(&f.pool, &f.key, &f.ctx, page(Some(cursor.clone())))
         .await
         .unwrap();
@@ -642,6 +753,7 @@ async fn family_refresh_mapping_inventory_is_bounded_atomic_and_reuses_shared_so
         &f.pool,
         &f.key,
         &f.policy,
+        &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
         &f.ctx,
         PrepareFamilyRefresh {
             request_id: Uuid::new_v4(),
@@ -856,11 +968,12 @@ async fn family_refresh_mapping_inventory_is_bounded_atomic_and_reuses_shared_so
         .unwrap()
     );
     worker::release(&f.pool, &claim).await.unwrap();
-    for step in 0..30 {
+    // Admission now enables the 72 bounded catalog outcomes as well as activity.
+    for step in 0..120 {
         if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
             break;
         }
-        assert!(step < 29);
+        assert!(step < 119);
     }
     let activity = prepared.families[1].plan_id;
     assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_family_refresh_mapping WHERE plan_id=$1 AND NOT qualified").bind(activity).fetch_one(&pool).await.unwrap(),0,"an invalid record does not poison intrinsic validity of a shared role value");
@@ -890,15 +1003,16 @@ async fn family_refresh_mapping_inventory_is_bounded_atomic_and_reuses_shared_so
     assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_family_refresh_mapping m JOIN migration_family_refresh_source s ON s.id=m.source_row_id WHERE m.plan_id=$1 AND s.plan_id=$2").bind(activity).bind(claim.plan).fetch_one(&pool).await.unwrap(),4);
     assert_eq!(
         sqlx::query_scalar::<_, i64>(
-            "SELECT count(*) FROM migration_family_refresh_manifest WHERE bundle_id=$1"
+            "SELECT count(*) FROM migration_family_refresh_manifest WHERE plan_id=$1"
         )
-        .bind(claim.bundle)
+        .bind(activity)
         .fetch_one(&pool)
         .await
         .unwrap(),
         4,
         "activity traversal counts each identity once, including held and excluded work"
     );
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_family_refresh_manifest WHERE plan_id=$1 AND kind='catalog'").bind(claim.plan).fetch_one(&pool).await.unwrap(), 72, "each catalog mapping receives its own bounded outcome");
     assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_family_refresh_manifest WHERE plan_id=$1 AND reason='source_conflict'").bind(activity).fetch_one(&pool).await.unwrap(),1);
     assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_family_refresh_manifest WHERE plan_id=$1 AND disposition='excluded'").bind(activity).fetch_one(&pool).await.unwrap(),1);
     assert!(sqlx::query_scalar::<_, bool>(
@@ -1153,6 +1267,7 @@ async fn family_refresh_plan_choices_are_versioned_atomic_and_inherited(pool: Pg
         &f.pool,
         &f.key,
         &f.policy,
+        &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
         &f.ctx,
         PrepareFamilyRefresh {
             request_id: Uuid::new_v4(),
@@ -1164,6 +1279,13 @@ async fn family_refresh_plan_choices_are_versioned_atomic_and_inherited(pool: Pg
     )
     .await
     .unwrap();
+    // Isolate read-adapter readiness and manually stepped unit rollback tests.
+    // Production admission above has already completed the empty handover.
+    sqlx::query("DELETE FROM migration_metadata_catalog_readiness WHERE organization_id=$1")
+        .bind(f.org)
+        .execute(&pool)
+        .await
+        .unwrap();
     let bundle = prepared.bundle_id;
     let old = prepared.families[0].plan_id;
     let make = |revision: &str, patches: Vec<MappingPatch>| PlanFamilyRefresh {
@@ -1685,6 +1807,7 @@ async fn family_refresh_activity_proposals_are_atomic_stable_and_do_not_write_na
         &f.pool,
         &f.key,
         &f.policy,
+        &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
         &f.ctx,
         PrepareFamilyRefresh {
             request_id: Uuid::new_v4(),
@@ -2028,6 +2151,7 @@ async fn family_refresh_missing_activity_holds_absence_and_preserves_owned_perso
         &f.pool,
         &f.key,
         &f.policy,
+        &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
         &f.ctx,
         PrepareFamilyRefresh {
             request_id: Uuid::new_v4(),
@@ -2234,6 +2358,7 @@ async fn family_refresh_metadata_catalog_qualifies_complete_names_and_choices(po
         &f.pool,
         &f.key,
         &f.policy,
+        &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
         &f.ctx,
         PrepareFamilyRefresh {
             request_id: Uuid::new_v4(),
@@ -2387,8 +2512,7 @@ async fn assert_metadata_destination_inspection(
         .unwrap(),
         0
     );
-    // Synthetic ready empty registry; production handover remains a typed,
-    // workspace-exclusive operation and must never occur in a read adapter.
+    // Restore the fixture registry after proving that reads never activate it.
     sqlx::query("INSERT INTO migration_metadata_catalog_readiness(organization_id,state,activated_at,activated_by_user_id,engine_version) VALUES($1,'ready',clock_timestamp(),$2,'fub-admitted-metadata-v1')").bind(f.org).bind(f.actor).execute(pool).await.unwrap();
     use crm_api::domain::migration::family_refresh::{
         catalog_plan::{self, Prepared},
@@ -2760,6 +2884,7 @@ async fn family_refresh_catalog_creation_requires_all_options_and_distinct_targe
         &f.pool,
         &f.key,
         &f.policy,
+        &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
         &f.ctx,
         PrepareFamilyRefresh {
             request_id: Uuid::new_v4(),
@@ -2777,7 +2902,7 @@ async fn family_refresh_catalog_creation_requires_all_options_and_distinct_targe
         }
         assert!(step < 39);
     }
-    sqlx::query("INSERT INTO migration_metadata_catalog_readiness(organization_id,state,activated_at,activated_by_user_id,engine_version) VALUES($1,'ready',clock_timestamp(),$2,'fub-admitted-metadata-v1')").bind(f.org).bind(f.actor).execute(&pool).await.unwrap();
+    assert!(sqlx::query_scalar::<_,bool>("SELECT state='ready' FROM migration_metadata_catalog_readiness WHERE organization_id=$1").bind(f.org).fetch_one(&pool).await.unwrap(), "typed refresh admission completed the handover");
     let mut current = draft;
     for round in 0..2 {
         let rows=sqlx::query("SELECT m.id,m.kind,m.source_element FROM migration_family_refresh_mapping m WHERE m.plan_id=$1 ORDER BY m.id").bind(current.families[0].plan_id).fetch_all(&pool).await.unwrap();

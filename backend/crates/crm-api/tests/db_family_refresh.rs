@@ -3117,6 +3117,7 @@ async fn history_source_walk_is_atomic_bounded_and_counts_each_identity_once(poo
         &f.pool,
         &f.key,
         &f.policy,
+        &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
         &f.ctx,
         commands::PrepareFamilyRefresh {
             request_id: Uuid::new_v4(),
@@ -3468,6 +3469,7 @@ async fn history_missing_walk_holds_absence_without_deleting_or_advancing_baseli
         &f.pool,
         &f.key,
         &f.policy,
+        &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
         &f.ctx,
         commands::PrepareFamilyRefresh {
             request_id: Uuid::new_v4(),

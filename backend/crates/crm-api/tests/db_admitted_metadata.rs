@@ -3551,6 +3551,7 @@ async fn family_refresh_catalog_authenticates_existing_admitted_claims(migrator:
         &f.pool,
         &f.key,
         &f.policy,
+        &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
         &f.ctx,
         PrepareFamilyRefresh {
             request_id: Uuid::new_v4(),

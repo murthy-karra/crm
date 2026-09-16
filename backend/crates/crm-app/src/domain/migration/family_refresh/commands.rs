@@ -5,7 +5,7 @@ use super::{
     model::{Family, ENGINE},
 };
 use crate::{
-    auth::workspace,
+    auth::workspace::{self, ReleaseReadiness},
     config::RawPayloadKey,
     domain::{
         envelope::CommandContext,
@@ -64,6 +64,7 @@ pub async fn prepare(
     pool: &PgPool,
     key: &RawPayloadKey,
     policy: &SnapshotPolicy,
+    release: &ReleaseReadiness,
     ctx: &CommandContext,
     cmd: PrepareFamilyRefresh,
 ) -> Result<PreparedBundle, MigrationError> {
@@ -83,7 +84,11 @@ pub async fn prepare(
         .bind(ENGINE)
         .execute(&mut *tx)
         .await?;
+    // Catalog handover drains compatible old writers before any retention locks.
+    // Use the same order for all families so mixed requests cannot invert it.
+    workspace::exclusive(&mut tx, ctx.organization_id).await?;
     store::require_admin(&mut tx, ctx).await?;
+    store::lock_org(&mut tx, ctx.organization_id).await?;
     // Serialize receipts and competing preparations before looking up replay.
     sqlx::query("SELECT organization_id FROM migration_snapshot_storage WHERE organization_id=$1 FOR UPDATE").bind(ctx.organization_id.0).fetch_optional(&mut *tx).await?.ok_or(MigrationError::NotFound)?;
     let receipt = sqlx::query("SELECT r.*,p.family,p.revision,b.parent_import_id,b.parent_plan_id FROM migration_family_refresh_receipt r JOIN migration_family_refresh_plan p ON p.id=r.plan_id AND p.bundle_id=r.bundle_id AND p.organization_id=r.organization_id JOIN migration_family_refresh_bundle b ON b.id=r.bundle_id AND b.organization_id=r.organization_id WHERE r.organization_id=$1 AND r.actor_user_id=$2 AND r.action='prepare' AND r.request_id=$3")
@@ -184,6 +189,10 @@ pub async fn prepare(
         history_capture_store::verify_parent(&mut tx, ctx.organization_id, &h).await?;
         history_inputs = json!({"capture_id":capture,"capture_sequence":h.get::<i64,_>("capture_sequence").to_string(),"revision":h.get::<i64,_>("revision").to_string(),"started_at":started,"completed_at":completed,
             "profile_version":h.get::<String,_>("profile_version"),"parser_version":h.get::<String,_>("parser_version"),"schema_version":h.get::<String,_>("schema_version"),"source_user_id":h.get::<i64,_>("source_user_id").to_string(),"source_user_evidence_revision":h.get::<i32,_>("source_user_evidence_revision").to_string()});
+    }
+    if families.contains(&Family::Metadata) {
+        release.require_admitted_metadata(&mut tx).await?;
+        super::super::admitted_metadata::handover_qualified(&mut tx, key, ctx).await?;
     }
     let bundle = Uuid::new_v4();
     let plans: Vec<_> = families

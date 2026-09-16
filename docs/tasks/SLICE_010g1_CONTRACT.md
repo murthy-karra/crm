@@ -489,8 +489,8 @@ The read-only catalog adapter authenticates the selected mapping and its parent,
 rechecks native destination snapshots and existing original/admitted registry
 claims, and preserves Plan's prospective IDs. It requires the completed shared
 catalog handover; it never treats an inactive registry as empty or initiates that
-handover from a reader. Refresh preparation still needs to wire the existing
-handover into its typed admission path before exposing this workflow.
+handover from a reader. Typed refresh admission now reuses that handover after authenticating all
+selected source bindings and before committing a metadata bundle.
 
 Distinct field/option source keys cannot claim one destination. Creation checks
 use bounded prospective sets and native database folding, preserve the 200-tag,
@@ -545,3 +545,20 @@ The worker enters this stage only with a compatible ready shared registry.
 Exhaustion records catalog completion only; it does not complete Person walks,
 seal a digest, confirm work or authorize native writes. Existing immutable
 mapping choices and logical byte charges are unchanged by the fixed projections.
+
+### Typed shared catalog admission
+
+Prepare requires the existing admitted-metadata release readiness when metadata
+is selected. It acquires the workspace-exclusive barrier, current admin and
+Organization lock before retention serialization. After validating every selected
+source, it reuses the original/admitted catalog handover: compatible old writers
+are drained, exact original claims keep their original owners and their encrypted
+reference bytes charge the original import/snapshot/Organization ledgers.
+
+For refresh, handover and bundle admission share one transaction: invalid input,
+failed source qualification, drain failure, or insufficient capacity leaves
+neither a partial registry nor a bundle. Authorized receipt replay precedes
+mutable requalification and does not repeat the handover. Existing admitted
+metadata keeps its previously established two-transaction handover behavior.
+This is catalog admission only; complete family release inventories, HTTP
+exposure, confirmation and native execution remain separate work.

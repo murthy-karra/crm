@@ -2518,3 +2518,22 @@ traversal evidence through `aaccd81` is archived in
   warnings denied (`/private/tmp/010g1-mapping-order-clippy.log`); formatting and
   diff checks passed. The preceding full 39-test suite remains the broader
   catalog checkpoint; final-tree verification is still required.
+
+## 010g1 catalog preparation checkpoints — 2026-09-16
+
+- `d1252f2` persisted atomic encrypted catalog outcomes, mapping-owner fences,
+  parent-option holds, counts and byte settlement. The isolated serial family
+  suite passed 39 tests (`/private/tmp/010g1-catalog-plan-family-db.log`), with
+  subsequent focused owner-forgery and dependency cases passing in
+  `/private/tmp/010g1-catalog-plan-final-db.log`. Library Clippy passed with
+  warnings denied (`/private/tmp/010g1-catalog-plan-final-clippy.log`).
+- `a2cf04f` added bounded catalog worker traversal, fixed capture-order
+  projections, atomic exact-next cursor advancement and exhaustion fencing.
+  The 21 affected database tests passed serially
+  (`/private/tmp/010g1-catalog-walk-family-db.log`), including read-only
+  native behavior, fault rollback and replay under exhausted capacity.
+  Library Clippy passed (`/private/tmp/010g1-catalog-walk-final-clippy.log`).
+
+Both used the isolated `crm_010g1_schema_20260915` database and
+`/private/tmp/crm-010g1-target-20260915` Cargo target. Neither checkpoint exposed
+HTTP/Web routes, performed native refresh execution, or completed the slice.

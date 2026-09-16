@@ -5,8 +5,8 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 ## Working constraints
 
-- Branch `codex/010g1-family-refresh`, base `dd140b0`; the bounded catalog-walk checkpoint
-  follows **`d1252f2`**. One primary writer; the previously authorized single
+- Branch `codex/010g1-family-refresh`, base `dd140b0`; the typed catalog-admission checkpoint
+  follows **`a2cf04f`**. One primary writer; the previously authorized single
   implementation reviewer remains reserved for the final review. Planning review
   READY, round 1. Preserve D-050's two review/fix rounds and final performance gate.
 - Do not merge, push or deploy. Preserve unrelated `docs/prompts/MODEL_ROUTING.md`
@@ -41,7 +41,9 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 - Metadata catalog: bounded mapping inventory; full occurrence field-name checks;
   database-folded choice collisions; exact registry and destination inspection;
   stable prospective IDs; native capacity/label and duplicate-target checks;
-  all-option requirements for new choice fields. Registry handover must be ready.
+  all-option requirements for new choice fields. Typed admission now establishes
+  compatible shared registry readiness; bounded worker catalog outcomes precede
+  Person proposals.
 - New bundles choose mapping representatives in capture/item/element order. Old
   bundles retain their original UUID cursor semantics and cannot qualify old tag
   choices; pre-name-index sources also require fresh bundles. Replanning does not
@@ -49,26 +51,29 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 ## Current verified milestone
 
-Catalog preparation now runs one exact mapping per existing scheduler turn.
-Migration 021 supplies scoped capture-order projections and an indexed selector;
-SQL fences prevent skipped outcomes and premature completion. New outcomes,
-counts, byte settlement and the cursor commit together. Existing outcomes replay
-without additional charges. The worker requires ready shared catalog state.
-Catalog exhaustion does not seal or confirm the family or complete Person walks.
+Typed refresh Prepare now reuses the shared catalog handover after validating
+selected sources. It requires existing catalog release readiness and takes the
+workspace-exclusive barrier before Organization/retention locks. Original claim
+owners and exact original-payer charges are preserved. Handover, bundle and
+receipt commit together; failure rolls all three back. Authorized replay neither
+repeats the handover nor charges again. Existing admitted metadata preserves its
+previous transaction boundary. No native refresh writes or HTTP exposure follow
+from this admission.
 
-The affected database suite passed **21 tests** serially
-(`/private/tmp/010g1-catalog-walk-family-db.log`), including catalog dependencies,
-worker dispatch, cursor rollback, no-skip fences and replay under exhausted
-capacity. The focused Plan scenario also passed
-(`/private/tmp/010g1-catalog-walk-db.log`). Library Clippy passed with warnings
-denied (`/private/tmp/010g1-catalog-walk-final-clippy.log`); formatting and diff
-checks passed. The preceding catalog-unit checkpoint passed the full 39-test
-family suite (`/private/tmp/010g1-catalog-plan-family-db.log`).
+The production-code family suite ran **39 tests**: 38 passed and one inventory
+fixture hit its obsolete 30-turn drain bound now that admission enables 72
+catalog units (`/private/tmp/010g1-catalog-admission-family-db.log`). After a
+test-only correction, that scenario passed, along with a new original-owner/
+exact-charge/fault-rollback/replay scenario and two existing admitted-metadata
+regressions (`/private/tmp/010g1-catalog-admission-focused-db.log`). No failing
+check remains in this milestone. Library Clippy passed with warnings denied
+(`/private/tmp/010g1-catalog-admission-clippy.log`); formatting and diff checks
+also passed. Final slice-wide gates remain outstanding.
 
 ## Remaining implementation
 
-1. Wire shared catalog handover into authorized typed refresh admission. Convert and persist
-   atomic Person metadata proposals, source gaps and missing-source outcomes.
+1. Convert and persist atomic Person metadata proposals, source gaps and
+   missing-source outcomes.
 2. Bootstrap legacy baselines only where independently provable. Add refresh-owned
    initial activity/history identities and catalog claims with exclusive typed
    owner shapes; extend existing ownership/baseline/reader adapters accordingly.

@@ -1033,3 +1033,131 @@ async fn family_refresh_metadata_prior_result_preserves_ownership_and_source_bou
     .unwrap();
     assert_eq!(count, 0);
 }
+
+#[sqlx::test(migrations = "./migrations")]
+#[ignore = "requires PostgreSQL migrator"]
+async fn family_refresh_catalog_handover_preserves_original_owners_and_charges(migrator: PgPool) {
+    use crm_api::{
+        auth::workspace::ReleaseReadiness,
+        domain::migration::family_refresh::{commands, model::Family},
+    };
+    let mut p = person(101);
+    p["tags"] = json!(["Imported"]);
+    p["customText"] = json!("Native baseline");
+    let f = support::fixture_with_book(
+        &migrator,
+        book(
+            vec![p.clone()],
+            vec![field(10, "customText", "Text", "text")],
+        ),
+    )
+    .await;
+    let parent = complete_parent(&f).await;
+    let (child, first) = propose(&f, parent).await;
+    let ready = replan(
+        &f,
+        child,
+        &first,
+        matching_choices(&f, plan_id(&first)).await,
+    )
+    .await;
+    execute(&f, child, &ready, parent).await;
+    let report = crate::db_people_admission_execution::report(&f, parent, vec![p]).await;
+    let ledger_sql = "SELECT jsonb_build_object('import',i.retained_bytes,'snapshot',s.retained_bytes,'identities',(SELECT jsonb_agg(to_jsonb(x) ORDER BY kind,source_key) FROM migration_metadata_identity x WHERE x.import_id=i.id),'claims',(SELECT count(*) FROM migration_metadata_catalog_claim WHERE organization_id=i.organization_id),'readiness',(SELECT count(*) FROM migration_metadata_catalog_readiness WHERE organization_id=i.organization_id)) FROM migration_metadata_import i JOIN migration_snapshot s ON s.id=i.snapshot_id AND s.organization_id=i.organization_id WHERE i.id=$1";
+    let before: Value = sqlx::query_scalar(ledger_sql)
+        .bind(child)
+        .fetch_one(&migrator)
+        .await
+        .unwrap();
+    assert_eq!(before["readiness"], 0);
+    assert_eq!(before["claims"], 0);
+    let request = Uuid::new_v4();
+    let command = || commands::PrepareFamilyRefresh {
+        request_id: request,
+        parent_import_id: parent,
+        core_report_id: Some(report),
+        history_capture_id: None,
+        families: vec![Family::Metadata],
+    };
+    // Fail after claim insertion, while publishing readiness, to prove both the
+    // owner backfill and its original-payer charges roll back with admission.
+    sqlx::raw_sql("CREATE FUNCTION test_handover_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic catalog handover fault'; END $$; CREATE TRIGGER test_handover_fault BEFORE INSERT ON migration_metadata_catalog_readiness FOR EACH ROW EXECUTE FUNCTION test_handover_fault()").execute(&migrator).await.unwrap();
+    assert!(commands::prepare(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &ReleaseReadiness::for_tests(),
+        &f.ctx,
+        command()
+    )
+    .await
+    .is_err());
+    sqlx::raw_sql("DROP TRIGGER test_handover_fault ON migration_metadata_catalog_readiness; DROP FUNCTION test_handover_fault()").execute(&migrator).await.unwrap();
+    let failed: Value = sqlx::query_scalar(ledger_sql)
+        .bind(child)
+        .fetch_one(&migrator)
+        .await
+        .unwrap();
+    assert_eq!(failed, before);
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_family_refresh_bundle WHERE organization_id=$1"
+        )
+        .bind(f.org)
+        .fetch_one(&migrator)
+        .await
+        .unwrap(),
+        0
+    );
+    let prepared = commands::prepare(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &ReleaseReadiness::for_tests(),
+        &f.ctx,
+        command(),
+    )
+    .await
+    .unwrap();
+    let after: Value = sqlx::query_scalar(ledger_sql)
+        .bind(child)
+        .fetch_one(&migrator)
+        .await
+        .unwrap();
+    let bytes: i64 = sqlx::query_scalar("SELECT sum(32+octet_length(evidence_nonce)+octet_length(evidence_ciphertext))::bigint FROM migration_metadata_catalog_claim WHERE original_import_id=$1").bind(child).fetch_one(&migrator).await.unwrap();
+    assert!(bytes > 0);
+    assert_eq!(
+        after["import"].as_i64().unwrap() - before["import"].as_i64().unwrap(),
+        bytes
+    );
+    assert_eq!(
+        after["snapshot"].as_i64().unwrap() - before["snapshot"].as_i64().unwrap(),
+        bytes
+    );
+    assert_eq!(after["identities"], before["identities"]);
+    assert_eq!(
+        after["claims"].as_u64().unwrap(),
+        before["identities"].as_array().unwrap().len() as u64
+    );
+    assert!(sqlx::query_scalar::<_,bool>("SELECT bool_and(c.original_import_id=x.import_id AND c.original_plan_id=x.plan_id AND c.original_mapping_id=x.mapping_id AND c.target_id=x.target_id) FROM migration_metadata_identity x JOIN migration_metadata_catalog_claim c USING(organization_id,source_account_id,kind,source_key) WHERE x.import_id=$1").bind(child).fetch_one(&migrator).await.unwrap());
+    let replay = commands::prepare(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &ReleaseReadiness::for_tests(),
+        &f.ctx,
+        command(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(replay.bundle_id, prepared.bundle_id);
+    assert_eq!(
+        sqlx::query_scalar::<_, Value>(ledger_sql)
+            .bind(child)
+            .fetch_one(&migrator)
+            .await
+            .unwrap(),
+        after,
+        "receipt replay cannot backfill or charge again"
+    );
+}

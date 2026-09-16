@@ -62,6 +62,26 @@ async fn family_refresh_prepare_combined_is_atomic_metered_and_replay_safe(pool:
     assert_eq!(prepared.families[0].family, Family::Metadata);
     assert_eq!(prepared.state, "preparing");
     assert_eq!(prepared.revision, "1");
+    let summary = crm_api::domain::migration::family_refresh::queries::detail(
+        &f.pool,
+        &f.ctx,
+        prepared.bundle_id,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        summary
+            .families
+            .iter()
+            .map(|f| f.family)
+            .collect::<Vec<_>>(),
+        vec![Family::Metadata, Family::Activity, Family::History]
+    );
+    assert!(summary
+        .families
+        .iter()
+        .all(|f| f.counts.units == 0 && f.revision == "1"));
+
     let scope = Scope {
         organization: f.ctx.organization_id,
         bundle: prepared.bundle_id,
@@ -365,4 +385,212 @@ async fn family_refresh_worker_authenticates_before_preparation(pool: PgPool) {
         worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap(),
         Progress::Idle
     );
+}
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn family_refresh_summaries_are_bounded_private_and_workspace_scoped(pool: PgPool) {
+    use crm_api::domain::migration::family_refresh::queries::{self, BundlePage};
+    let (f, parent, history, _) = history::fixture(&pool).await;
+    let prepare = || PrepareFamilyRefresh {
+        request_id: Uuid::new_v4(),
+        parent_import_id: parent,
+        core_report_id: None,
+        history_capture_id: Some(history),
+        families: vec![Family::History],
+    };
+    let first = commands::prepare(&f.pool, &f.key, &f.policy, &f.ctx, prepare())
+        .await
+        .unwrap();
+    // Synthetic terminal fixture; this is not a substitute for the pending
+    // typed cancellation command. These equally sized state labels add no bytes.
+    sqlx::query("UPDATE migration_family_refresh_bundle SET state='cancelled' WHERE id=$1")
+        .bind(first.bundle_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let second = commands::prepare(&f.pool, &f.key, &f.policy, &f.ctx, prepare())
+        .await
+        .unwrap();
+    let page = |cursor| BundlePage {
+        parent_import_id: parent,
+        limit: Some(1),
+        cursor,
+    };
+    let first_page = queries::list(&f.pool, &f.key, &f.ctx, page(None))
+        .await
+        .unwrap();
+    assert_eq!(first_page.items.len(), 1);
+    assert_eq!(first_page.items[0].id, second.bundle_id);
+    let cursor = first_page.next_cursor.unwrap();
+    sqlx::query("UPDATE migration_family_refresh_bundle SET state='cancelled' WHERE id=$1")
+        .bind(second.bundle_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let third = commands::prepare(&f.pool, &f.key, &f.policy, &f.ctx, prepare())
+        .await
+        .unwrap();
+    let last_page = queries::list(&f.pool, &f.key, &f.ctx, page(Some(cursor.clone())))
+        .await
+        .unwrap();
+    assert_eq!(last_page.items.len(), 1);
+    assert_eq!(last_page.items[0].id, first.bundle_id);
+    assert!(
+        last_page.next_cursor.is_none(),
+        "new bundles are outside the original upper bound"
+    );
+    assert_eq!(
+        queries::list(&f.pool, &f.key, &f.ctx, page(None))
+            .await
+            .unwrap()
+            .items[0]
+            .id,
+        third.bundle_id
+    );
+    let detail = queries::detail(&f.pool, &f.ctx, third.bundle_id)
+        .await
+        .unwrap();
+    assert_eq!(detail.bundle.revision, "1");
+    assert_eq!(detail.bundle.history_capture_id, Some(history));
+    assert!(detail.bundle.digest.is_none());
+    assert_eq!(detail.families.len(), 1);
+    assert_eq!(detail.families[0].plan_id, third.families[0].plan_id);
+    assert_eq!(detail.families[0].counts.units, 0);
+    let families = queries::families(&f.pool, &f.ctx, third.bundle_id)
+        .await
+        .unwrap();
+    assert_eq!(families.bundle_revision, "1");
+    assert_eq!(
+        serde_json::to_value(&families.items).unwrap(),
+        serde_json::to_value(&detail.families).unwrap()
+    );
+    let serialized = serde_json::to_string(&detail).unwrap();
+    for private in [
+        "nonce",
+        "ciphertext",
+        "source_nonce",
+        "lease_token",
+        "IMPORT_BODY_SENTINEL",
+        "IMPORT_PHONE_SENTINEL",
+    ] {
+        assert!(!serialized.contains(private));
+    }
+    assert!(serialized.len() < 4096);
+    assert_eq!(
+        serde_json::to_value(&detail).unwrap()["families"][0]["counts"]["units"],
+        "0"
+    );
+    for limit in [0, 51] {
+        let mut invalid = page(None);
+        invalid.limit = Some(limit);
+        assert!(matches!(
+            queries::list(&f.pool, &f.key, &f.ctx, invalid).await,
+            Err(MigrationError::InvalidInput)
+        ));
+    }
+    let mut wrong_size = page(Some(cursor.clone()));
+    wrong_size.limit = Some(2);
+    assert!(matches!(
+        queries::list(&f.pool, &f.key, &f.ctx, wrong_size).await,
+        Err(MigrationError::InvalidInput)
+    ));
+    let mut tampered = cursor.clone();
+    tampered.push('x');
+    assert!(matches!(
+        queries::list(&f.pool, &f.key, &f.ctx, page(Some(tampered))).await,
+        Err(MigrationError::InvalidInput)
+    ));
+    let actor = crate::common::create_user(
+        &pool,
+        "summary-reader@example.test",
+        "Summary reader",
+        "synthetic-summary-pass",
+    )
+    .await;
+    crate::common::add_membership_with(
+        &pool,
+        f.org,
+        actor,
+        crm_api::domain::admin::Role::Admin,
+        crm_api::domain::admin::MembershipStatus::Active,
+    )
+    .await;
+    let mut other = f.ctx.clone();
+    other.actor_user_id = UserId::new(actor);
+    assert!(queries::detail(&f.pool, &other, third.bundle_id)
+        .await
+        .is_ok());
+    assert!(
+        matches!(
+            queries::list(&f.pool, &f.key, &other, page(Some(cursor.clone()))).await,
+            Err(MigrationError::InvalidInput)
+        ),
+        "another authorized admin cannot reuse this actor's cursor"
+    );
+    let org = crate::common::create_org(&pool, "Foreign summary workspace").await;
+    crate::common::add_membership_with(
+        &pool,
+        org,
+        f.actor,
+        crm_api::domain::admin::Role::Admin,
+        crm_api::domain::admin::MembershipStatus::Active,
+    )
+    .await;
+    let mut foreign = f.ctx.clone();
+    foreign.organization_id = OrganizationId::new(org);
+    assert!(matches!(
+        queries::detail(&f.pool, &foreign, third.bundle_id).await,
+        Err(MigrationError::NotFound)
+    ));
+    assert!(matches!(
+        queries::list(&f.pool, &f.key, &foreign, page(None)).await,
+        Err(MigrationError::NotFound)
+    ));
+    sqlx::query(
+        "UPDATE organization_membership SET role='member' WHERE organization_id=$1 AND user_id=$2",
+    )
+    .bind(f.org)
+    .bind(actor)
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(matches!(
+        queries::families(&f.pool, &other, third.bundle_id).await,
+        Err(MigrationError::Forbidden)
+    ));
+    assert!(matches!(
+        queries::list(&f.pool, &f.key, &other, page(None)).await,
+        Err(MigrationError::Forbidden)
+    ));
+    assert!(matches!(
+        queries::detail(&f.pool, &f.ctx, Uuid::new_v4()).await,
+        Err(MigrationError::NotFound)
+    ));
+    sqlx::query("UPDATE organization SET workspace_revision=workspace_revision+1 WHERE id=$1")
+        .bind(f.org)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        matches!(
+            queries::list(&f.pool, &f.key, &f.ctx, page(Some(cursor.clone()))).await,
+            Err(MigrationError::InvalidInput)
+        ),
+        "workspace revision invalidates the list cursor"
+    );
+    // Detached workspace evidence is not readable even to a current admin.
+    sqlx::query("DELETE FROM migration_workspace WHERE organization_id=$1")
+        .bind(f.org)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(matches!(
+        queries::detail(&f.pool, &f.ctx, third.bundle_id).await,
+        Err(MigrationError::NotFound)
+    ));
+    assert!(matches!(
+        queries::list(&f.pool, &f.key, &f.ctx, page(Some(cursor))).await,
+        Err(MigrationError::NotFound)
+    ));
 }

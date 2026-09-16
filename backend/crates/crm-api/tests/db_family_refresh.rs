@@ -2890,6 +2890,30 @@ async fn assert_item_pages(
         .await,
         Err(MigrationError::NotFound)
     ));
+    sqlx::query("UPDATE organization SET workspace_revision=workspace_revision+1 WHERE id=$1")
+        .bind(f.org)
+        .execute(pool)
+        .await
+        .unwrap();
+    assert!(
+        matches!(
+            item_queries::items(
+                &f.pool,
+                &f.key,
+                &f.ctx,
+                claim.bundle,
+                item_query(claim.plan, Some(cursor.clone()))
+            )
+            .await,
+            Err(MigrationError::InvalidInput)
+        ),
+        "workspace revision invalidates the item cursor"
+    );
+    sqlx::query("UPDATE organization SET workspace_revision=workspace_revision-1 WHERE id=$1")
+        .bind(f.org)
+        .execute(pool)
+        .await
+        .unwrap();
     sqlx::query("UPDATE migration_family_refresh_bundle SET revision=revision+1 WHERE id=$1")
         .bind(claim.bundle)
         .execute(pool)

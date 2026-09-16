@@ -109,7 +109,7 @@ pub async fn items(
     store::require_admin(&mut tx, ctx).await?;
     // A shared plan lock keeps revision/position stable for this bounded read.
     // Native evidence remains behind its separately authorized field reader.
-    let row=sqlx::query("SELECT b.revision AS bundle_revision,b.parent_import_id,b.parent_plan_id FROM migration_family_refresh_bundle b JOIN migration_workspace w ON w.organization_id=b.organization_id AND w.import_id=b.parent_import_id AND w.plan_id=b.parent_plan_id WHERE b.id=$1 AND b.organization_id=$2 FOR SHARE OF b")
+    let row=sqlx::query("SELECT b.revision AS bundle_revision,b.parent_import_id,b.parent_plan_id,o.workspace_revision FROM migration_family_refresh_bundle b JOIN organization o ON o.id=b.organization_id JOIN migration_workspace w ON w.organization_id=b.organization_id AND w.import_id=b.parent_import_id AND w.plan_id=b.parent_plan_id WHERE b.id=$1 AND b.organization_id=$2 FOR SHARE OF b")
         .bind(bundle).bind(ctx.organization_id.0).fetch_optional(&mut *tx).await?.ok_or(MigrationError::NotFound)?;
     let plan=sqlx::query("SELECT revision AS plan_revision,position FROM migration_family_refresh_plan WHERE bundle_id=$1 AND organization_id=$2 AND id=$3 AND family=$4 FOR SHARE")
         .bind(bundle).bind(ctx.organization_id.0).bind(q.plan_id).bind(q.family.as_str()).fetch_optional(&mut *tx).await?.ok_or(MigrationError::NotFound)?;
@@ -125,6 +125,7 @@ pub async fn items(
     let scope=serde_json::to_string(&serde_json::json!({
         "engine":ENGINE,"actor":ctx.actor_user_id.0,"organization":ctx.organization_id.0,
         "parent":row.get::<Uuid,_>("parent_import_id"),"workspace":row.get::<Uuid,_>("parent_plan_id"),
+        "workspace_revision":row.get::<i64,_>("workspace_revision"),
         "bundle":bundle,"bundle_revision":row.get::<i64,_>("bundle_revision"),
         "plan":q.plan_id,"revision":plan.get::<i64,_>("plan_revision"),"family":q.family,
         "cohort":q.cohort_id,"outcome":q.outcome,"endpoint":"items","limit":limit,"order":"position_asc"

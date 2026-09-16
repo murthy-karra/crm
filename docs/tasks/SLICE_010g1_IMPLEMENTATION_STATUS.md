@@ -7,9 +7,8 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 - Branch `codex/010g1-family-refresh`, base `dd140b0`; one primary writer and the
   previously authorized single reviewer. Planning review READY, round 1.
-- Current milestone: bounded missing-history classification following source
-  traversal at **`c882de1`**, qualified holds at **`18170d4`** and item summaries
-  at **`bcab991`**.
+- Current milestone: bounded bundle/family summaries following missing-history
+  classification at **`f98559e`** and source traversal at **`c882de1`**.
   The combined feature is unfinished. No merge/push/deploy.
 - Foundation: comparison policies, source ordering, bounded encrypted evidence,
   exact decimal counts, draft persistence ownership and native/lease guards.
@@ -130,7 +129,9 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   limits. Queries avoid manifest ciphertext; cursors bind actor, Organization,
   workspace, bundle/plan revisions, family, cohort/outcome filters, size and order.
   Current admin/workspace checks and ordered bundle/plan locks apply to every page.
-  Other readers and full field/proof review remain pending.
+  Bundle list/detail and current-family summaries now project bounded state and
+  exact counts without encrypted payloads. List and item cursors bind the current
+  workspace revision. Remaining readers and full field/proof review are pending.
 - Migration 010 adds a fixed-width source-walk completion flag and database
   fences against skipped occurrences, missing outcomes, stale leases and cursor
   regression. Each history outcome/checkpoint/charge commits together; equal
@@ -151,46 +152,9 @@ Earlier checkpoint evidence through typed admission at `108678c`, including
 qualified-unit planning at `d9d2a43` and identity qualification at `26323f6`,
 is archived in [Project history](../plans/PROJECT_HISTORY.md#010g1-foundation-and-discovery-checkpoints--2026-09-15).
 
-- Bounded preparation dispatcher: all 29 serial family database regressions,
-  40 focused library tests and `crm-api --lib` Clippy with warnings denied passed.
-  Combined preparation reaches mappings for every selected family through real
-  claims. Tests cover active-owner exclusion, expired takeover, stale release,
-  exact settlement, storage-limit pause and wrong-key integrity pause before any
-  cohort work. Formatting and diff checks passed. Logs:
-  `/private/tmp/010g1-worker-family-db.log`, `/private/tmp/010g1-worker-unit.log`,
-  `/private/tmp/010g1-worker-clippy.log`. Runners match the prior checkpoint with
-  Clippy widened to the API library containing scheduler integration.
-- Bounded item summaries: the real original-history preparation scenario passes
-  on the final tree with three persisted action classes, stable growing-plan
-  pagination, valid cohort/outcome filters and rejection of altered size/filter,
-  tampered cursors, a second authorized actor, changed bundle revision, unknown
-  cohort and another Organization's current admin. Non-admin reads are denied.
-  Summaries contain no proof ciphertext or source-body sentinel. API-library
-  Clippy, formatting and diff checks passed. Logs:
-  `/private/tmp/010g1-items-final-db.log`, `/private/tmp/010g1-items-clippy.log`.
-  Database runner: serial `all history_baseline_authenticates_original_owner`;
-  the full 29-test family baseline is retained at `f760907` above.
-- Qualified history holds: all 29 serial family database regressions, 40 focused
-  library tests, API-library Clippy with warnings denied, formatting and diff
-  checks passed. The admitted cohort fixture freezes a qualified source with an
-  overlapping creation boundary as a counted hold, verifies its encrypted reason
-  and absence of native target/head IDs, then proves replay preserves that hold
-  after eligibility changes. Capacity rejection and an injected checkpoint fault
-  leave no partial unit or charge. This full family run also rechecks item cursor
-  isolation and preparation dispatch. Logs: `/private/tmp/010g1-held-family-db.log`,
-  `/private/tmp/010g1-held-unit.log`, `/private/tmp/010g1-held-clippy.log`.
-  Runners: serial `all family_refresh`, library `family_refresh` tests and
-  `cargo clippy -p crm-api --lib --locked -- -D warnings`, using isolation below.
-- Bounded history source walk: all 30 serial family database regressions and
-  API-library Clippy with warnings denied passed on the final implementation.
-  The 40 focused library tests also passed during this milestone. Tests cover
-  duplicate identity accounting, source diagnostics, cohort exclusions, storage
-  limits, injected transactional failure, forbidden cursor skips and replacement
-  plans reusing the bundle index under original encryption scopes. The replacement
-  fixture now uses authentic typed preparation after its placeholder ciphertext
-  caused an initial test failure. Logs: `/private/tmp/010g1-walk-final-family-db.log`,
-  `/private/tmp/010g1-walk-unit.log`, `/private/tmp/010g1-walk-revision-clippy.log`.
-  Runners match the preceding milestone; source exhaustion does not seal readiness.
+Earlier dispatcher, item-summary, qualified-hold and source-walk verification is
+archived in [Project history](../plans/PROJECT_HISTORY.md#010g1-preparation-and-source-classification-checkpoints--2026-09-16).
+
 - Missing-history classification: all 31 serial family database regressions,
   API-library Clippy with warnings denied, formatting and diff checks passed.
   The empty-capture scenario verifies scoped original ownership, encrypted
@@ -200,6 +164,16 @@ is archived in [Project history](../plans/PROJECT_HISTORY.md#010g1-foundation-an
   `/private/tmp/010g1-missing-family-db.log`, `/private/tmp/010g1-missing-clippy.log`.
   Runner: serial `all family_refresh`; Clippy as above. The pure comparison
   policies were unchanged; their 40-test evidence remains the source-walk run.
+- Bundle/family summaries and cursor revision binding: all 32 serial family
+  database regressions, API-library Clippy with warnings denied, formatting and
+  diff checks passed. Coverage includes three-family ordering, zero-count wire
+  precision, stable list pagination as new bundles appear, size/tamper/actor/
+  tenant rejection, revoked membership, detached workspace and workspace-revision
+  cursor invalidation. Summary projections fetch no encrypted evidence bodies.
+  Initial compilation caught an unavailable hex helper; the implementation now
+  reuses the existing import encoder without a new dependency. Logs:
+  `/private/tmp/010g1-summaries-family-db.log`,
+  `/private/tmp/010g1-summaries-final-clippy.log`. Runners match the prior milestone.
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB
   `crm_010g1_schema_20260915`. Database tests run serially.

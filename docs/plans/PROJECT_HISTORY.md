@@ -2124,3 +2124,50 @@ remains unfinished. Current residuals live in the implementation status.
   `/private/tmp/010g1-command-unit.log`, `/private/tmp/010g1-command-clippy.log`.
   Runners match the previous milestone: serial `all family_refresh` database
   tests, focused library tests and library Clippy in the isolated target/database.
+
+## 010g1 preparation and source classification checkpoints — 2026-09-16
+
+Verified local commits: dispatcher `f760907`, item summaries `bcab991`,
+qualified holds `18170d4`, source walk `c882de1`. These were intermediate
+checkpoints; the combined family refresh feature remained unfinished.
+
+- Bounded preparation dispatcher: all 29 serial family database regressions,
+  40 focused library tests and `crm-api --lib` Clippy with warnings denied passed.
+  Combined preparation reaches mappings for every selected family through real
+  claims. Tests cover active-owner exclusion, expired takeover, stale release,
+  exact settlement, storage-limit pause and wrong-key integrity pause before any
+  cohort work. Formatting and diff checks passed. Logs:
+  `/private/tmp/010g1-worker-family-db.log`, `/private/tmp/010g1-worker-unit.log`,
+  `/private/tmp/010g1-worker-clippy.log`. Runners match the prior checkpoint with
+  Clippy widened to the API library containing scheduler integration.
+- Bounded item summaries: the real original-history preparation scenario passes
+  on the final tree with three persisted action classes, stable growing-plan
+  pagination, valid cohort/outcome filters and rejection of altered size/filter,
+  tampered cursors, a second authorized actor, changed bundle revision, unknown
+  cohort and another Organization's current admin. Non-admin reads are denied.
+  Summaries contain no proof ciphertext or source-body sentinel. API-library
+  Clippy, formatting and diff checks passed. Logs:
+  `/private/tmp/010g1-items-final-db.log`, `/private/tmp/010g1-items-clippy.log`.
+  Database runner: serial `all history_baseline_authenticates_original_owner`;
+  the full 29-test family baseline is retained at `f760907` above.
+- Qualified history holds: all 29 serial family database regressions, 40 focused
+  library tests, API-library Clippy with warnings denied, formatting and diff
+  checks passed. The admitted cohort fixture freezes a qualified source with an
+  overlapping creation boundary as a counted hold, verifies its encrypted reason
+  and absence of native target/head IDs, then proves replay preserves that hold
+  after eligibility changes. Capacity rejection and an injected checkpoint fault
+  leave no partial unit or charge. This full family run also rechecks item cursor
+  isolation and preparation dispatch. Logs: `/private/tmp/010g1-held-family-db.log`,
+  `/private/tmp/010g1-held-unit.log`, `/private/tmp/010g1-held-clippy.log`.
+  Runners: serial `all family_refresh`, library `family_refresh` tests and
+  `cargo clippy -p crm-api --lib --locked -- -D warnings`, using isolation below.
+- Bounded history source walk: all 30 serial family database regressions and
+  API-library Clippy with warnings denied passed on the final implementation.
+  The 40 focused library tests also passed during this milestone. Tests cover
+  duplicate identity accounting, source diagnostics, cohort exclusions, storage
+  limits, injected transactional failure, forbidden cursor skips and replacement
+  plans reusing the bundle index under original encryption scopes. The replacement
+  fixture now uses authentic typed preparation after its placeholder ciphertext
+  caused an initial test failure. Logs: `/private/tmp/010g1-walk-final-family-db.log`,
+  `/private/tmp/010g1-walk-unit.log`, `/private/tmp/010g1-walk-revision-clippy.log`.
+  Runners match the preceding milestone; source exhaustion does not seal readiness.

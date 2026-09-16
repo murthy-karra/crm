@@ -1760,6 +1760,7 @@ async fn history_baseline_authenticates_original_owner_and_body_only_corrections
         "new identities never get a fabricated baseline"
     );
     assert_new_candidate(&f, &claim, cohort, Kind::Event, "50").await;
+    assert_history_preparation(&pool, &f, &claim, cohort).await;
     assert!(history_baseline::discover(
         &f.pool,
         &f.key,
@@ -2489,4 +2490,133 @@ async fn family_refresh_new_activity_without_first_coverage_is_held(pool: PgPool
             .await
             .is_err()
     );
+}
+
+async fn assert_history_preparation(
+    pool: &PgPool,
+    f: &import_support::Fixture,
+    claim: &crm_api::domain::migration::family_refresh::cohort::Claim,
+    cohort: Uuid,
+) {
+    use crm_api::domain::migration::family_refresh::{
+        evidence::{Purpose, Scope},
+        history_plan::{self, Prepared, Proposal},
+        model::{Counts, Family, Kind},
+    };
+    let scope = Scope {
+        organization: f.ctx.organization_id,
+        bundle: claim.bundle,
+        plan: claim.plan,
+        family: Family::History,
+        revision: 1,
+    };
+    let mut tiny = f.policy.clone();
+    tiny.run_ceiling_bytes = 1;
+    assert!(matches!(
+        history_plan::prepare_unit(&f.pool, &f.key, &tiny, claim, cohort, Kind::Event, "1")
+            .await
+            .unwrap(),
+        Prepared::Capacity
+    ));
+    let before: serde_json::Value = sqlx::query_scalar("SELECT jsonb_build_object('position',position,'counts',counts,'retained',retained_bytes,'measured',measured_bytes,'reserved',reserved_bytes) FROM migration_family_refresh_plan WHERE id=$1").bind(claim.plan).fetch_one(pool).await.unwrap();
+    sqlx::raw_sql("CREATE FUNCTION test_history_plan_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.position>OLD.position THEN RAISE EXCEPTION 'synthetic history plan fault'; END IF; RETURN NEW; END $$; CREATE TRIGGER test_history_plan_fault BEFORE UPDATE ON migration_family_refresh_plan FOR EACH ROW EXECUTE FUNCTION test_history_plan_fault()")
+        .execute(pool).await.unwrap();
+    assert!(history_plan::prepare_unit(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        claim,
+        cohort,
+        Kind::Event,
+        "1"
+    )
+    .await
+    .is_err());
+    sqlx::raw_sql("DROP TRIGGER test_history_plan_fault ON migration_family_refresh_plan; DROP FUNCTION test_history_plan_fault()")
+        .execute(pool).await.unwrap();
+    let after: serde_json::Value = sqlx::query_scalar("SELECT jsonb_build_object('position',position,'counts',counts,'retained',retained_bytes,'measured',measured_bytes,'reserved',reserved_bytes) FROM migration_family_refresh_plan WHERE id=$1").bind(claim.plan).fetch_one(pool).await.unwrap();
+    assert_eq!(
+        after, before,
+        "failed unit rolls back both progress and accounting"
+    );
+    let manifests: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM migration_family_refresh_manifest WHERE plan_id=$1",
+    )
+    .bind(claim.plan)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    assert_eq!(manifests, 0);
+    for (kind, source, expected) in [
+        (Kind::Event, "1", "correction"),
+        (Kind::Call, "2", "already_current"),
+        (Kind::Event, "50", "insert"),
+    ] {
+        let id = match history_plan::prepare_unit(
+            &f.pool, &f.key, &f.policy, claim, cohort, kind, source,
+        )
+        .await
+        .unwrap()
+        {
+            Prepared::Unit(id) => id,
+            _ => panic!("expected persisted history unit"),
+        };
+        let row = sqlx::query("SELECT * FROM migration_family_refresh_manifest WHERE id=$1")
+            .bind(id)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+        assert_eq!(row.get::<String, _>("disposition"), expected);
+        let p: Proposal = scope
+            .open(
+                &f.key,
+                id,
+                Purpose::Manifest,
+                row.get("nonce"),
+                row.get("ciphertext"),
+            )
+            .unwrap();
+        assert_eq!(p.source_id, source);
+        assert_eq!(p.target, row.get::<Uuid, _>("target_id"));
+        assert_eq!(p.baseline.is_none(), expected == "insert");
+        assert_eq!(p.version_id.is_some(), expected == "correction");
+        assert!(!p.source.display.metadata().to_string().contains("SENTINEL"));
+        let bytes: i64 = sqlx::query_scalar(
+            "SELECT retained_bytes FROM migration_family_refresh_plan WHERE id=$1",
+        )
+        .bind(claim.plan)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+        assert!(
+            matches!(history_plan::prepare_unit(&f.pool,&f.key,&f.policy,claim,cohort,kind,source).await.unwrap(),Prepared::Unit(replay) if replay==id)
+        );
+        let after: i64 = sqlx::query_scalar(
+            "SELECT retained_bytes FROM migration_family_refresh_plan WHERE id=$1",
+        )
+        .bind(claim.plan)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+        assert_eq!(after, bytes, "replay does not charge or allocate again");
+    }
+    let row = sqlx::query("SELECT counts,position,measured_bytes,retained_bytes FROM migration_family_refresh_plan WHERE id=$1").bind(claim.plan).fetch_one(pool).await.unwrap();
+    let counts: Counts = serde_json::from_value(row.get("counts")).unwrap();
+    assert_eq!(row.get::<i64, _>("position"), 3);
+    assert_eq!(counts.units, 3);
+    assert_eq!(counts.inserts, 1);
+    assert_eq!(counts.already_current, 1);
+    assert_eq!(counts.history_corrections, 1);
+    assert!(counts.reconciles());
+    assert_eq!(
+        row.get::<i64, _>("retained_bytes"),
+        row.get::<i64, _>("measured_bytes")
+    );
+    let native: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM migration_family_refresh_result WHERE plan_id=$1")
+            .bind(claim.plan)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    assert_eq!(native, 0);
 }

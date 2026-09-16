@@ -391,3 +391,28 @@ source keys, regardless of content equality. This adapter creates no baseline,
 head, identity or target. Its candidate is only a source/identity/coverage proof;
 classification must still validate mappings/native limits and freeze stable IDs,
 and execution must revalidate under its write locks and permit.
+
+### Persisted qualified history proposals
+
+The history unit preparer freezes authenticated source metadata/canonical HMAC,
+exact prior fact/head/version proof, operation counts and stable identity/fact IDs
+inside plan-scoped encrypted manifests. New identities use the first-coverage
+adapter; consumed or unproven identities never obtain a fabricated baseline.
+Original facts and native heads remain untouched during preparation.
+
+The plan lock serializes duplicate preparation; an existing manifest is replayed
+before observing mutable baseline state. An active admin/lease is required for
+replay as well as insertion. Manifest insertion, position/count changes and exact
+byte settlement commit together. Capacity failure or a failed checkpoint leaves
+no partial manifest, count or charge. Source diagnostics, out-of-cohort exclusions
+and held prerequisites still need dispatcher-owned settlement before plan sealing;
+this entry point alone cannot mark the complete family ready.
+
+Qualified new notes/tasks also have a pure initial-row proposal: it requires
+unconsumed identity/first-coverage inputs, validates unchanged native content
+limits and Organization role mappings, and preserves source timestamps and
+completion without assigning a native completer. A completed source task is an
+inserted initial state, not an additional native completion action. Revision zero
+in the proposal means no existing row; the initial row has revision one. Future
+write-proof construction must canonicalize proposed typed rows through PostgreSQL
+before digesting them, including PostgreSQL's timestamp representation.

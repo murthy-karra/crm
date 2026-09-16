@@ -20,4 +20,5 @@ pub mod core_source;
 mod preparation;
 
 mod first_coverage;
+pub mod history_plan;
 pub mod new_identity;

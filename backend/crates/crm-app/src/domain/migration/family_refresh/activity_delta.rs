@@ -52,6 +52,80 @@ pub struct Proposal {
     pub after: Value,
     pub counts: Counts,
 }
+/// Build an initial native row only after source/cohort/coverage discovery and
+/// global/native collision checks. Zero means no existing native revision;
+/// execution uses an INSERT permit and repeats those checks under its locks.
+pub fn propose_insert(
+    scope: Scope<'_>,
+    person: Uuid,
+    target: Uuid,
+    source: &Source,
+    members: &Members,
+    identity_consumed: bool,
+    first_coverage: bool,
+) -> Result<Proposal, Hold> {
+    match compare_native(None, None, &Value::Null, identity_consumed, first_coverage) {
+        Outcome::Insert => {}
+        Outcome::Held(h) => return Err(h),
+        _ => return Err(Hold::BaselineUnproven),
+    }
+    if source.updated < source.created {
+        return Err(Hold::UnsupportedSource);
+    }
+    let mut after = json!({
+        "id":target,"organization_id":scope.organization,"person_id":person,
+        "origin":"migration","source":"fub","source_external_id":scope.source_external_id,
+        "correlation_id":scope.correlation,"created_at":source.created,"updated_at":source.updated,
+        "deleted_at":null,"deleted_by_user_id":null,"revision":1
+    });
+    let kind = match &source.content {
+        Content::Note { body, author } => {
+            if !NoteBody::parse(body).is_ok_and(|v| v == *body) {
+                return Err(Hold::UnsupportedSource);
+            }
+            member(*author, &members.all)?;
+            after["body"] = json!(body);
+            after["author_user_id"] = json!(author);
+            Kind::Note
+        }
+        Content::Task {
+            title,
+            kind,
+            creator,
+            assignee,
+            due,
+            completed,
+        } => {
+            if !TaskTitle::parse(title).is_ok_and(|v| v == *title) {
+                return Err(Hold::UnsupportedSource);
+            }
+            member(*creator, &members.all)?;
+            member(*assignee, &members.active)?;
+            after["title"] = json!(title);
+            after["kind"] = json!(kind);
+            after["created_by_user_id"] = json!(creator);
+            after["assignee_user_id"] = json!(assignee);
+            after["due_at"] = json!(due);
+            after["completed_at"] = json!(completed);
+            after["completed_by_user_id"] = Value::Null;
+            Kind::Task
+        }
+    };
+    Ok(Proposal {
+        kind,
+        target,
+        person,
+        expected_revision: 0,
+        expected_head: None,
+        after,
+        counts: Counts {
+            units: 1,
+            inserts: 1,
+            ..Counts::default()
+        },
+    })
+}
+
 fn time(value: &Value) -> Result<Option<DateTime<Utc>>, Hold> {
     if value.is_null() {
         return Ok(None);
@@ -303,6 +377,90 @@ mod tests {
             m,
             true,
         )
+    }
+    #[test]
+    fn new_activity_preserves_fixed_ids_source_times_and_completion_attribution() {
+        for task in [false, true] {
+            let (org, b, _, mut source, members) = fixture(task);
+            if let Content::Task { completed, .. } = &mut source.content {
+                *completed = Some(date());
+            }
+            let p = propose_insert(
+                Scope {
+                    organization: org,
+                    source_external_id: "v1:17:1",
+                    correlation: b.result_id,
+                },
+                b.person_id,
+                b.target_id,
+                &source,
+                &members,
+                false,
+                true,
+            )
+            .unwrap();
+            assert_eq!(p.target, b.target_id);
+            assert_eq!(p.after["id"], json!(b.target_id));
+            assert_eq!(p.after["created_at"], json!(source.created));
+            assert_eq!(p.after["revision"], 1);
+            assert_eq!(p.expected_revision, 0);
+            assert!(p.expected_head.is_none());
+            assert_eq!(p.counts.inserts, 1);
+            assert!(p.counts.reconciles());
+            if task {
+                assert_eq!(p.after["completed_at"], json!(date()));
+                assert!(p.after["completed_by_user_id"].is_null());
+                assert_eq!(
+                    p.counts.task_completions, 0,
+                    "initial source state is not a native completion action"
+                );
+            }
+        }
+    }
+    #[test]
+    fn new_activity_needs_unconsumed_identity_and_valid_roles_and_content() {
+        let (org, b, _, mut source, members) = fixture(true);
+        let run = |source: &Source, consumed, coverage| {
+            propose_insert(
+                Scope {
+                    organization: org,
+                    source_external_id: "v1:17:1",
+                    correlation: b.result_id,
+                },
+                b.person_id,
+                b.target_id,
+                source,
+                &members,
+                consumed,
+                coverage,
+            )
+        };
+        assert!(matches!(
+            run(&source, true, true),
+            Err(Hold::BaselineUnproven)
+        ));
+        assert!(matches!(
+            run(&source, false, false),
+            Err(Hold::FirstCoverageRequired)
+        ));
+        if let Content::Task { assignee, .. } = &mut source.content {
+            *assignee = Some(Uuid::new_v4());
+        }
+        assert!(matches!(
+            run(&source, false, true),
+            Err(Hold::MappingRequired)
+        ));
+        if let Content::Task {
+            assignee, title, ..
+        } = &mut source.content
+        {
+            *assignee = None;
+            *title = "invalid\nmultiline".into();
+        }
+        assert!(matches!(
+            run(&source, false, true),
+            Err(Hold::UnsupportedSource)
+        ));
     }
     #[test]
     fn identical_source_does_not_write_merely_for_a_new_correlation_or_timestamp_format() {

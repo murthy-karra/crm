@@ -235,6 +235,28 @@ pub struct Counts {
     pub source_only: u64,
 }
 impl Counts {
+    /// Add one bounded unit without wrapping counts or losing wire precision.
+    pub fn checked_add(&self, other: &Self) -> Option<Self> {
+        macro_rules! sum {
+            ($($field:ident),+ $(,)?) => {
+                Some(Self { $($field: self.$field.checked_add(other.$field).filter(|v| *v <= i64::MAX as u64)?,)+ })
+            };
+        }
+        sum!(
+            units,
+            inserts,
+            updates,
+            already_current,
+            held,
+            excluded,
+            tag_removals,
+            field_clears,
+            task_completions,
+            task_reopens,
+            history_corrections,
+            source_only
+        )
+    }
     pub fn useful(&self) -> bool {
         self.inserts > 0
             || self.updates > 0
@@ -417,6 +439,36 @@ mod tests {
             compare_history(None, &new, p, true, false, true),
             HistoryChange::Held(Hold::TargetErased)
         );
+    }
+    #[test]
+    fn accumulating_counts_checks_every_action_and_wire_overflow() {
+        let a = Counts {
+            units: 1,
+            inserts: 1,
+            ..Counts::default()
+        };
+        let b = Counts {
+            units: 1,
+            history_corrections: 1,
+            ..Counts::default()
+        };
+        let sum = a.checked_add(&b).unwrap();
+        assert_eq!(sum.units, 2);
+        assert_eq!(sum.inserts, 1);
+        assert_eq!(sum.history_corrections, 1);
+        assert!(sum.reconciles());
+        assert!(Counts {
+            units: i64::MAX as u64,
+            ..Counts::default()
+        }
+        .checked_add(&a)
+        .is_none());
+        assert!(Counts {
+            source_only: u64::MAX,
+            ..Counts::default()
+        }
+        .checked_add(&a)
+        .is_none());
     }
     #[test]
     fn count_wire_contract_is_exact_and_strict() {

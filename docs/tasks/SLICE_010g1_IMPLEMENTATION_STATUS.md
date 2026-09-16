@@ -78,8 +78,8 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   display authentication/erasure and strictly newer capture ordering. Original/admitted
   first owners and successive typed correction heads have authenticated database
   evidence. Prior corrections now verify the exact cohort, terminal/frozen boundary,
-  immediate predecessor and encrypted source/display agreement. New-identity
-  first-coverage classification remains outstanding.
+  immediate predecessor and encrypted source/display agreement. Persisted new-identity
+  classification remains outstanding.
 - Core resolution independently checks each family's exhausted streams and the
   final authenticated cursor, including settled note-detail work. Shared indexing
   does not make an unfinished activity stream a metadata prerequisite.
@@ -94,6 +94,12 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   cannot make the same capture newly eligible, even with no applied refresh head.
   A genuinely newer capture can still use the unchanged older baseline. This
   reuses confirmed plans/cohorts; exact remainder execution remains unwired.
+- New-identity prerequisite discovery now combines authenticated complete-source
+  resolution with frozen/live Person checks, first-family successful-result and
+  capture boundaries, accepted scans, and global/native collision rejection.
+  Original and admitted/recovered cohorts use separate owner proofs. This is a
+  read-only candidate adapter; mapping/native validation, frozen target allocation
+  and persisted classification remain outstanding.
 - No refresh HTTP commands, family dispatcher or Web workflow are exposed yet.
 
 ## Evidence and isolation
@@ -267,6 +273,22 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   accepted_scan_survives --locked -- --ignored --test-threads=1`, then the freshly
   compiled `debug/deps/all-07593333edaca6c2 family_refresh --ignored
   --test-threads=1`; `cargo test -p crm-app --lib family_refresh --locked`.
+- New-identity prerequisites: all 24 serial family database regressions, 37
+  focused Rust tests and `crm-app --lib` Clippy with warnings denied passed.
+  Original and admitted activity/history fixtures qualify later new identities;
+  missing first coverage, late completion, existing identities, foreign scope,
+  legacy/canonical native source collisions and native tombstones are rejected.
+  Repeated discovery allocates no identity or head. The strengthened two-test
+  activity collision rerun also passed. A test-only attempt to clone a non-Clone
+  lease claim was corrected before the successful full run. Logs:
+  `/private/tmp/010g1-new-identity-family-db.log`,
+  `/private/tmp/010g1-new-identity-collision-db.log`,
+  `/private/tmp/010g1-new-identity-unit.log`, and
+  `/private/tmp/010g1-new-identity-clippy.log`.
+  Runners: `cargo test -p crm-api --features test-support --test all
+  family_refresh --locked -- --ignored --test-threads=1`, then the
+  `family_refresh_new_activity` filter; `cargo test -p crm-app --lib
+  family_refresh --locked`. No refresh executor or workflow completion claim.
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB
   `crm_010g1_schema_20260915`. Database tests run serially.

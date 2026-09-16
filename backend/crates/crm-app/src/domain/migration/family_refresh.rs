@@ -18,3 +18,6 @@ pub mod activity_baseline;
 pub mod core_resolution;
 pub mod core_source;
 mod preparation;
+
+mod first_coverage;
+pub mod new_identity;

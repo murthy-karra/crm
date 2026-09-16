@@ -954,6 +954,12 @@ async fn admitted_activity_retains_exact_initial_after_state(pool: PgPool) {
     .fetch_one(&pool)
     .await
     .unwrap();
+    let mut new_task = db_activity_source::task(22);
+    new_task["personId"] = json!(104);
+    f.reader.set_records(
+        crm_api::domain::migration::snapshot_source::Stream::TasksOpen,
+        vec![new_task],
+    );
     let claim = prepared_indexed_refresh(&pool, &f, parent).await;
     let bundle = claim.bundle;
     let cohort:Uuid=sqlx::query_scalar("SELECT id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND source_person_id='104'").bind(bundle).fetch_one(&pool).await.unwrap();
@@ -965,6 +971,7 @@ async fn admitted_activity_retains_exact_initial_after_state(pool: PgPool) {
             Discovery::Proven(_)
         ));
     }
+    assert_new_candidate(&f, &claim, cohort, Kind::Task, "22").await;
     let wrong:Uuid=sqlx::query_scalar("SELECT id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND source_person_id='101'").bind(bundle).fetch_one(&pool).await.unwrap();
     assert!(matches!(
         activity_baseline::discover(&f.pool, &f.key, &claim, wrong, Kind::Note, "11")
@@ -1752,6 +1759,7 @@ async fn history_baseline_authenticates_original_owner_and_body_only_corrections
         ),
         "new identities never get a fabricated baseline"
     );
+    assert_new_candidate(&f, &claim, cohort, Kind::Event, "50").await;
     assert!(history_baseline::discover(
         &f.pool,
         &f.key,
@@ -1796,7 +1804,7 @@ async fn history_baseline_authenticates_admitted_owner(pool: PgPool) {
     .await
     .unwrap();
     let book = capture::HistoryBook::new();
-    book.set_records(Stream::Events, vec![json!({"id":81,"personId":104,"type":"Inquiry","created":"2026-01-01T00:00:00Z","description":"NEW_PRIVATE_BODY"})]);
+    book.set_records(Stream::Events, vec![json!({"id":82,"personId":104,"type":"Inquiry"}),json!({"id":81,"personId":104,"type":"Inquiry","created":"2026-01-01T00:00:00Z","description":"NEW_PRIVATE_BODY"})]);
     let (newer, _) = capture::propose(&f, parent).await;
     capture::confirm(&f, newer).await;
     capture::drain(&f, &book).await;
@@ -1812,6 +1820,7 @@ async fn history_baseline_authenticates_admitted_owner(pool: PgPool) {
         assert!(i < 9);
     }
     let cohort:Uuid=sqlx::query_scalar("SELECT id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND source_person_id='104' AND admission_id=$2").bind(claim.bundle).bind(admission).fetch_one(&pool).await.unwrap();
+    assert_new_candidate(&f, &claim, cohort, Kind::Event, "82").await;
     let selected = match history_resolution::resolve(&f.pool, &f.key, &claim, Kind::Event, "81")
         .await
         .unwrap()
@@ -2307,4 +2316,177 @@ async fn accepted_scan_survives_zero_write_cancel_without_advancing_a_baseline(p
             Discovery::Proven(_)
         ));
     }
+}
+
+async fn assert_new_candidate(
+    f: &import_support::Fixture,
+    claim: &crm_api::domain::migration::family_refresh::cohort::Claim,
+    cohort: Uuid,
+    kind: crm_api::domain::migration::family_refresh::model::Kind,
+    source: &str,
+) {
+    use crm_api::domain::migration::family_refresh::new_identity::{self, Discovery};
+    for _ in 0..2 {
+        match new_identity::discover(&f.pool, &f.key, claim, cohort, kind, source)
+            .await
+            .unwrap()
+        {
+            Discovery::New(c) => {
+                let expected: Uuid = sqlx::query_scalar(
+                    "SELECT person_id FROM migration_family_refresh_cohort WHERE id=$1",
+                )
+                .bind(cohort)
+                .fetch_one(&f.pool)
+                .await
+                .unwrap();
+                assert_eq!(c.person, expected);
+                assert_eq!(c.kind, kind);
+                assert!(!c.source.is_nil());
+            }
+            Discovery::Held(h) => panic!("new identity held: {h:?}"),
+        }
+    }
+}
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn family_refresh_new_activity_requires_exact_first_coverage(pool: PgPool) {
+    use crm_api::domain::migration::{
+        family_refresh::{
+            model::{Hold, Kind},
+            new_identity::{self, Discovery},
+        },
+        snapshot_source::Stream,
+    };
+    let book = db_activity_source::book();
+    book.set_records(Stream::TasksOpen, vec![db_activity_source::task(21)]);
+    let f = import_support::fixture_with_book(&pool, book).await;
+    let parent = db_activity_source::completed_parent(&f).await;
+    let (child, ready) = db_activity_source::prepare(&f, parent).await;
+    let choices = db_activity_source::choices(&f, child).await;
+    let ready = db_activity_source::replan(&f, child, &ready, choices, None).await;
+    db_activity_source::confirm(&f, child, &ready).await;
+    f.reader.set_records(
+        Stream::TasksOpen,
+        vec![db_activity_source::task(21), db_activity_source::task(22)],
+    );
+    let claim = prepared_indexed_refresh(&pool, &f, parent).await;
+    let cohort: Uuid = sqlx::query_scalar("SELECT id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND source_person_id='101'").bind(claim.bundle).fetch_one(&pool).await.unwrap();
+    assert_new_candidate(&f, &claim, cohort, Kind::Task, "22").await;
+    assert!(matches!(
+        new_identity::discover(&f.pool, &f.key, &claim, cohort, Kind::Task, "21")
+            .await
+            .unwrap(),
+        Discovery::Held(Hold::BaselineUnproven)
+    ));
+    assert!(matches!(
+        new_identity::discover(&f.pool, &f.key, &claim, cohort, Kind::Task, "999")
+            .await
+            .unwrap(),
+        Discovery::Held(Hold::SourceNotObserved)
+    ));
+    let end: Option<chrono::DateTime<chrono::Utc>> =
+        sqlx::query_scalar("SELECT completed_at FROM migration_activity_import WHERE id=$1")
+            .bind(child)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    sqlx::query("UPDATE migration_activity_import SET completed_at=clock_timestamp()+interval '1 minute' WHERE id=$1").bind(child).execute(&pool).await.unwrap();
+    assert!(matches!(
+        new_identity::discover(&f.pool, &f.key, &claim, cohort, Kind::Task, "22")
+            .await
+            .unwrap(),
+        Discovery::Held(Hold::FirstCoverageRequired)
+    ));
+    sqlx::query("UPDATE migration_activity_import SET completed_at=$2 WHERE id=$1")
+        .bind(child)
+        .bind(end)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_new_candidate(&f, &claim, cohort, Kind::Task, "22").await;
+    let new_identities: i64 = sqlx::query_scalar("SELECT count(*) FROM migration_activity_identity WHERE organization_id=$1 AND source_id='22'").bind(f.org).fetch_one(&pool).await.unwrap();
+    assert_eq!(
+        new_identities, 0,
+        "read-only discovery never consumes an identity"
+    );
+    // A native row without registry ownership cannot be acquired by equality.
+    // Keep both legacy and account-scoped keys, including native tombstones.
+    let person: Uuid =
+        sqlx::query_scalar("SELECT person_id FROM migration_family_refresh_cohort WHERE id=$1")
+            .bind(cohort)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    for key in [
+        "22".to_owned(),
+        format!(
+            "v1:{}:22",
+            sqlx::query_scalar::<_, i64>(
+                "SELECT source_account_id FROM migration_family_refresh_bundle WHERE id=$1"
+            )
+            .bind(claim.bundle)
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+        ),
+    ] {
+        let id = Uuid::new_v4();
+        sqlx::query("INSERT INTO task(id,organization_id,person_id,title,kind,created_by_user_id,assignee_user_id,origin,correlation_id,source,source_external_id) VALUES($1,$2,$3,'Local task','call',$4,$4,'web_session',$5,'fub',$6)")
+            .bind(id).bind(f.org).bind(person).bind(f.actor).bind(Uuid::new_v4()).bind(key).execute(&pool).await.unwrap();
+        assert!(matches!(
+            new_identity::discover(&f.pool, &f.key, &claim, cohort, Kind::Task, "22")
+                .await
+                .unwrap(),
+            Discovery::Held(Hold::BaselineUnproven)
+        ));
+        sqlx::query("UPDATE task SET title='',deleted_at=clock_timestamp(),deleted_by_user_id=$2 WHERE id=$1").bind(id).bind(f.actor).execute(&pool).await.unwrap();
+        assert!(matches!(
+            new_identity::discover(&f.pool, &f.key, &claim, cohort, Kind::Task, "22")
+                .await
+                .unwrap(),
+            Discovery::Held(Hold::BaselineUnproven)
+        ));
+        sqlx::query("DELETE FROM task WHERE id=$1")
+            .bind(id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+}
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn family_refresh_new_activity_without_first_coverage_is_held(pool: PgPool) {
+    use crm_api::domain::migration::{
+        family_refresh::{
+            model::{Hold, Kind},
+            new_identity::{self, Discovery},
+        },
+        snapshot_source::Stream,
+    };
+    let book = db_activity_source::book();
+    book.set_records(Stream::TasksOpen, vec![db_activity_source::task(22)]);
+    let f = import_support::fixture_with_book(&pool, book).await;
+    let parent = db_activity_source::completed_parent(&f).await;
+    let claim = prepared_indexed_refresh(&pool, &f, parent).await;
+    let cohort: Uuid = sqlx::query_scalar("SELECT id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND source_person_id='101'").bind(claim.bundle).fetch_one(&pool).await.unwrap();
+    assert!(matches!(
+        new_identity::discover(&f.pool, &f.key, &claim, cohort, Kind::Task, "22")
+            .await
+            .unwrap(),
+        Discovery::Held(Hold::FirstCoverageRequired)
+    ));
+    assert!(
+        new_identity::discover(&f.pool, &f.key, &claim, Uuid::new_v4(), Kind::Task, "22")
+            .await
+            .is_err()
+    );
+    let mut foreign = claim;
+    foreign.organization = crm_api::ids::OrganizationId::new(Uuid::new_v4());
+    assert!(
+        new_identity::discover(&f.pool, &f.key, &foreign, cohort, Kind::Task, "22")
+            .await
+            .is_err()
+    );
 }

@@ -373,3 +373,21 @@ plan and cohort indexes, returns at most one violating boundary, and never
 selects a winning source variant by timestamp. First-coverage and source-record
 qualification remain separate. Exact remainders must copy their fixed manifests;
 they do not obtain same-capture permission by rerunning fresh discovery.
+
+### New identity prerequisite discovery
+
+A separate read-only adapter resolves every retained source occurrence before
+qualifying new note/task/event/call/text identities. It checks the exact frozen
+Person and live original/admission identity, prior accepted refresh scans and
+terminal first-family roots before the bundle boundary. A successful first-family
+result must belong to that Person/cohort; held-only or missing coverage remains
+`first_coverage_required`. Original and admitted/recovered owner shapes stay
+separate. Every confirmed first-family capture must precede the new capture.
+A fixed-size SQL aggregate checks the lineage without returning all roots.
+
+Existing global identities, including tombstones, cannot become new. Activity
+also rejects native collisions under both canonical account-scoped and legacy
+source keys, regardless of content equality. This adapter creates no baseline,
+head, identity or target. Its candidate is only a source/identity/coverage proof;
+classification must still validate mappings/native limits and freeze stable IDs,
+and execution must revalidate under its write locks and permit.

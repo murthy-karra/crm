@@ -48,3 +48,5 @@ pub mod activity_mapping;
 pub mod activity_plan;
 
 pub mod activity_walk;
+
+pub mod activity_missing;

@@ -171,7 +171,11 @@ pub async fn run_once(
                         Prepared::Held(h) => h,
                     }
                 } else {
-                    excluded = true;
+                    // A moved source Person cannot turn a previously owned
+                    // in-cohort identity into an ordinary exclusion.
+                    let (mut tx, _, _) = preparation::begin(pool, claim).await?;
+                    let owned:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM crm_family_refresh_owned_activity($1,$2) WHERE kind=$3 AND source_id=$4)").bind(claim.organization.0).bind(claim.bundle).bind(row.get::<String,_>("kind")).bind(source).fetch_one(&mut *tx).await?;
+                    excluded = !owned;
                     Hold::IdentityMismatch
                 }
             }

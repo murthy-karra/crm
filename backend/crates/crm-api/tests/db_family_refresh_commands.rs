@@ -217,7 +217,7 @@ async fn family_refresh_prepare_combined_is_atomic_metered_and_replay_safe(pool:
             if walked { "classify" } else { "mappings" }
         );
         assert_eq!(plan.get::<bool, _>("source_walk_complete"), walked);
-        assert_eq!(plan.get::<bool, _>("owned_walk_complete"), history);
+        assert_eq!(plan.get::<bool, _>("owned_walk_complete"), walked);
         assert_eq!(plan.get::<bool, _>("mappings_complete"), !history);
         assert!(plan.get::<Option<Uuid>, _>("lease_token").is_none());
         assert_eq!(
@@ -1958,4 +1958,226 @@ async fn family_refresh_activity_proposals_are_atomic_stable_and_do_not_write_na
         "preparing",
         "source exhaustion alone does not seal a ready plan"
     );
+}
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn family_refresh_missing_activity_holds_absence_and_preserves_owned_person_scope(
+    pool: PgPool,
+) {
+    use crm_api::domain::migration::{
+        family_refresh::{
+            activity_missing::{self, MissingProposal},
+            activity_walk::Progress as WalkProgress,
+            cohort::Claim,
+            model::{Counts, Hold},
+        },
+        snapshot_source::Stream,
+    };
+    let book = db_activity_source::book();
+    book.set_records(
+        Stream::TasksOpen,
+        vec![db_activity_source::task(21), db_activity_source::task(22)],
+    );
+    let f = import_support::fixture_with_book(&pool, book).await;
+    let parent = db_activity_source::completed_parent(&f).await;
+    let (first, ready) = db_activity_source::prepare(&f, parent).await;
+    let choices = db_activity_source::choices(&f, first).await;
+    let ready = db_activity_source::replan(&f, first, &ready, choices, None).await;
+    db_activity_source::confirm(&f, first, &ready).await;
+    let before: serde_json::Value = sqlx::query_scalar(
+        "SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM task t WHERE organization_id=$1",
+    )
+    .bind(f.org)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let mut moved = db_activity_source::task(21);
+    moved["personId"] = json!(999);
+    let mut outside = db_activity_source::task(30);
+    outside["personId"] = json!(999);
+    f.reader
+        .set_records(Stream::TasksOpen, vec![moved, outside]);
+    let report = admission::report(
+        &f,
+        parent,
+        vec![
+            json!({"id":101,"firstName":"Synthetic","stage":"Lead","assignedUserId":3}),
+            json!({"id":999,"firstName":"Outside"}),
+        ],
+    )
+    .await;
+    let draft = commands::prepare(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &f.ctx,
+        PrepareFamilyRefresh {
+            request_id: Uuid::new_v4(),
+            parent_import_id: parent,
+            core_report_id: Some(report),
+            history_capture_id: None,
+            families: vec![Family::Activity],
+        },
+    )
+    .await
+    .unwrap();
+    let plan = draft.families[0].plan_id;
+    for step in 0..40 {
+        worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap();
+        if sqlx::query_scalar::<_, bool>(
+            "SELECT source_walk_complete FROM migration_family_refresh_plan WHERE id=$1",
+        )
+        .bind(plan)
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+        {
+            break;
+        }
+        assert!(step < 39);
+    }
+    assert_eq!(sqlx::query_scalar::<_,String>("SELECT m.reason FROM migration_family_refresh_manifest m JOIN migration_family_refresh_source s ON s.id=m.source_row_id WHERE m.plan_id=$1 AND s.source_id='21'").bind(plan).fetch_one(&pool).await.unwrap(),"identity_mismatch","a moved owned identity must not become an ordinary exclusion");
+    assert_eq!(sqlx::query_scalar::<_,String>("SELECT m.disposition FROM migration_family_refresh_manifest m JOIN migration_family_refresh_source s ON s.id=m.source_row_id WHERE m.plan_id=$1 AND s.source_id='30'").bind(plan).fetch_one(&pool).await.unwrap(),"excluded");
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM crm_family_refresh_owned_activity($1,$2)"
+        )
+        .bind(Uuid::new_v4())
+        .bind(draft.bundle_id)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap(),
+        0
+    );
+    let token = Uuid::new_v4();
+    let mut tx = f.pool.begin().await.unwrap();
+    sqlx::query("SELECT set_config('crm.family_refresh_reader','fub-family-refresh-v1',true)")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let epoch:i64=sqlx::query_scalar("UPDATE migration_family_refresh_plan SET lease_token=$3,lease_epoch=lease_epoch+1,lease_expires_at=clock_timestamp()+interval '60 seconds' WHERE id=$1 AND organization_id=$2 RETURNING lease_epoch").bind(plan).bind(f.org).bind(token).fetch_one(&mut *tx).await.unwrap();
+    tx.commit().await.unwrap();
+    let claim = Claim {
+        organization: f.ctx.organization_id,
+        bundle: draft.bundle_id,
+        plan,
+        token,
+        epoch,
+    };
+    for statement in ["UPDATE migration_family_refresh_plan SET owned_walk_complete=true WHERE id=$1","UPDATE migration_family_refresh_plan SET owned_activity_kind='task',owned_activity_source_id='22' WHERE id=$1","UPDATE migration_family_refresh_plan SET owned_after=gen_random_uuid() WHERE id=$1"] {
+        let mut tx=f.pool.begin().await.unwrap();sqlx::query("SELECT set_config('crm.family_refresh_reader','fub-family-refresh-v1',true),set_config('crm.family_refresh_lease',$1,true)").bind(token.to_string()).execute(&mut *tx).await.unwrap();
+        assert!(sqlx::query(statement).bind(plan).execute(&mut *tx).await.is_err());tx.rollback().await.unwrap();
+    }
+    let mut tiny = f.policy.clone();
+    tiny.org_ceiling_bytes = 1;
+    assert_eq!(
+        activity_missing::run_once(&f.pool, &f.key, &tiny, &claim)
+            .await
+            .unwrap(),
+        WalkProgress::Capacity,
+        "an observed unit's variable cursor still requires admission"
+    );
+    assert_eq!(
+        activity_missing::run_once(&f.pool, &f.key, &f.policy, &claim)
+            .await
+            .unwrap(),
+        WalkProgress::Advanced
+    );
+    let checkpoint:serde_json::Value=sqlx::query_scalar("SELECT jsonb_build_object('kind',owned_activity_kind,'source',owned_activity_source_id,'count',counts,'measured',measured_bytes,'retained',retained_bytes,'reserved',reserved_bytes) FROM migration_family_refresh_plan WHERE id=$1").bind(plan).fetch_one(&pool).await.unwrap();
+    assert_eq!(checkpoint["source"], "21");
+    assert_eq!(
+        activity_missing::run_once(&f.pool, &f.key, &tiny, &claim)
+            .await
+            .unwrap(),
+        WalkProgress::Capacity
+    );
+    sqlx::raw_sql("CREATE FUNCTION test_missing_activity_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.owned_activity_source_id IS DISTINCT FROM OLD.owned_activity_source_id THEN RAISE EXCEPTION 'synthetic missing activity fault'; END IF; RETURN NEW; END $$; CREATE TRIGGER test_missing_activity_fault BEFORE UPDATE ON migration_family_refresh_plan FOR EACH ROW EXECUTE FUNCTION test_missing_activity_fault()").execute(&pool).await.unwrap();
+    assert!(
+        activity_missing::run_once(&f.pool, &f.key, &f.policy, &claim)
+            .await
+            .is_err()
+    );
+    sqlx::raw_sql("DROP TRIGGER test_missing_activity_fault ON migration_family_refresh_plan; DROP FUNCTION test_missing_activity_fault()").execute(&pool).await.unwrap();
+    let after_fault:serde_json::Value=sqlx::query_scalar("SELECT jsonb_build_object('kind',owned_activity_kind,'source',owned_activity_source_id,'count',counts,'measured',measured_bytes,'retained',retained_bytes,'reserved',reserved_bytes) FROM migration_family_refresh_plan WHERE id=$1").bind(plan).fetch_one(&pool).await.unwrap();
+    assert_eq!(checkpoint, after_fault);
+    assert_eq!(
+        activity_missing::run_once(&f.pool, &f.key, &f.policy, &claim)
+            .await
+            .unwrap(),
+        WalkProgress::Advanced
+    );
+    let row = sqlx::query(
+        "SELECT * FROM migration_family_refresh_manifest WHERE plan_id=$1 AND source_id='22'",
+    )
+    .bind(plan)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let scope = Scope {
+        organization: f.ctx.organization_id,
+        bundle: claim.bundle,
+        plan,
+        family: Family::Activity,
+        revision: 1,
+    };
+    let data: MissingProposal = scope
+        .open(
+            &f.key,
+            row.get("id"),
+            Purpose::Manifest,
+            row.get("nonce"),
+            row.get("ciphertext"),
+        )
+        .unwrap();
+    assert!(data.source_not_observed);
+    assert_eq!(data.source_id, "22");
+    assert_eq!(data.reason, Hold::SourceNotObserved);
+    assert!(data.baseline.is_some());
+    assert!(row.get::<Option<Uuid>, _>("target_id").is_none());
+    assert!(row.get::<Option<Uuid>, _>("source_row_id").is_none());
+    assert_eq!(
+        activity_missing::run_once(&f.pool, &f.key, &f.policy, &claim)
+            .await
+            .unwrap(),
+        WalkProgress::Finished
+    );
+    assert_eq!(
+        activity_missing::run_once(&f.pool, &f.key, &tiny, &claim)
+            .await
+            .unwrap(),
+        WalkProgress::Finished
+    );
+    let p=sqlx::query("SELECT counts,measured_bytes,retained_bytes FROM migration_family_refresh_plan WHERE id=$1").bind(plan).fetch_one(&pool).await.unwrap();
+    let counts: Counts = serde_json::from_value(p.get("counts")).unwrap();
+    assert_eq!((counts.units, counts.held, counts.excluded), (3, 2, 1));
+    assert_eq!(
+        p.get::<i64, _>("measured_bytes"),
+        p.get::<i64, _>("retained_bytes")
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, serde_json::Value>(
+            "SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM task t WHERE organization_id=$1"
+        )
+        .bind(f.org)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        before
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_family_refresh_head WHERE organization_id=$1"
+        )
+        .bind(f.org)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        0
+    );
+    sqlx::raw_sql(include_str!("fixtures/family_refresh_byte_inventory.sql"))
+        .execute(&pool)
+        .await
+        .unwrap();
+    worker::release(&f.pool, &claim).await.unwrap();
 }

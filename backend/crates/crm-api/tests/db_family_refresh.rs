@@ -975,6 +975,22 @@ async fn admitted_activity_retains_exact_initial_after_state(pool: PgPool) {
     let claim = prepared_indexed_refresh(&pool, &f, parent).await;
     let bundle = claim.bundle;
     let cohort:Uuid=sqlx::query_scalar("SELECT id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND source_person_id='104'").bind(bundle).fetch_one(&pool).await.unwrap();
+    let owners = sqlx::query(
+        "SELECT * FROM crm_family_refresh_owned_activity($1,$2) ORDER BY kind,source_id",
+    )
+    .bind(f.org)
+    .bind(bundle)
+    .fetch_all(&f.pool)
+    .await
+    .unwrap();
+    assert_eq!(owners.len(), 2);
+    assert!(owners
+        .iter()
+        .all(|r| r.get::<Uuid, _>("cohort_id") == cohort));
+    assert_eq!(owners[0].get::<String, _>("kind"), "note");
+    assert_eq!(owners[0].get::<String, _>("source_id"), "11");
+    assert_eq!(owners[1].get::<String, _>("kind"), "task");
+    assert_eq!(owners[1].get::<String, _>("source_id"), "21");
     for (kind, source) in [(Kind::Note, "11"), (Kind::Task, "21")] {
         assert!(matches!(
             activity_baseline::discover(&f.pool, &f.key, &claim, cohort, kind, source)

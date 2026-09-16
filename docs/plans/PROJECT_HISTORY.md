@@ -2171,3 +2171,95 @@ checkpoints; the combined family refresh feature remained unfinished.
   caused an initial test failure. Logs: `/private/tmp/010g1-walk-final-family-db.log`,
   `/private/tmp/010g1-walk-unit.log`, `/private/tmp/010g1-walk-revision-clippy.log`.
   Runners match the preceding milestone; source exhaustion does not seal readiness.
+
+
+## 010g1 mapping and activity preparation checkpoints — 2026-09-16
+
+Verified milestones through activity traversal at `aaccd81` on
+`codex/010g1-family-refresh`; no merge, push or deployment. These checkpoints
+are preparation evidence, not complete 010g1 execution readiness.
+
+- Missing-history classification: all 31 serial family database regressions,
+  API-library Clippy with warnings denied, formatting and diff checks passed.
+  The empty-capture scenario verifies scoped original ownership, encrypted
+  source-not-observed holds, unchanged native identities/heads, capacity and
+  injected-failure rollback, forbidden cursor skips and premature completion.
+  Admitted ownership and observed-identity reuse are also covered. Logs:
+  `/private/tmp/010g1-missing-family-db.log`, `/private/tmp/010g1-missing-clippy.log`.
+  Runner: serial `all family_refresh`; Clippy as above. The pure comparison
+  policies were unchanged; their 40-test evidence remains the source-walk run.
+- Bundle/family summaries and cursor revision binding: all 32 serial family
+  database regressions, API-library Clippy with warnings denied, formatting and
+  diff checks passed. Coverage includes three-family ordering, zero-count wire
+  precision, stable list pagination as new bundles appear, size/tamper/actor/
+  tenant rejection, revoked membership, detached workspace and workspace-revision
+  cursor invalidation. Summary projections fetch no encrypted evidence bodies.
+  Initial compilation caught an unavailable hex helper; the implementation now
+  reuses the existing import encoder without a new dependency. Logs:
+  `/private/tmp/010g1-summaries-family-db.log`,
+  `/private/tmp/010g1-summaries-final-clippy.log`. Runners match the prior milestone.
+- Bounded mapping inventory: the full family run passed 32 of 33 tests; its
+  remaining legacy accounting probe used an unfenced synthetic insert. That
+  fixture now supplies a valid preparation lease/phase and still verifies that
+  unsettled evidence cannot commit; its focused rerun passed. The new inventory
+  test covers a 70-option field across the 50-element boundary, folded tag aliases,
+  note-detail-only authors, repeated task roles, unsupported-record isolation,
+  source reuse across families, capacity/fault rollback and completion guards.
+  API-library Clippy with warnings denied, formatting and diff checks passed.
+  Logs: `/private/tmp/010g1-mapping-family-db.log`,
+  `/private/tmp/010g1-mapping-accounting-db.log`, `/private/tmp/010g1-mapping-clippy.log`.
+  Runners: serial `all family_refresh`, then the corrected accounting test only;
+  Clippy as above. This is preparation evidence, not native execution readiness.
+- Mapping review: the expanded inventory/review database scenario passed on the
+  final tree, including an explicit check that migration 013's index is installed.
+  It pages all 70 options without repeats, rejects altered filter/size/actor/
+  workspace cursors, denies foreign Organizations and revoked readers, fails
+  closed on wrong encryption keys, and invalidates partial-inventory cursors after
+  progress. API-library Clippy with warnings denied, formatting and diff checks
+  passed. Logs: `/private/tmp/010g1-mapping-read-index-db.log`,
+  `/private/tmp/010g1-mapping-read-clippy.log`. Database runner: serial
+  `all family_refresh_mapping_inventory`; preceding family evidence is retained above.
+- Typed mapping revisions: 41 family unit tests and API-library Clippy with
+  warnings denied passed. The full serial family database run passed 33 of 34;
+  the remaining admitted-history fixture incorrectly assumed its first UUID-
+  ordered identity was always an event. It now checks the selected identity's
+  actual family/person/HMAC, and its focused rerun passed. The new Plan scenario
+  verifies immutable old choices, stable proposed IDs through inheritance,
+  shared-source reuse, exact settlement, capacity/injected-failure rollback,
+  replay/stale-revision/tenant rejection, field-option binding, inactive-assignee
+  rejection and timezone inheritance/clearing. Its initial activity assertion
+  exposed missing fixture captures; the completed scenario passed both focused
+  and full runs. Formatting and diff checks passed. Logs:
+  `/private/tmp/010g1-plan-family-db.log`,
+  `/private/tmp/010g1-plan-admitted-fix-db.log`,
+  `/private/tmp/010g1-plan-db-final.log`, `/private/tmp/010g1-plan-unit.log`,
+  `/private/tmp/010g1-plan-clippy.log`. Runners: serial `all family_refresh`,
+  corrected admitted-owner test only, `crm-app --lib family_refresh`, and the
+  established Clippy command. Native conversion/execution remain unverified work.
+- Activity conversion: the expanded typed-plan database scenario and final
+  API-library Clippy passed, along with formatting/diff checks. It verifies detail
+  content instead of list fallback, explicit task-kind/role mapping, date-only
+  conversion in the selected zone, timezone clearing and source-user conflict,
+  changed destination snapshots, foreign Organizations and released leases.
+  Initial test-helper compilation errors were corrected before the passing run.
+  Logs: `/private/tmp/010g1-activity-mapping-conflict-final-db.log` and
+  `/private/tmp/010g1-activity-mapping-final-clippy.log`. Runner: serial
+  `all family_refresh_plan_choices`; preceding regression evidence remains above.
+- Activity-unit persistence: the new serial database scenario and API-library
+  Clippy passed, with formatting/diff checks. It verifies an imported task update,
+  new-task prospective ID, inactive-assignee hold, exact encrypted/relational
+  counts, capacity/injected-failure rollback and replay after mapping revocation.
+  Native task snapshots and refresh heads remain unchanged. Initial Clippy enum
+  size findings were resolved with boxed evidence before the passing run. Logs:
+  `/private/tmp/010g1-activity-plan-db.log` and
+  `/private/tmp/010g1-activity-plan-final-clippy.log`. Runner: serial
+  `all family_refresh_activity_proposals`; this new adapter is not dispatched yet.
+- Activity traversal: all 35 serial family database regressions and API-library
+  Clippy passed, plus formatting/diff checks. Coverage includes complete-group
+  conflicts before cohort filtering, exclusions, note list/detail identity reuse,
+  failed cursor/count/charge rollback, forbidden cursor skips and premature
+  completion, and replay of already-frozen unit outcomes. The initial command
+  run passed 8/9; the remaining old phase expectation was updated from mappings
+  to classify for activity, then the full family run passed. Logs:
+  `/private/tmp/010g1-activity-walk-family-db.log` and
+  `/private/tmp/010g1-activity-walk-clippy.log`. Runner: serial `all family_refresh`.

@@ -7,8 +7,8 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 - Branch `codex/010g1-family-refresh`, base `dd140b0`; one primary writer and the
   previously authorized single reviewer. Planning review READY, round 1.
-- Current milestone: bounded activity source traversal following persisted
-  activity proposals at **`b2cd149`** and mapping conversion at **`4690233`**.
+- Current milestone: missing-activity ownership traversal following source
+  traversal at **`aaccd81`** and persisted proposals at **`b2cd149`**.
   The combined feature is unfinished. No merge/push/deploy.
 - Foundation: comparison policies, source ordering, bounded encrypted evidence,
   exact decimal counts, draft persistence ownership and native/lease guards.
@@ -43,7 +43,7 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 - Core capture indexing now retains authenticated page/cursor evidence and every
   source occurrence before Person filtering, with scoped raw references, lease
   fences and atomic accounting/checkpoints. It reuses the existing metadata and
-  activity parsers and performs no source calls. Persisted core classification remains unwired. The immutable core index now resolves across
+  activity parsers and performs no source calls. Metadata/catalog classification remains pending; activity dispatch is wired below. The immutable core index now resolves across
   family/mapping plans without recopying or reencrypting evidence.
 - New positively applied original/admitted activity results retain exact encrypted
   native after-state/revision. A first-result discovery adapter checks frozen
@@ -96,8 +96,8 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   resolution with frozen/live Person checks, first-family successful-result and
   capture boundaries, accepted scans, and global/native collision rejection.
   Original and admitted/recovered cohorts use separate owner proofs. This is a
-  read-only candidate adapter; metadata/activity mapping conversion and persisted
-  classification remain outstanding. History proposals freeze prospective IDs.
+  read-only candidate adapter; metadata/catalog conversion and classification remain outstanding; activity
+  proposals now persist and traverse as described below. History proposals freeze prospective IDs.
 - Qualified history units can now persist encrypted addition/current/correction
   proposals, including exact prior-version evidence and stable prospective IDs.
   Replay keeps IDs/counts/charges unchanged; manifest, count/position and byte
@@ -110,7 +110,7 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   later become eligible.
 - Native activity planning also builds initial note/task rows for qualified new
   identities, with content/role validation and source completion attribution.
-  Retained mapping conversion, persisted activity units and execution remain.
+  Retained mapping conversion and persisted units are wired below; execution remains.
 - Typed bundle preparation now validates retained selections, freezes encrypted
   bindings and plan IDs, meters admission/cancellation capacity and records an
   authorized replay receipt atomically. History-only indexing no longer treats
@@ -122,7 +122,7 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   successor; capacity and integrity failures pause with metered control capacity.
   The existing one-second scheduler gives this adapter a finite turn without a
   new polling loop. It now drives observed and missing history classification plus core mapping
-  inventory. Core classification, execution, revoked-executor pause/resume and release-readiness
+  inventory. Metadata/catalog classification, execution, revoked-executor pause/resume and release-readiness
   integration remain.
 - Item-summary reads now use scoped keyset pages with an immutable upper bound,
   25/default and 50/max rows, decimal counters, 4 KiB summary and 512 KiB response
@@ -162,7 +162,7 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   patches; inventory inherits untouched choices and stable prospective IDs over
   the same shared sources. Existing destinations are scoped snapshots, option
   targets bind the effective field, and inactive assignees are rejected. Activity
-  timezone omission inherits; explicit null clears. Native conversion and
+  timezone omission inherits; explicit null clears. Metadata conversion and
   classification remain pending; mapping intent creates no native rows.
 - Activity conversion now resolves complete source groups before applying the
   current plan's authenticated mappings. It reuses original note HTML/content and
@@ -179,8 +179,15 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   duplicate identity reuse, full conflict resolution before cohort filtering,
   encrypted diagnostics and explicit exclusions. Migration 015 fences live
   leases, no-skip cursors, required outcomes and source exhaustion. Unit outcome,
-  cursor and charges commit together. Absent-owned classification and complete-
-  plan sealing remain pending; source exhaustion remains preparation.
+  cursor and charges commit together. A second pass now walks exact original/
+  admitted activity owners within the frozen cohort. It reuses observed outcomes
+  and persists encrypted missing-source holds with authenticated baseline evidence
+  when available. Migration 016 fences the composite identity cursor, charges its
+  variable-width state, and checks missing-source absence and owner scope. A moved
+  owned source ID remains an identity-mismatch hold even when its new Person is
+  outside the cohort. Native rows and heads do not change. Refresh-owned initial
+  identities must extend this selector when their owner shape lands. Complete-
+  plan sealing remains pending; exhausted preparation is not confirmation.
 - No refresh HTTP commands or Web workflow are exposed yet.
 
 ## Evidence and isolation
@@ -192,90 +199,17 @@ is archived in [Project history](../plans/PROJECT_HISTORY.md#010g1-foundation-an
 Earlier dispatcher, item-summary, qualified-hold and source-walk verification is
 archived in [Project history](../plans/PROJECT_HISTORY.md#010g1-preparation-and-source-classification-checkpoints--2026-09-16).
 
-- Missing-history classification: all 31 serial family database regressions,
-  API-library Clippy with warnings denied, formatting and diff checks passed.
-  The empty-capture scenario verifies scoped original ownership, encrypted
-  source-not-observed holds, unchanged native identities/heads, capacity and
-  injected-failure rollback, forbidden cursor skips and premature completion.
-  Admitted ownership and observed-identity reuse are also covered. Logs:
-  `/private/tmp/010g1-missing-family-db.log`, `/private/tmp/010g1-missing-clippy.log`.
-  Runner: serial `all family_refresh`; Clippy as above. The pure comparison
-  policies were unchanged; their 40-test evidence remains the source-walk run.
-- Bundle/family summaries and cursor revision binding: all 32 serial family
-  database regressions, API-library Clippy with warnings denied, formatting and
-  diff checks passed. Coverage includes three-family ordering, zero-count wire
-  precision, stable list pagination as new bundles appear, size/tamper/actor/
-  tenant rejection, revoked membership, detached workspace and workspace-revision
-  cursor invalidation. Summary projections fetch no encrypted evidence bodies.
-  Initial compilation caught an unavailable hex helper; the implementation now
-  reuses the existing import encoder without a new dependency. Logs:
-  `/private/tmp/010g1-summaries-family-db.log`,
-  `/private/tmp/010g1-summaries-final-clippy.log`. Runners match the prior milestone.
-- Bounded mapping inventory: the full family run passed 32 of 33 tests; its
-  remaining legacy accounting probe used an unfenced synthetic insert. That
-  fixture now supplies a valid preparation lease/phase and still verifies that
-  unsettled evidence cannot commit; its focused rerun passed. The new inventory
-  test covers a 70-option field across the 50-element boundary, folded tag aliases,
-  note-detail-only authors, repeated task roles, unsupported-record isolation,
-  source reuse across families, capacity/fault rollback and completion guards.
-  API-library Clippy with warnings denied, formatting and diff checks passed.
-  Logs: `/private/tmp/010g1-mapping-family-db.log`,
-  `/private/tmp/010g1-mapping-accounting-db.log`, `/private/tmp/010g1-mapping-clippy.log`.
-  Runners: serial `all family_refresh`, then the corrected accounting test only;
-  Clippy as above. This is preparation evidence, not native execution readiness.
-- Mapping review: the expanded inventory/review database scenario passed on the
-  final tree, including an explicit check that migration 013's index is installed.
-  It pages all 70 options without repeats, rejects altered filter/size/actor/
-  workspace cursors, denies foreign Organizations and revoked readers, fails
-  closed on wrong encryption keys, and invalidates partial-inventory cursors after
-  progress. API-library Clippy with warnings denied, formatting and diff checks
-  passed. Logs: `/private/tmp/010g1-mapping-read-index-db.log`,
-  `/private/tmp/010g1-mapping-read-clippy.log`. Database runner: serial
-  `all family_refresh_mapping_inventory`; preceding family evidence is retained above.
-- Typed mapping revisions: 41 family unit tests and API-library Clippy with
-  warnings denied passed. The full serial family database run passed 33 of 34;
-  the remaining admitted-history fixture incorrectly assumed its first UUID-
-  ordered identity was always an event. It now checks the selected identity's
-  actual family/person/HMAC, and its focused rerun passed. The new Plan scenario
-  verifies immutable old choices, stable proposed IDs through inheritance,
-  shared-source reuse, exact settlement, capacity/injected-failure rollback,
-  replay/stale-revision/tenant rejection, field-option binding, inactive-assignee
-  rejection and timezone inheritance/clearing. Its initial activity assertion
-  exposed missing fixture captures; the completed scenario passed both focused
-  and full runs. Formatting and diff checks passed. Logs:
-  `/private/tmp/010g1-plan-family-db.log`,
-  `/private/tmp/010g1-plan-admitted-fix-db.log`,
-  `/private/tmp/010g1-plan-db-final.log`, `/private/tmp/010g1-plan-unit.log`,
-  `/private/tmp/010g1-plan-clippy.log`. Runners: serial `all family_refresh`,
-  corrected admitted-owner test only, `crm-app --lib family_refresh`, and the
-  established Clippy command. Native conversion/execution remain unverified work.
-- Activity conversion: the expanded typed-plan database scenario and final
-  API-library Clippy passed, along with formatting/diff checks. It verifies detail
-  content instead of list fallback, explicit task-kind/role mapping, date-only
-  conversion in the selected zone, timezone clearing and source-user conflict,
-  changed destination snapshots, foreign Organizations and released leases.
-  Initial test-helper compilation errors were corrected before the passing run.
-  Logs: `/private/tmp/010g1-activity-mapping-conflict-final-db.log` and
-  `/private/tmp/010g1-activity-mapping-final-clippy.log`. Runner: serial
-  `all family_refresh_plan_choices`; preceding regression evidence remains above.
-- Activity-unit persistence: the new serial database scenario and API-library
-  Clippy passed, with formatting/diff checks. It verifies an imported task update,
-  new-task prospective ID, inactive-assignee hold, exact encrypted/relational
-  counts, capacity/injected-failure rollback and replay after mapping revocation.
-  Native task snapshots and refresh heads remain unchanged. Initial Clippy enum
-  size findings were resolved with boxed evidence before the passing run. Logs:
-  `/private/tmp/010g1-activity-plan-db.log` and
-  `/private/tmp/010g1-activity-plan-final-clippy.log`. Runner: serial
-  `all family_refresh_activity_proposals`; this new adapter is not dispatched yet.
-- Activity traversal: all 35 serial family database regressions and API-library
-  Clippy passed, plus formatting/diff checks. Coverage includes complete-group
-  conflicts before cohort filtering, exclusions, note list/detail identity reuse,
-  failed cursor/count/charge rollback, forbidden cursor skips and premature
-  completion, and replay of already-frozen unit outcomes. The initial command
-  run passed 8/9; the remaining old phase expectation was updated from mappings
-  to classify for activity, then the full family run passed. Logs:
-  `/private/tmp/010g1-activity-walk-family-db.log` and
-  `/private/tmp/010g1-activity-walk-clippy.log`. Runner: serial `all family_refresh`.
+Mapping, bounded review, typed Plan, activity conversion/proposals and source
+traversal evidence through `aaccd81` is archived in
+[Project history](../plans/PROJECT_HISTORY.md#010g1-mapping-and-activity-preparation-checkpoints--2026-09-16).
+
+- Missing-activity ownership traversal: all **36** family-refresh database tests
+  passed serially (`/private/tmp/010g1-activity-missing-family-db.log`). Focused
+  absence, moved-Person, original/admitted owner scope, capacity rollback, lease
+  fencing, replay and byte-inventory checks passed
+  (`/private/tmp/010g1-activity-missing-db.log`). Library Clippy passed with
+  warnings denied (`/private/tmp/010g1-activity-missing-clippy.log`).
+
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB
   `crm_010g1_schema_20260915`. Database tests run serially.

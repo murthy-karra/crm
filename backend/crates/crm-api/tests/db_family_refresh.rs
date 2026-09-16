@@ -310,7 +310,19 @@ async fn shared_evidence_is_charged_once_and_reservations_roll_back(pool: PgPool
     crm_api::auth::workspace::shared(&mut app_tx, crm_api::ids::OrganizationId::new(f.org))
         .await
         .unwrap();
-    sqlx::query("INSERT INTO migration_family_refresh_mapping(id,bundle_id,plan_id,organization_id,kind,source_key_hmac,disposition,nonce,ciphertext) VALUES($1,$2,$3,$4,'note_author',decode(repeat('00',32),'hex'),'hold',decode(repeat('00',24),'hex'),decode(repeat('00',16),'hex'))")
+    // The accounting probe must first satisfy the preparation fence. Timezone
+    // is the sole mapping without a source row; this synthetic row rolls back.
+    sqlx::query("SELECT set_config('crm.family_refresh_lease',$1,true)")
+        .bind(token.to_string())
+        .execute(&mut *app_tx)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE migration_family_refresh_plan SET phase='mappings' WHERE id=$1")
+        .bind(plan)
+        .execute(&mut *app_tx)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO migration_family_refresh_mapping(id,bundle_id,plan_id,organization_id,kind,source_key_hmac,disposition,nonce,ciphertext) VALUES($1,$2,$3,$4,'timezone',decode(repeat('00',32),'hex'),'hold',decode(repeat('00',24),'hex'),decode(repeat('00',16),'hex'))")
         .bind(Uuid::new_v4()).bind(bundle).bind(plan).bind(f.org).execute(&mut *app_tx).await.unwrap();
     assert!(
         app_tx.commit().await.is_err(),

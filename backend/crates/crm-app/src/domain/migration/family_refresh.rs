@@ -32,3 +32,5 @@ pub mod history_hold;
 pub mod history_missing;
 
 pub mod history_walk;
+
+pub mod mapping_inventory;

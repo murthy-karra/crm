@@ -7,8 +7,8 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 - Branch `codex/010g1-family-refresh`, base `dd140b0`; one primary writer and the
   previously authorized single reviewer. Planning review READY, round 1.
-- Current milestone: bounded bundle/family summaries following missing-history
-  classification at **`f98559e`** and source traversal at **`c882de1`**.
+- Current milestone: bounded core mapping inventory following bundle/family
+  summaries at **`934caa0`** and missing-history classification at **`f98559e`**.
   The combined feature is unfinished. No merge/push/deploy.
 - Foundation: comparison policies, source ordering, bounded encrypted evidence,
   exact decimal counts, draft persistence ownership and native/lease guards.
@@ -121,8 +121,8 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   steps. Core plans reuse the payer's index. Exact token/epoch release protects a
   successor; capacity and integrity failures pause with metered control capacity.
   The existing one-second scheduler gives this adapter a finite turn without a
-  new polling loop. It now drives observed and missing history classification. Core mapping and
-  classification, execution, revoked-executor pause/resume and release-readiness
+  new polling loop. It now drives observed and missing history classification plus core mapping
+  inventory. Core classification, execution, revoked-executor pause/resume and release-readiness
   integration remain.
 - Item-summary reads now use scoped keyset pages with an immutable upper bound,
   25/default and 50/max rows, decimal counters, 4 KiB summary and 512 KiB response
@@ -144,6 +144,15 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   Absence never deletes native history, reconstructs erased facts or advances a
   baseline. Refresh-owned initial identities must extend this selection when
   their ownership model lands.
+- Core mapping inventory now walks at most 50 elements per transaction, with
+  original source encryption scopes, frozen-cohort filtering, exact original
+  field/option/role keys and database-folded tag groups. Full source values remain
+  in retained references; new mappings default to hold. Native field-creation
+  limits remain distinct from intrinsic mapping-value validity and complete
+  record qualification. Note authors come from enriched detail, never list
+  fallback. Migration 012 binds mapping references, family/parent relationships,
+  current admin/lease and bounded element progress. Plan patches, mapping readers
+  and native conversion/classification remain pending.
 - No refresh HTTP commands or Web workflow are exposed yet.
 
 ## Evidence and isolation
@@ -174,6 +183,18 @@ archived in [Project history](../plans/PROJECT_HISTORY.md#010g1-preparation-and-
   reuses the existing import encoder without a new dependency. Logs:
   `/private/tmp/010g1-summaries-family-db.log`,
   `/private/tmp/010g1-summaries-final-clippy.log`. Runners match the prior milestone.
+- Bounded mapping inventory: the full family run passed 32 of 33 tests; its
+  remaining legacy accounting probe used an unfenced synthetic insert. That
+  fixture now supplies a valid preparation lease/phase and still verifies that
+  unsettled evidence cannot commit; its focused rerun passed. The new inventory
+  test covers a 70-option field across the 50-element boundary, folded tag aliases,
+  note-detail-only authors, repeated task roles, unsupported-record isolation,
+  source reuse across families, capacity/fault rollback and completion guards.
+  API-library Clippy with warnings denied, formatting and diff checks passed.
+  Logs: `/private/tmp/010g1-mapping-family-db.log`,
+  `/private/tmp/010g1-mapping-accounting-db.log`, `/private/tmp/010g1-mapping-clippy.log`.
+  Runners: serial `all family_refresh`, then the corrected accounting test only;
+  Clippy as above. This is preparation evidence, not native execution readiness.
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB
   `crm_010g1_schema_20260915`. Database tests run serially.

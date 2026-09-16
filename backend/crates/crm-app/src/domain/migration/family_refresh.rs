@@ -36,3 +36,9 @@ pub mod history_walk;
 pub mod mapping_inventory;
 
 pub mod mapping_queries;
+
+pub mod mapping_selection;
+
+pub mod plan_commands;
+
+mod mapping_inheritance;

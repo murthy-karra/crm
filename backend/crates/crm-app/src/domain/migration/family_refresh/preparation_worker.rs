@@ -190,6 +190,7 @@ async fn step(
         p.get("nonce"),
         p.get("ciphertext"),
     )?;
+    super::plan_commands::validate_runtime(&frozen)?;
     if frozen != own
         || frozen["version"] != ENGINE
         || frozen["parent_import_id"] != serde_json::json!(b.get::<Uuid, _>("parent_import_id"))

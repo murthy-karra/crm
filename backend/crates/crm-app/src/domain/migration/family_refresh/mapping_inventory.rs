@@ -22,22 +22,44 @@ use sqlx::{PgConnection, PgPool, Row};
 use std::collections::BTreeMap;
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum Choice {
     Hold,
-    Existing { target: Uuid },
-    CreateMatching { target: Uuid },
+    Existing {
+        #[serde(rename = "target_id")]
+        target: Uuid,
+    },
+    CreateMatching {
+        #[serde(rename = "target_id")]
+        target: Uuid,
+    },
     Unassigned,
-    Kind { kind: TaskKind },
-    Timezone { zone: String },
+    Kind {
+        kind: TaskKind,
+    },
+    Timezone {
+        zone: String,
+    },
 }
-#[derive(Serialize, Deserialize)]
+impl Choice {
+    pub(super) fn columns(&self) -> (&'static str, Option<Uuid>) {
+        match self {
+            Self::Hold => ("hold", None),
+            Self::Existing { target } => ("existing", Some(*target)),
+            Self::CreateMatching { target } => ("create_matching", Some(*target)),
+            Self::Unassigned => ("unassigned", None),
+            Self::Kind { .. } => ("kind", None),
+            Self::Timezone { .. } => ("timezone", None),
+        }
+    }
+}
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Reference {
     pub row: Uuid,
     pub element: u32,
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Mapping {
     pub kind: String,
     pub source_key: Vec<u8>,
@@ -51,6 +73,43 @@ pub struct Mapping {
     pub qualified: bool,
     pub creation_allowed: bool,
     pub choice: Choice,
+    #[serde(default)]
+    pub(super) destination: Option<super::mapping_selection::Destination>,
+}
+impl Mapping {
+    pub(super) fn verify(&self, row: &sqlx::postgres::PgRow) -> Result<(), MigrationError> {
+        let (disposition, target) = self.choice.columns();
+        let source_bound = match &self.source {
+            Some(reference) => {
+                Some(reference.row) == row.get::<Option<Uuid>, _>("source_row_id")
+                    && i32::try_from(reference.element).ok()
+                        == row.get::<Option<i32>, _>("source_element")
+            }
+            None => {
+                self.kind == "timezone"
+                    && row.get::<Option<Uuid>, _>("source_row_id").is_none()
+                    && row.get::<Option<i32>, _>("source_element").is_none()
+            }
+        };
+        let destination_bound = match (&self.choice, &self.destination) {
+            (Choice::Existing { target }, Some(destination)) => *target == destination.id(),
+            (Choice::Existing { .. }, None) => false,
+            (_, None) => true,
+            (_, Some(_)) => false,
+        };
+        if !source_bound
+            || !destination_bound
+            || self.kind != row.get::<String, _>("kind")
+            || self.source_key != row.get::<Vec<u8>, _>("source_key_hmac")
+            || self.parent_key != row.get::<Option<Vec<u8>>, _>("parent_key")
+            || self.qualified != row.get::<bool, _>("qualified")
+            || disposition != row.get::<String, _>("disposition")
+            || target != row.get::<Option<Uuid>, _>("target_id")
+        {
+            return Err(MigrationError::Crypto);
+        }
+        Ok(())
+    }
 }
 #[derive(Debug, PartialEq, Eq)]
 pub enum Progress {
@@ -141,8 +200,7 @@ fn seed(source: &Derived, index: usize) -> Result<Option<Seed>, MigrationError> 
                         parent: Some(id.as_bytes().to_vec()),
                         label: choice.label.clone(),
                         qualified: f.reasons.is_empty() && choice.reasons.is_empty(),
-                        creation_allowed: f.creation_reasons.is_empty()
-                            && choice.reasons.is_empty(),
+                        creation_allowed: choice.label.is_some() && choice.reasons.is_empty(),
                     }
                 }
             }
@@ -267,7 +325,7 @@ async fn mappings(
             continue;
         }
         let id = Uuid::new_v4();
-        let data = Mapping {
+        let mut data = Mapping {
             kind: seed.kind.into(),
             source_key: hash.clone(),
             parent_key,
@@ -279,7 +337,9 @@ async fn mappings(
             qualified: seed.qualified,
             creation_allowed: seed.qualified && seed.creation_allowed,
             choice: Choice::Hold,
+            destination: None,
         };
+        super::mapping_inheritance::apply(conn, input.key, input.scope, &mut data).await?;
         let sealed = input.scope.seal(input.key, id, Purpose::Mapping, &data)?;
         pending.push(Pending {
             id,
@@ -428,9 +488,9 @@ pub async fn run_once(
     };
     let added = pending.len();
     for pending in pending {
-        sqlx::query("INSERT INTO migration_family_refresh_mapping(id,bundle_id,plan_id,organization_id,kind,source_key_hmac,parent_id,disposition,nonce,ciphertext,source_row_id,source_element,qualified) VALUES($1,$2,$3,$4,$5,$6,$7,'hold',$8,$9,$10,$11,$12)")
+        sqlx::query("INSERT INTO migration_family_refresh_mapping(id,bundle_id,plan_id,organization_id,kind,source_key_hmac,parent_id,disposition,nonce,ciphertext,source_row_id,source_element,qualified,target_id) VALUES($1,$2,$3,$4,$5,$6,$7,$13,$8,$9,$10,$11,$12,$14)")
             .bind(pending.id).bind(claim.bundle).bind(claim.plan).bind(claim.organization.0).bind(&pending.data.kind).bind(&pending.data.source_key).bind(pending.parent)
-            .bind(pending.sealed.nonce.as_slice()).bind(pending.sealed.ciphertext).bind(source).bind(pending.element).bind(pending.data.qualified).execute(&mut *tx).await?;
+            .bind(pending.sealed.nonce.as_slice()).bind(pending.sealed.ciphertext).bind(source).bind(pending.element).bind(pending.data.qualified).bind(pending.data.choice.columns().0).bind(pending.data.choice.columns().1).execute(&mut *tx).await?;
     }
     if end == total {
         sqlx::query("UPDATE migration_family_refresh_plan SET mapping_after=$3,mapping_current=NULL,mapping_offset=0 WHERE id=$1 AND organization_id=$2").bind(claim.plan).bind(claim.organization.0).bind(source).execute(&mut *tx).await?;

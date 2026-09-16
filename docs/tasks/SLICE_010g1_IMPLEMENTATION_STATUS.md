@@ -7,8 +7,8 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 - Branch `codex/010g1-family-refresh`, base `dd140b0`; one primary writer and the
   previously authorized single reviewer. Planning review READY, round 1.
-- Current milestone: bounded mapping review following core mapping inventory
-  at **`76fb93b`** and bundle/family summaries at **`934caa0`**.
+- Current milestone: typed mapping revisions following bounded mapping review
+  at **`19d2a69`** and core inventory at **`76fb93b`**.
   The combined feature is unfinished. No merge/push/deploy.
 - Foundation: comparison policies, source ordering, bounded encrypted evidence,
   exact decimal counts, draft persistence ownership and native/lease guards.
@@ -155,8 +155,15 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   authenticate kind/key/parent/source/value/choice bindings and expose only small
   labels and explicit choices. Their cursors bind inventory progress as well as
   actor/Org/workspace/bundle/plan/filter/size, so partial discovery cannot silently
-  change a page. Migration 013 adds the filtered review index. Plan patches and
-  native conversion/classification remain pending.
+  change a page. Migration 013 adds the filtered review index. Typed Plan now
+  admits up to 50 explicit choices into an immutable successor, authenticates
+  frozen conversion bindings, invalidates the combined digest and settles old/new
+  control capacity atomically. Migration 014 retains encrypted predecessor-bound
+  patches; inventory inherits untouched choices and stable prospective IDs over
+  the same shared sources. Existing destinations are scoped snapshots, option
+  targets bind the effective field, and inactive assignees are rejected. Activity
+  timezone omission inherits; explicit null clears. Native conversion and
+  classification remain pending; mapping intent creates no native rows.
 - No refresh HTTP commands or Web workflow are exposed yet.
 
 ## Evidence and isolation
@@ -208,6 +215,23 @@ archived in [Project history](../plans/PROJECT_HISTORY.md#010g1-preparation-and-
   passed. Logs: `/private/tmp/010g1-mapping-read-index-db.log`,
   `/private/tmp/010g1-mapping-read-clippy.log`. Database runner: serial
   `all family_refresh_mapping_inventory`; preceding family evidence is retained above.
+- Typed mapping revisions: 41 family unit tests and API-library Clippy with
+  warnings denied passed. The full serial family database run passed 33 of 34;
+  the remaining admitted-history fixture incorrectly assumed its first UUID-
+  ordered identity was always an event. It now checks the selected identity's
+  actual family/person/HMAC, and its focused rerun passed. The new Plan scenario
+  verifies immutable old choices, stable proposed IDs through inheritance,
+  shared-source reuse, exact settlement, capacity/injected-failure rollback,
+  replay/stale-revision/tenant rejection, field-option binding, inactive-assignee
+  rejection and timezone inheritance/clearing. Its initial activity assertion
+  exposed missing fixture captures; the completed scenario passed both focused
+  and full runs. Formatting and diff checks passed. Logs:
+  `/private/tmp/010g1-plan-family-db.log`,
+  `/private/tmp/010g1-plan-admitted-fix-db.log`,
+  `/private/tmp/010g1-plan-db-final.log`, `/private/tmp/010g1-plan-unit.log`,
+  `/private/tmp/010g1-plan-clippy.log`. Runners: serial `all family_refresh`,
+  corrected admitted-owner test only, `crm-app --lib family_refresh`, and the
+  established Clippy command. Native conversion/execution remain unverified work.
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB
   `crm_010g1_schema_20260915`. Database tests run serially.

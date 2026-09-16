@@ -439,3 +439,29 @@ History-only indexing uses the original parent's core anchor. Each Person's
 history eligibility independently checks its frozen creation capture, so a later
 admission/recovery can be held without preventing other cohorts' source indexing.
 Combined history still must start after the selected core capture.
+
+### Typed mapping revisions
+
+`PlanFamilyRefresh` now owns at most 50 explicit mapping patches for one selected
+family, with the accepted bundle revision and actor-scoped replay receipt. It
+requires completed core mapping inventory, an unconfirmed current plan, no live
+preparation claim, and authenticated frozen bundle/plan conversion bindings.
+Success supersedes that family plan, clears the combined ready digest, and
+reserves a successor's measured evidence plus cancellation capacity atomically.
+Other selected families and the original shared-source payer remain bound.
+
+Migration 014 retains encrypted, immutable patches referencing the immediately
+preceding mapping. The bounded inventory worker applies those choices or inherits
+untouched predecessor choices by exact source key. Proposed catalog IDs are
+server-allocated and survive inheritance; this path creates no native catalog
+rows. Existing choices capture scoped destination snapshots; classification,
+confirmation and execution must independently revalidate targets and complete
+source eligibility. Option choices bind their effective parent field, including
+field patches in the same request. Intrinsic option validity does not depend on
+whether an oversized source field could be created wholesale.
+
+An omitted activity timezone inherits the previous choice; explicit null clears
+it to hold. Historical authors/creators may reference inactive Organization
+members, while assignees must be active. Read summaries authenticate encrypted
+choices against relational disposition/target/source/parent/value bindings.
+HTTP exposure, complete classification and native application remain pending.

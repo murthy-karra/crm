@@ -1851,7 +1851,22 @@ async fn history_baseline_authenticates_admitted_owner(pool: PgPool) {
         cohort,
         "admitted owners use their exact frozen cohort"
     );
-    assert_eq!(owned.get::<String, _>("kind"), "event");
+    let owner=sqlx::query("SELECT family,person_id,identity_hmac FROM migration_history_import_identity WHERE id=$1 AND organization_id=$2").bind(owned.get::<Uuid,_>("identity_id")).bind(f.org).fetch_one(&pool).await.unwrap();
+    let expected = match owner.get::<String, _>("family").as_str() {
+        "events" => "event",
+        "calls" => "call",
+        "text_messages" => "text",
+        other => panic!("unexpected history family {other}"),
+    };
+    assert_eq!(owned.get::<String, _>("kind"), expected);
+    assert_eq!(
+        owned.get::<Uuid, _>("person_id"),
+        owner.get::<Uuid, _>("person_id")
+    );
+    assert_eq!(
+        owned.get::<Vec<u8>, _>("identity_hmac"),
+        owner.get::<Vec<u8>, _>("identity_hmac")
+    );
     use crm_api::domain::migration::family_refresh::{model::Hold, new_identity};
     assert!(matches!(
         new_identity::discover(&f.pool, &f.key, &claim, cohort, Kind::Event, "82")

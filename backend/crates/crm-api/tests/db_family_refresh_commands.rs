@@ -929,7 +929,7 @@ async fn assert_mapping_reader(
         assert!(ids.insert(item.id));
         assert!(item.parent_id.is_some());
         assert!(item.value_qualified);
-        assert!(!item.creation_allowed);
+        assert!(item.creation_allowed, "valid individual options may be created within an existing field even when the source cannot create a whole new field");
     }
     let mut next = first.next_cursor;
     while let Some(cursor) = next {
@@ -1078,6 +1078,367 @@ async fn assert_mapping_reader(
     sqlx::query("UPDATE organization SET workspace_revision=workspace_revision-1 WHERE id=$1")
         .bind(f.org)
         .execute(pool)
+        .await
+        .unwrap();
+}
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn family_refresh_plan_choices_are_versioned_atomic_and_inherited(pool: PgPool) {
+    use crm_api::domain::migration::family_refresh::{
+        mapping_selection::{MappingPatch, Selection},
+        plan_commands::{self, PlanFamilyRefresh},
+    };
+    let f = import_support::fixture_with_book(&pool, db_activity_source::book()).await;
+    let parent = db_activity_source::completed_parent(&f).await;
+    use crm_api::domain::migration::snapshot_source::Stream;
+    f.reader
+        .set_records(Stream::TasksOpen, vec![db_activity_source::task(21)]);
+    f.reader.set_records(Stream::Notes,vec![json!({"id":11,"personId":101,"createdById":3,"body":"List","created":"2026-09-01T12:00:00Z"})]);
+    f.reader.set_raw(Stream::NoteDetail,0,200,serde_json::to_vec(&json!({"id":11,"personId":101,"createdById":3,"type":"Note","body":"Detail","isHtml":false,"created":"2026-09-01T12:00:00Z","updated":null})).unwrap(),false);
+    f.reader.set_records(Stream::CustomFields,vec![json!({"id":10,"name":"customChoice","label":"Choice","type":"dropdown","choices":["First"]})]);
+    let native_field = Uuid::new_v4();
+    let native_option = Uuid::new_v4();
+    sqlx::query("INSERT INTO custom_field(id,organization_id,label,field_type,position,created_by_user_id) VALUES($1,$2,'Destination','choice',1,$3)").bind(native_field).bind(f.org).bind(f.actor).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO custom_field_option(id,organization_id,field_id,label,position) VALUES($1,$2,$3,'Native first',1)").bind(native_option).bind(f.org).bind(native_field).execute(&pool).await.unwrap();
+    let report=admission::report(&f,parent,vec![json!({"id":101,"firstName":"Synthetic","stage":"Lead","assignedUserId":3,"tags":["New label"]})]).await;
+    let prepared = commands::prepare(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &f.ctx,
+        PrepareFamilyRefresh {
+            request_id: Uuid::new_v4(),
+            parent_import_id: parent,
+            core_report_id: Some(report),
+            history_capture_id: None,
+            families: vec![Family::Metadata, Family::Activity],
+        },
+    )
+    .await
+    .unwrap();
+    let bundle = prepared.bundle_id;
+    let old = prepared.families[0].plan_id;
+    let make = |revision: &str, patches: Vec<MappingPatch>| PlanFamilyRefresh {
+        request_id: Uuid::new_v4(),
+        expected_revision: revision.into(),
+        family: Family::Metadata,
+        patches,
+        source_timezone: None,
+    };
+    assert!(matches!(
+        plan_commands::plan(
+            &f.pool,
+            &f.key,
+            &f.policy,
+            &f.ctx,
+            bundle,
+            make("1", vec![])
+        )
+        .await,
+        Err(MigrationError::ImportBusy)
+    ));
+    for step in 0..60 {
+        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+            break;
+        }
+        assert!(step < 59);
+    }
+    let tag: Uuid = sqlx::query_scalar(
+        "SELECT id FROM migration_family_refresh_mapping WHERE plan_id=$1 AND kind='tag'",
+    )
+    .bind(old)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let patch = MappingPatch {
+        mapping_id: tag,
+        choice: Selection::CreateMatching,
+    };
+    let request = Uuid::new_v4();
+    let field_mapping: Uuid = sqlx::query_scalar(
+        "SELECT id FROM migration_family_refresh_mapping WHERE plan_id=$1 AND kind='field'",
+    )
+    .bind(old)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let option_mapping: Uuid = sqlx::query_scalar(
+        "SELECT id FROM migration_family_refresh_mapping WHERE plan_id=$1 AND kind='option'",
+    )
+    .bind(old)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let input = || PlanFamilyRefresh {
+        request_id: request,
+        ..make(
+            "1",
+            vec![
+                patch.clone(),
+                MappingPatch {
+                    mapping_id: option_mapping,
+                    choice: Selection::Existing {
+                        target_id: native_option,
+                    },
+                },
+                MappingPatch {
+                    mapping_id: field_mapping,
+                    choice: Selection::Existing {
+                        target_id: native_field,
+                    },
+                },
+            ],
+        )
+    };
+    let before:serde_json::Value=sqlx::query_scalar("SELECT jsonb_build_object('retained',retained_bytes,'reserved',reserved_bytes) FROM migration_snapshot_storage WHERE organization_id=$1").bind(f.org).fetch_one(&pool).await.unwrap();
+    let mut tiny = f.policy.clone();
+    tiny.org_ceiling_bytes = 1;
+    assert!(matches!(
+        plan_commands::plan(&f.pool, &f.key, &tiny, &f.ctx, bundle, input()).await,
+        Err(MigrationError::StorageLimit)
+    ));
+    let after:serde_json::Value=sqlx::query_scalar("SELECT jsonb_build_object('retained',retained_bytes,'reserved',reserved_bytes) FROM migration_snapshot_storage WHERE organization_id=$1").bind(f.org).fetch_one(&pool).await.unwrap();
+    assert_eq!(before, after);
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_family_refresh_plan WHERE bundle_id=$1"
+        )
+        .bind(bundle)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        2
+    );
+    for choice in [
+        Selection::Existing {
+            target_id: Uuid::new_v4(),
+        },
+        Selection::Unassigned,
+    ] {
+        assert!(matches!(
+            plan_commands::plan(
+                &f.pool,
+                &f.key,
+                &f.policy,
+                &f.ctx,
+                bundle,
+                make(
+                    "1",
+                    vec![MappingPatch {
+                        mapping_id: tag,
+                        choice
+                    }]
+                )
+            )
+            .await,
+            Err(MigrationError::InvalidImportChoice)
+        ));
+    }
+    assert!(matches!(
+        plan_commands::plan(
+            &f.pool,
+            &f.key,
+            &f.policy,
+            &f.ctx,
+            bundle,
+            make("1", vec![patch.clone(), patch.clone()])
+        )
+        .await,
+        Err(MigrationError::InvalidInput)
+    ));
+    sqlx::raw_sql("CREATE FUNCTION test_plan_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic plan fault'; END $$; CREATE TRIGGER test_plan_fault BEFORE INSERT ON migration_family_refresh_mapping_patch FOR EACH ROW EXECUTE FUNCTION test_plan_fault()").execute(&pool).await.unwrap();
+    assert!(
+        plan_commands::plan(&f.pool, &f.key, &f.policy, &f.ctx, bundle, input())
+            .await
+            .is_err()
+    );
+    sqlx::raw_sql("DROP TRIGGER test_plan_fault ON migration_family_refresh_mapping_patch; DROP FUNCTION test_plan_fault()").execute(&pool).await.unwrap();
+    let planned = plan_commands::plan(&f.pool, &f.key, &f.policy, &f.ctx, bundle, input())
+        .await
+        .unwrap();
+    assert_eq!(planned.revision, "2");
+    let successor = planned.families[0].plan_id;
+    assert_ne!(old, successor);
+    let replay = plan_commands::plan(&f.pool, &f.key, &tiny, &f.ctx, bundle, input())
+        .await
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(&planned).unwrap(),
+        serde_json::to_value(replay).unwrap()
+    );
+    let mut changed = input();
+    changed.patches.clear();
+    assert!(matches!(
+        plan_commands::plan(&f.pool, &f.key, &f.policy, &f.ctx, bundle, changed).await,
+        Err(MigrationError::Conflict)
+    ));
+    assert!(matches!(
+        plan_commands::plan(
+            &f.pool,
+            &f.key,
+            &f.policy,
+            &f.ctx,
+            bundle,
+            make("1", vec![])
+        )
+        .await,
+        Err(MigrationError::Conflict)
+    ));
+    let foreign = crm_api::domain::envelope::CommandContext {
+        organization_id: OrganizationId(Uuid::new_v4()),
+        ..f.ctx.clone()
+    };
+    assert!(
+        plan_commands::plan(&f.pool, &f.key, &f.policy, &foreign, bundle, input())
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, String>(
+            "SELECT disposition FROM migration_family_refresh_mapping WHERE id=$1"
+        )
+        .bind(tag)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        "hold"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, String>(
+            "SELECT state FROM migration_family_refresh_plan WHERE id=$1"
+        )
+        .bind(old)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        "superseded"
+    );
+    for step in 0..30 {
+        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+            break;
+        }
+        assert!(step < 29);
+    }
+    let target:Uuid=sqlx::query_scalar("SELECT target_id FROM migration_family_refresh_mapping WHERE plan_id=$1 AND kind='tag' AND disposition='create_matching'").bind(successor).fetch_one(&pool).await.unwrap();
+    assert!(
+        !sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM tag WHERE id=$1)")
+            .bind(target)
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+    );
+    let third = plan_commands::plan(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &f.ctx,
+        bundle,
+        make("2", vec![]),
+    )
+    .await
+    .unwrap();
+    for step in 0..30 {
+        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+            break;
+        }
+        assert!(step < 29);
+    }
+    assert_eq!(sqlx::query_scalar::<_,Uuid>("SELECT target_id FROM migration_family_refresh_mapping WHERE plan_id=$1 AND kind='tag'").bind(third.families[0].plan_id).fetch_one(&pool).await.unwrap(),target,"stable prospective ID survives untouched successor revisions");
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_family_refresh_source WHERE bundle_id=$1 AND plan_id<>$2").bind(bundle).bind(old).fetch_one(&pool).await.unwrap(),0);
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_family_refresh_plan WHERE bundle_id=$1 AND measured_bytes<>retained_bytes").bind(bundle).fetch_one(&pool).await.unwrap(),0);
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT reserved_bytes FROM migration_family_refresh_plan WHERE id=$1"
+        )
+        .bind(successor)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        0,
+        "superseded nonpayer releases its control capacity"
+    );
+    // Activity choices and timezone have independent revisions over the same index.
+    let activity = prepared.families[1].plan_id;
+    let roles =
+        sqlx::query("SELECT id,kind FROM migration_family_refresh_mapping WHERE plan_id=$1")
+            .bind(activity)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    assert_eq!(roles.len(), 4);
+    let assignee = roles
+        .iter()
+        .find(|r| r.get::<String, _>("kind") == "task_assignee")
+        .unwrap()
+        .get::<Uuid, _>("id");
+    sqlx::query("UPDATE organization_membership SET status='inactive' WHERE organization_id=$1 AND user_id=$2").bind(f.org).bind(f.member).execute(&pool).await.unwrap();
+    let bad = PlanFamilyRefresh {
+        family: Family::Activity,
+        patches: vec![MappingPatch {
+            mapping_id: assignee,
+            choice: Selection::Existing {
+                target_id: f.member,
+            },
+        }],
+        ..make("3", vec![])
+    };
+    assert!(matches!(
+        plan_commands::plan(&f.pool, &f.key, &f.policy, &f.ctx, bundle, bad).await,
+        Err(MigrationError::InvalidImportChoice)
+    ));
+    let patches = roles
+        .into_iter()
+        .map(|r| MappingPatch {
+            mapping_id: r.get("id"),
+            choice: if r.get::<String, _>("kind") == "task_kind" {
+                Selection::Kind {
+                    kind: crm_api::domain::task::TaskKind::FollowUp,
+                }
+            } else {
+                Selection::Existing { target_id: f.actor }
+            },
+        })
+        .collect();
+    let activity_cmd = PlanFamilyRefresh {
+        request_id: Uuid::new_v4(),
+        expected_revision: "3".into(),
+        family: Family::Activity,
+        patches,
+        source_timezone: Some(Some("America/Los_Angeles".into())),
+    };
+    let fourth = plan_commands::plan(&f.pool, &f.key, &f.policy, &f.ctx, bundle, activity_cmd)
+        .await
+        .unwrap();
+    for step in 0..30 {
+        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+            break;
+        }
+        assert!(step < 29);
+    }
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_family_refresh_mapping WHERE plan_id=$1 AND disposition IN ('existing','kind','timezone')").bind(fourth.families[1].plan_id).fetch_one(&pool).await.unwrap(),5);
+
+    let carry = PlanFamilyRefresh {
+        family: Family::Activity,
+        ..make("4", vec![])
+    };
+    let fifth = plan_commands::plan(&f.pool, &f.key, &f.policy, &f.ctx, bundle, carry)
+        .await
+        .unwrap();
+    assert_eq!(sqlx::query_scalar::<_,String>("SELECT disposition FROM migration_family_refresh_mapping WHERE plan_id=$1 AND kind='timezone'").bind(fifth.families[1].plan_id).fetch_one(&pool).await.unwrap(),"timezone");
+    for step in 0..30 {
+        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+            break;
+        }
+        assert!(step < 29);
+    }
+    let clear:PlanFamilyRefresh=serde_json::from_value(json!({"request_id":Uuid::new_v4(),"expected_revision":"5","family":"activity","patches":[],"source_timezone":null})).unwrap();
+    let sixth = plan_commands::plan(&f.pool, &f.key, &f.policy, &f.ctx, bundle, clear)
+        .await
+        .unwrap();
+    assert_eq!(sqlx::query_scalar::<_,String>("SELECT disposition FROM migration_family_refresh_mapping WHERE plan_id=$1 AND kind='timezone'").bind(sixth.families[1].plan_id).fetch_one(&pool).await.unwrap(),"hold");
+    sqlx::raw_sql(include_str!("fixtures/family_refresh_byte_inventory.sql"))
+        .execute(&pool)
         .await
         .unwrap();
 }

@@ -156,35 +156,7 @@ pub async fn mappings(
             row.get("nonce"),
             row.get("ciphertext"),
         )?;
-        let (disposition, target) = match &data.choice {
-            Choice::Hold => ("hold", None),
-            Choice::Existing { target } => ("existing", Some(*target)),
-            Choice::CreateMatching { target } => ("create_matching", Some(*target)),
-            Choice::Unassigned => ("unassigned", None),
-            Choice::Kind { .. } => ("kind", None),
-            Choice::Timezone { .. } => ("timezone", None),
-        };
-        let source_bound = match &data.source {
-            Some(r) => {
-                Some(r.row) == row.get::<Option<Uuid>, _>("source_row_id")
-                    && i32::try_from(r.element).ok() == row.get::<Option<i32>, _>("source_element")
-            }
-            None => {
-                data.kind == "timezone"
-                    && row.get::<Option<Uuid>, _>("source_row_id").is_none()
-                    && row.get::<Option<i32>, _>("source_element").is_none()
-            }
-        };
-        if !source_bound
-            || data.kind != row.get::<String, _>("kind")
-            || data.source_key != row.get::<Vec<u8>, _>("source_key_hmac")
-            || data.parent_key != row.get::<Option<Vec<u8>>, _>("parent_key")
-            || data.qualified != row.get::<bool, _>("qualified")
-            || disposition != row.get::<String, _>("disposition")
-            || target != row.get::<Option<Uuid>, _>("target_id")
-        {
-            return Err(MigrationError::Crypto);
-        }
+        data.verify(row)?;
         let item = Summary {
             id: row.get("id"),
             parent_id: row.get("parent_id"),

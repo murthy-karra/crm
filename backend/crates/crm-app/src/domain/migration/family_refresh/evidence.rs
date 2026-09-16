@@ -11,6 +11,7 @@ pub enum Purpose {
     Binding,
     Source,
     Mapping,
+    MappingPatch,
     Manifest,
     Result,
     HistoryDisplay,
@@ -22,6 +23,7 @@ impl Purpose {
             Self::Binding => "binding",
             Self::Source => "source",
             Self::Mapping => "mapping",
+            Self::MappingPatch => "mapping-patch",
             Self::Manifest => "manifest",
             Self::Result => "result",
             Self::HistoryDisplay => "history-display",
@@ -30,7 +32,7 @@ impl Purpose {
     }
     fn limit(self) -> usize {
         match self {
-            Self::Binding | Self::Mapping | Self::Receipt => 64 * 1024,
+            Self::Binding | Self::Mapping | Self::MappingPatch | Self::Receipt => 64 * 1024,
             Self::Source => 4 * 1024 * 1024,
             Self::Manifest | Self::Result => 64 * 1024 * 1024,
             Self::HistoryDisplay => 4096,

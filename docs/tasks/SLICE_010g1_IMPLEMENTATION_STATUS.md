@@ -7,9 +7,9 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 - Branch `codex/010g1-family-refresh`, base `dd140b0`; one primary writer and the
   previously authorized single reviewer. Planning review READY, round 1.
-- Current milestone: bounded history source classification following qualified
-  holds at **`18170d4`**, item summaries at **`bcab991`** and preparation dispatch
-  at **`f760907`**.
+- Current milestone: bounded missing-history classification following source
+  traversal at **`c882de1`**, qualified holds at **`18170d4`** and item summaries
+  at **`bcab991`**.
   The combined feature is unfinished. No merge/push/deploy.
 - Foundation: comparison policies, source ordering, bounded encrypted evidence,
   exact decimal counts, draft persistence ownership and native/lease guards.
@@ -103,8 +103,9 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   proposals, including exact prior-version evidence and stable prospective IDs.
   Replay keeps IDs/counts/charges unchanged; manifest, count/position and byte
   settlement share one transaction. History source diagnostics and out-of-cohort
-  exclusions now persist through a bounded keyset walk; owned-but-missing source
-  gaps and complete-plan sealing remain pending. Qualified identities with ineligible/unproven
+  exclusions now persist through a bounded keyset walk. A second bounded pass
+  holds original/admitted identities absent from the new source; complete-plan
+  sealing remains pending. Qualified identities with ineligible/unproven
   baselines now persist encrypted, counted holds atomically without prospective
   native IDs or heads; replay preserves the held outcome even if prerequisites
   later become eligible.
@@ -121,7 +122,7 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   steps. Core plans reuse the payer's index. Exact token/epoch release protects a
   successor; capacity and integrity failures pause with metered control capacity.
   The existing one-second scheduler gives this adapter a finite turn without a
-  new polling loop. It now drives history source classification. Core mapping and
+  new polling loop. It now drives observed and missing history classification. Core mapping and
   classification, execution, revoked-executor pause/resume and release-readiness
   integration remain.
 - Item-summary reads now use scoped keyset pages with an immutable upper bound,
@@ -135,6 +136,13 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   regression. Each history outcome/checkpoint/charge commits together; equal
   occurrences reuse the identity unit. Source exhaustion remains preparation,
   with no ready digest or native writes.
+- Migration 011 adds a separate owned-history cursor and completion flag. Its
+  database selection shares exact frozen cohort/parent/account/terminal-owner
+  bounds with the cursor fence. Original/admitted identities absent from the
+  capture persist encrypted holds; observed identities reuse existing outcomes.
+  Absence never deletes native history, reconstructs erased facts or advances a
+  baseline. Refresh-owned initial identities must extend this selection when
+  their ownership model lands.
 - No refresh HTTP commands or Web workflow are exposed yet.
 
 ## Evidence and isolation
@@ -183,6 +191,15 @@ is archived in [Project history](../plans/PROJECT_HISTORY.md#010g1-foundation-an
   caused an initial test failure. Logs: `/private/tmp/010g1-walk-final-family-db.log`,
   `/private/tmp/010g1-walk-unit.log`, `/private/tmp/010g1-walk-revision-clippy.log`.
   Runners match the preceding milestone; source exhaustion does not seal readiness.
+- Missing-history classification: all 31 serial family database regressions,
+  API-library Clippy with warnings denied, formatting and diff checks passed.
+  The empty-capture scenario verifies scoped original ownership, encrypted
+  source-not-observed holds, unchanged native identities/heads, capacity and
+  injected-failure rollback, forbidden cursor skips and premature completion.
+  Admitted ownership and observed-identity reuse are also covered. Logs:
+  `/private/tmp/010g1-missing-family-db.log`, `/private/tmp/010g1-missing-clippy.log`.
+  Runner: serial `all family_refresh`; Clippy as above. The pure comparison
+  policies were unchanged; their 40-test evidence remains the source-walk run.
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB
   `crm_010g1_schema_20260915`. Database tests run serially.

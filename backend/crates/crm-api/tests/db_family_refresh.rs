@@ -1828,6 +1828,18 @@ async fn history_baseline_authenticates_admitted_owner(pool: PgPool) {
         assert!(i < 9);
     }
     let cohort:Uuid=sqlx::query_scalar("SELECT id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND source_person_id='104' AND admission_id=$2").bind(claim.bundle).bind(admission).fetch_one(&pool).await.unwrap();
+    let owned = sqlx::query("SELECT * FROM crm_family_refresh_next_owned_history($1,$2,NULL)")
+        .bind(f.org)
+        .bind(claim.bundle)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        owned.get::<Uuid, _>("cohort_id"),
+        cohort,
+        "admitted owners use their exact frozen cohort"
+    );
+    assert_eq!(owned.get::<String, _>("kind"), "event");
     use crm_api::domain::migration::family_refresh::{model::Hold, new_identity};
     assert!(matches!(
         new_identity::discover(&f.pool, &f.key, &claim, cohort, Kind::Event, "82")
@@ -3319,6 +3331,23 @@ async fn history_source_walk_is_atomic_bounded_and_counts_each_identity_once(poo
         assert!(visited < 20);
     }
     assert_eq!(visited, 7);
+    let before_owned:serde_json::Value=sqlx::query_scalar("SELECT jsonb_build_object('position',position,'counts',counts,'retained',retained_bytes) FROM migration_family_refresh_plan WHERE id=$1").bind(replacement).fetch_one(&pool).await.unwrap();
+    use crm_api::domain::migration::family_refresh::history_missing;
+    for step in 0..10 {
+        if history_missing::run_once(&f.pool, &f.key, &f.policy, &successor)
+            .await
+            .unwrap()
+            == Progress::Finished
+        {
+            break;
+        }
+        assert!(step < 9);
+    }
+    let after_owned:serde_json::Value=sqlx::query_scalar("SELECT jsonb_build_object('position',position,'counts',counts,'retained',retained_bytes) FROM migration_family_refresh_plan WHERE id=$1").bind(replacement).fetch_one(&pool).await.unwrap();
+    assert_eq!(
+        before_owned, after_owned,
+        "already observed identities advance the owned cursor without new units or charges"
+    );
     assert_eq!(
         sqlx::query_scalar::<_, i64>(
             "SELECT count(*) FROM migration_family_refresh_source WHERE plan_id=$1"
@@ -3339,4 +3368,218 @@ async fn history_source_walk_is_atomic_bounded_and_counts_each_identity_once(poo
         .unwrap(),
         6
     );
+}
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn history_missing_walk_holds_absence_without_deleting_or_advancing_baselines(pool: PgPool) {
+    use crate::{db_history_capture_support as capture, db_history_import_support as original};
+    use crm_api::domain::migration::{
+        family_refresh::{
+            cohort, commands, core_source,
+            evidence::{Purpose, Scope},
+            history_index,
+            history_missing::{self, MissingProposal},
+            history_walk::{self, Progress},
+            model::{Counts, Family, Hold},
+            preparation_worker,
+        },
+        history_capture_source::Stream,
+    };
+    let (f, parent, first, book) = original::fixture(&pool).await;
+    let root = original::ready(&f, parent, first).await;
+    original::confirm(&f, root).await;
+    original::drain(&f).await;
+    let native_before:serde_json::Value=sqlx::query_scalar("SELECT jsonb_agg(to_jsonb(i) ORDER BY id) FROM migration_history_import_identity i WHERE organization_id=$1").bind(f.org).fetch_one(&pool).await.unwrap();
+    for stream in [Stream::Events, Stream::Calls, Stream::TextMessages] {
+        book.set_records(stream, vec![]);
+    }
+    let (capture, _) = capture::propose(&f, parent).await;
+    capture::confirm(&f, capture).await;
+    capture::drain(&f, &book).await;
+    commands::prepare(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &f.ctx,
+        commands::PrepareFamilyRefresh {
+            request_id: Uuid::new_v4(),
+            parent_import_id: parent,
+            core_report_id: None,
+            history_capture_id: Some(capture),
+            families: vec![Family::History],
+        },
+    )
+    .await
+    .unwrap();
+    let claim = preparation_worker::claim_next(&f.pool)
+        .await
+        .unwrap()
+        .unwrap();
+    cohort::freeze_page(&f.pool, &claim, &f.policy, 50)
+        .await
+        .unwrap();
+    for step in 0..10 {
+        if history_index::index_page(&f.pool, &f.key, &claim, &f.policy)
+            .await
+            .unwrap()
+            == core_source::Progress::Finished
+        {
+            break;
+        }
+        assert!(step < 9);
+    }
+    assert!(
+        history_missing::run_once(&f.pool, &f.key, &f.policy, &claim)
+            .await
+            .is_err(),
+        "source reconciliation must finish first"
+    );
+    assert_eq!(
+        history_walk::run_once(&f.pool, &f.key, &f.policy, &claim)
+            .await
+            .unwrap(),
+        Progress::Finished
+    );
+    let owners=sqlx::query("SELECT id FROM migration_history_import_identity WHERE organization_id=$1 AND fact_id IS NOT NULL ORDER BY id").bind(f.org).fetch_all(&pool).await.unwrap();
+    assert!(owners.len() >= 2);
+    let first_owner: Uuid = owners[0].get("id");
+    let last_owner: Uuid = owners.last().unwrap().get("id");
+    assert!(
+        sqlx::query("SELECT * FROM crm_family_refresh_next_owned_history($1,$2,NULL)")
+            .bind(Uuid::new_v4())
+            .bind(claim.bundle)
+            .fetch_optional(&f.pool)
+            .await
+            .unwrap()
+            .is_none(),
+        "foreign Organization cannot enumerate owners"
+    );
+    for (next, complete, expected) in [
+        (Some(first_owner), false, "outcome missing"),
+        (Some(last_owner), false, "skipped an identity"),
+        (None, true, "incomplete"),
+    ] {
+        let mut tx = f.pool.begin().await.unwrap();
+        sqlx::query("SELECT set_config('crm.family_refresh_reader','fub-family-refresh-v1',true),set_config('crm.family_refresh_lease',$1,true)").bind(claim.token.to_string()).execute(&mut *tx).await.unwrap();
+        let error=sqlx::query("UPDATE migration_family_refresh_plan SET owned_after=$2,owned_walk_complete=$3 WHERE id=$1").bind(claim.plan).bind(next).bind(complete).execute(&mut *tx).await.unwrap_err();
+        assert!(error.to_string().contains(expected), "{error}");
+        tx.rollback().await.unwrap();
+    }
+    let before:serde_json::Value=sqlx::query_scalar("SELECT jsonb_build_object('position',position,'counts',counts,'cursor',owned_after,'retained',retained_bytes,'reserved',reserved_bytes) FROM migration_family_refresh_plan WHERE id=$1").bind(claim.plan).fetch_one(&pool).await.unwrap();
+    let mut tiny = f.policy.clone();
+    tiny.run_ceiling_bytes = 1;
+    assert_eq!(
+        history_missing::run_once(&f.pool, &f.key, &tiny, &claim)
+            .await
+            .unwrap(),
+        Progress::Capacity
+    );
+    sqlx::raw_sql("CREATE FUNCTION test_missing_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.owned_after IS DISTINCT FROM OLD.owned_after THEN RAISE EXCEPTION 'synthetic missing fault'; END IF; RETURN NEW; END $$; CREATE TRIGGER test_missing_fault BEFORE UPDATE ON migration_family_refresh_plan FOR EACH ROW EXECUTE FUNCTION test_missing_fault()").execute(&pool).await.unwrap();
+    assert!(
+        history_missing::run_once(&f.pool, &f.key, &f.policy, &claim)
+            .await
+            .is_err()
+    );
+    sqlx::raw_sql("DROP TRIGGER test_missing_fault ON migration_family_refresh_plan; DROP FUNCTION test_missing_fault()").execute(&pool).await.unwrap();
+    let after:serde_json::Value=sqlx::query_scalar("SELECT jsonb_build_object('position',position,'counts',counts,'cursor',owned_after,'retained',retained_bytes,'reserved',reserved_bytes) FROM migration_family_refresh_plan WHERE id=$1").bind(claim.plan).fetch_one(&pool).await.unwrap();
+    assert_eq!(
+        before, after,
+        "failure rolls back manifest, counts, cursor and settlement"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_family_refresh_manifest WHERE plan_id=$1"
+        )
+        .bind(claim.plan)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        0
+    );
+    let mut advanced = 0;
+    loop {
+        match history_missing::run_once(&f.pool, &f.key, &f.policy, &claim)
+            .await
+            .unwrap()
+        {
+            Progress::Advanced => advanced += 1,
+            Progress::Finished => break,
+            Progress::Capacity => panic!("unexpected capacity"),
+        }
+        assert!(advanced <= owners.len());
+    }
+    assert_eq!(advanced, owners.len());
+    let p = sqlx::query("SELECT * FROM migration_family_refresh_plan WHERE id=$1")
+        .bind(claim.plan)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let counts: Counts = serde_json::from_value(p.get("counts")).unwrap();
+    assert_eq!(counts.units, owners.len() as u64);
+    assert_eq!(counts.held, counts.units);
+    assert!(counts.reconciles());
+    assert!(p.get::<bool, _>("owned_walk_complete"));
+    assert!(p.get::<Option<Vec<u8>>, _>("digest").is_none());
+    assert_eq!(p.get::<String, _>("state"), "preparing");
+    assert_eq!(
+        p.get::<i64, _>("retained_bytes"),
+        p.get::<i64, _>("measured_bytes")
+    );
+    let scope = Scope {
+        organization: f.ctx.organization_id,
+        bundle: claim.bundle,
+        plan: claim.plan,
+        family: Family::History,
+        revision: 1,
+    };
+    let manifests = sqlx::query("SELECT * FROM migration_family_refresh_manifest WHERE plan_id=$1")
+        .bind(claim.plan)
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    for m in manifests {
+        assert_eq!(m.get::<String, _>("reason"), "source_not_observed");
+        assert!(m.get::<Option<Uuid>, _>("source_row_id").is_none());
+        assert!(m.get::<Option<Uuid>, _>("target_id").is_none());
+        assert!(m.get::<Option<Uuid>, _>("expected_head_id").is_none());
+        let proposal: MissingProposal = scope
+            .open(
+                &f.key,
+                m.get("id"),
+                Purpose::Manifest,
+                m.get("nonce"),
+                m.get("ciphertext"),
+            )
+            .unwrap();
+        assert!(proposal.source_not_observed);
+        assert_eq!(proposal.reason, Hold::SourceNotObserved);
+        assert_eq!(proposal.baseline.unwrap().identity, proposal.identity);
+    }
+    assert_eq!(
+        history_missing::run_once(&f.pool, &f.key, &f.policy, &claim)
+            .await
+            .unwrap(),
+        Progress::Finished
+    );
+    let native_after:serde_json::Value=sqlx::query_scalar("SELECT jsonb_agg(to_jsonb(i) ORDER BY id) FROM migration_history_import_identity i WHERE organization_id=$1").bind(f.org).fetch_one(&pool).await.unwrap();
+    assert_eq!(
+        native_before, native_after,
+        "native identity/fact ownership remains unchanged"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_family_refresh_history_head WHERE organization_id=$1"
+        )
+        .bind(f.org)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        0
+    );
+    preparation_worker::release(&f.pool, &claim).await.unwrap();
+    assert!(preparation_worker::claim_next(&f.pool)
+        .await
+        .unwrap()
+        .is_none());
 }

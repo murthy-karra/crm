@@ -33,7 +33,8 @@ pub enum Discovery {
     Proven(Baseline),
     Held(Hold),
 }
-/// The identity hash must come from authenticated retained source selection.
+/// The identity hash comes from authenticated retained source selection or the
+/// bounded frozen first-owner walk; the original fact is authenticated below.
 pub async fn discover(
     pool: &PgPool,
     key: &RawPayloadKey,

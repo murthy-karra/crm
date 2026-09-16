@@ -9,8 +9,8 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   previously authorized single reviewer. Planning review READY, round 1.
 - User requested “commit and proceed”; foundation checkpoint **`8b5959e`** is
   committed; accounting checkpoint **`0ef822f`** is also committed. History
-  correction storage is committed with this checkpoint; the combined feature is
-  unfinished. No merge/push/deploy.
+  correction storage is committed as **`047e3e5`**; native delta planning is
+  committed with this checkpoint. The combined feature is unfinished. No merge/push/deploy.
 - Foundation: comparison policies, source ordering, bounded encrypted evidence,
   exact decimal counts, draft persistence ownership and native/lease guards.
 - Accounting now measures family and shared evidence separately. One frozen plan
@@ -27,6 +27,12 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 - The retained-history adapter reuses existing identity/canonical HMAC purposes;
   body-only changes create different semantics with unchanged metadata. Displays
   use a separate, version-bound AEAD purpose and a 4 KiB plaintext limit.
+- Native delta planning now builds atomic metadata and note/task update
+  proposals. Metadata retains ownership separately from equality, preserves local
+  links, checks complete alias absence, reports source gaps, and counts qualified
+  clears/removals. Activity preserves immutable fields and native local state,
+  validates role mappings, and counts completion/reopen without inventing actors.
+  These are pure preparation components; persistence execution is not wired.
 - No refresh HTTP commands, family worker or Web workflow are exposed yet.
 
 ## Evidence and isolation
@@ -54,6 +60,16 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   `/private/tmp/010g1-history-legacy-tests.log` and
   `/private/tmp/010g1-history-schema.log`. These are targeted storage/adapter
   checks, not evidence of a working refresh HTTP/worker/Web flow.
+- Native delta planning: all 28 focused family tests passed, including 8 new
+  metadata and 6 new activity tests. Checks cover ownership, alias conflicts,
+  missing/null/empty data, serialization, local edits/ABA, capacity, role mappings,
+  task completion/reopen, and immutable fields. Clippy (`crm-app --lib`, warnings
+  denied), formatting, and diff checks passed. The existing database 20-tag limit
+  and idempotent-reapplication regression passed. An intermediate test-helper
+  signature compile failure was corrected and rerun successfully. Logs:
+  `/private/tmp/010g1-native-delta-tests.log`,
+  `/private/tmp/010g1-native-delta-clippy.log` and
+  `/private/tmp/010g1-native-tag-regression.log`. No refresh execution or UI claim.
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB
   `crm_010g1_schema_20260915`. Database tests run serially.

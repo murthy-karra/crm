@@ -1,3 +1,5 @@
+pub(crate) const PERSON_TAG_LIMIT: usize = 20;
+
 use serde::Serialize;
 
 use crate::domain::admin::Role;

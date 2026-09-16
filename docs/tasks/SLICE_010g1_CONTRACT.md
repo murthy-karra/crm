@@ -167,3 +167,27 @@ The retained-source adapter preserves the original `timeline-import-identity-v1`
 and `timeline-import-canonical-v1` purposes. Body-only canonical changes alter the
 semantic hash while leaving metadata unchanged; display AEAD has its own purpose,
 4 KiB ceiling and exact version-row binding.
+
+### Native delta planning checkpoint
+
+The metadata planner compares complete baseline/current metadata and the native
+revision before proposing any change. It retains explicit ownership separately
+from value equality. Whole-Person proposals preserve local links, require all
+supporting tag aliases to be absent before removing an owned link, retain unknown
+source gaps, and distinguish qualified field clears from missing/null/empty data.
+Duplicate field targets and conflicting alias targets hold the Person. Capacity
+uses the final tag set and the same 20-tag constant as ordinary native commands.
+A hold never returns a partially applicable change list or destructive counts.
+
+The activity update planner starts from the complete unchanged native row and
+replaces only declared note/task columns. It preserves identity, source binding,
+creation time and any local-only fields; a changed source creation time is held.
+Equivalent timestamp formats and a new correlation ID alone do not cause writes.
+Historical author/creator membership and active-assignee membership remain
+separate. Source completion/reopen has explicit counts and no invented completer.
+The database must still verify the frozen proposal under locks and return the
+actual post-write revision; these pure proposals do not authorize execution.
+
+Both planners are internal preparation components. Cohort/source discovery,
+immutable baseline adapters, HTTP commands, workers and Web integration remain
+unfinished. No application path invokes these proposals yet.

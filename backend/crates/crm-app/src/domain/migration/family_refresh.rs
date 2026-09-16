@@ -46,3 +46,5 @@ mod mapping_inheritance;
 pub mod activity_mapping;
 
 pub mod activity_plan;
+
+pub mod activity_walk;

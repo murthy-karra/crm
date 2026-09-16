@@ -52,6 +52,39 @@ pub async fn prepare_unit(
     kind: Kind,
     source_id: &str,
 ) -> Result<Prepared, MigrationError> {
+    prepare(
+        pool,
+        key,
+        policy,
+        claim,
+        Unit {
+            cohort,
+            kind,
+            source_id,
+            walk: None,
+        },
+    )
+    .await
+}
+pub(super) struct Unit<'a> {
+    pub cohort: Uuid,
+    pub kind: Kind,
+    pub source_id: &'a str,
+    pub walk: Option<super::activity_walk::Position>,
+}
+pub(super) async fn prepare(
+    pool: &PgPool,
+    key: &RawPayloadKey,
+    policy: &SnapshotPolicy,
+    claim: &Claim,
+    input: Unit<'_>,
+) -> Result<Prepared, MigrationError> {
+    let Unit {
+        cohort,
+        kind,
+        source_id,
+        walk,
+    } = input;
     let (kind_name, source_kind) = match kind {
         Kind::Note => ("note", core_resolution::Kind::Note),
         Kind::Task => ("task", core_resolution::Kind::Task),
@@ -84,7 +117,10 @@ pub async fn prepare_unit(
         );
         if let Some(row)=sqlx::query("SELECT id,cohort_id,source_row_id FROM migration_family_refresh_manifest WHERE plan_id=$1 AND organization_id=$2 AND kind=$3 AND source_key_hmac=$4").bind(claim.plan).bind(claim.organization.0).bind(kind_name).bind(&hash).fetch_optional(&mut *tx).await? {
             if row.get::<Option<Uuid>,_>("cohort_id")!=Some(cohort) || row.get::<Option<Uuid>,_>("source_row_id")!=Some(selected.row) {return Err(MigrationError::Crypto);}
-            return Ok(Prepared::Unit(row.get("id")));
+            super::activity_walk::advance(&mut tx,claim,walk).await?;
+            let id=row.get("id");
+            tx.commit().await?;
+            return Ok(Prepared::Unit(id));
         }
         let consumed:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM migration_activity_identity WHERE organization_id=$1 AND source_account_id=$2 AND kind=$3 AND source_id=$4)").bind(claim.organization.0).bind(account).bind(kind_name).bind(source_id).fetch_one(&mut *tx).await?;
         (account, c.get::<Uuid, _>("person_id"), consumed)
@@ -120,7 +156,7 @@ pub async fn prepare_unit(
     );
     // The claim may be shared by duplicate callers. Serialize allocation and
     // settlement, and preserve an earlier immutable hold or prospective ID.
-    if let Some(id)=sqlx::query_scalar("SELECT id FROM migration_family_refresh_manifest WHERE plan_id=$1 AND organization_id=$2 AND kind=$3 AND source_key_hmac=$4").bind(claim.plan).bind(claim.organization.0).bind(kind_name).bind(&hash).fetch_optional(&mut *tx).await? {return Ok(Prepared::Unit(id));}
+    if let Some(id)=sqlx::query_scalar("SELECT id FROM migration_family_refresh_manifest WHERE plan_id=$1 AND organization_id=$2 AND kind=$3 AND source_key_hmac=$4").bind(claim.plan).bind(claim.organization.0).bind(kind_name).bind(&hash).fetch_optional(&mut *tx).await? {super::activity_walk::advance(&mut tx,claim,walk).await?;tx.commit().await?;return Ok(Prepared::Unit(id));}
     let mut native = None;
     let mut converted_evidence = None;
     if let (None, activity_mapping::Conversion::Ready(converted)) = (held, converted) {
@@ -302,6 +338,7 @@ pub async fn prepare_unit(
         .bind(claim.epoch)
         .execute(&mut *tx)
         .await?;
+    super::activity_walk::advance(&mut tx, claim, walk).await?;
     tx.commit().await?;
     tracing::info!(organization_id=%claim.organization,plan_id=%claim.plan,manifest_id=%id,disposition,"Family refresh activity proposal prepared");
     Ok(Prepared::Unit(id))

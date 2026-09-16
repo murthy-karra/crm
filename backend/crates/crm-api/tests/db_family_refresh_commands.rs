@@ -211,11 +211,12 @@ async fn family_refresh_prepare_combined_is_atomic_metered_and_replay_safe(pool:
         .bind(prepared.bundle_id).fetch_all(&pool).await.unwrap();
     for plan in plans {
         let history = plan.get::<String, _>("family") == "history";
+        let walked = plan.get::<String, _>("family") != "metadata";
         assert_eq!(
             plan.get::<String, _>("phase"),
-            if history { "classify" } else { "mappings" }
+            if walked { "classify" } else { "mappings" }
         );
-        assert_eq!(plan.get::<bool, _>("source_walk_complete"), history);
+        assert_eq!(plan.get::<bool, _>("source_walk_complete"), walked);
         assert_eq!(plan.get::<bool, _>("owned_walk_complete"), history);
         assert_eq!(plan.get::<bool, _>("mappings_complete"), !history);
         assert!(plan.get::<Option<Uuid>, _>("lease_token").is_none());
@@ -613,9 +614,18 @@ async fn family_refresh_mapping_inventory_is_bounded_atomic_and_reuses_shared_so
     f.reader.set_records(Stream::CustomFields,vec![json!({"id":10,"name":"customChoice","label":"Choice","type":"dropdown","choices":(0..70).map(|n|format!("Option {n}")).collect::<Vec<_>>()})]);
     let mut invalid_task = db_activity_source::task(22);
     invalid_task["assignedUserId"] = json!("invalid role reference");
+    let mut conflicting = db_activity_source::task(21);
+    conflicting["personId"] = json!(999);
+    let mut outside = db_activity_source::task(30);
+    outside["personId"] = json!(999);
     f.reader.set_records(
         Stream::TasksOpen,
-        vec![db_activity_source::task(21), invalid_task],
+        vec![
+            db_activity_source::task(21),
+            invalid_task,
+            conflicting,
+            outside,
+        ],
     );
     f.reader.set_records(Stream::Notes,vec![json!({"id":11,"personId":101,"createdById":999,"body":"List body must not seed mappings","created":"2026-09-01T12:00:00Z"})]);
     f.reader.set_raw(Stream::NoteDetail,0,200,serde_json::to_vec(&json!({"id":11,"personId":101,"createdById":3,"type":"Note","body":"Retained detail","isHtml":false,"created":"2026-09-01T12:00:00Z","updated":null})).unwrap(),false);
@@ -870,8 +880,28 @@ async fn family_refresh_mapping_inventory_is_bounded_atomic_and_reuses_shared_so
         .fetch_one(&pool)
         .await
         .unwrap(),
+        4,
+        "activity traversal counts each identity once, including held and excluded work"
+    );
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_family_refresh_manifest WHERE plan_id=$1 AND reason='source_conflict'").bind(activity).fetch_one(&pool).await.unwrap(),1);
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_family_refresh_manifest WHERE plan_id=$1 AND disposition='excluded'").bind(activity).fetch_one(&pool).await.unwrap(),1);
+    assert!(sqlx::query_scalar::<_, bool>(
+        "SELECT source_walk_complete FROM migration_family_refresh_plan WHERE id=$1"
+    )
+    .bind(activity)
+    .fetch_one(&pool)
+    .await
+    .unwrap());
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_family_refresh_result WHERE bundle_id=$1"
+        )
+        .bind(claim.bundle)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
         0,
-        "mapping discovery grants no native action"
+        "preparation cannot execute native work"
     );
 }
 
@@ -1693,7 +1723,15 @@ async fn family_refresh_activity_proposals_are_atomic_stable_and_do_not_write_na
     .await
     .unwrap();
     for step in 0..40 {
-        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+        worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap();
+        if sqlx::query_scalar::<_, bool>(
+            "SELECT mappings_complete FROM migration_family_refresh_plan WHERE id=$1",
+        )
+        .bind(planned.families[0].plan_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+        {
             break;
         }
         assert!(step < 39);
@@ -1715,7 +1753,15 @@ async fn family_refresh_activity_proposals_are_atomic_stable_and_do_not_write_na
         epoch,
     };
     let cohort:Uuid=sqlx::query_scalar("SELECT id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND source_person_id='101'").bind(claim.bundle).fetch_one(&pool).await.unwrap();
-    let checkpoint:serde_json::Value=sqlx::query_scalar("SELECT jsonb_build_object('position',position,'counts',counts,'retained',retained_bytes,'reserved',reserved_bytes) FROM migration_family_refresh_plan WHERE id=$1").bind(plan).fetch_one(&pool).await.unwrap();
+    let checkpoint:serde_json::Value=sqlx::query_scalar("SELECT jsonb_build_object('position',position,'counts',counts,'retained',retained_bytes,'reserved',reserved_bytes,'cursor',checkpoint_id) FROM migration_family_refresh_plan WHERE id=$1").bind(plan).fetch_one(&pool).await.unwrap();
+    use crm_api::domain::migration::family_refresh::activity_walk;
+    for statement in ["UPDATE migration_family_refresh_plan SET source_walk_complete=true WHERE id=$1","UPDATE migration_family_refresh_plan SET checkpoint_id=(SELECT id FROM migration_family_refresh_source WHERE bundle_id=$2 AND kind IN ('note','task') ORDER BY id DESC LIMIT 1) WHERE id=$1"] {
+        let mut tx=f.pool.begin().await.unwrap();
+        sqlx::query("SELECT set_config('crm.family_refresh_reader','fub-family-refresh-v1',true),set_config('crm.family_refresh_lease',$1,true)").bind(token.to_string()).execute(&mut *tx).await.unwrap();
+        let query=sqlx::query(statement).bind(plan);
+        let result=if statement.contains("$2"){query.bind(claim.bundle).execute(&mut *tx).await}else{query.execute(&mut *tx).await};
+        assert!(result.is_err(),"cannot skip source occurrences or declare premature completion");tx.rollback().await.unwrap();
+    }
     let mut tiny = f.policy.clone();
     tiny.org_ceiling_bytes = 1;
     assert!(matches!(
@@ -1724,6 +1770,12 @@ async fn family_refresh_activity_proposals_are_atomic_stable_and_do_not_write_na
             .unwrap(),
         Prepared::Capacity
     ));
+    assert_eq!(
+        activity_walk::run_once(&f.pool, &f.key, &tiny, &claim)
+            .await
+            .unwrap(),
+        activity_walk::Progress::Capacity
+    );
     sqlx::raw_sql("CREATE FUNCTION test_activity_plan_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.position<>OLD.position THEN RAISE EXCEPTION 'synthetic activity fault'; END IF; RETURN NEW; END $$; CREATE TRIGGER test_activity_plan_fault BEFORE UPDATE ON migration_family_refresh_plan FOR EACH ROW EXECUTE FUNCTION test_activity_plan_fault()").execute(&pool).await.unwrap();
     assert!(activity_plan::prepare_unit(
         &f.pool,
@@ -1736,8 +1788,11 @@ async fn family_refresh_activity_proposals_are_atomic_stable_and_do_not_write_na
     )
     .await
     .is_err());
+    assert!(activity_walk::run_once(&f.pool, &f.key, &f.policy, &claim)
+        .await
+        .is_err());
     sqlx::raw_sql("DROP TRIGGER test_activity_plan_fault ON migration_family_refresh_plan; DROP FUNCTION test_activity_plan_fault()").execute(&pool).await.unwrap();
-    let after_fault:serde_json::Value=sqlx::query_scalar("SELECT jsonb_build_object('position',position,'counts',counts,'retained',retained_bytes,'reserved',reserved_bytes) FROM migration_family_refresh_plan WHERE id=$1").bind(plan).fetch_one(&pool).await.unwrap();
+    let after_fault:serde_json::Value=sqlx::query_scalar("SELECT jsonb_build_object('position',position,'counts',counts,'retained',retained_bytes,'reserved',reserved_bytes,'cursor',checkpoint_id) FROM migration_family_refresh_plan WHERE id=$1").bind(plan).fetch_one(&pool).await.unwrap();
     assert_eq!(checkpoint, after_fault);
     let scope = Scope {
         organization: f.ctx.organization_id,
@@ -1868,4 +1923,39 @@ async fn family_refresh_activity_proposals_are_atomic_stable_and_do_not_write_na
         p.get::<i64, _>("retained_bytes")
     );
     worker::release(&f.pool, &claim).await.unwrap();
+    for step in 0..20 {
+        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+            break;
+        }
+        assert!(step < 19);
+    }
+    assert!(sqlx::query_scalar::<_, bool>(
+        "SELECT source_walk_complete FROM migration_family_refresh_plan WHERE id=$1"
+    )
+    .bind(plan)
+    .fetch_one(&pool)
+    .await
+    .unwrap());
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_family_refresh_manifest WHERE plan_id=$1"
+        )
+        .bind(plan)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        3,
+        "traversal reuses frozen outcomes"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, String>(
+            "SELECT state FROM migration_family_refresh_plan WHERE id=$1"
+        )
+        .bind(plan)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        "preparing",
+        "source exhaustion alone does not seal a ready plan"
+    );
 }

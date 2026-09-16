@@ -7,8 +7,8 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 - Branch `codex/010g1-family-refresh`, base `dd140b0`; one primary writer and the
   previously authorized single reviewer. Planning review READY, round 1.
-- Current milestone: persisted activity proposals following mapping conversion
-  at **`4690233`** and typed mapping revisions at **`8371c7b`**.
+- Current milestone: bounded activity source traversal following persisted
+  activity proposals at **`b2cd149`** and mapping conversion at **`4690233`**.
   The combined feature is unfinished. No merge/push/deploy.
 - Foundation: comparison policies, source ordering, bounded encrypted evidence,
   exact decimal counts, draft persistence ownership and native/lease guards.
@@ -174,8 +174,13 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   encrypted insert/update/current or held outcomes with exact first-coverage,
   baseline/head/revision and mapping evidence. Replay preserves earlier holds and
   prospective IDs before mutable checks. Manifest/count/position/byte settlement
-  is atomic; native rows/identities/heads remain unchanged. Bounded traversal,
-  absent-owned classification and complete-plan sealing remain pending.
+  is atomic; native rows/identities/heads remain unchanged. The scheduler now
+  traverses one activity occurrence at a time after mappings complete, with
+  duplicate identity reuse, full conflict resolution before cohort filtering,
+  encrypted diagnostics and explicit exclusions. Migration 015 fences live
+  leases, no-skip cursors, required outcomes and source exhaustion. Unit outcome,
+  cursor and charges commit together. Absent-owned classification and complete-
+  plan sealing remain pending; source exhaustion remains preparation.
 - No refresh HTTP commands or Web workflow are exposed yet.
 
 ## Evidence and isolation
@@ -262,6 +267,15 @@ archived in [Project history](../plans/PROJECT_HISTORY.md#010g1-preparation-and-
   `/private/tmp/010g1-activity-plan-db.log` and
   `/private/tmp/010g1-activity-plan-final-clippy.log`. Runner: serial
   `all family_refresh_activity_proposals`; this new adapter is not dispatched yet.
+- Activity traversal: all 35 serial family database regressions and API-library
+  Clippy passed, plus formatting/diff checks. Coverage includes complete-group
+  conflicts before cohort filtering, exclusions, note list/detail identity reuse,
+  failed cursor/count/charge rollback, forbidden cursor skips and premature
+  completion, and replay of already-frozen unit outcomes. The initial command
+  run passed 8/9; the remaining old phase expectation was updated from mappings
+  to classify for activity, then the full family run passed. Logs:
+  `/private/tmp/010g1-activity-walk-family-db.log` and
+  `/private/tmp/010g1-activity-walk-clippy.log`. Runner: serial `all family_refresh`.
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB
   `crm_010g1_schema_20260915`. Database tests run serially.

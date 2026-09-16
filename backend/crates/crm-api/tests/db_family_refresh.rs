@@ -1859,7 +1859,22 @@ pub(super) async fn prior_native_fixture(
     f: &import_support::Fixture,
     parent: Uuid,
     claim: &crm_api::domain::migration::family_refresh::cohort::Claim,
+    proofs: Vec<crm_api::domain::migration::family_refresh::native_baseline::AfterState>,
+) -> (
+    crm_api::domain::migration::family_refresh::cohort::Claim,
+    Uuid,
+    Vec<Uuid>,
+) {
+    prior_native_fixture_with_source(pool, f, parent, claim, proofs, false).await
+}
+
+async fn prior_native_fixture_with_source(
+    pool: &PgPool,
+    f: &import_support::Fixture,
+    parent: Uuid,
+    claim: &crm_api::domain::migration::family_refresh::cohort::Claim,
     mut proofs: Vec<crm_api::domain::migration::family_refresh::native_baseline::AfterState>,
+    reuse_source: bool,
 ) -> (
     crm_api::domain::migration::family_refresh::cohort::Claim,
     Uuid,
@@ -1871,12 +1886,16 @@ pub(super) async fn prior_native_fixture(
         model::Family,
         native_baseline::{ResultData, State},
     };
-    let report = db_people_admission_execution::report(
-        f,
-        parent,
-        vec![json!({"id":101,"firstName":"Synthetic successor","stage":"Lead","assignedUserId":3})],
-    )
-    .await;
+    let report = if reuse_source {
+        sqlx::query_scalar("SELECT core_report_id FROM migration_family_refresh_bundle WHERE id=$1")
+            .bind(claim.bundle)
+            .fetch_one(pool)
+            .await
+            .unwrap()
+    } else {
+        db_people_admission_execution::report(f, parent,
+            vec![json!({"id":101,"firstName":"Synthetic successor","stage":"Lead","assignedUserId":3})]).await
+    };
     let family: String =
         sqlx::query_scalar("SELECT family FROM migration_family_refresh_plan WHERE id=$1")
             .bind(claim.plan)
@@ -1933,8 +1952,13 @@ pub(super) async fn prior_native_fixture(
         sqlx::query("INSERT INTO migration_family_refresh_head(organization_id,source_account_id,kind,source_key_hmac,person_id,target_id,result_id,version) SELECT organization_id,source_account_id,$2,$3,$4,$5,$6,1 FROM migration_family_refresh_bundle WHERE id=$1")
             .bind(claim.bundle).bind(kind).bind(source_key).bind(proof.person).bind(proof.target).bind(result).execute(&mut *tx).await.unwrap();
     }
-    sqlx::query("UPDATE migration_family_refresh_plan SET state='completed',lease_token=NULL,lease_expires_at=NULL WHERE id=$1").bind(claim.plan).execute(&mut *tx).await.unwrap();
-    sqlx::query("UPDATE migration_family_refresh_bundle SET state='completed',updated_at=clock_timestamp() WHERE id=$1").bind(claim.bundle).execute(&mut *tx).await.unwrap();
+    let terminal = if proofs.is_empty() {
+        "cancelled"
+    } else {
+        "completed"
+    };
+    sqlx::query("UPDATE migration_family_refresh_plan SET state=$2,lease_token=NULL,lease_expires_at=NULL WHERE id=$1").bind(claim.plan).bind(terminal).execute(&mut *tx).await.unwrap();
+    sqlx::query("UPDATE migration_family_refresh_bundle SET state=$2,updated_at=clock_timestamp() WHERE id=$1").bind(claim.bundle).bind(terminal).execute(&mut *tx).await.unwrap();
     sqlx::query("SELECT crm_family_refresh_settle(organization_id,bundle_id,plan_id,token,$2,true) FROM migration_family_refresh_reservation WHERE plan_id=$1 AND purpose='control'").bind(claim.plan).bind(claim.epoch).execute(&mut *tx).await.unwrap();
     let bundle = Uuid::new_v4();
     let plan = Uuid::new_v4();
@@ -2201,4 +2225,86 @@ async fn prior_refresh_unowned_head_cannot_fall_back_to_first_import(pool: PgPoo
         ),
         "corrupted or foreign result evidence must not fall back either"
     );
+}
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn accepted_scan_survives_zero_write_cancel_without_advancing_a_baseline(pool: PgPool) {
+    use crm_api::domain::migration::{
+        family_refresh::{
+            activity_baseline::{self, Discovery},
+            model::{Hold, Kind},
+        },
+        snapshot_source::Stream,
+    };
+    for reuse in [false, true] {
+        let book = db_activity_source::book();
+        book.set_records(Stream::TasksOpen, vec![db_activity_source::task(21)]);
+        let f = import_support::fixture_with_book(&pool, book).await;
+        let parent = db_activity_source::completed_parent(&f).await;
+        let (child, ready) = db_activity_source::prepare(&f, parent).await;
+        let choices = db_activity_source::choices(&f, child).await;
+        let ready = db_activity_source::replan(&f, child, &ready, choices, None).await;
+        db_activity_source::confirm(&f, child, &ready).await;
+        let prior = prepared_indexed_refresh(&pool, &f, parent).await;
+        let (next, cohort, results) =
+            prior_native_fixture_with_source(&pool, &f, parent, &prior, vec![], reuse).await;
+        assert!(results.is_empty());
+        let heads: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM migration_family_refresh_head WHERE organization_id=$1",
+        )
+        .bind(f.org)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(heads, 0, "a cancelled scan is not an applied baseline");
+        let previous=sqlx::query("SELECT p.source_snapshot_id,s.completed_at,b.state FROM migration_family_refresh_plan p JOIN migration_family_refresh_bundle b ON b.id=p.bundle_id JOIN migration_snapshot s ON s.id=p.source_snapshot_id WHERE p.id=$1").bind(prior.plan).fetch_one(&pool).await.unwrap();
+        assert_eq!(previous.get::<String, _>("state"), "cancelled");
+        let found = activity_baseline::discover(&f.pool, &f.key, &next, cohort, Kind::Task, "21")
+            .await
+            .unwrap();
+        if reuse {
+            assert!(
+                matches!(found, Discovery::Held(Hold::SourceNotNewer)),
+                "the same accepted capture is reserved for exact unfinished remainders"
+            );
+            continue;
+        }
+        let baseline = match found {
+            Discovery::Proven(b) => b,
+            Discovery::Held(h) => panic!("{h:?}"),
+        };
+        assert!(
+            baseline.head_id.is_none(),
+            "the unchanged first-import result remains the baseline"
+        );
+        let selected=sqlx::query("SELECT s.id,s.started_at FROM migration_snapshot s JOIN migration_family_refresh_plan p ON p.source_snapshot_id=s.id WHERE p.id=$1").bind(next.plan).fetch_one(&pool).await.unwrap();
+        sqlx::query("UPDATE migration_snapshot SET started_at=$2 WHERE id=$1")
+            .bind(selected.get::<Uuid, _>("id"))
+            .bind(previous.get::<Option<chrono::DateTime<chrono::Utc>>, _>("completed_at"))
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert!(
+            matches!(
+                activity_baseline::discover(&f.pool, &f.key, &next, cohort, Kind::Task, "21")
+                    .await
+                    .unwrap(),
+                Discovery::Held(Hold::SourceNotNewer)
+            ),
+            "ordering uses the accepted scan, not only the older applied result"
+        );
+        sqlx::query("UPDATE migration_snapshot SET started_at=$2 WHERE id=$1")
+            .bind(selected.get::<Uuid, _>("id"))
+            .bind(selected.get::<Option<chrono::DateTime<chrono::Utc>>, _>("started_at"))
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert!(matches!(
+            activity_baseline::discover(&f.pool, &f.key, &next, cohort, Kind::Task, "21")
+                .await
+                .unwrap(),
+            Discovery::Proven(_)
+        ));
+    }
 }

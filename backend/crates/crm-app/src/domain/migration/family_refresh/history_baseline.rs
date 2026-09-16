@@ -58,6 +58,11 @@ pub async fn discover(
     }
     let c=sqlx::query("SELECT c.*,p.id AS live_person FROM migration_family_refresh_cohort c LEFT JOIN person p ON p.id=c.person_id AND p.organization_id=c.organization_id WHERE c.id=$1 AND c.bundle_id=$2 AND c.organization_id=$3")
         .bind(cohort).bind(claim.bundle).bind(claim.organization.0).fetch_optional(&mut *tx).await?.ok_or(MigrationError::NotFound)?;
+    if let Err(hold) =
+        super::source_policy::qualify_accepted_scan(&mut tx, claim.organization, &b, &p, &c).await?
+    {
+        return Ok(Discovery::Held(hold));
+    }
     if c.get::<Option<Uuid>, _>("live_person").is_none() {
         return Ok(Discovery::Held(Hold::TargetErased));
     }

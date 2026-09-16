@@ -354,3 +354,22 @@ The joins are bounded by the current identity/version keys; discovery does not
 walk or decrypt the entire version chain. This is preparation evidence, not the
 version-aware public timeline or execution admission. Application grants and
 capability advertisement remain unchanged.
+
+
+### Accepted scan boundaries remain separate from applied baselines
+
+Fresh metadata, activity and history baseline discovery also checks prior
+confirmed family plans for the exact frozen Person cohort, original parent and
+account. A held unit or zero-write cancellation does not discard its accepted
+capture boundary. The same capture, or a new interval starting before/on a prior
+accepted interval's completion, holds `source_not_newer` even when no refresh
+result/head was ever written. A later qualified capture may still use the older
+unchanged applied baseline. Unconfirmed plans and other families/cohorts do not
+establish this boundary.
+
+The existing confirmed plans and frozen cohorts are authoritative; no duplicate
+watermark or storage charge is introduced. The lookup uses the existing parent,
+plan and cohort indexes, returns at most one violating boundary, and never
+selects a winning source variant by timestamp. First-coverage and source-record
+qualification remain separate. Exact remainders must copy their fixed manifests;
+they do not obtain same-capture permission by rerunning fresh discovery.

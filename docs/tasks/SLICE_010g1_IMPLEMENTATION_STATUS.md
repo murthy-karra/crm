@@ -89,6 +89,11 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   revision. Metadata retains separate ownership/aliases; activity requires explicit
   positive ownership. Invalid heads never fall back to first-import evidence.
   These read adapters do not yet produce results through a refresh executor.
+- All three baseline discovery paths now separately enforce prior accepted scan
+  boundaries for the exact family/cohort. Held work and zero-write cancellation
+  cannot make the same capture newly eligible, even with no applied refresh head.
+  A genuinely newer capture can still use the unchanged older baseline. This
+  reuses confirmed plans/cohorts; exact remainder execution remains unwired.
 - No refresh HTTP commands, family dispatcher or Web workflow are exposed yet.
 
 ## Evidence and isolation
@@ -248,6 +253,20 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   db_family_refresh_history_baseline --locked -- --ignored --test-threads=1`,
   then the freshly compiled `debug/deps/all-07593333edaca6c2 family_refresh
   --ignored --test-threads=1`; `cargo test -p crm-app --lib family_refresh --locked`.
+- Accepted scan boundaries: all 22 serial family database regressions and 37
+  focused Rust tests passed, plus `crm-app --lib` Clippy with warnings denied,
+  formatting and diff checks. The new cancellation regression proves that an
+  accepted zero-write scan does not advance the applied baseline, while fresh
+  preparation rejects reuse or overlap and accepts a later capture. Accepted/
+  cancelled plans are migrator-built fixtures; typed confirmation and execution
+  remain outstanding. Logs: `/private/tmp/010g1-scan-boundary-db.log`,
+  `/private/tmp/010g1-scan-family-db.log`,
+  `/private/tmp/010g1-scan-boundary-unit.log`, and
+  `/private/tmp/010g1-scan-boundary-clippy.log`.
+  Runners: `cargo test -p crm-api --features test-support --test all
+  accepted_scan_survives --locked -- --ignored --test-threads=1`, then the freshly
+  compiled `debug/deps/all-07593333edaca6c2 family_refresh --ignored
+  --test-threads=1`; `cargo test -p crm-app --lib family_refresh --locked`.
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB
   `crm_010g1_schema_20260915`. Database tests run serially.

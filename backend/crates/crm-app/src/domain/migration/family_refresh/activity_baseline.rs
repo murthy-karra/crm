@@ -144,6 +144,11 @@ pub async fn discover(
     }
     let c=sqlx::query("SELECT * FROM migration_family_refresh_cohort WHERE id=$1 AND bundle_id=$2 AND organization_id=$3")
         .bind(cohort).bind(claim.bundle).bind(claim.organization.0).fetch_optional(&mut *tx).await?.ok_or(MigrationError::NotFound)?;
+    if let Err(hold) =
+        super::source_policy::qualify_accepted_scan(&mut tx, claim.organization, &b, &p, &c).await?
+    {
+        return Ok(Discovery::Held(hold));
+    }
     let identity=sqlx::query("SELECT * FROM migration_activity_identity WHERE organization_id=$1 AND source_account_id=$2 AND kind=$3 AND source_id=$4")
         .bind(claim.organization.0).bind(b.get::<i64,_>("source_account_id")).bind(kind).bind(source_id).fetch_optional(&mut *tx).await?;
     let Some(identity) = identity else {

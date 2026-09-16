@@ -89,6 +89,78 @@ pub(super) async fn qualify_core_snapshots(
     Ok(qualify_newer_capture(selected, previous))
 }
 
+/// Fresh preparation cannot reinterpret a capture already accepted for this
+/// cohort/family, even if every native unit was held or execution was cancelled.
+/// Exact remainders copy frozen manifests; they do not run fresh discovery.
+pub(super) async fn qualify_accepted_scan(
+    conn: &mut sqlx::PgConnection,
+    organization: crate::ids::OrganizationId,
+    bundle: &sqlx::postgres::PgRow,
+    plan: &sqlx::postgres::PgRow,
+    cohort: &sqlx::postgres::PgRow,
+) -> Result<Result<(), Hold>, crate::domain::migration::MigrationError> {
+    use sqlx::Row;
+    let family: String = plan.get("family");
+    let (table, column) = match family.as_str() {
+        "metadata" | "activity" => ("migration_snapshot", "source_snapshot_id"),
+        "history" => ("migration_history_capture_run", "history_capture_id"),
+        _ => return Err(crate::domain::migration::MigrationError::InvalidInput),
+    };
+    let selected: Uuid = plan.get(column);
+    let source = sqlx::query(&format!("SELECT id,source_account_id,started_at,completed_at,state FROM {table} WHERE organization_id=$1 AND id=$2"))
+        .bind(organization.0).bind(selected).fetch_optional(&mut *conn).await?;
+    let Some(source) = source else {
+        return Ok(Err(Hold::SourceUnavailable));
+    };
+    let Some(started) = source.get::<Option<DateTime<Utc>>, _>("started_at") else {
+        return Ok(Err(Hold::SourceUnavailable));
+    };
+    if source.get::<i64, _>("source_account_id") != bundle.get::<i64, _>("source_account_id") {
+        return Ok(Err(Hold::IdentityMismatch));
+    }
+    let boundary = Boundary {
+        capture: selected,
+        account: source.get("source_account_id"),
+        started,
+        completed: source.get("completed_at"),
+        terminal: matches!(
+            source.get::<String, _>("state").as_str(),
+            "completed" | "completed_with_gaps"
+        ),
+    };
+    if let Err(hold) = boundary.complete() {
+        return Ok(Err(hold));
+    }
+    let sql = include_str!("sql/accepted_scan.sql")
+        .replace("__SOURCE_TABLE__", table)
+        .replace("__SOURCE_COLUMN__", column);
+    let reason: Option<String> = sqlx::query_scalar(&sql)
+        .bind(organization.0)
+        .bind(bundle.get::<Uuid, _>("parent_import_id"))
+        .bind(bundle.get::<Uuid, _>("id"))
+        .bind(boundary.account)
+        .bind(bundle.get::<Uuid, _>("parent_plan_id"))
+        .bind(family)
+        .bind(cohort.get::<Uuid, _>("person_id"))
+        .bind(cohort.get::<Option<Uuid>, _>("original_result_id"))
+        .bind(cohort.get::<Option<Uuid>, _>("admission_result_id"))
+        .bind(bundle.get::<DateTime<Utc>, _>("created_at"))
+        .bind(selected)
+        .bind(started)
+        .bind(cohort.get::<Uuid, _>("creation_snapshot_id"))
+        .bind(cohort.get::<String, _>("source_person_id"))
+        .fetch_optional(conn)
+        .await?;
+    Ok(match reason.as_deref() {
+        None => Ok(()),
+        Some("identity_mismatch") => Err(Hold::IdentityMismatch),
+        Some("baseline_unproven") => Err(Hold::BaselineUnproven),
+        Some("source_unavailable") => Err(Hold::SourceUnavailable),
+        Some("source_not_newer") => Err(Hold::SourceNotNewer),
+        _ => return Err(crate::domain::migration::MigrationError::Crypto),
+    })
+}
+
 pub struct Occurrence<'a> {
     pub identity: &'a [u8],
     pub semantic: &'a [u8],

@@ -45,6 +45,11 @@ pub async fn discover(
     }
     let c = sqlx::query("SELECT * FROM migration_family_refresh_cohort WHERE id=$1 AND bundle_id=$2 AND organization_id=$3")
         .bind(cohort).bind(claim.bundle).bind(claim.organization.0).fetch_optional(&mut *tx).await?.ok_or(MigrationError::NotFound)?;
+    if let Err(hold) =
+        super::source_policy::qualify_accepted_scan(&mut tx, claim.organization, &b, &p, &c).await?
+    {
+        return Ok(Discovery::Held(hold));
+    }
     let person: Uuid = c.get("person_id");
     let live: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM person p JOIN migration_import_identity i ON i.organization_id=p.organization_id AND i.target_id=p.id AND i.family='people' WHERE p.organization_id=$1 AND p.id=$2 AND i.source_account_id=$3 AND i.source_id=$4 AND i.import_id=$5 AND ((i.admission_id IS NULL AND EXISTS(SELECT 1 FROM migration_import_result r WHERE r.id=$6 AND r.organization_id=i.organization_id AND r.import_id=i.import_id AND r.plan_id=i.plan_id AND r.manifest_id=i.manifest_id AND r.person_id=i.target_id AND r.source_id=i.source_id AND r.disposition IN ('imported','already_imported'))) OR i.admission_result_id=$7))")
         .bind(claim.organization.0).bind(person).bind(b.get::<i64,_>("source_account_id")).bind(c.get::<String,_>("source_person_id")).bind(b.get::<Uuid,_>("parent_import_id")).bind(c.get::<Option<Uuid>,_>("original_result_id")).bind(c.get::<Option<Uuid>,_>("admission_result_id")).fetch_one(&mut *tx).await?;

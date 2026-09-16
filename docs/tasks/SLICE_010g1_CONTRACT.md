@@ -274,3 +274,30 @@ state and the proof settle in the existing transaction and ciphertext ledger.
 Verification compares the complete state and revision, including unowned cells,
 and requires the exact immutable result binding. Metadata baseline discovery,
 legacy bootstrap and refresh execution remain unwired.
+
+
+### Scoped discovery and shared source indexing
+
+Metadata discovery uses the frozen cohort's exact original/admission result,
+parent/account, successful terminal family result and authenticated after-state.
+Results or terminal transitions after bundle creation cannot establish first
+coverage. It compares current native state/revision without adopting equality;
+existing refresh heads await their own adapter.
+
+Core source selection includes every indexed occurrence before Person filtering,
+compares variants within their representation, rejects open/completed task
+contradictions and requires note detail. Immutable sources retain their original
+plan's encryption scope and storage ownership when referenced by another family
+or mapping revision. Manifest source FKs are now bundle/Organization scoped, with
+kind and Person guards. Native guards reconcile source IDs instead of depending
+on nullable preclassification identity hashes.
+
+History indexing preserves authenticated page/cursor evidence separately from
+raw captures, validates run/parent/account/access-user/profile and completed stream
+totals, and requires capture ordering after the selected core or latest frozen
+cohort creation capture. Every parsable occurrence remains visible before cohort
+filtering; diagnostic pages are retained explicitly, never used as qualified
+native evidence. Only metadata is copied into the derived index; raw bodies and
+full canonical values remain in their existing encrypted captures. Page sources,
+checkpoints and exact byte charges commit together behind the current lease.
+This stage supplies preparation components, not native execution or HTTP admission.

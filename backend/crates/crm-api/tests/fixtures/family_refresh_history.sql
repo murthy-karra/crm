@@ -4,7 +4,7 @@ DO $$
 DECLARE org UUID:=current_setting('test.family_org')::uuid; actor UUID:=current_setting('test.family_actor')::uuid;
  parent UUID:=current_setting('test.family_parent')::uuid; capture UUID; round INTEGER:=0;
  bundle UUID:=gen_random_uuid(); plan UUID:=gen_random_uuid(); lease UUID:=gen_random_uuid(); control UUID:=gen_random_uuid();
- c RECORD; f RECORD; raw RECORD; h RECORD; source UUID; manifest UUID; outcome UUID; display UUID; cohort UUID; position BIGINT:=0;
+ c RECORD; f RECORD; raw RECORD; h RECORD; page UUID; source UUID; manifest UUID; outcome UUID; display UUID; cohort UUID; position BIGINT:=0;
  rejected BOOLEAN; frozen TEXT; after_frozen TEXT; before_counts JSONB; after_counts JSONB; before_bytes BIGINT; after_bytes BIGINT; charged BIGINT;
 BEGIN
  FOREACH capture IN ARRAY ARRAY[current_setting('test.family_capture')::uuid,current_setting('test.family_successor_capture')::uuid] LOOP
@@ -38,8 +38,11 @@ BEGIN
   SELECT * INTO raw FROM migration_history_capture WHERE run_id=capture AND organization_id=org AND family=f.family AND classification='advancing' LIMIT 1;
   SELECT id INTO cohort FROM migration_family_refresh_cohort WHERE bundle_id=bundle AND organization_id=org AND person_id=f.person_id;
   position:=position+1; source:=gen_random_uuid(); manifest:=gen_random_uuid();
-  INSERT INTO migration_family_refresh_source(id,bundle_id,plan_id,organization_id,capture_id,capture_sequence,ordinal,representation,kind,source_id,source_person_id,identity_hmac,semantic_hmac,qualified,nonce,ciphertext)
-  SELECT source,bundle,plan,org,raw.id,raw.sequence,0,raw.representation,f.kind,'1',co.source_person_id,f.identity_hmac,sha256(convert_to(f.kind||round::text,'UTF8')),true,decode(repeat('00',24),'hex'),decode(repeat('00',16),'hex') FROM migration_family_refresh_cohort co WHERE co.id=cohort;
+  page:=gen_random_uuid();
+  INSERT INTO migration_family_refresh_history_page(id,bundle_id,plan_id,organization_id,run_id,capture_id,capture_sequence,checkpoint,stream,accepted,nonce,ciphertext)
+  VALUES(page,bundle,plan,org,capture,raw.id,raw.sequence,raw.checkpoint,raw.family,true,decode(repeat('00',24),'hex'),decode(repeat('00',16),'hex'));
+  INSERT INTO migration_family_refresh_source(id,bundle_id,plan_id,organization_id,history_page_id,capture_id,capture_sequence,ordinal,representation,kind,source_id,source_person_id,identity_hmac,semantic_hmac,qualified,nonce,ciphertext)
+  SELECT source,bundle,plan,org,page,raw.id,raw.sequence,0,raw.representation,f.kind,'1',co.source_person_id,f.identity_hmac,sha256(convert_to(f.kind||round::text,'UTF8')),true,decode(repeat('00',24),'hex'),decode(repeat('00',16),'hex') FROM migration_family_refresh_cohort co WHERE co.id=cohort;
   INSERT INTO migration_family_refresh_manifest(id,bundle_id,plan_id,organization_id,cohort_id,source_row_id,position,kind,source_key_hmac,person_id,target_id,expected_head_id,disposition,counts,nonce,ciphertext,added_byte_bound)
   VALUES(manifest,bundle,plan,org,cohort,source,position,f.kind,f.identity_hmac,f.person_id,f.id,(SELECT result_id FROM migration_family_refresh_history_head WHERE organization_id=org AND identity_id=f.identity_id),'correction','{}',decode(repeat('00',24),'hex'),decode(repeat('00',16),'hex'),8192);
  END LOOP;

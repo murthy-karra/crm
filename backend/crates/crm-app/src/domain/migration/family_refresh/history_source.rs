@@ -14,11 +14,12 @@ use crate::{
     ids::OrganizationId,
 };
 use chrono::{DateTime, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
 // Deliberately no Debug: source IDs and metadata are not log fields.
+#[derive(Serialize, Deserialize)]
 pub struct HistoryEvidence {
     pub identity_hmac: [u8; 32],
     pub semantic_hmac: [u8; 32],
@@ -26,7 +27,7 @@ pub struct HistoryEvidence {
     pub created: Option<DateTime<Utc>>,
     pub display: HistoryDisplay,
 }
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct HistoryDisplay(Value);
 impl HistoryDisplay {

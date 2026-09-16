@@ -3467,3 +3467,59 @@ async fn admitted_owner_hot_proof(
         snapshot
     );
 }
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn family_refresh_metadata_admitted_discovery_preserves_coverage_and_ownership(
+    migrator: PgPool,
+) {
+    use crm_api::domain::migration::family_refresh::{
+        metadata_discovery::{self, Discovery},
+        model::Hold,
+    };
+    let (f, root, plan, person) = prepared_typed(&migrator).await;
+    approve_all(&f, root, plan).await;
+    finish(&f, root).await;
+    let parent: Uuid = sqlx::query_scalar(
+        "SELECT parent_import_id FROM migration_admitted_metadata_import WHERE id=$1",
+    )
+    .bind(root)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    let claim =
+        crate::db_family_refresh::prepared_family_refresh(&migrator, &f, parent, "metadata").await;
+    let cohort: Uuid = sqlx::query_scalar(
+        "SELECT id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND person_id=$2",
+    )
+    .bind(claim.bundle)
+    .bind(person)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    match metadata_discovery::discover(&f.pool, &f.key, &claim, cohort)
+        .await
+        .unwrap()
+    {
+        Discovery::Proven(p) => {
+            assert_eq!(p.baseline.person, person);
+            assert_eq!(p.ownership.tags.len(), 1);
+            assert_eq!(p.ownership.fields.len(), 4);
+        }
+        Discovery::Held(h) => panic!("unexpected hold: {h:?}"),
+    }
+    let original:Uuid=sqlx::query_scalar("SELECT id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND source_person_id='101'").bind(claim.bundle).fetch_one(&f.pool).await.unwrap();
+    assert!(matches!(
+        metadata_discovery::discover(&f.pool, &f.key, &claim, original)
+            .await
+            .unwrap(),
+        Discovery::Held(Hold::FirstCoverageRequired)
+    ));
+    let mut wrong = claim;
+    wrong.token = Uuid::new_v4();
+    assert!(
+        metadata_discovery::discover(&f.pool, &f.key, &wrong, cohort)
+            .await
+            .is_err()
+    );
+}

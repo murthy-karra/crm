@@ -3,12 +3,15 @@
 pub mod activity_delta;
 pub mod cohort;
 pub mod evidence;
+pub mod history_index;
 pub mod history_source;
 pub mod metadata_baseline;
 pub mod metadata_delta;
+pub mod metadata_discovery;
 pub mod model;
 pub mod source_policy;
 
 pub mod activity_baseline;
+pub mod core_resolution;
 pub mod core_source;
 mod preparation;

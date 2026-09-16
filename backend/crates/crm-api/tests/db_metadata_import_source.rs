@@ -850,3 +850,60 @@ async fn metadata_source_full_multimegabyte_evidence_survives_execution_without_
     let count:i64=sqlx::query_scalar("SELECT count(*) FROM person_custom_field_value WHERE organization_id=$1 AND text_value='native text'").bind(f.org).fetch_one(&f.pool).await.unwrap();
     assert_eq!(count, 1);
 }
+
+#[sqlx::test(migrations = "./migrations")]
+#[ignore]
+async fn family_refresh_metadata_original_discovery_is_bound_and_conservative(migrator: PgPool) {
+    use crm_api::domain::migration::family_refresh::{
+        metadata_discovery::{self, Discovery},
+        model::Hold,
+    };
+    let mut p = person(101);
+    p["tags"] = json!(["Imported"]);
+    p["customText"] = json!("Native baseline");
+    let f = support::fixture_with_book(
+        &migrator,
+        book(vec![p], vec![field(10, "customText", "Text", "text")]),
+    )
+    .await;
+    let parent = complete_parent(&f).await;
+    let (child, first) = propose(&f, parent).await;
+    let ready = replan(
+        &f,
+        child,
+        &first,
+        matching_choices(&f, plan_id(&first)).await,
+    )
+    .await;
+    execute(&f, child, &ready, parent).await;
+    let claim =
+        crate::db_family_refresh::prepared_family_refresh(&migrator, &f, parent, "metadata").await;
+    let cohort:Uuid=sqlx::query_scalar("SELECT id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND source_person_id='101'").bind(claim.bundle).fetch_one(&f.pool).await.unwrap();
+    let proven = match metadata_discovery::discover(&f.pool, &f.key, &claim, cohort)
+        .await
+        .unwrap()
+    {
+        Discovery::Proven(p) => p,
+        Discovery::Held(h) => panic!("unexpected hold: {h:?}"),
+    };
+    assert_eq!(proven.ownership.tags.len(), 1);
+    assert_eq!(proven.ownership.fields.len(), 1);
+    assert!(
+        metadata_discovery::discover(&f.pool, &f.key, &claim, Uuid::new_v4())
+            .await
+            .is_err()
+    );
+    // Migrator simulates a forbidden local edit and revert, preserving row value
+    // but advancing the database-owned metadata revision twice.
+    let target = *proven.ownership.fields.iter().next().unwrap();
+    let mut tx = migrator.begin().await.unwrap();
+    sqlx::query("UPDATE person_custom_field_value SET text_value='local edit' WHERE organization_id=$1 AND person_id=$2 AND field_id=$3").bind(f.org).bind(proven.baseline.person).bind(target).execute(&mut *tx).await.unwrap();
+    sqlx::query("UPDATE person_custom_field_value SET text_value='Native baseline' WHERE organization_id=$1 AND person_id=$2 AND field_id=$3").bind(f.org).bind(proven.baseline.person).bind(target).execute(&mut *tx).await.unwrap();
+    tx.commit().await.unwrap();
+    assert!(matches!(
+        metadata_discovery::discover(&f.pool, &f.key, &claim, cohort)
+            .await
+            .unwrap(),
+        Discovery::Held(Hold::LocalChange)
+    ));
+}

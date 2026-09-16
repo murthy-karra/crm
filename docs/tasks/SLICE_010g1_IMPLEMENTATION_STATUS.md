@@ -43,7 +43,8 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   source occurrence before Person filtering, with scoped raw references, lease
   fences and atomic accounting/checkpoints. It reuses the existing metadata and
   activity parsers and performs no source calls. Dispatcher/classification and
-  plan-revision reuse remain unwired; history indexing is still pending.
+  classification remain unwired. The immutable core index now resolves across
+  family/mapping plans without recopying or reencrypting evidence.
 - New positively applied original/admitted activity results retain exact encrypted
   native after-state/revision. A first-result discovery adapter checks frozen
   cohort/identity/manifest/result ownership and current equality/revision; missing
@@ -55,8 +56,19 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   The verifier rejects missing legacy proof, binding mismatch, local changes/ABA
   and refresh-head replacement. Original planning budgets now include the existing
   native state; exact ciphertext is charged through each existing result ledger.
-  These proofs are not yet connected to refresh classification/discovery.
-- No refresh HTTP commands, family worker or Web workflow are exposed yet.
+  A scoped metadata discovery adapter now selects exact original/admitted results
+  and checks terminal first coverage, Person identity, proof binding and current
+  revision. Legacy and previous-refresh adapters/classification remain pending.
+- Core source resolution reconciles all occurrences before cohort filtering,
+  rejects conflicting Person links/open-versus-completed task streams, and
+  requires note detail. Shared manifest references remain bundle/Org/kind/Person
+  scoped; database native guards inspect all source-ID occurrences.
+- The bounded history index authenticates retained capture/observation hashes,
+  identity, stream totals, cursor continuity and ordering after the frozen core
+  anchor. It retains all parsed occurrences, explicit diagnostic page evidence,
+  raw references and metadata-only displays, with transaction/lease/ledger fences.
+  It does not create native history facts or corrections.
+- No refresh HTTP commands, family dispatcher or Web workflow are exposed yet.
 
 ## Evidence and isolation
 
@@ -137,6 +149,25 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   --locked -- --ignored --test-threads=1`, then three exact tests using that
   freshly compiled `debug/deps/all-07593333edaca6c2` binary, serially against the
   owned synthetic database. No refresh discovery/execution or final-gate claim.
+- Discovery/source-index checkpoint: 13 serial family database regressions and
+  33 focused Rust tests passed. These include original/admitted metadata discovery,
+  edit/revert and wrong-cohort/token holds; complete source occurrence conflicts,
+  negative note detail, shared cross-family source reuse without duplicate storage;
+  and 103 history records over four pages with privacy, corruption rollback,
+  checkpoint-failure rollback, replay and exact accounting. Fresh migrations,
+  `crm-app --lib` Clippy with warnings denied, formatting and diff checks passed.
+  Initial SQL CASE syntax and Rust visibility checks failed during implementation,
+  were corrected, and passed subsequent schema/build/tests. Logs:
+  `/private/tmp/010g1-metadata-discovery-db.log`,
+  `/private/tmp/010g1-resolution-db.log`,
+  `/private/tmp/010g1-history-index-db.log`,
+  `/private/tmp/010g1-evidence-discovery-unit.log`,
+  `/private/tmp/010g1-history-index-clippy.log`,
+  `/private/tmp/010g1-source-reuse-schema.log`,
+  `/private/tmp/010g1-history-index-schema.log`.
+  Runners: `cargo test -p crm-api --features test-support --test all family_refresh
+  --locked -- --ignored --test-threads=1`; `cargo test -p crm-app --lib
+  family_refresh --locked`; isolated target/database as below. No final workflow gate claim.
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB
   `crm_010g1_schema_20260915`. Database tests run serially.
@@ -144,7 +175,7 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   No live FUB/customer processing. Linker reports the large `__eh_frame` warning.
 
 Remaining: final capability inventories and refresh-owned initial identities;
-history source indexing, index plan-revision reuse, legacy/prior-refresh
-baselines and metadata discovery; cohort/index dispatcher integration; metadata/activity/history execution; typed
+history source resolution/first-coverage classification, legacy/prior-refresh
+baselines; cohort/index dispatcher integration; metadata/activity/history execution; typed
 commands and bounded readers; common Web workflow; independent implementation
 review; full database/browser/performance/final gates. Do not report 010g1 done.

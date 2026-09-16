@@ -54,3 +54,5 @@ pub mod activity_missing;
 pub mod metadata_catalog;
 
 pub mod metadata_destination;
+
+pub mod catalog_plan;

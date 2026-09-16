@@ -2390,6 +2390,63 @@ async fn assert_metadata_destination_inspection(
     // Synthetic ready empty registry; production handover remains a typed,
     // workspace-exclusive operation and must never occur in a read adapter.
     sqlx::query("INSERT INTO migration_metadata_catalog_readiness(organization_id,state,activated_at,activated_by_user_id,engine_version) VALUES($1,'ready',clock_timestamp(),$2,'fub-admitted-metadata-v1')").bind(f.org).bind(f.actor).execute(pool).await.unwrap();
+    use crm_api::domain::migration::family_refresh::{
+        catalog_plan::{self, Prepared},
+        model::Counts,
+    };
+    let option_first = rows
+        .iter()
+        .find(|r| r.get::<String, _>("kind") == "option")
+        .unwrap()
+        .get::<Uuid, _>("id");
+    assert!(
+        matches!(
+            catalog_plan::prepare_unit(&f.pool, &f.key, &f.policy, &claim, option_first).await,
+            Err(MigrationError::ImportBusy)
+        ),
+        "parent catalog outcome precedes an option outcome"
+    );
+    let checkpoint_sql="SELECT jsonb_build_object('position',position,'counts',counts,'measured',measured_bytes,'retained',retained_bytes,'reserved',reserved_bytes) FROM migration_family_refresh_plan WHERE id=$1";
+    let before: serde_json::Value = sqlx::query_scalar(checkpoint_sql)
+        .bind(plan)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    let mut tiny = f.policy.clone();
+    tiny.org_ceiling_bytes = 1;
+    assert!(matches!(
+        catalog_plan::prepare_unit(&f.pool, &f.key, &tiny, &claim, first)
+            .await
+            .unwrap(),
+        Prepared::Capacity
+    ));
+    sqlx::raw_sql("CREATE FUNCTION test_catalog_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.position<>OLD.position THEN RAISE EXCEPTION 'synthetic catalog checkpoint fault'; END IF; RETURN NEW; END $$; CREATE TRIGGER test_catalog_fault BEFORE UPDATE ON migration_family_refresh_plan FOR EACH ROW EXECUTE FUNCTION test_catalog_fault()").execute(pool).await.unwrap();
+    assert!(
+        catalog_plan::prepare_unit(&f.pool, &f.key, &f.policy, &claim, first)
+            .await
+            .is_err()
+    );
+    sqlx::raw_sql("DROP TRIGGER test_catalog_fault ON migration_family_refresh_plan; DROP FUNCTION test_catalog_fault()").execute(pool).await.unwrap();
+    let after: serde_json::Value = sqlx::query_scalar(checkpoint_sql)
+        .bind(plan)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        after, before,
+        "failed catalog checkpoint and capacity admission roll back manifests/counts/bytes"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_family_refresh_manifest WHERE plan_id=$1"
+        )
+        .bind(plan)
+        .fetch_one(pool)
+        .await
+        .unwrap(),
+        0
+    );
+    let mut units = std::collections::BTreeMap::new();
     let mut tag = Uuid::nil();
     let mut field = Uuid::nil();
     let mut option = Uuid::nil();
@@ -2415,6 +2472,17 @@ async fn assert_metadata_destination_inspection(
             serde_json::to_value(&evidence).unwrap(),
             serde_json::to_value(&replay).unwrap()
         );
+        let Prepared::Unit(unit) =
+            catalog_plan::prepare_unit(&f.pool, &f.key, &f.policy, &claim, id)
+                .await
+                .unwrap()
+        else {
+            panic!("catalog unit must fit");
+        };
+        assert!(
+            matches!(catalog_plan::prepare_unit(&f.pool,&f.key,&tiny,&claim,id).await.unwrap(),Prepared::Unit(replayed) if replayed==unit)
+        );
+        units.insert(id, unit);
         match row.get::<String, _>("kind").as_str() {
             "tag" => tag = id,
             "field" => {
@@ -2425,6 +2493,29 @@ async fn assert_metadata_destination_inspection(
             _ => panic!("unexpected kind"),
         }
     }
+    let totals: serde_json::Value =
+        sqlx::query_scalar("SELECT counts FROM migration_family_refresh_plan WHERE id=$1")
+            .bind(plan)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    let totals: Counts = serde_json::from_value(totals).unwrap();
+    assert_eq!(
+        (
+            totals.units,
+            totals.inserts,
+            totals.already_current,
+            totals.held
+        ),
+        (3, 1, 2, 0)
+    );
+    assert!(totals.reconciles());
+    let retained: serde_json::Value = sqlx::query_scalar(checkpoint_sql)
+        .bind(plan)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    assert_eq!(retained["measured"], retained["retained"]);
     assert_eq!(
         f.reader.calls(),
         calls,
@@ -2439,12 +2530,27 @@ async fn assert_metadata_destination_inspection(
         0,
         "prospective tag stays absent"
     );
+    let mut forged = f.pool.begin().await.unwrap();
+    sqlx::query("SELECT set_config('crm.family_refresh_reader','fub-family-refresh-v1',true),set_config('crm.family_refresh_lease',$1,true)").bind(token.to_string()).execute(&mut *forged).await.unwrap();
+    let error=sqlx::query("INSERT INTO migration_family_refresh_manifest(id,bundle_id,plan_id,organization_id,source_row_id,position,kind,source_key_hmac,target_id,disposition,counts,nonce,ciphertext,added_byte_bound) SELECT $1,u.bundle_id,u.plan_id,u.organization_id,u.source_row_id,p.position+1,'catalog',decode(repeat('ab',32),'hex'),u.target_id,u.disposition,u.counts,u.nonce,u.ciphertext,u.added_byte_bound FROM migration_family_refresh_manifest u JOIN migration_family_refresh_plan p ON p.id=u.plan_id WHERE u.id=$2")
+        .bind(Uuid::new_v4()).bind(units[&field]).execute(&mut *forged).await.unwrap_err();
+    assert!(
+        error
+            .as_database_error()
+            .is_some_and(|e| e.message().contains("invalid family catalog unit binding")),
+        "application SQL cannot omit the typed catalog mapping owner"
+    );
+    forged.rollback().await.unwrap();
     let original:serde_json::Value=sqlx::query_scalar("SELECT jsonb_build_object('label',label,'updated_at',updated_at) FROM custom_field WHERE id=$1").bind(native_field).fetch_one(pool).await.unwrap();
     sqlx::query("UPDATE custom_field SET label='Changed destination' WHERE id=$1")
         .bind(native_field)
         .execute(pool)
         .await
         .unwrap();
+    assert!(
+        matches!(catalog_plan::prepare_unit(&f.pool,&f.key,&tiny,&claim,field).await.unwrap(),Prepared::Unit(unit) if Some(&unit)==units.get(&field)),
+        "immutable preview replay precedes mutable destination checks"
+    );
     for id in [field, option] {
         assert!(
             matches!(
@@ -2658,6 +2764,19 @@ async fn family_refresh_catalog_creation_requires_all_options_and_distinct_targe
             claim_metadata_inspection(&f, current.bundle_id, current.families[0].plan_id).await;
         let rows=sqlx::query("SELECT m.id,m.kind,m.target_id,s.source_id FROM migration_family_refresh_mapping m JOIN migration_family_refresh_source s ON s.id=m.source_row_id AND s.organization_id=m.organization_id WHERE m.plan_id=$1 ORDER BY m.kind,m.id").bind(claim.plan).fetch_all(&pool).await.unwrap();
         for row in rows {
+            let prepared = crm_api::domain::migration::family_refresh::catalog_plan::prepare_unit(
+                &f.pool,
+                &f.key,
+                &f.policy,
+                &claim,
+                row.get("id"),
+            )
+            .await
+            .unwrap();
+            assert!(matches!(
+                prepared,
+                crm_api::domain::migration::family_refresh::catalog_plan::Prepared::Unit(_)
+            ));
             let inspected = metadata_destination::inspect(&f.pool, &f.key, &claim, row.get("id"))
                 .await
                 .unwrap();
@@ -2677,6 +2796,18 @@ async fn family_refresh_catalog_creation_requires_all_options_and_distinct_targe
                 );
             }
         }
+        let counts: serde_json::Value =
+            sqlx::query_scalar("SELECT counts FROM migration_family_refresh_plan WHERE id=$1")
+                .bind(claim.plan)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let counts: crm_api::domain::migration::family_refresh::model::Counts =
+            serde_json::from_value(counts).unwrap();
+        assert_eq!(counts.units, 5);
+        assert_eq!(counts.inserts, if round == 1 { 3 } else { 0 });
+        assert_eq!(counts.held, if round == 1 { 2 } else { 5 });
+        assert!(counts.reconciles());
         worker::release(&f.pool, &claim).await.unwrap();
     }
     assert_eq!(

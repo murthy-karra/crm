@@ -513,3 +513,21 @@ Existing bundles retain UUID traversal so an in-progress cursor cannot silently
 skip records on upgrade. Their tag catalog choices remain source-unavailable and
 require a freshly prepared bundle. Replanning over the same shared old index is
 not a compatibility upgrade; existing immutable choices are not rewritten.
+
+### Immutable catalog preparation units
+
+Catalog manifests now carry a typed mapping FK. Migration 020 fences their
+family, live lease, exact source/key/target, null Person/baseline fields and
+parent-option prerequisite. Eligible units require compatible ready registry
+state and qualified mapping intent; held units carry no native target. A catalog
+unit cannot grant native write authority merely by being present.
+
+The unit runner persists the encrypted outcome, exact counts, position and byte
+settlement atomically. Replay returns the earlier outcome before mutable catalog
+checks, preserving its prospective IDs and avoiding repeated charges. Options
+wait for a parent catalog outcome; a held parent holds the dependent option.
+Native execution must independently revalidate ready evidence. Full family
+readiness/sealing must distinguish these prerequisites from useful Person work;
+existing catalog mappings alone must not turn an otherwise all-held Person
+family into actionable refresh work. Worker dispatch and Person preparation are
+still separate integration work.

@@ -112,6 +112,35 @@ pub async fn inspect(
         family: Family::Metadata,
         revision: p.get("revision"),
     };
+    let owner=sqlx::query("SELECT id,revision,family,phase,source_snapshot_id FROM migration_family_refresh_plan WHERE id=$1 AND bundle_id=$2 AND organization_id=$3")
+        .bind(b.get::<Uuid,_>("payer_plan_id")).bind(claim.bundle).bind(claim.organization.0).fetch_one(&mut *tx).await?;
+    let owner_family: Family =
+        serde_json::from_value(serde_json::json!(owner.get::<String, _>("family")))
+            .map_err(|_| MigrationError::Crypto)?;
+    let snapshot = b
+        .get::<Option<Uuid>, _>("core_snapshot_id")
+        .ok_or(MigrationError::SourceNotEligible)?;
+    if owner_family == Family::History
+        || owner.get::<Option<Uuid>, _>("source_snapshot_id") != Some(snapshot)
+        || matches!(
+            owner.get::<String, _>("phase").as_str(),
+            "cohort" | "capture"
+        )
+    {
+        return Err(MigrationError::Conflict);
+    }
+    let source_scope = Scope {
+        plan: owner.get("id"),
+        revision: owner.get("revision"),
+        family: owner_family,
+        ..scope
+    };
+    if let Err(hold) =
+        super::core_source::qualify_family(&mut tx, key, source_scope, snapshot, Family::Metadata)
+            .await?
+    {
+        return Ok(Inspection::Held(hold));
+    }
     let account = b.get("source_account_id");
     let (data, parent_id) = load(&mut tx, key, scope, id).await?;
     if !matches!(data.kind.as_str(), "tag" | "field" | "option") {

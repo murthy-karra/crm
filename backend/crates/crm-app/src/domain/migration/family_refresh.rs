@@ -34,3 +34,5 @@ pub mod history_missing;
 pub mod history_walk;
 
 pub mod mapping_inventory;
+
+pub mod mapping_queries;

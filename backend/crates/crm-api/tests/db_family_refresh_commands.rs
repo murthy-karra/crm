@@ -701,6 +701,7 @@ async fn family_refresh_mapping_inventory_is_bounded_atomic_and_reuses_shared_so
         tx.rollback().await.unwrap();
     }
     let mut partial = false;
+    let mut inventory_cursor = None;
     let mut count = 0_i64;
     for step in 0..10 {
         let progress = mapping_inventory::run_once(&f.pool, &f.key, &f.policy, &claim)
@@ -726,6 +727,21 @@ async fn family_refresh_mapping_inventory_is_bounded_atomic_and_reuses_shared_so
         .await
         .unwrap();
         partial |= offset == 50;
+        if offset == 50 {
+            use crm_api::domain::migration::family_refresh::mapping_queries;
+            let page = mapping_queries::mappings(
+                &f.pool,
+                &f.key,
+                &f.ctx,
+                claim.bundle,
+                mapping_page(claim.plan, None),
+            )
+            .await
+            .unwrap();
+            assert!(!page.inventory_complete);
+            inventory_cursor = page.next_cursor;
+            assert!(inventory_cursor.is_some());
+        }
         if progress == MappingProgress::Finished {
             break;
         }
@@ -736,6 +752,22 @@ async fn family_refresh_mapping_inventory_is_bounded_atomic_and_reuses_shared_so
         "the field's option list crosses the element checkpoint"
     );
     assert_eq!(count, 72, "one field, 70 choices and one folded tag group");
+    use crm_api::domain::migration::family_refresh::mapping_queries;
+    assert!(
+        matches!(
+            mapping_queries::mappings(
+                &f.pool,
+                &f.key,
+                &f.ctx,
+                claim.bundle,
+                mapping_page(claim.plan, inventory_cursor)
+            )
+            .await,
+            Err(MigrationError::InvalidInput)
+        ),
+        "inventory progress invalidates a partial mapping cursor"
+    );
+    assert_mapping_reader(&pool, &f, &claim).await;
     let rows = sqlx::query("SELECT * FROM migration_family_refresh_mapping WHERE plan_id=$1")
         .bind(claim.plan)
         .fetch_all(&pool)
@@ -841,4 +873,211 @@ async fn family_refresh_mapping_inventory_is_bounded_atomic_and_reuses_shared_so
         0,
         "mapping discovery grants no native action"
     );
+}
+
+fn mapping_page(
+    plan_id: Uuid,
+    cursor: Option<String>,
+) -> crm_api::domain::migration::family_refresh::mapping_queries::MappingPage {
+    use crm_api::domain::migration::family_refresh::mapping_queries::{
+        Disposition, Kind, MappingPage,
+    };
+    MappingPage {
+        family: Family::Metadata,
+        plan_id,
+        kind: Some(Kind::Option),
+        disposition: Some(Disposition::Hold),
+        limit: Some(25),
+        cursor,
+    }
+}
+async fn assert_mapping_reader(
+    pool: &PgPool,
+    f: &import_support::Fixture,
+    claim: &crm_api::domain::migration::family_refresh::cohort::Claim,
+) {
+    use crm_api::domain::migration::family_refresh::mapping_queries::{self, Disposition, Kind};
+    assert!(
+        sqlx::query_scalar::<_, bool>(
+            "SELECT to_regclass('family_refresh_mapping_filter') IS NOT NULL"
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap(),
+        "filtered mapping review migration is installed"
+    );
+    let first = mapping_queries::mappings(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        claim.bundle,
+        mapping_page(claim.plan, None),
+    )
+    .await
+    .unwrap();
+    assert!(first.inventory_complete);
+    assert_eq!(first.plan_revision, "1");
+    assert_eq!(first.items.len(), 25);
+    let cursor = first.next_cursor.clone().unwrap();
+    let encoded = serde_json::to_string(&first).unwrap();
+    assert!(encoded.len() < 512 * 1024);
+    for private in ["nonce", "ciphertext", "source_key", "source_row_id"] {
+        assert!(!encoded.contains(private));
+    }
+    let mut ids = std::collections::BTreeSet::new();
+    for item in &first.items {
+        assert!(ids.insert(item.id));
+        assert!(item.parent_id.is_some());
+        assert!(item.value_qualified);
+        assert!(!item.creation_allowed);
+    }
+    let mut next = first.next_cursor;
+    while let Some(cursor) = next {
+        let page = mapping_queries::mappings(
+            &f.pool,
+            &f.key,
+            &f.ctx,
+            claim.bundle,
+            mapping_page(claim.plan, Some(cursor)),
+        )
+        .await
+        .unwrap();
+        for item in page.items {
+            assert!(ids.insert(item.id), "no repeated mappings across pages");
+        }
+        next = page.next_cursor;
+    }
+    assert_eq!(ids.len(), 70);
+    for scenario in 0..6 {
+        let mut q = mapping_page(claim.plan, Some(cursor.clone()));
+        match scenario {
+            0 => q.limit = Some(24),
+            1 => q.kind = Some(Kind::Tag),
+            2 => q.disposition = Some(Disposition::Existing),
+            3 => q.cursor = Some(format!("{cursor}x")),
+            4 => q.limit = Some(0),
+            _ => q.kind = Some(Kind::TaskKind),
+        }
+        assert!(matches!(
+            mapping_queries::mappings(&f.pool, &f.key, &f.ctx, claim.bundle, q).await,
+            Err(MigrationError::InvalidInput)
+        ));
+    }
+    let wrong_key = crm_api::config::RawPayloadKey::new([0x63; 32]);
+    assert!(matches!(
+        mapping_queries::mappings(
+            &f.pool,
+            &wrong_key,
+            &f.ctx,
+            claim.bundle,
+            mapping_page(claim.plan, None)
+        )
+        .await,
+        Err(MigrationError::Crypto)
+    ));
+    let mut wrong_plan = mapping_page(Uuid::new_v4(), None);
+    wrong_plan.kind = None;
+    assert!(matches!(
+        mapping_queries::mappings(&f.pool, &f.key, &f.ctx, claim.bundle, wrong_plan).await,
+        Err(MigrationError::NotFound)
+    ));
+    let foreign = crate::common::create_org(pool, "Foreign mapping review").await;
+    crate::common::add_membership_with(
+        pool,
+        foreign,
+        f.actor,
+        crm_api::domain::admin::Role::Admin,
+        crm_api::domain::admin::MembershipStatus::Active,
+    )
+    .await;
+    let mut other = f.ctx.clone();
+    other.organization_id = OrganizationId::new(foreign);
+    assert!(matches!(
+        mapping_queries::mappings(
+            &f.pool,
+            &f.key,
+            &other,
+            claim.bundle,
+            mapping_page(claim.plan, None)
+        )
+        .await,
+        Err(MigrationError::NotFound)
+    ));
+    let actor = crate::common::create_user(
+        pool,
+        "mapping-reader@example.test",
+        "Mapping reader",
+        "synthetic-mapping-pass",
+    )
+    .await;
+    crate::common::add_membership_with(
+        pool,
+        f.org,
+        actor,
+        crm_api::domain::admin::Role::Admin,
+        crm_api::domain::admin::MembershipStatus::Active,
+    )
+    .await;
+    other = f.ctx.clone();
+    other.actor_user_id = UserId::new(actor);
+    assert!(mapping_queries::mappings(
+        &f.pool,
+        &f.key,
+        &other,
+        claim.bundle,
+        mapping_page(claim.plan, None)
+    )
+    .await
+    .is_ok());
+    assert!(matches!(
+        mapping_queries::mappings(
+            &f.pool,
+            &f.key,
+            &other,
+            claim.bundle,
+            mapping_page(claim.plan, Some(cursor.clone()))
+        )
+        .await,
+        Err(MigrationError::InvalidInput)
+    ));
+    sqlx::query(
+        "UPDATE organization_membership SET role='member' WHERE organization_id=$1 AND user_id=$2",
+    )
+    .bind(f.org)
+    .bind(actor)
+    .execute(pool)
+    .await
+    .unwrap();
+    assert!(matches!(
+        mapping_queries::mappings(
+            &f.pool,
+            &f.key,
+            &other,
+            claim.bundle,
+            mapping_page(claim.plan, None)
+        )
+        .await,
+        Err(MigrationError::Forbidden)
+    ));
+    sqlx::query("UPDATE organization SET workspace_revision=workspace_revision+1 WHERE id=$1")
+        .bind(f.org)
+        .execute(pool)
+        .await
+        .unwrap();
+    assert!(matches!(
+        mapping_queries::mappings(
+            &f.pool,
+            &f.key,
+            &f.ctx,
+            claim.bundle,
+            mapping_page(claim.plan, Some(cursor))
+        )
+        .await,
+        Err(MigrationError::InvalidInput)
+    ));
+    sqlx::query("UPDATE organization SET workspace_revision=workspace_revision-1 WHERE id=$1")
+        .bind(f.org)
+        .execute(pool)
+        .await
+        .unwrap();
 }

@@ -70,7 +70,7 @@ struct Position {
     after: Option<(DateTime<Utc>, Uuid)>,
 }
 const BUNDLE_COLUMNS: &str="b.id,b.parent_import_id,b.revision,b.state,b.core_report_id,b.history_capture_id,b.predecessor_id,b.digest,b.created_at,b.confirmed_at";
-async fn begin<'a>(
+pub(super) async fn begin<'a>(
     pool: &'a PgPool,
     ctx: &CommandContext,
 ) -> Result<Transaction<'a, Postgres>, MigrationError> {
@@ -86,7 +86,7 @@ async fn begin<'a>(
     store::require_admin(&mut tx, ctx).await?;
     Ok(tx)
 }
-fn bounded<T: Serialize>(value: &T, limit: usize) -> Result<(), MigrationError> {
+pub(super) fn bounded<T: Serialize>(value: &T, limit: usize) -> Result<(), MigrationError> {
     if serde_json::to_vec(value)
         .map_err(|_| MigrationError::Crypto)?
         .len()

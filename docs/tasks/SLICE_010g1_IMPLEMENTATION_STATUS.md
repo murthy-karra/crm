@@ -7,8 +7,8 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 - Branch `codex/010g1-family-refresh`, base `dd140b0`; one primary writer and the
   previously authorized single reviewer. Planning review READY, round 1.
-- Current milestone: bounded core mapping inventory following bundle/family
-  summaries at **`934caa0`** and missing-history classification at **`f98559e`**.
+- Current milestone: bounded mapping review following core mapping inventory
+  at **`76fb93b`** and bundle/family summaries at **`934caa0`**.
   The combined feature is unfinished. No merge/push/deploy.
 - Foundation: comparison policies, source ordering, bounded encrypted evidence,
   exact decimal counts, draft persistence ownership and native/lease guards.
@@ -151,8 +151,12 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   limits remain distinct from intrinsic mapping-value validity and complete
   record qualification. Note authors come from enriched detail, never list
   fallback. Migration 012 binds mapping references, family/parent relationships,
-  current admin/lease and bounded element progress. Plan patches, mapping readers
-  and native conversion/classification remain pending.
+  current admin/lease and bounded element progress. Bounded mapping summaries now
+  authenticate kind/key/parent/source/value/choice bindings and expose only small
+  labels and explicit choices. Their cursors bind inventory progress as well as
+  actor/Org/workspace/bundle/plan/filter/size, so partial discovery cannot silently
+  change a page. Migration 013 adds the filtered review index. Plan patches and
+  native conversion/classification remain pending.
 - No refresh HTTP commands or Web workflow are exposed yet.
 
 ## Evidence and isolation
@@ -195,6 +199,15 @@ archived in [Project history](../plans/PROJECT_HISTORY.md#010g1-preparation-and-
   `/private/tmp/010g1-mapping-accounting-db.log`, `/private/tmp/010g1-mapping-clippy.log`.
   Runners: serial `all family_refresh`, then the corrected accounting test only;
   Clippy as above. This is preparation evidence, not native execution readiness.
+- Mapping review: the expanded inventory/review database scenario passed on the
+  final tree, including an explicit check that migration 013's index is installed.
+  It pages all 70 options without repeats, rejects altered filter/size/actor/
+  workspace cursors, denies foreign Organizations and revoked readers, fails
+  closed on wrong encryption keys, and invalidates partial-inventory cursors after
+  progress. API-library Clippy with warnings denied, formatting and diff checks
+  passed. Logs: `/private/tmp/010g1-mapping-read-index-db.log`,
+  `/private/tmp/010g1-mapping-read-clippy.log`. Database runner: serial
+  `all family_refresh_mapping_inventory`; preceding family evidence is retained above.
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB
   `crm_010g1_schema_20260915`. Database tests run serially.

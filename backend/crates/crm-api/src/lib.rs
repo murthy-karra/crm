@@ -317,6 +317,26 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
                         }
                     }
                 }
+                // Share the existing one-second bounded scheduler. Family
+                // preparation uses retained data only and gets its own finite
+                // turn even when core-report work remains continuously queued.
+                for _ in 0..32 {
+                    use domain::migration::family_refresh::preparation_worker::{self, Progress};
+                    match preparation_worker::run_once(
+                        &pool,
+                        &state.raw_payload_key,
+                        &state.snapshot_policy,
+                    )
+                    .await
+                    {
+                        Ok(Progress::Advanced | Progress::Paused) => tokio::task::yield_now().await,
+                        Ok(Progress::Idle) => break,
+                        Err(error) => {
+                            tracing::warn!(outcome=%error, "family refresh preparation sweep failed");
+                            break;
+                        }
+                    }
+                }
             }
         })
     });

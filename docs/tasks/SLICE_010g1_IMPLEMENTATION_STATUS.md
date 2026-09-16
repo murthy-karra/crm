@@ -7,9 +7,9 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 - Branch `codex/010g1-family-refresh`, base `dd140b0`; one primary writer and the
   previously authorized single reviewer. Planning review READY, round 1.
-- Current milestone: verified typed bundle preparation and per-cohort history
-  ordering, following qualified-unit planning at **`d9d2a43`** and new-identity
-  eligibility at **`26323f6`**.
+- Current milestone: bounded preparation dispatch following verified typed
+  admission at **`108678c`**, qualified-unit planning at **`d9d2a43`** and
+  new-identity eligibility at **`26323f6`**.
   The combined feature is unfinished. No merge/push/deploy.
 - Foundation: comparison policies, source ordering, bounded encrypted evidence,
   exact decimal counts, draft persistence ownership and native/lease guards.
@@ -40,12 +40,11 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   exclusions, fences current admin/lease ownership, and settles exact byte charges
   with the checkpoint. Database guards also enforce the frozen identity/terminal
   boundary and reject application cohort/progress writes without a live payer
-  claim. Dispatcher integration remains pending.
+  claim. Cohort/index dispatch now shares the existing one-second scheduler.
 - Core capture indexing now retains authenticated page/cursor evidence and every
   source occurrence before Person filtering, with scoped raw references, lease
   fences and atomic accounting/checkpoints. It reuses the existing metadata and
-  activity parsers and performs no source calls. Core dispatcher integration and persisted
-  classification remain unwired. The immutable core index now resolves across
+  activity parsers and performs no source calls. Persisted core classification remains unwired. The immutable core index now resolves across
   family/mapping plans without recopying or reencrypting evidence.
 - New positively applied original/admitted activity results retain exact encrypted
   native after-state/revision. A first-result discovery adapter checks frozen
@@ -113,7 +112,14 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   authorized replay receipt atomically. History-only indexing no longer treats
   the latest cohort's creation boundary as a global blocker; existing and new
   identity eligibility enforce each cohort's own boundary.
-- No refresh HTTP commands, family dispatcher or Web workflow are exposed yet.
+- Preparation dispatch now authenticates frozen bindings, claims 60-second leases,
+  freezes the shared cohort and indexes retained core/history sources in bounded
+  steps. Core plans reuse the payer's index. Exact token/epoch release protects a
+  successor; capacity and integrity failures pause with metered control capacity.
+  The existing one-second scheduler gives this adapter a finite turn without a
+  new polling loop. It stops at mappings; classification/execution dispatch,
+  revoked-executor pause/resume and release-readiness integration remain.
+- No refresh HTTP commands or Web workflow are exposed yet.
 
 ## Evidence and isolation
 
@@ -150,6 +156,15 @@ is archived in [Project history](../plans/PROJECT_HISTORY.md#010g1-foundation-an
   `/private/tmp/010g1-command-unit.log`, `/private/tmp/010g1-command-clippy.log`.
   Runners match the previous milestone: serial `all family_refresh` database
   tests, focused library tests and library Clippy in the isolated target/database.
+- Bounded preparation dispatcher: all 29 serial family database regressions,
+  40 focused library tests and `crm-api --lib` Clippy with warnings denied passed.
+  Combined preparation reaches mappings for every selected family through real
+  claims. Tests cover active-owner exclusion, expired takeover, stale release,
+  exact settlement, storage-limit pause and wrong-key integrity pause before any
+  cohort work. Formatting and diff checks passed. Logs:
+  `/private/tmp/010g1-worker-family-db.log`, `/private/tmp/010g1-worker-unit.log`,
+  `/private/tmp/010g1-worker-clippy.log`. Runners match the prior checkpoint with
+  Clippy widened to the API library containing scheduler integration.
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB
   `crm_010g1_schema_20260915`. Database tests run serially.
@@ -157,7 +172,7 @@ is archived in [Project history](../plans/PROJECT_HISTORY.md#010g1-foundation-an
   No live FUB/customer processing. Linker reports the large `__eh_frame` warning.
 
 Remaining: final capability inventories and refresh-owned initial identities;
-new-identity first-coverage classification, legacy baselines and refresh-executor after-state production; cohort/index dispatcher
+new-identity first-coverage classification, legacy baselines and refresh-executor after-state production; classification/execution dispatcher
 integration; metadata/activity/history execution; typed commands and bounded
 readers; common Web workflow; independent implementation
 review; full database/browser/performance/final gates. Do not report 010g1 done.

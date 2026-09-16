@@ -1592,23 +1592,28 @@ async fn history_index_preserves_pages_privacy_and_atomic_accounting(pool: PgPoo
     );
 }
 
-async fn draft_history_refresh(
+pub(super) async fn draft_history_refresh(
     pool: &PgPool,
     f: &import_support::Fixture,
     capture: Uuid,
 ) -> crm_api::domain::migration::family_refresh::cohort::Claim {
     use crm_api::domain::migration::family_refresh::cohort::{self, Claim};
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("SELECT set_config('crm.family_refresh_reader','fub-family-refresh-v1',true)")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
     let bundle = Uuid::new_v4();
     let plan = Uuid::new_v4();
     let control = Uuid::new_v4();
     let token = Uuid::new_v4();
     sqlx::query("INSERT INTO migration_family_refresh_bundle(id,organization_id,parent_import_id,parent_plan_id,source_account_id,executor_user_id,engine_version,history_capture_id,state,source_nonce,source_ciphertext) SELECT $1,organization_id,parent_import_id,parent_plan_id,source_account_id,$2,'fub-family-refresh-v1',id,'preparing',decode(repeat('00',24),'hex'),decode(repeat('00',16),'hex') FROM migration_history_capture_run WHERE id=$3")
-        .bind(bundle).bind(f.actor).bind(capture).execute(pool).await.unwrap();
-    sqlx::query("INSERT INTO migration_family_refresh_plan(id,bundle_id,organization_id,family,revision,state,phase,history_capture_id,nonce,ciphertext) SELECT $1,id,organization_id,'history',1,'preparing','cohort',history_capture_id,source_nonce,source_ciphertext FROM migration_family_refresh_bundle WHERE id=$2").bind(plan).bind(bundle).execute(pool).await.unwrap();
+        .bind(bundle).bind(f.actor).bind(capture).execute(&mut *tx).await.unwrap();
+    sqlx::query("INSERT INTO migration_family_refresh_plan(id,bundle_id,organization_id,family,revision,state,phase,history_capture_id,nonce,ciphertext) SELECT $1,id,organization_id,'history',1,'preparing','cohort',history_capture_id,source_nonce,source_ciphertext FROM migration_family_refresh_bundle WHERE id=$2").bind(plan).bind(bundle).execute(&mut *tx).await.unwrap();
     sqlx::query("UPDATE migration_family_refresh_bundle SET payer_plan_id=$2 WHERE id=$1")
         .bind(bundle)
         .bind(plan)
-        .execute(pool)
+        .execute(&mut *tx)
         .await
         .unwrap();
     assert!(sqlx::query_scalar::<_, bool>(
@@ -1618,7 +1623,7 @@ async fn draft_history_refresh(
     .bind(bundle)
     .bind(plan)
     .bind(control)
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await
     .unwrap());
     sqlx::query("SELECT crm_family_refresh_settle($1,$2,$3,$4,0,false)")
@@ -1626,10 +1631,11 @@ async fn draft_history_refresh(
         .bind(bundle)
         .bind(plan)
         .bind(control)
-        .execute(pool)
+        .execute(&mut *tx)
         .await
         .unwrap();
-    sqlx::query("UPDATE migration_family_refresh_plan SET lease_token=$2,lease_epoch=1,lease_expires_at=clock_timestamp()+interval '60 seconds' WHERE id=$1").bind(plan).bind(token).execute(pool).await.unwrap();
+    sqlx::query("UPDATE migration_family_refresh_plan SET lease_token=$2,lease_epoch=1,lease_expires_at=clock_timestamp()+interval '60 seconds' WHERE id=$1").bind(plan).bind(token).execute(&mut *tx).await.unwrap();
+    tx.commit().await.unwrap();
     let claim = Claim {
         organization: f.ctx.organization_id,
         bundle,

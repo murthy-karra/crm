@@ -75,9 +75,11 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 - History selection reconciles the complete occurrence set and authenticates
   original-namespace identity hashes and metadata-only evidence. Baseline discovery
   verifies original/admitted first ownership, current typed correction bindings,
-  display authentication/erasure and strictly newer capture ordering. Original and
-  admitted owner paths have database evidence; authenticated prior-correction
-  discovery and new-identity first-coverage classification remain outstanding.
+  display authentication/erasure and strictly newer capture ordering. Original/admitted
+  first owners and successive typed correction heads have authenticated database
+  evidence. Prior corrections now verify the exact cohort, terminal/frozen boundary,
+  immediate predecessor and encrypted source/display agreement. New-identity
+  first-coverage classification remains outstanding.
 - Core resolution independently checks each family's exhausted streams and the
   final authenticated cursor, including settled note-detail work. Shared indexing
   does not make an unfinished activity stream a metadata prerequisite.
@@ -229,6 +231,23 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   family_refresh --locked`. The full family database rerun used the freshly
   compiled `debug/deps/all-07593333edaca6c2 family_refresh --ignored
   --test-threads=1` binary. Same isolated target/database as below.
+- Authenticated prior-history correction discovery: all 21 serial family database
+  regressions and 37 focused Rust tests passed, plus `crm-app --lib` Clippy with
+  warnings denied, formatting and diff checks. Three new database scenarios use
+  genuine retained indexes and scoped encrypted displays: two successive event/
+  call/text corrections for original and admitted owners, wrong version scope,
+  validly encrypted but source-mismatched metadata, late predecessor boundaries,
+  replay without read-model changes, first-owner preservation, exact settlement
+  and erasure without original-version fallback. Correction inserts remain
+  migrator-only fixtures; no execution or public timeline claim. Logs:
+  `/private/tmp/010g1-correction-baseline-db.log`,
+  `/private/tmp/010g1-correction-family-db.log`,
+  `/private/tmp/010g1-correction-baseline-unit.log`,
+  `/private/tmp/010g1-correction-baseline-clippy.log`.
+  Runners: `cargo test -p crm-api --features test-support --test all
+  db_family_refresh_history_baseline --locked -- --ignored --test-threads=1`,
+  then the freshly compiled `debug/deps/all-07593333edaca6c2 family_refresh
+  --ignored --test-threads=1`; `cargo test -p crm-app --lib family_refresh --locked`.
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB
   `crm_010g1_schema_20260915`. Database tests run serially.
@@ -236,8 +255,7 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   No live FUB/customer processing. Linker reports the large `__eh_frame` warning.
 
 Remaining: final capability inventories and refresh-owned initial identities;
-new-identity first-coverage classification and prior-correction discovery evidence, legacy
-baselines and refresh-executor after-state production; cohort/index dispatcher
+new-identity first-coverage classification, legacy baselines and refresh-executor after-state production; cohort/index dispatcher
 integration; metadata/activity/history execution; typed commands and bounded
 readers; common Web workflow; independent implementation
 review; full database/browser/performance/final gates. Do not report 010g1 done.

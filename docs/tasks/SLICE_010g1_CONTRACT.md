@@ -330,3 +330,27 @@ current-admin/workspace/preparation-lease admission.
 This defines the successful native-result payload and read adapter for the
 forthcoming executor. Synthetic successful-result fixtures are migrator-owned;
 no new native execution, HTTP admission or capability advertisement is enabled.
+
+
+### Authenticated prior-history correction discovery
+
+A current typed correction must join its exact successful result, manifest,
+frozen Person cohort and immediate predecessor. The predecessor bundle/family
+must be confirmed and terminal, with its bundle update, result commit and typed
+version timestamp no later than the new bundle's frozen boundary. Its capture,
+source account, original parent and exact original/admitted Person result remain
+scoped; a new capture must still be strictly later than the accepted current one.
+
+Discovery opens the deletable display in the correction's version/plan scope and
+also opens its retained source occurrence in that occurrence's original plan
+scope. Authenticated source identity, full canonical semantic HMAC, Person link,
+source-created time and metadata must match the typed correction and display.
+A validly encrypted but unrelated display is rejected; body-only canonical
+changes remain distinguishable. Existing first fact/display verification and
+erasure gates run before accepting a correction. Invalid or erased current
+versions never fall back to the original fact.
+
+The joins are bounded by the current identity/version keys; discovery does not
+walk or decrypt the entire version chain. This is preparation evidence, not the
+version-aware public timeline or execution admission. Application grants and
+capability advertisement remain unchanged.

@@ -3,7 +3,8 @@
 use super::{
     cohort::Claim,
     evidence::{Purpose, Scope},
-    history_source::HistoryDisplay,
+    history_index::Record,
+    history_source::{HistoryDisplay, HistoryEvidence},
     model::{Family, Hold, Kind},
     preparation,
     source_policy::{qualify_newer_capture, Boundary},
@@ -119,20 +120,59 @@ pub async fn discover(
         version_id: None,
         result: None,
     };
-    if let Some(head)=sqlx::query("SELECT * FROM migration_family_refresh_history_head WHERE organization_id=$1 AND identity_id=$2").bind(claim.organization.0).bind(baseline.identity).fetch_optional(&mut *tx).await? {
-        if head.get::<Uuid,_>("original_fact_id")!=fact || head.get::<Uuid,_>("person_id")!=person || head.get::<String,_>("family")!=family{return Ok(Discovery::Held(Hold::IdentityMismatch));}
-        if head.get::<i64,_>("version")==1 {
-            if head.get::<Uuid,_>("capture_id")!=baseline.capture || head.get::<Vec<u8>,_>("semantic_hmac")!=baseline.semantic || head.get::<Option<DateTime<Utc>>,_>("source_created_at")!=created{return Ok(Discovery::Held(Hold::BaselineUnproven));}
+    if let Some(head) = sqlx::query("SELECT * FROM migration_family_refresh_history_head WHERE organization_id=$1 AND identity_id=$2")
+        .bind(claim.organization.0).bind(baseline.identity).fetch_optional(&mut *tx).await?
+    {
+        if head.get::<Uuid, _>("original_fact_id") != fact
+            || head.get::<Uuid, _>("person_id") != person
+            || head.get::<String, _>("family") != family
+        { return Ok(Discovery::Held(Hold::IdentityMismatch)); }
+        if head.get::<i64, _>("version") == 1 {
+            if head.get::<Uuid, _>("capture_id") != baseline.capture
+                || head.get::<Vec<u8>, _>("semantic_hmac") != baseline.semantic
+                || head.get::<Option<DateTime<Utc>>, _>("source_created_at") != created
+            { return Ok(Discovery::Held(Hold::BaselineUnproven)); }
         } else {
-            let corrected=table.replace("_imported","_corrected");
-            let v=sqlx::query(&format!("SELECT v.*,d.nonce,d.ciphertext,p.revision AS plan_revision FROM {corrected} v JOIN migration_family_refresh_history_display d ON d.id=v.id AND d.identity_id=v.identity_id AND d.organization_id=v.organization_id AND d.result_id=v.result_id JOIN migration_family_refresh_plan p ON p.id=v.plan_id AND p.bundle_id=v.bundle_id AND p.organization_id=v.organization_id JOIN migration_family_refresh_result r ON r.id=v.result_id AND r.manifest_id=v.manifest_id AND r.plan_id=v.plan_id AND r.bundle_id=v.bundle_id AND r.organization_id=v.organization_id AND r.disposition='applied' WHERE v.id=$1 AND v.organization_id=$2 AND v.identity_id=$3"))
-                .bind(head.get::<Option<Uuid>,_>("version_id")).bind(claim.organization.0).bind(baseline.identity).fetch_optional(&mut *tx).await?;
-            let Some(v)=v else{return Ok(Discovery::Held(Hold::BaselineUnproven));};
-            if v.get::<Uuid,_>("original_fact_id")!=fact || v.get::<Uuid,_>("person_id")!=person || v.get::<i64,_>("version")!=head.get::<i64,_>("version") || Some(v.get::<Uuid,_>("result_id"))!=head.get::<Option<Uuid>,_>("result_id") || v.get::<Uuid,_>("capture_id")!=head.get::<Uuid,_>("capture_id") || v.get::<Vec<u8>,_>("semantic_hmac")!=head.get::<Vec<u8>,_>("semantic_hmac") || v.get::<Option<DateTime<Utc>>,_>("source_created_at")!=head.get::<Option<DateTime<Utc>>,_>("source_created_at"){return Ok(Discovery::Held(Hold::BaselineUnproven));}
-            let (Some(nonce),Some(ciphertext))=(v.get::<Option<Vec<u8>>,_>("nonce"),v.get::<Option<Vec<u8>>,_>("ciphertext")) else{return Ok(Discovery::Held(Hold::TargetErased));};
-            let scope=Scope{organization:claim.organization,bundle:v.get("bundle_id"),plan:v.get("plan_id"),family:Family::History,revision:v.get("plan_revision")};
-            let _:HistoryDisplay=scope.open(key,v.get("id"),Purpose::HistoryDisplay,&nonce,&ciphertext)?;
-            baseline.capture=v.get("capture_id");baseline.semantic=v.get("semantic_hmac");baseline.created=v.get("source_created_at");baseline.version=v.get("version");baseline.version_id=Some(v.get("id"));baseline.result=Some(v.get("result_id"));
+            let corrected = table.replace("_imported", "_corrected");
+            let kind_name = match kind { Kind::Event => "event", Kind::Call => "call", Kind::Text => "text", _ => unreachable!() };
+            let sql = include_str!("sql/history_baseline.sql").replace("__CORRECTED__", &corrected);
+            let v = sqlx::query(&sql)
+                .bind(head.get::<Option<Uuid>, _>("version_id")).bind(claim.organization.0).bind(baseline.identity)
+                .bind(b.get::<Uuid,_>("parent_import_id")).bind(b.get::<Uuid,_>("parent_plan_id"))
+                .bind(b.get::<i64,_>("source_account_id"))
+                .bind(c.get::<Option<Uuid>,_>("original_result_id")).bind(c.get::<Option<Uuid>,_>("admission_result_id"))
+                .bind(c.get::<Uuid,_>("creation_snapshot_id")).bind(b.get::<DateTime<Utc>,_>("created_at"))
+                .bind(kind_name).bind(identity_hmac.as_slice()).bind(c.get::<String,_>("source_person_id"))
+                .fetch_optional(&mut *tx).await?;
+            let Some(v) = v else { return Ok(Discovery::Held(Hold::BaselineUnproven)); };
+            if v.get::<Uuid, _>("original_fact_id") != fact
+                || v.get::<Uuid, _>("person_id") != person
+                || v.get::<i64, _>("version") != head.get::<i64, _>("version")
+                || Some(v.get::<Uuid, _>("result_id")) != head.get::<Option<Uuid>, _>("result_id")
+                || v.get::<Uuid, _>("capture_id") != head.get::<Uuid, _>("capture_id")
+                || v.get::<Vec<u8>, _>("semantic_hmac") != head.get::<Vec<u8>, _>("semantic_hmac")
+                || v.get::<Option<DateTime<Utc>>, _>("source_created_at") != head.get::<Option<DateTime<Utc>>, _>("source_created_at")
+            { return Ok(Discovery::Held(Hold::BaselineUnproven)); }
+            let (Some(nonce), Some(ciphertext)) = (v.get::<Option<Vec<u8>>, _>("nonce"), v.get::<Option<Vec<u8>>, _>("ciphertext"))
+                else { return Ok(Discovery::Held(Hold::TargetErased)); };
+            let scope = Scope { organization: claim.organization, bundle: v.get("bundle_id"), plan: v.get("plan_id"), family: Family::History, revision: v.get("plan_revision") };
+            let display: HistoryDisplay = scope.open(key, v.get("id"), Purpose::HistoryDisplay, &nonce, &ciphertext)?;
+            // Source reuse retains the original source plan's AEAD namespace.
+            // Its authenticated semantic hash includes body-only source changes.
+            let source_scope = Scope { plan: v.get("source_plan"), revision: v.get("source_revision"), ..scope };
+            let source: Record = source_scope.open(key, v.get("source_id"), Purpose::Source, v.get("source_nonce"), v.get("source_ciphertext"))?;
+            let evidence = source.evidence.ok_or(MigrationError::Crypto)?;
+            if source.reason.is_some() || source.person_refs != vec![evidence.source_person.clone()] {
+                return Err(MigrationError::Crypto);
+            }
+            verify_display(&evidence, &display, identity_hmac, &v.get::<Vec<u8>, _>("semantic_hmac"),
+                &c.get::<String,_>("source_person_id"), v.get("source_created_at"))?;
+            baseline.capture = v.get("capture_id");
+            baseline.semantic = v.get("semantic_hmac");
+            baseline.created = v.get("source_created_at");
+            baseline.version = v.get("version");
+            baseline.version_id = Some(v.get("id"));
+            baseline.result = Some(v.get("result_id"));
         }
     }
     // The current source was already ordered after the core anchor by indexing.
@@ -161,4 +201,58 @@ pub async fn discover(
         return Ok(Discovery::Held(hold));
     }
     Ok(Discovery::Proven(baseline))
+}
+
+/// AEAD authenticates bytes; these checks bind their interpretation to the typed
+/// fact and source identity instead of trusting an independently sealed display.
+fn verify_display(
+    source: &HistoryEvidence,
+    display: &HistoryDisplay,
+    identity: &[u8; 32],
+    semantic: &[u8],
+    person: &str,
+    created: Option<DateTime<Utc>>,
+) -> Result<(), MigrationError> {
+    if source.identity_hmac != *identity
+        || source.semantic_hmac != semantic
+        || source.source_person != person
+        || source.created != created
+        || source.display.metadata() != display.metadata()
+    {
+        return Err(MigrationError::Crypto);
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    #[test]
+    fn correction_display_must_match_authenticated_source_and_typed_fact() {
+        let display =
+            || serde_json::from_value::<HistoryDisplay>(json!({"type":"Inquiry"})).unwrap();
+        let mut source = HistoryEvidence {
+            identity_hmac: [1; 32],
+            semantic_hmac: [2; 32],
+            source_person: "101".into(),
+            created: None,
+            display: display(),
+        };
+        assert!(verify_display(&source, &display(), &[1; 32], &[2; 32], "101", None).is_ok());
+        assert!(verify_display(&source, &display(), &[3; 32], &[2; 32], "101", None).is_err());
+        assert!(verify_display(&source, &display(), &[1; 32], &[3; 32], "101", None).is_err());
+        assert!(verify_display(&source, &display(), &[1; 32], &[2; 32], "102", None).is_err());
+        assert!(verify_display(
+            &source,
+            &display(),
+            &[1; 32],
+            &[2; 32],
+            "101",
+            Some(Utc::now())
+        )
+        .is_err());
+        source.display = serde_json::from_value(json!({"type":"different"})).unwrap();
+        assert!(verify_display(&source, &display(), &[1; 32], &[2; 32], "101", None).is_err());
+    }
 }

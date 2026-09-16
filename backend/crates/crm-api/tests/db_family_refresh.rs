@@ -2588,6 +2588,7 @@ async fn assert_history_preparation(
     .await
     .unwrap();
     assert_eq!(manifests, 0);
+    let mut original_cursor = None;
     for (kind, source, expected) in [
         (Kind::Event, "1", "correction"),
         (Kind::Call, "2", "already_current"),
@@ -2640,7 +2641,22 @@ async fn assert_history_preparation(
         .await
         .unwrap();
         assert_eq!(after, bytes, "replay does not charge or allocate again");
+        if source == "2" {
+            use crm_api::domain::migration::family_refresh::item_queries;
+            original_cursor = item_queries::items(
+                &f.pool,
+                &f.key,
+                &f.ctx,
+                claim.bundle,
+                item_query(claim.plan, None),
+            )
+            .await
+            .unwrap()
+            .next_cursor;
+            assert!(original_cursor.is_some());
+        }
     }
+    assert_item_pages(pool, f, claim, cohort, original_cursor.unwrap()).await;
     let row = sqlx::query("SELECT counts,position,measured_bytes,retained_bytes FROM migration_family_refresh_plan WHERE id=$1").bind(claim.plan).fetch_one(pool).await.unwrap();
     let counts: Counts = serde_json::from_value(row.get("counts")).unwrap();
     assert_eq!(row.get::<i64, _>("position"), 3);
@@ -2660,4 +2676,211 @@ async fn assert_history_preparation(
             .await
             .unwrap();
     assert_eq!(native, 0);
+}
+
+fn item_query(
+    plan: Uuid,
+    cursor: Option<String>,
+) -> crm_api::domain::migration::family_refresh::item_queries::ItemPage {
+    use crm_api::domain::migration::family_refresh::{item_queries::ItemPage, model::Family};
+    ItemPage {
+        family: Family::History,
+        plan_id: plan,
+        cohort_id: None,
+        outcome: None,
+        limit: Some(1),
+        cursor,
+    }
+}
+async fn assert_item_pages(
+    pool: &PgPool,
+    f: &import_support::Fixture,
+    claim: &crm_api::domain::migration::family_refresh::cohort::Claim,
+    cohort: Uuid,
+    original_cursor: String,
+) {
+    use crm_api::domain::migration::{
+        family_refresh::item_queries::{self, Outcome},
+        MigrationError,
+    };
+    let older = item_queries::items(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        claim.bundle,
+        item_query(claim.plan, Some(original_cursor)),
+    )
+    .await
+    .unwrap();
+    assert_eq!(older.items.len(), 1);
+    assert_eq!(older.items[0].position, "2");
+    assert!(
+        older.next_cursor.is_none(),
+        "cursor upper bound excludes later inserts"
+    );
+    let first = item_queries::items(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        claim.bundle,
+        item_query(claim.plan, None),
+    )
+    .await
+    .unwrap();
+    assert_eq!(first.items[0].position, "1");
+    let cursor = first.next_cursor.unwrap();
+    let second = item_queries::items(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        claim.bundle,
+        item_query(claim.plan, Some(cursor.clone())),
+    )
+    .await
+    .unwrap();
+    assert_eq!(second.items[0].position, "2");
+    let third = item_queries::items(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        claim.bundle,
+        item_query(claim.plan, second.next_cursor),
+    )
+    .await
+    .unwrap();
+    assert_eq!(third.items[0].position, "3");
+    assert!(third.next_cursor.is_none());
+    let json = serde_json::to_string(&third).unwrap();
+    assert!(json.len() < 4096 && !json.contains("SENTINEL") && !json.contains("ciphertext"));
+    for scenario in 0..5 {
+        let mut q = item_query(claim.plan, Some(cursor.clone()));
+        match scenario {
+            0 => q.limit = Some(2),
+            1 => q.cohort_id = Some(cohort),
+            2 => q.outcome = Some(Outcome::Insert),
+            3 => q.cursor = Some(format!("{}x", cursor)),
+            _ => q.limit = Some(51),
+        }
+        assert!(matches!(
+            item_queries::items(&f.pool, &f.key, &f.ctx, claim.bundle, q).await,
+            Err(MigrationError::InvalidInput)
+        ));
+    }
+    let mut q = item_query(claim.plan, None);
+    q.outcome = Some(Outcome::Insert);
+    q.cohort_id = Some(cohort);
+    let filtered = item_queries::items(&f.pool, &f.key, &f.ctx, claim.bundle, q)
+        .await
+        .unwrap();
+    assert_eq!(filtered.items[0].position, "3");
+    assert!(filtered.next_cursor.is_none());
+    let mut other = f.ctx.clone();
+    other.actor_user_id = crm_api::ids::UserId::new(f.member);
+    assert!(matches!(
+        item_queries::items(
+            &f.pool,
+            &f.key,
+            &other,
+            claim.bundle,
+            item_query(claim.plan, None)
+        )
+        .await,
+        Err(MigrationError::Forbidden)
+    ));
+    sqlx::query(
+        "UPDATE organization_membership SET role='admin' WHERE organization_id=$1 AND user_id=$2",
+    )
+    .bind(f.org)
+    .bind(f.member)
+    .execute(pool)
+    .await
+    .unwrap();
+    assert!(
+        matches!(
+            item_queries::items(
+                &f.pool,
+                &f.key,
+                &other,
+                claim.bundle,
+                item_query(claim.plan, Some(cursor.clone()))
+            )
+            .await,
+            Err(MigrationError::InvalidInput)
+        ),
+        "another authorized actor cannot reuse this cursor"
+    );
+    assert!(item_queries::items(
+        &f.pool,
+        &f.key,
+        &other,
+        claim.bundle,
+        item_query(claim.plan, None)
+    )
+    .await
+    .is_ok());
+    sqlx::query(
+        "UPDATE organization_membership SET role='member' WHERE organization_id=$1 AND user_id=$2",
+    )
+    .bind(f.org)
+    .bind(f.member)
+    .execute(pool)
+    .await
+    .unwrap();
+    other.organization_id = crm_api::ids::OrganizationId::new(Uuid::new_v4());
+    assert!(item_queries::items(
+        &f.pool,
+        &f.key,
+        &other,
+        claim.bundle,
+        item_query(claim.plan, None)
+    )
+    .await
+    .is_err());
+    let mut q = item_query(claim.plan, None);
+    q.cohort_id = Some(Uuid::new_v4());
+    assert!(matches!(
+        item_queries::items(&f.pool, &f.key, &f.ctx, claim.bundle, q).await,
+        Err(MigrationError::NotFound)
+    ));
+    let foreign_org = crate::common::create_org(pool, "Foreign family item reader").await;
+    crate::common::add_membership_with(
+        pool,
+        foreign_org,
+        f.actor,
+        crm_api::domain::admin::Role::Admin,
+        crm_api::domain::admin::MembershipStatus::Active,
+    )
+    .await;
+    let mut foreign = f.ctx.clone();
+    foreign.organization_id = crm_api::ids::OrganizationId::new(foreign_org);
+    assert!(matches!(
+        item_queries::items(
+            &f.pool,
+            &f.key,
+            &foreign,
+            claim.bundle,
+            item_query(claim.plan, None)
+        )
+        .await,
+        Err(MigrationError::NotFound)
+    ));
+    sqlx::query("UPDATE migration_family_refresh_bundle SET revision=revision+1 WHERE id=$1")
+        .bind(claim.bundle)
+        .execute(pool)
+        .await
+        .unwrap();
+    assert!(
+        matches!(
+            item_queries::items(
+                &f.pool,
+                &f.key,
+                &f.ctx,
+                claim.bundle,
+                item_query(claim.plan, Some(cursor))
+            )
+            .await,
+            Err(MigrationError::InvalidInput)
+        ),
+        "revision change invalidates prior cursor"
+    );
 }

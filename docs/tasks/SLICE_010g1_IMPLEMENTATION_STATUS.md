@@ -7,9 +7,9 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 - Branch `codex/010g1-family-refresh`, base `dd140b0`; one primary writer and the
   previously authorized single reviewer. Planning review READY, round 1.
-- Current milestone: bounded preparation dispatch following verified typed
-  admission at **`108678c`**, qualified-unit planning at **`d9d2a43`** and
-  new-identity eligibility at **`26323f6`**.
+- Current milestone: bounded item summaries following preparation dispatch at
+  **`f760907`**, typed admission at **`108678c`** and qualified-unit planning at
+  **`d9d2a43`**.
   The combined feature is unfinished. No merge/push/deploy.
 - Foundation: comparison policies, source ordering, bounded encrypted evidence,
   exact decimal counts, draft persistence ownership and native/lease guards.
@@ -119,6 +119,12 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   The existing one-second scheduler gives this adapter a finite turn without a
   new polling loop. It stops at mappings; classification/execution dispatch,
   revoked-executor pause/resume and release-readiness integration remain.
+- Item-summary reads now use scoped keyset pages with an immutable upper bound,
+  25/default and 50/max rows, decimal counters, 4 KiB summary and 512 KiB response
+  limits. Queries avoid manifest ciphertext; cursors bind actor, Organization,
+  workspace, bundle/plan revisions, family, cohort/outcome filters, size and order.
+  Current admin/workspace checks and ordered bundle/plan locks apply to every page.
+  Other readers and full field/proof review remain pending.
 - No refresh HTTP commands or Web workflow are exposed yet.
 
 ## Evidence and isolation
@@ -165,6 +171,16 @@ is archived in [Project history](../plans/PROJECT_HISTORY.md#010g1-foundation-an
   `/private/tmp/010g1-worker-family-db.log`, `/private/tmp/010g1-worker-unit.log`,
   `/private/tmp/010g1-worker-clippy.log`. Runners match the prior checkpoint with
   Clippy widened to the API library containing scheduler integration.
+- Bounded item summaries: the real original-history preparation scenario passes
+  on the final tree with three persisted action classes, stable growing-plan
+  pagination, valid cohort/outcome filters and rejection of altered size/filter,
+  tampered cursors, a second authorized actor, changed bundle revision, unknown
+  cohort and another Organization's current admin. Non-admin reads are denied.
+  Summaries contain no proof ciphertext or source-body sentinel. API-library
+  Clippy, formatting and diff checks passed. Logs:
+  `/private/tmp/010g1-items-final-db.log`, `/private/tmp/010g1-items-clippy.log`.
+  Database runner: serial `all history_baseline_authenticates_original_owner`;
+  the full 29-test family baseline is retained at `f760907` above.
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB
   `crm_010g1_schema_20260915`. Database tests run serially.

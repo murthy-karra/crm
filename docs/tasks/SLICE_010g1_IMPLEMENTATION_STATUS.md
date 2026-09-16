@@ -7,9 +7,9 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 - Branch `codex/010g1-family-refresh`, base `dd140b0`; one primary writer and the
   previously authorized single reviewer. Planning review READY, round 1.
-- Current milestone: bounded item summaries following preparation dispatch at
-  **`f760907`**, typed admission at **`108678c`** and qualified-unit planning at
-  **`d9d2a43`**.
+- Current milestone: persisted qualified history holds following bounded item
+  summaries at **`bcab991`**, preparation dispatch at **`f760907`** and typed
+  admission at **`108678c`**.
   The combined feature is unfinished. No merge/push/deploy.
 - Foundation: comparison policies, source ordering, bounded encrypted evidence,
   exact decimal counts, draft persistence ownership and native/lease guards.
@@ -102,8 +102,11 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 - Qualified history units can now persist encrypted addition/current/correction
   proposals, including exact prior-version evidence and stable prospective IDs.
   Replay keeps IDs/counts/charges unchanged; manifest, count/position and byte
-  settlement share one transaction. Dispatcher-owned held/excluded/source-gap
-  settlement and complete-plan sealing are still pending.
+  settlement share one transaction. Unresolved-source diagnostic/excluded/source-gap settlement and complete-plan
+  sealing are still pending. Qualified identities with ineligible/unproven
+  baselines now persist encrypted, counted holds atomically without prospective
+  native IDs or heads; replay preserves the held outcome even if prerequisites
+  later become eligible.
 - Native activity planning also builds initial note/task rows for qualified new
   identities, with content/role validation and source completion attribution.
   Retained mapping conversion, persisted activity units and execution remain.
@@ -129,39 +132,10 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 ## Evidence and isolation
 
-Earlier checkpoint evidence, including new-identity qualification at `26323f6`,
+Earlier checkpoint evidence through typed admission at `108678c`, including
+qualified-unit planning at `d9d2a43` and identity qualification at `26323f6`,
 is archived in [Project history](../plans/PROJECT_HISTORY.md#010g1-foundation-and-discovery-checkpoints--2026-09-15).
 
-- Qualified history preparation/native insertion planning: all 24 serial family
-  database regressions and 40 focused Rust tests passed, plus `crm-app --lib`
-  Clippy with warnings denied, formatting and diff checks. Real retained history
-  fixtures freeze new/current/body-only-correction units, decrypt their exact
-  proposals, verify stable target/version IDs and replay without changed counts
-  or charges. Capacity rejection and an injected final checkpoint failure leave
-  no partial manifest, position, count or ledger mutation. Native insertion
-  policy checks ownership/coverage, content/roles, fixed IDs and source completion
-  with no invented native actor. These are preparation checks, not execution.
-  Final logs: `/private/tmp/010g1-preparation-family-db.log`,
-  `/private/tmp/010g1-preparation-unit.log`,
-  `/private/tmp/010g1-preparation-clippy.log`.
-  Runners: `cargo test -p crm-api --features test-support --test all
-  family_refresh --locked -- --ignored --test-threads=1`; `cargo test -p crm-app
-  --lib family_refresh --locked`; `cargo clippy -p crm-app --lib --locked --
-  -D warnings`. All used the isolated target/database below.
-- Typed preparation/per-cohort history ordering: all 27 serial family database
-  regressions and 40 focused Rust tests passed, plus `crm-app --lib` Clippy with
-  warnings denied, formatting and diff checks. The three new command scenarios
-  cover combined/history-only payers, encrypted frozen bindings, exact retained
-  and reserved bytes, whole-admission rollback, same-request replay despite a
-  newly restrictive budget, changed-body/active-bundle conflicts, invalid fields,
-  unauthorized callers and another Organization's real source report. The history
-  fixture proves indexing still succeeds when an admitted cohort's creation
-  interval overlaps, while both its new and existing identities stay held until
-  the boundary is valid. No native-refresh capability is installed by preparation.
-  Logs: `/private/tmp/010g1-command-family-db.log`,
-  `/private/tmp/010g1-command-unit.log`, `/private/tmp/010g1-command-clippy.log`.
-  Runners match the previous milestone: serial `all family_refresh` database
-  tests, focused library tests and library Clippy in the isolated target/database.
 - Bounded preparation dispatcher: all 29 serial family database regressions,
   40 focused library tests and `crm-api --lib` Clippy with warnings denied passed.
   Combined preparation reaches mappings for every selected family through real
@@ -181,6 +155,17 @@ is archived in [Project history](../plans/PROJECT_HISTORY.md#010g1-foundation-an
   `/private/tmp/010g1-items-final-db.log`, `/private/tmp/010g1-items-clippy.log`.
   Database runner: serial `all history_baseline_authenticates_original_owner`;
   the full 29-test family baseline is retained at `f760907` above.
+- Qualified history holds: all 29 serial family database regressions, 40 focused
+  library tests, API-library Clippy with warnings denied, formatting and diff
+  checks passed. The admitted cohort fixture freezes a qualified source with an
+  overlapping creation boundary as a counted hold, verifies its encrypted reason
+  and absence of native target/head IDs, then proves replay preserves that hold
+  after eligibility changes. Capacity rejection and an injected checkpoint fault
+  leave no partial unit or charge. This full family run also rechecks item cursor
+  isolation and preparation dispatch. Logs: `/private/tmp/010g1-held-family-db.log`,
+  `/private/tmp/010g1-held-unit.log`, `/private/tmp/010g1-held-clippy.log`.
+  Runners: serial `all family_refresh`, library `family_refresh` tests and
+  `cargo clippy -p crm-api --lib --locked -- -D warnings`, using isolation below.
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB
   `crm_010g1_schema_20260915`. Database tests run serially.

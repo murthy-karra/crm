@@ -1855,6 +1855,7 @@ async fn history_baseline_authenticates_admitted_owner(pool: PgPool) {
         .unwrap(),
         Discovery::Held(Hold::SourceNotNewer)
     ));
+    let frozen_hold = assert_frozen_history_hold(&pool, &f, &claim, cohort).await;
     // Indexing succeeds independently of this cohort's late creation boundary.
     sqlx::query("UPDATE migration_snapshot SET completed_at=$2 WHERE id=$1")
         .bind(anchor.get::<Uuid, _>("id"))
@@ -1863,6 +1864,19 @@ async fn history_baseline_authenticates_admitted_owner(pool: PgPool) {
         .await
         .unwrap();
     assert_new_candidate(&f, &claim, cohort, Kind::Event, "82").await;
+    use crm_api::domain::migration::family_refresh::history_plan::{self, Prepared};
+    assert!(
+        matches!(history_plan::prepare_unit(&f.pool,&f.key,&f.policy,&claim,cohort,Kind::Event,"82").await.unwrap(),Prepared::Unit(id) if id==frozen_hold),
+        "newly eligible evidence does not rewrite this plan's immutable hold"
+    );
+    let held: String =
+        sqlx::query_scalar("SELECT disposition FROM migration_family_refresh_manifest WHERE id=$1")
+            .bind(frozen_hold)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(held, "held");
+
     let selected = match history_resolution::resolve(&f.pool, &f.key, &claim, Kind::Event, "81")
         .await
         .unwrap()
@@ -2883,4 +2897,111 @@ async fn assert_item_pages(
         ),
         "revision change invalidates prior cursor"
     );
+}
+
+async fn assert_frozen_history_hold(
+    pool: &PgPool,
+    f: &import_support::Fixture,
+    claim: &crm_api::domain::migration::family_refresh::cohort::Claim,
+    cohort: Uuid,
+) -> Uuid {
+    use crm_api::domain::migration::family_refresh::{
+        evidence::{Purpose, Scope},
+        history_hold::HeldProposal,
+        history_plan::{self, Prepared},
+        model::{Counts, Family, Hold, Kind},
+    };
+    let mut tiny = f.policy.clone();
+    tiny.run_ceiling_bytes = 1;
+    assert!(matches!(
+        history_plan::prepare_unit(&f.pool, &f.key, &tiny, claim, cohort, Kind::Event, "82")
+            .await
+            .unwrap(),
+        Prepared::Capacity
+    ));
+    let before:serde_json::Value=sqlx::query_scalar("SELECT jsonb_build_object('position',position,'counts',counts,'retained',retained_bytes,'reserved',reserved_bytes) FROM migration_family_refresh_plan WHERE id=$1").bind(claim.plan).fetch_one(pool).await.unwrap();
+    sqlx::raw_sql("CREATE FUNCTION test_history_hold_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.position>OLD.position THEN RAISE EXCEPTION 'synthetic history hold fault'; END IF; RETURN NEW; END $$; CREATE TRIGGER test_history_hold_fault BEFORE UPDATE ON migration_family_refresh_plan FOR EACH ROW EXECUTE FUNCTION test_history_hold_fault()")
+        .execute(pool).await.unwrap();
+    assert!(history_plan::prepare_unit(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        claim,
+        cohort,
+        Kind::Event,
+        "82"
+    )
+    .await
+    .is_err());
+    sqlx::raw_sql("DROP TRIGGER test_history_hold_fault ON migration_family_refresh_plan; DROP FUNCTION test_history_hold_fault()").execute(pool).await.unwrap();
+    let after:serde_json::Value=sqlx::query_scalar("SELECT jsonb_build_object('position',position,'counts',counts,'retained',retained_bytes,'reserved',reserved_bytes) FROM migration_family_refresh_plan WHERE id=$1").bind(claim.plan).fetch_one(pool).await.unwrap();
+    assert_eq!(
+        before, after,
+        "failed hold rolls back its counts and charge"
+    );
+    let id = match history_plan::prepare_unit(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        claim,
+        cohort,
+        Kind::Event,
+        "82",
+    )
+    .await
+    .unwrap()
+    {
+        Prepared::Unit(id) => id,
+        _ => panic!("qualified held identity must persist"),
+    };
+    let r = sqlx::query("SELECT * FROM migration_family_refresh_manifest WHERE id=$1")
+        .bind(id)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    assert_eq!(r.get::<String, _>("disposition"), "held");
+    assert_eq!(r.get::<String, _>("reason"), "source_not_newer");
+    assert!(r.get::<Option<Uuid>, _>("target_id").is_none());
+    assert!(r.get::<Option<Uuid>, _>("expected_head_id").is_none());
+    let scope = Scope {
+        organization: f.ctx.organization_id,
+        bundle: claim.bundle,
+        plan: claim.plan,
+        family: Family::History,
+        revision: 1,
+    };
+    let proposal: HeldProposal = scope
+        .open(
+            &f.key,
+            id,
+            Purpose::Manifest,
+            r.get("nonce"),
+            r.get("ciphertext"),
+        )
+        .unwrap();
+    assert_eq!(proposal.reason, Hold::SourceNotNewer);
+    assert_eq!(proposal.source_id, "82");
+    let counts: Counts = serde_json::from_value(r.get("counts")).unwrap();
+    assert_eq!(counts.units, 1);
+    assert_eq!(counts.held, 1);
+    assert!(counts.reconciles());
+    let row=sqlx::query("SELECT position,counts,measured_bytes,retained_bytes FROM migration_family_refresh_plan WHERE id=$1").bind(claim.plan).fetch_one(pool).await.unwrap();
+    assert_eq!(row.get::<i64, _>("position"), 1);
+    assert_eq!(
+        row.get::<i64, _>("measured_bytes"),
+        row.get::<i64, _>("retained_bytes")
+    );
+    assert_eq!(
+        row.get::<serde_json::Value, _>("counts"),
+        r.get::<serde_json::Value, _>("counts")
+    );
+    let units: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM migration_family_refresh_manifest WHERE plan_id=$1",
+    )
+    .bind(claim.plan)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    assert_eq!(units, 1);
+    id
 }

@@ -4,6 +4,7 @@ use super::{
     cohort::Claim,
     evidence::{Purpose, Scope},
     history_baseline::{self, Baseline},
+    history_hold,
     history_resolution::{self, Resolution},
     history_source::HistoryEvidence,
     model::{Counts, Family, HistoryChange, Hold, Kind},
@@ -36,7 +37,8 @@ pub enum Prepared {
 
 /// This entry point accepts only a resolved in-cohort source identity. Source
 /// diagnostic/excluded occurrences are settled by the source-walk dispatcher.
-/// The returned hold is not a stored unit when source/cohort proof is absent.
+/// Qualified sources with baseline holds become immutable held manifests. A
+/// returned hold is not stored when source/cohort proof itself is absent.
 pub async fn prepare_unit(
     pool: &PgPool,
     key: &RawPayloadKey,
@@ -90,14 +92,33 @@ pub async fn prepare_unit(
     )
     .await?
     {
-        history_baseline::Discovery::Proven(b) => Some(b),
+        history_baseline::Discovery::Proven(b) => Ok(Some(b)),
         history_baseline::Discovery::Held(Hold::BaselineUnproven) => {
             match new_identity::discover(pool, key, claim, cohort, kind, source_id).await? {
-                new_identity::Discovery::New(_) => None,
-                new_identity::Discovery::Held(h) => return Ok(Prepared::Held(h)),
+                new_identity::Discovery::New(_) => Ok(None),
+                new_identity::Discovery::Held(h) => Err(h),
             }
         }
-        history_baseline::Discovery::Held(h) => return Ok(Prepared::Held(h)),
+        history_baseline::Discovery::Held(h) => Err(h),
+    };
+    let baseline = match baseline {
+        Ok(baseline) => baseline,
+        Err(reason) => {
+            return history_hold::prepare(
+                pool,
+                key,
+                policy,
+                claim,
+                history_hold::Input {
+                    cohort,
+                    kind,
+                    source_id: source_id.to_owned(),
+                    selected: *selected,
+                    reason,
+                },
+            )
+            .await
+        }
     };
     let (mut tx, b, p) = preparation::begin(pool, claim).await?;
     if p.get::<String, _>("family") != "history"

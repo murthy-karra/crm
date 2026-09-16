@@ -2088,3 +2088,39 @@ implemented, verified, published and deployed. Do not restart its completed lane
 - R1 (auto-hangup of a live call on identity change) remains a later product
   choice, not a blocker for this documentation milestone.
 <!-- END PROJECT_STATE snapshot 6e89776 -->
+
+## 010g1 qualified proposals and typed admission — 2026-09-15
+
+Verified implementation checkpoints `d9d2a43` and `108678c`; the combined feature
+remains unfinished. Current residuals live in the implementation status.
+
+- Qualified history preparation/native insertion planning: all 24 serial family
+  database regressions and 40 focused Rust tests passed, plus `crm-app --lib`
+  Clippy with warnings denied, formatting and diff checks. Real retained history
+  fixtures freeze new/current/body-only-correction units, decrypt their exact
+  proposals, verify stable target/version IDs and replay without changed counts
+  or charges. Capacity rejection and an injected final checkpoint failure leave
+  no partial manifest, position, count or ledger mutation. Native insertion
+  policy checks ownership/coverage, content/roles, fixed IDs and source completion
+  with no invented native actor. These are preparation checks, not execution.
+  Final logs: `/private/tmp/010g1-preparation-family-db.log`,
+  `/private/tmp/010g1-preparation-unit.log`,
+  `/private/tmp/010g1-preparation-clippy.log`.
+  Runners: `cargo test -p crm-api --features test-support --test all
+  family_refresh --locked -- --ignored --test-threads=1`; `cargo test -p crm-app
+  --lib family_refresh --locked`; `cargo clippy -p crm-app --lib --locked --
+  -D warnings`. All used the isolated target/database below.
+- Typed preparation/per-cohort history ordering: all 27 serial family database
+  regressions and 40 focused Rust tests passed, plus `crm-app --lib` Clippy with
+  warnings denied, formatting and diff checks. The three new command scenarios
+  cover combined/history-only payers, encrypted frozen bindings, exact retained
+  and reserved bytes, whole-admission rollback, same-request replay despite a
+  newly restrictive budget, changed-body/active-bundle conflicts, invalid fields,
+  unauthorized callers and another Organization's real source report. The history
+  fixture proves indexing still succeeds when an admitted cohort's creation
+  interval overlaps, while both its new and existing identities stay held until
+  the boundary is valid. No native-refresh capability is installed by preparation.
+  Logs: `/private/tmp/010g1-command-family-db.log`,
+  `/private/tmp/010g1-command-unit.log`, `/private/tmp/010g1-command-clippy.log`.
+  Runners match the previous milestone: serial `all family_refresh` database
+  tests, focused library tests and library Clippy in the isolated target/database.

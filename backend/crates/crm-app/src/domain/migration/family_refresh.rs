@@ -26,3 +26,5 @@ pub mod new_identity;
 pub mod preparation_worker;
 
 pub mod item_queries;
+
+pub mod history_hold;

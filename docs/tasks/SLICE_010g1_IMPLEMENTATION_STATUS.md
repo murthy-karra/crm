@@ -10,7 +10,7 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 - User requested “commit and proceed”; foundation checkpoint **`8b5959e`** is
   committed; accounting checkpoint **`0ef822f`** is also committed. History
   correction storage is committed as **`047e3e5`**; native delta planning is
-  committed with this checkpoint. The combined feature is unfinished. No merge/push/deploy.
+  committed as **`cbae4c6`**. The combined feature is unfinished. No merge/push/deploy.
 - Foundation: comparison policies, source ordering, bounded encrypted evidence,
   exact decimal counts, draft persistence ownership and native/lease guards.
 - Accounting now measures family and shared evidence separately. One frozen plan
@@ -33,6 +33,10 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   clears/removals. Activity preserves immutable fields and native local state,
   validates role mappings, and counts completion/reopen without inventing actors.
   These are pure preparation components; persistence execution is not wired.
+- Cohort preparation now has a bounded transactional page runner. It freezes
+  original/admitted/recovered identity proofs behind a workspace boundary, records
+  exclusions, fences current admin/lease ownership, and settles exact byte charges
+  with the checkpoint. Dispatcher integration remains pending.
 - No refresh HTTP commands, family worker or Web workflow are exposed yet.
 
 ## Evidence and isolation
@@ -70,6 +74,15 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   `/private/tmp/010g1-native-delta-tests.log`,
   `/private/tmp/010g1-native-delta-clippy.log` and
   `/private/tmp/010g1-native-tag-regression.log`. No refresh execution or UI claim.
+- Cohort preparation: all 6 family database regressions passed, including
+  application-role paging, admission/recovery proof selection, terminal cutoff,
+  wrong Organization/token rejection, capacity rollback, injected checkpoint
+  failure rollback, replay and exact metering. The initial fixture-count assertion
+  was corrected (one original plus one admitted Person). Migration application,
+  `crm-app` Clippy with warnings denied, formatting and diff checks passed. Logs:
+  `/private/tmp/010g1-cohort-db-tests.log`,
+  `/private/tmp/010g1-cohort-clippy.log`, and
+  `/private/tmp/010g1-cohort-schema.log`. Full workflow gates remain outstanding.
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB
   `crm_010g1_schema_20260915`. Database tests run serially.
@@ -77,6 +90,6 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   No live FUB/customer processing. Linker reports the large `__eh_frame` warning.
 
 Remaining: final capability inventories and refresh-owned initial identities;
-source/cohort/baseline discovery; metadata/activity/history execution; typed
+source and baseline discovery; cohort dispatcher integration; metadata/activity/history execution; typed
 commands and bounded readers; common Web workflow; independent implementation
 review; full database/browser/performance/final gates. Do not report 010g1 done.

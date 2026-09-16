@@ -191,3 +191,23 @@ actual post-write revision; these pure proposals do not authorize execution.
 Both planners are internal preparation components. Cohort/source discovery,
 immutable baseline adapters, HTTP commands, workers and Web integration remain
 unfinished. No application path invokes these proposals yet.
+
+### Cohort preparation checkpoint
+
+`family_refresh::cohort::freeze_page` is an internal bounded transaction for the
+existing dispatcher integration. The bundle's discovery timestamp is taken only
+after acquiring the exclusive workspace lock, so earlier admission writers have
+committed. Bundle creation must acquire that lock before taking other workload
+locks; the trigger provides a final boundary check with a bounded lock timeout.
+The payer plan scans original-parent People identities in source-ID order, at
+most 50 per unit, retaining exact original or terminal admission/recovery result
+references. Unproven, unfinished and erased identities receive explicit counts.
+Newer admissions cannot join the frozen scope. Family first-coverage and baseline
+qualification remain separate subsequent steps.
+
+Each page rechecks the active admin, workspace, token, epoch and expiry, reserves
+capacity, and commits cohort rows, cursor, counters and exact ledger settlement
+together. Failed units roll back; expired older reservations use the existing
+fenced reclaim operation. Completed cohort preparation is replay-safe. The
+nullable initial counter avoids retroactive uncharged bytes on existing plans.
+This does not yet expose an HTTP command or dispatch a production worker.

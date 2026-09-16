@@ -76,7 +76,7 @@ async fn original_mapping_hold_recovers_once_with_honest_fact(migrator: PgPool) 
     assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_people_admission_result WHERE admission_id=$1 AND disposition='settled'").bind(run).fetch_one(&f.pool).await.unwrap(),1);
 }
 
-async fn recovered_fixture(migrator: &PgPool) -> (import_support::Fixture, Uuid, Uuid) {
+pub(super) async fn recovered_fixture(migrator: &PgPool) -> (import_support::Fixture, Uuid, Uuid) {
     recovery_fixture(migrator, true, 1).await
 }
 async fn recovery_fixture(

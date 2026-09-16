@@ -1092,8 +1092,9 @@ async fn family_refresh_plan_choices_are_versioned_atomic_and_inherited(pool: Pg
     let f = import_support::fixture_with_book(&pool, db_activity_source::book()).await;
     let parent = db_activity_source::completed_parent(&f).await;
     use crm_api::domain::migration::snapshot_source::Stream;
-    f.reader
-        .set_records(Stream::TasksOpen, vec![db_activity_source::task(21)]);
+    let mut task = db_activity_source::task(21);
+    task["dueDate"] = json!("2026-09-02");
+    f.reader.set_records(Stream::TasksOpen, vec![task]);
     f.reader.set_records(Stream::Notes,vec![json!({"id":11,"personId":101,"createdById":3,"body":"List","created":"2026-09-01T12:00:00Z"})]);
     f.reader.set_raw(Stream::NoteDetail,0,200,serde_json::to_vec(&json!({"id":11,"personId":101,"createdById":3,"type":"Note","body":"Detail","isHtml":false,"created":"2026-09-01T12:00:00Z","updated":null})).unwrap(),false);
     f.reader.set_records(Stream::CustomFields,vec![json!({"id":10,"name":"customChoice","label":"Choice","type":"dropdown","choices":["First"]})]);
@@ -1418,6 +1419,7 @@ async fn family_refresh_plan_choices_are_versioned_atomic_and_inherited(pool: Pg
     }
     assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_family_refresh_mapping WHERE plan_id=$1 AND disposition IN ('existing','kind','timezone')").bind(fourth.families[1].plan_id).fetch_one(&pool).await.unwrap(),5);
 
+    assert_activity_mapping_conversion(&pool, &f, bundle, fourth.families[1].plan_id, None).await;
     let carry = PlanFamilyRefresh {
         family: Family::Activity,
         ..make("4", vec![])
@@ -1437,8 +1439,153 @@ async fn family_refresh_plan_choices_are_versioned_atomic_and_inherited(pool: Pg
         .await
         .unwrap();
     assert_eq!(sqlx::query_scalar::<_,String>("SELECT disposition FROM migration_family_refresh_mapping WHERE plan_id=$1 AND kind='timezone'").bind(sixth.families[1].plan_id).fetch_one(&pool).await.unwrap(),"hold");
+    for step in 0..30 {
+        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+            break;
+        }
+        assert!(step < 29);
+    }
+    assert_activity_mapping_conversion(
+        &pool,
+        &f,
+        bundle,
+        sixth.families[1].plan_id,
+        Some(crm_api::domain::migration::family_refresh::model::Hold::MappingRequired),
+    )
+    .await;
+    let conflict = PlanFamilyRefresh {
+        family: Family::Activity,
+        source_timezone: Some(Some("UTC".into())),
+        ..make("6", vec![])
+    };
+    let seventh = plan_commands::plan(&f.pool, &f.key, &f.policy, &f.ctx, bundle, conflict)
+        .await
+        .unwrap();
+    for step in 0..30 {
+        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+            break;
+        }
+        assert!(step < 29);
+    }
+    assert_activity_mapping_conversion(
+        &pool,
+        &f,
+        bundle,
+        seventh.families[1].plan_id,
+        Some(crm_api::domain::migration::family_refresh::model::Hold::SourceConflict),
+    )
+    .await;
     sqlx::raw_sql(include_str!("fixtures/family_refresh_byte_inventory.sql"))
         .execute(&pool)
         .await
         .unwrap();
+}
+
+async fn assert_activity_mapping_conversion(
+    pool: &PgPool,
+    f: &import_support::Fixture,
+    bundle: Uuid,
+    plan: Uuid,
+    expected_hold: Option<crm_api::domain::migration::family_refresh::model::Hold>,
+) {
+    use crm_api::domain::migration::family_refresh::{
+        activity_delta::Content,
+        activity_mapping::{self, Conversion},
+        cohort::Claim,
+        model::{Hold, Kind},
+    };
+    // Claim the completed mapping phase without enabling future classification
+    // dispatch. This uses the ordinary app lease guards, never a native permit.
+    let token = Uuid::new_v4();
+    let mut tx = f.pool.begin().await.unwrap();
+    sqlx::query("SELECT set_config('crm.family_refresh_reader','fub-family-refresh-v1',true)")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let epoch:i64=sqlx::query_scalar("UPDATE migration_family_refresh_plan SET lease_token=$3,lease_epoch=lease_epoch+1,lease_expires_at=clock_timestamp()+interval '60 seconds' WHERE id=$1 AND organization_id=$2 RETURNING lease_epoch").bind(plan).bind(f.org).bind(token).fetch_one(&mut *tx).await.unwrap();
+    tx.commit().await.unwrap();
+    let claim = Claim {
+        organization: f.ctx.organization_id,
+        bundle,
+        plan,
+        token,
+        epoch,
+    };
+    let calls = f.reader.calls();
+    let note = activity_mapping::convert(&f.pool, &f.key, &claim, Kind::Note, "11")
+        .await
+        .unwrap();
+    let Conversion::Ready(note) = note else {
+        panic!("mapped detail must convert")
+    };
+    assert!(
+        matches!(note.evidence.source.content,Content::Note{ref body,author} if body=="Detail" && author==Some(f.actor))
+    );
+    let task = activity_mapping::convert(&f.pool, &f.key, &claim, Kind::Task, "21")
+        .await
+        .unwrap();
+    if let Some(expected) = expected_hold {
+        assert!(
+            matches!(task,Conversion::Held(actual) if actual==expected),
+            "date-only tasks require a consistent explicit timezone"
+        );
+    } else {
+        let Conversion::Ready(task) = task else {
+            panic!("mapped task must convert")
+        };
+        assert!(
+            matches!(task.evidence.source.content,Content::Task{kind:crm_api::domain::task::TaskKind::FollowUp,creator,assignee,due:Some(due),completed:None,..} if creator==Some(f.actor) && assignee==Some(f.actor) && due.to_rfc3339()=="2026-09-03T06:59:59+00:00")
+        );
+        assert!(task
+            .evidence
+            .transformations
+            .iter()
+            .any(|v| v == "date_only_end_of_day_in_confirmed_timezone"));
+    }
+    assert_eq!(
+        f.reader.calls(),
+        calls,
+        "conversion never contacts the source provider"
+    );
+    let label: String = sqlx::query_scalar("SELECT display_name FROM app_user WHERE id=$1")
+        .bind(f.actor)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE app_user SET display_name='Changed mapping destination' WHERE id=$1")
+        .bind(f.actor)
+        .execute(pool)
+        .await
+        .unwrap();
+    assert!(
+        matches!(
+            activity_mapping::convert(&f.pool, &f.key, &claim, Kind::Note, "11")
+                .await
+                .unwrap(),
+            Conversion::Held(Hold::TargetUnavailable)
+        ),
+        "changed destination snapshots must be reviewed again"
+    );
+    sqlx::query("UPDATE app_user SET display_name=$2 WHERE id=$1")
+        .bind(f.actor)
+        .bind(label)
+        .execute(pool)
+        .await
+        .unwrap();
+    let foreign = Claim {
+        organization: OrganizationId(Uuid::new_v4()),
+        ..claim
+    };
+    assert!(
+        activity_mapping::convert(&f.pool, &f.key, &foreign, Kind::Note, "11")
+            .await
+            .is_err()
+    );
+    assert!(worker::release(&f.pool, &claim).await.unwrap());
+    assert!(
+        activity_mapping::convert(&f.pool, &f.key, &claim, Kind::Note, "11")
+            .await
+            .is_err(),
+        "a released lease grants no preparation authority"
+    );
 }

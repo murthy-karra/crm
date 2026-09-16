@@ -7,8 +7,8 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 - Branch `codex/010g1-family-refresh`, base `dd140b0`; one primary writer and the
   previously authorized single reviewer. Planning review READY, round 1.
-- Current milestone: typed mapping revisions following bounded mapping review
-  at **`19d2a69`** and core inventory at **`76fb93b`**.
+- Current milestone: retained activity mapping conversion following typed
+  mapping revisions at **`8371c7b`**.
   The combined feature is unfinished. No merge/push/deploy.
 - Foundation: comparison policies, source ordering, bounded encrypted evidence,
   exact decimal counts, draft persistence ownership and native/lease guards.
@@ -164,6 +164,13 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   targets bind the effective field, and inactive assignees are rejected. Activity
   timezone omission inherits; explicit null clears. Native conversion and
   classification remain pending; mapping intent creates no native rows.
+- Activity conversion now resolves complete source groups before applying the
+  current plan's authenticated mappings. It reuses original note HTML/content and
+  task-time conversion, requires note detail, checks role destination snapshots,
+  validates explicit kind/timezone choices and reconciles source-user timezone
+  evidence. Missing timezone and conflicting evidence hold date-only tasks. It
+  returns native proposal inputs and exact mapping/source references without
+  source calls or native writes; persisted activity classification remains next.
 - No refresh HTTP commands or Web workflow are exposed yet.
 
 ## Evidence and isolation
@@ -232,6 +239,15 @@ archived in [Project history](../plans/PROJECT_HISTORY.md#010g1-preparation-and-
   `/private/tmp/010g1-plan-clippy.log`. Runners: serial `all family_refresh`,
   corrected admitted-owner test only, `crm-app --lib family_refresh`, and the
   established Clippy command. Native conversion/execution remain unverified work.
+- Activity conversion: the expanded typed-plan database scenario and final
+  API-library Clippy passed, along with formatting/diff checks. It verifies detail
+  content instead of list fallback, explicit task-kind/role mapping, date-only
+  conversion in the selected zone, timezone clearing and source-user conflict,
+  changed destination snapshots, foreign Organizations and released leases.
+  Initial test-helper compilation errors were corrected before the passing run.
+  Logs: `/private/tmp/010g1-activity-mapping-conflict-final-db.log` and
+  `/private/tmp/010g1-activity-mapping-final-clippy.log`. Runner: serial
+  `all family_refresh_plan_choices`; preceding regression evidence remains above.
 - Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
   `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB
   `crm_010g1_schema_20260915`. Database tests run serially.

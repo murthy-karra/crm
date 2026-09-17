@@ -42,6 +42,12 @@ const nativeFields = computed(() => {
         class="rounded-lg border border-border px-2 py-0.5 text-small text-text-muted"
       >Imported external record</span>
     </div>
+    <p
+      v-if="external && entry.version && entry.version !== '1'"
+      class="text-small text-text-muted"
+    >
+      Corrected source record · version {{ entry.version }}
+    </p>
     <p class="text-small text-text-muted">
       {{ external ? 'FUB record created' : 'Displayed at' }}: {{ entry.display_at ? formatAbsoluteTime(entry.display_at) : 'Date unknown' }}
     </p>

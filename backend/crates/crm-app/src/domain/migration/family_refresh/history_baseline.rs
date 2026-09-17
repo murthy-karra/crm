@@ -14,7 +14,7 @@ use crate::{
     domain::migration::{history_import_source, history_import_store, MigrationError},
 };
 use chrono::{DateTime, Utc};
-use sqlx::{PgPool, Row};
+use sqlx::{postgres::PgRow, PgConnection, PgPool, Row};
 use uuid::Uuid;
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -43,13 +43,26 @@ pub async fn discover(
     kind: Kind,
     identity_hmac: &[u8; 32],
 ) -> Result<Discovery, MigrationError> {
+    let (mut tx, b, p) = preparation::read_begin(pool, claim).await?;
+    discover_in(&mut tx, key, claim, cohort, kind, identity_hmac, &b, &p).await
+}
+#[allow(clippy::too_many_arguments)]
+pub(super) async fn discover_in(
+    conn: &mut PgConnection,
+    key: &RawPayloadKey,
+    claim: &Claim,
+    cohort: Uuid,
+    kind: Kind,
+    identity_hmac: &[u8; 32],
+    b: &PgRow,
+    p: &PgRow,
+) -> Result<Discovery, MigrationError> {
     let family = match kind {
         Kind::Event => "events",
         Kind::Call => "calls",
         Kind::Text => "text_messages",
         _ => return Err(MigrationError::InvalidInput),
     };
-    let (mut tx, b, p) = preparation::read_begin(pool, claim).await?;
     if p.get::<String, _>("family") != "history"
         || !matches!(
             p.get::<String, _>("phase").as_str(),
@@ -59,21 +72,23 @@ pub async fn discover(
         return Err(MigrationError::Conflict);
     }
     let c=sqlx::query("SELECT c.*,p.id AS live_person FROM migration_family_refresh_cohort c LEFT JOIN person p ON p.id=c.person_id AND p.organization_id=c.organization_id WHERE c.id=$1 AND c.bundle_id=$2 AND c.organization_id=$3")
-        .bind(cohort).bind(claim.bundle).bind(claim.organization.0).fetch_optional(&mut *tx).await?.ok_or(MigrationError::NotFound)?;
+        .bind(cohort).bind(claim.bundle).bind(claim.organization.0).fetch_optional(&mut *conn).await?.ok_or(MigrationError::NotFound)?;
     if let Err(hold) =
-        super::source_policy::qualify_accepted_scan(&mut tx, claim.organization, &b, &p, &c).await?
+        super::source_policy::qualify_accepted_scan(&mut *conn, claim.organization, b, p, &c)
+            .await?
     {
         return Ok(Discovery::Held(hold));
     }
     if let Err(hold) =
-        super::source_policy::qualify_history_creation(&mut tx, claim.organization, &p, &c).await?
+        super::source_policy::qualify_history_creation(&mut *conn, claim.organization, p, &c)
+            .await?
     {
         return Ok(Discovery::Held(hold));
     }
     if c.get::<Option<Uuid>, _>("live_person").is_none() {
         return Ok(Discovery::Held(Hold::TargetErased));
     }
-    let identity=sqlx::query("SELECT * FROM migration_history_import_identity WHERE organization_id=$1 AND identity_hmac=$2").bind(claim.organization.0).bind(identity_hmac.as_slice()).fetch_optional(&mut *tx).await?;
+    let identity=sqlx::query("SELECT * FROM migration_history_import_identity WHERE organization_id=$1 AND identity_hmac=$2").bind(claim.organization.0).bind(identity_hmac.as_slice()).fetch_optional(&mut *conn).await?;
     let Some(identity) = identity else {
         return Ok(Discovery::Held(Hold::BaselineUnproven));
     };
@@ -89,18 +104,24 @@ pub async fn discover(
     {
         return Ok(Discovery::Held(Hold::IdentityMismatch));
     }
-    let owner = if let Some(root) = identity.get::<Option<Uuid>, _>("admitted_root_id") {
+    let owner = if let Some(owner_bundle) = identity.get::<Option<Uuid>, _>("refresh_bundle_id") {
+        sqlx::query("SELECT p.history_capture_id AS capture_id,b.state,GREATEST(b.updated_at,r.committed_at) AS terminal_at FROM migration_family_refresh_bundle b JOIN migration_family_refresh_plan p ON p.bundle_id=b.id AND p.organization_id=b.organization_id JOIN migration_family_refresh_manifest m ON m.plan_id=p.id AND m.bundle_id=b.id AND m.organization_id=b.organization_id JOIN migration_family_refresh_cohort c ON c.id=m.cohort_id AND c.bundle_id=b.id AND c.organization_id=b.organization_id JOIN migration_family_refresh_result r ON r.manifest_id=m.id AND r.plan_id=p.id AND r.organization_id=b.organization_id WHERE b.id=$1 AND b.organization_id=$2 AND p.id=$3 AND m.id=$4 AND b.parent_import_id=$5 AND b.parent_plan_id=$6 AND b.source_account_id=$7 AND c.source_person_id=$8 AND c.original_result_id IS NOT DISTINCT FROM $9::uuid AND c.admission_result_id IS NOT DISTINCT FROM $10::uuid AND c.creation_snapshot_id=$11 AND p.state IN ('completed','cancelled') AND p.family='history' AND p.confirmed_at IS NOT NULL AND b.confirmed_at IS NOT NULL AND m.disposition='insert' AND r.disposition='applied' AND r.person_id=$12 AND r.target_id=$13")
+            .bind(owner_bundle).bind(claim.organization.0).bind(identity.get::<Option<Uuid>,_>("refresh_plan_id")).bind(identity.get::<Option<Uuid>,_>("refresh_manifest_id"))
+            .bind(b.get::<Uuid,_>("parent_import_id")).bind(b.get::<Uuid,_>("parent_plan_id")).bind(b.get::<i64,_>("source_account_id"))
+            .bind(c.get::<String,_>("source_person_id")).bind(c.get::<Option<Uuid>,_>("original_result_id")).bind(c.get::<Option<Uuid>,_>("admission_result_id")).bind(c.get::<Uuid,_>("creation_snapshot_id"))
+            .bind(person).bind(identity.get::<Option<Uuid>,_>("fact_id")).fetch_optional(&mut *conn).await?
+    } else if let Some(root) = identity.get::<Option<Uuid>, _>("admitted_root_id") {
         let Some(admission) = c.get::<Option<Uuid>, _>("admission_id") else {
             return Ok(Discovery::Held(Hold::IdentityMismatch));
         };
         sqlx::query("SELECT history_capture_id AS capture_id,state,COALESCE(completed_at,updated_at) AS terminal_at FROM migration_admitted_history_root WHERE id=$1 AND organization_id=$2 AND parent_import_id=$3 AND parent_plan_id=$4 AND source_account_id=$5 AND admission_id=$6 AND confirmed_plan_id=$7")
-            .bind(root).bind(claim.organization.0).bind(b.get::<Uuid,_>("parent_import_id")).bind(b.get::<Uuid,_>("parent_plan_id")).bind(b.get::<i64,_>("source_account_id")).bind(admission).bind(identity.get::<Option<Uuid>,_>("admitted_plan_id")).fetch_optional(&mut *tx).await?
+            .bind(root).bind(claim.organization.0).bind(b.get::<Uuid,_>("parent_import_id")).bind(b.get::<Uuid,_>("parent_plan_id")).bind(b.get::<i64,_>("source_account_id")).bind(admission).bind(identity.get::<Option<Uuid>,_>("admitted_plan_id")).fetch_optional(&mut *conn).await?
     } else {
         if c.get::<Option<Uuid>, _>("original_result_id").is_none() {
             return Ok(Discovery::Held(Hold::IdentityMismatch));
         }
         sqlx::query("SELECT p.capture_id,r.state,COALESCE(r.completed_at,r.updated_at) AS terminal_at FROM migration_history_import_run r JOIN migration_history_import_plan p ON p.id=r.plan_id AND p.organization_id=r.organization_id WHERE r.id=$1 AND r.organization_id=$2 AND r.parent_import_id=$3 AND p.parent_plan_id=$4 AND p.source_account_id=$5 AND r.confirmed_at IS NOT NULL")
-            .bind(identity.get::<Option<Uuid>,_>("owner_run_id")).bind(claim.organization.0).bind(b.get::<Uuid,_>("parent_import_id")).bind(b.get::<Uuid,_>("parent_plan_id")).bind(b.get::<i64,_>("source_account_id")).fetch_optional(&mut *tx).await?
+            .bind(identity.get::<Option<Uuid>,_>("owner_run_id")).bind(claim.organization.0).bind(b.get::<Uuid,_>("parent_import_id")).bind(b.get::<Uuid,_>("parent_plan_id")).bind(b.get::<i64,_>("source_account_id")).fetch_optional(&mut *conn).await?
     };
     let Some(owner) = owner else {
         return Ok(Discovery::Held(Hold::BaselineUnproven));
@@ -112,15 +133,20 @@ pub async fn discover(
     {
         return Ok(Discovery::Held(Hold::FirstCoverageRequired));
     }
-    let fact =
-        history_import_store::existing_fact(&mut tx, key, claim.organization, &identity, &identity)
-            .await?;
+    let fact = history_import_store::existing_fact(
+        &mut *conn,
+        key,
+        claim.organization,
+        &identity,
+        &identity,
+    )
+    .await?;
     let Some(fact) = fact else {
         return Ok(Discovery::Held(Hold::BaselineUnproven));
     };
     let table = history_import_source::fact_table(family)?;
     let created:Option<DateTime<Utc>>=sqlx::query_scalar(&format!("SELECT source_created_at FROM {table} WHERE id=$1 AND organization_id=$2 AND identity_id=$3"))
-        .bind(fact).bind(claim.organization.0).bind(identity.get::<Uuid,_>("id")).fetch_one(&mut *tx).await?;
+        .bind(fact).bind(claim.organization.0).bind(identity.get::<Uuid,_>("id")).fetch_one(&mut *conn).await?;
     let mut baseline = Baseline {
         identity: identity.get("id"),
         person,
@@ -133,7 +159,7 @@ pub async fn discover(
         result: None,
     };
     if let Some(head) = sqlx::query("SELECT * FROM migration_family_refresh_history_head WHERE organization_id=$1 AND identity_id=$2")
-        .bind(claim.organization.0).bind(baseline.identity).fetch_optional(&mut *tx).await?
+        .bind(claim.organization.0).bind(baseline.identity).fetch_optional(&mut *conn).await?
     {
         if head.get::<Uuid, _>("original_fact_id") != fact
             || head.get::<Uuid, _>("person_id") != person
@@ -155,7 +181,7 @@ pub async fn discover(
                 .bind(c.get::<Option<Uuid>,_>("original_result_id")).bind(c.get::<Option<Uuid>,_>("admission_result_id"))
                 .bind(c.get::<Uuid,_>("creation_snapshot_id")).bind(b.get::<DateTime<Utc>,_>("created_at"))
                 .bind(kind_name).bind(identity_hmac.as_slice()).bind(c.get::<String,_>("source_person_id"))
-                .fetch_optional(&mut *tx).await?;
+                .fetch_optional(&mut *conn).await?;
             let Some(v) = v else { return Ok(Discovery::Held(Hold::BaselineUnproven)); };
             if v.get::<Uuid, _>("original_fact_id") != fact
                 || v.get::<Uuid, _>("person_id") != person
@@ -190,7 +216,7 @@ pub async fn discover(
     // The current source was already ordered after the core anchor by indexing.
     // This additionally fences the previous accepted per-identity history state.
     let rows=sqlx::query("SELECT id,source_account_id,started_at,completed_at,state FROM migration_history_capture_run WHERE organization_id=$1 AND parent_import_id=$2 AND parent_plan_id=$3 AND id=ANY($4)")
-        .bind(claim.organization.0).bind(b.get::<Uuid,_>("parent_import_id")).bind(b.get::<Uuid,_>("parent_plan_id")).bind(vec![baseline.capture,b.get::<Uuid,_>("history_capture_id")]).fetch_all(&mut *tx).await?;
+        .bind(claim.organization.0).bind(b.get::<Uuid,_>("parent_import_id")).bind(b.get::<Uuid,_>("parent_plan_id")).bind(vec![baseline.capture,b.get::<Uuid,_>("history_capture_id")]).fetch_all(&mut *conn).await?;
     let boundary = |id: Uuid| -> Option<Boundary> {
         let r = rows.iter().find(|r| r.get::<Uuid, _>("id") == id)?;
         Some(Boundary {

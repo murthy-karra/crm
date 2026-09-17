@@ -17,7 +17,7 @@ SELECT COALESCE(
  ('crm_admitted_history_write_fence()','204dca1fab619a05f1f7fc25cc635c3c'),
  ('crm_admitted_history_retained_size(jsonb)','2e016c5394e55a47bdc780b9c98dc73b'),
  ('crm_admitted_history_measure()','8f443cb578e5bb3ce9bc345d90b77853'),
- ('crm_history_import_measure()','e14011114d4c60efffa2271036b492e4'),
+ ('crm_history_import_measure()','9e5b10663974a2821f42f59763e3ef41'),
  ('crm_admitted_history_immutable()','53c389083f98cafa28f61cb95b80c66e'),
  ('crm_admitted_history_fact_allowed(jsonb,text)','f34dfe142392ca870e283a92b821a997'),
  ('crm_admitted_history_owner_insert()','7cc1d0fccd05e9913d74618888ce0134'),

@@ -120,5 +120,5 @@ BEGIN
  DELETE FROM migration_history_import_display d USING fub_text_record_imported fact WHERE d.id=fact.manifest_id AND d.organization_id=fact.organization_id AND d.organization_id=org;
  IF EXISTS(SELECT 1 FROM migration_history_review_state WHERE organization_id=org AND ((counts->>'fub_text_record_imported_known')::bigint<>0 OR (counts->>'fub_text_record_imported_unknown')::bigint<>0)) THEN RAISE EXCEPTION 'suppression counts wrong'; END IF;
  IF EXISTS(SELECT 1 FROM migration_family_refresh_plan WHERE organization_id=org AND measured_bytes<>retained_bytes) THEN RAISE EXCEPTION 'erasure left unsettled evidence'; END IF;
- IF has_table_privilege('crm_app','fub_event_record_corrected','INSERT') OR has_table_privilege('crm_app','migration_family_refresh_history_head','UPDATE') THEN RAISE EXCEPTION 'unfinished execution exposed'; END IF;
+ IF NOT has_table_privilege('crm_app','fub_event_record_corrected','INSERT') OR NOT has_table_privilege('crm_app','migration_family_refresh_history_head','UPDATE') THEN RAISE EXCEPTION 'typed execution grants missing'; END IF;
 END $$;

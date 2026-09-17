@@ -73,10 +73,9 @@ pub(super) fn scope(claim: &Claim, p: &PgRow) -> Result<Scope, MigrationError> {
         revision: p.get("revision"),
     })
 }
-/// Metadata and activity share the confirmed queue; history joins after its
-/// exclusive initial owner and version-aware execution adapters are installed.
+/// All three retained families share the same confirmed bounded queue.
 pub async fn claim_next(pool: &PgPool) -> Result<Option<Claim>, MigrationError> {
-    let runnable="p.family IN ('metadata','activity') AND p.state IN ('queued','running') AND p.phase='apply' AND p.confirmed_at IS NOT NULL AND NOT p.cancel_requested AND b.confirmed_at IS NOT NULL AND b.state IN ('queued','running','paused') AND (p.lease_token IS NULL OR p.lease_expires_at<=clock_timestamp())";
+    let runnable="p.family IN ('metadata','activity','history') AND p.state IN ('queued','running') AND p.phase='apply' AND p.confirmed_at IS NOT NULL AND NOT p.cancel_requested AND b.confirmed_at IS NOT NULL AND b.state IN ('queued','running','paused') AND (p.lease_token IS NULL OR p.lease_expires_at<=clock_timestamp())";
     let sql=format!("SELECT p.id,p.bundle_id,p.organization_id FROM migration_family_refresh_plan p JOIN migration_family_refresh_bundle b ON b.id=p.bundle_id AND b.organization_id=p.organization_id JOIN migration_workspace w ON w.organization_id=b.organization_id AND w.import_id=b.parent_import_id AND w.plan_id=b.parent_plan_id JOIN organization_membership m ON m.organization_id=b.organization_id AND m.user_id=b.executor_user_id WHERE {runnable} AND m.role='admin' AND m.status='active' ORDER BY p.lease_epoch,p.created_at,p.id LIMIT 1");
     let Some(candidate) = sqlx::query(&sql).fetch_optional(pool).await? else {
         return Ok(None);
@@ -171,6 +170,7 @@ pub async fn apply_once(
         if payer != claim.plan {
             sealing::settle_control(&mut tx, claim.organization.0, claim.bundle, payer).await?;
         }
+        sealing::release_terminal_controls(&mut tx, claim.organization.0, claim.bundle).await?;
         tx.commit().await?;
         return Ok(Progress::Finished);
     };
@@ -190,7 +190,9 @@ pub async fn apply_once(
         super::model::Family::Activity => {
             super::activity_execution::apply(pool, key, policy, release, claim, scope, unit).await
         }
-        super::model::Family::History => Err(MigrationError::Conflict),
+        super::model::Family::History => {
+            super::history_execution::apply(pool, key, policy, release, claim, scope, unit).await
+        }
     }
 }
 
@@ -206,6 +208,19 @@ pub(super) async fn finish(
     reservation: Uuid,
     result: ResultUnit,
 ) -> Result<Progress, MigrationError> {
+    insert_result(&mut tx, key, claim, scope, unit, result_id, &result).await?;
+    finish_inserted(tx, claim, p, unit, result_id, reservation, result).await
+}
+#[allow(clippy::too_many_arguments)]
+pub(super) async fn insert_result(
+    conn: &mut sqlx::PgConnection,
+    key: &RawPayloadKey,
+    claim: &Claim,
+    scope: Scope,
+    unit: &PgRow,
+    result_id: Uuid,
+    result: &ResultUnit,
+) -> Result<(), MigrationError> {
     let value = scope.seal(key, result_id, Purpose::Result, &result.data)?;
     let reason = result
         .reason
@@ -213,7 +228,18 @@ pub(super) async fn finish(
         .transpose()?
         .and_then(|v| v.as_str().map(str::to_owned))
         .or_else(|| unit.get("reason"));
-    sqlx::query("INSERT INTO migration_family_refresh_result(id,bundle_id,plan_id,organization_id,manifest_id,disposition,person_id,target_id,native_revision,reason,nonce,ciphertext,native_bytes) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)").bind(result_id).bind(claim.bundle).bind(claim.plan).bind(claim.organization.0).bind(unit.get::<Uuid,_>("id")).bind(result.disposition).bind(result.person).bind(result.target).bind(result.revision).bind(reason).bind(value.nonce.as_slice()).bind(value.ciphertext).bind(result.native_bytes).execute(&mut *tx).await?;
+    sqlx::query("INSERT INTO migration_family_refresh_result(id,bundle_id,plan_id,organization_id,manifest_id,disposition,person_id,target_id,native_revision,reason,nonce,ciphertext,native_bytes) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)").bind(result_id).bind(claim.bundle).bind(claim.plan).bind(claim.organization.0).bind(unit.get::<Uuid,_>("id")).bind(result.disposition).bind(result.person).bind(result.target).bind(result.revision).bind(reason).bind(value.nonce.as_slice()).bind(value.ciphertext).bind(result.native_bytes).execute(&mut *conn).await?;
+    Ok(())
+}
+pub(super) async fn finish_inserted(
+    mut tx: Transaction<'static, Postgres>,
+    claim: &Claim,
+    p: &PgRow,
+    unit: &PgRow,
+    result_id: Uuid,
+    reservation: Uuid,
+    result: ResultUnit,
+) -> Result<Progress, MigrationError> {
     if result.data.after_state.is_some() {
         let changed=sqlx::query("INSERT INTO migration_family_refresh_head(organization_id,source_account_id,kind,source_key_hmac,person_id,target_id,result_id,version,storage_plan_id) SELECT $1,b.source_account_id,$3,$4,$5,$6,$7,1,$8 FROM migration_family_refresh_bundle b WHERE b.id=$2 AND b.organization_id=$1 ON CONFLICT(organization_id,source_account_id,kind,source_key_hmac) DO UPDATE SET result_id=EXCLUDED.result_id,version=migration_family_refresh_head.version+1 WHERE migration_family_refresh_head.result_id IS NOT DISTINCT FROM $9::uuid").bind(claim.organization.0).bind(claim.bundle).bind(unit.get::<String,_>("kind")).bind(unit.get::<Vec<u8>,_>("source_key_hmac")).bind(result.person).bind(result.target).bind(result_id).bind(claim.plan).bind(unit.get::<Option<Uuid>,_>("expected_head_id")).execute(&mut *tx).await?.rows_affected();
         if changed != 1 {

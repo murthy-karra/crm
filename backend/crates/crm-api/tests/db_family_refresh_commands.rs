@@ -3700,3 +3700,240 @@ async fn family_refresh_partial_cancel_keeps_shared_payer_work(pool: PgPool) {
         .await
         .unwrap();
 }
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn family_refresh_history_execution_is_atomic_versioned_and_refresh_owned(pool: PgPool) {
+    use crm_api::{
+        auth::workspace::ReleaseReadiness,
+        domain::migration::{
+            family_refresh::{
+                confirmation::{self, ConfirmFamilyRefresh, SelectedPlan},
+                execution,
+            },
+            history_capture_source::Stream,
+        },
+    };
+    let (f, parent, initial, book) = history::fixture(&pool).await;
+    let import = history::ready(&f, parent, initial).await;
+    history::confirm(&f, import).await;
+    history::drain(&f).await;
+    let original:serde_json::Value=sqlx::query_scalar("SELECT jsonb_agg(to_jsonb(i) ORDER BY id) FROM migration_history_import_identity i WHERE organization_id=$1").bind(f.org).fetch_one(&pool).await.unwrap();
+    book.set_records(Stream::Events,vec![json!({"id":1,"personId":101,"type":"Changed","created":"unknown","description":"PRIVATE_CORRECTION"}),json!({"id":4,"personId":101,"type":"New retained event","created":"2026-01-05T00:00:00Z","description":"PRIVATE_ADDITION"})]);
+    book.set_records(Stream::TextMessages,vec![json!({"id":3,"personId":102,"userId":3,"created":"2026-01-06T00:00:00Z","message":"PRIVATE_TEXT_CORRECTION","status":"Updated vendor status"})]);
+    let release = ReleaseReadiness::for_tests();
+    for round in 0..2 {
+        if round == 1 {
+            book.set_records(Stream::Events,vec![json!({"id":1,"personId":101,"type":"Changed","created":"unknown","description":"PRIVATE_CORRECTION"}),json!({"id":4,"personId":101,"type":"New retained event corrected","created":"unknown","description":"PRIVATE_ADDITION_CORRECTED"})]);
+        }
+        let (capture_id, _) = capture::propose(&f, parent).await;
+        capture::confirm(&f, capture_id).await;
+        capture::drain(&f, &book).await;
+        let bundle = commands::prepare(
+            &f.pool,
+            &f.key,
+            &f.policy,
+            &release,
+            &f.ctx,
+            PrepareFamilyRefresh {
+                request_id: Uuid::new_v4(),
+                parent_import_id: parent,
+                core_report_id: None,
+                history_capture_id: Some(capture_id),
+                families: vec![Family::History],
+            },
+        )
+        .await
+        .unwrap();
+        let plan = bundle.families[0].plan_id;
+        for n in 0..200 {
+            let state: String =
+                sqlx::query_scalar("SELECT state FROM migration_family_refresh_bundle WHERE id=$1")
+                    .bind(bundle.bundle_id)
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+            if state == "ready" {
+                break;
+            }
+            assert_ne!(state, "paused");
+            assert!(n < 199);
+            worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap();
+        }
+        let sealed=sqlx::query("SELECT b.revision AS bundle_revision,encode(b.digest,'hex') AS bundle_digest,p.revision,encode(p.digest,'hex') AS digest,p.counts FROM migration_family_refresh_bundle b JOIN migration_family_refresh_plan p ON p.bundle_id=b.id AND p.organization_id=b.organization_id WHERE p.id=$1").bind(plan).fetch_one(&pool).await.unwrap();
+        let counts: crm_api::domain::migration::family_refresh::model::Counts =
+            serde_json::from_value(sealed.get("counts")).unwrap();
+        assert_eq!(counts.units, 4);
+        assert_eq!(
+            counts.held,
+            0,
+            "{}",
+            sealed.get::<serde_json::Value, _>("counts")
+        );
+        assert_eq!(counts.inserts, u64::from(round == 0));
+        assert_eq!(counts.history_corrections, if round == 0 { 2 } else { 1 });
+        let request = Uuid::new_v4();
+        let input = || ConfirmFamilyRefresh {
+            request_id: request,
+            expected_revision: sealed.get::<i64, _>("bundle_revision").to_string(),
+            bundle_digest: sealed.get("bundle_digest"),
+            families: vec![SelectedPlan {
+                family: Family::History,
+                plan_id: plan,
+                plan_revision: sealed.get::<i64, _>("revision").to_string(),
+                plan_digest: sealed.get("digest"),
+                expected_counts: serde_json::from_value(sealed.get("counts")).unwrap(),
+            }],
+            acknowledged_exclusions: true,
+        };
+        let confirmed =
+            confirmation::confirm(&f.pool, &f.key, &release, &f.ctx, bundle.bundle_id, input())
+                .await
+                .unwrap();
+        let replay = confirmation::confirm_with_readiness(
+            &f.pool,
+            &f.key,
+            None,
+            &f.ctx,
+            bundle.bundle_id,
+            input(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(confirmed).unwrap(),
+            serde_json::to_value(replay).unwrap()
+        );
+        let claim = execution::claim_next(&f.pool).await.unwrap().unwrap();
+        let checkpoint="SELECT jsonb_build_object('identities',(SELECT jsonb_agg(to_jsonb(i) ORDER BY id) FROM migration_history_import_identity i WHERE organization_id=p.organization_id),'heads',(SELECT jsonb_agg(to_jsonb(h) ORDER BY identity_id) FROM migration_family_refresh_history_head h WHERE organization_id=p.organization_id),'results',(SELECT count(*) FROM migration_family_refresh_result WHERE plan_id=p.id),'initial_displays',(SELECT count(*) FROM migration_history_import_display WHERE organization_id=p.organization_id),'correction_displays',(SELECT count(*) FROM migration_family_refresh_history_display WHERE organization_id=p.organization_id),'read_state',(SELECT jsonb_agg(to_jsonb(s) ORDER BY person_id) FROM migration_history_review_state s WHERE organization_id=p.organization_id),'position',apply_position,'measured',measured_bytes,'retained',retained_bytes,'reserved',reserved_bytes,'org',(SELECT retained_bytes FROM migration_snapshot_storage WHERE organization_id=p.organization_id)) FROM migration_family_refresh_plan p WHERE id=$1";
+        for position in 1..=4 {
+            let unit=sqlx::query("SELECT kind,disposition FROM migration_family_refresh_manifest WHERE plan_id=$1 AND position=$2").bind(plan).bind(position as i64).fetch_one(&pool).await.unwrap();
+            let before: serde_json::Value = sqlx::query_scalar(checkpoint)
+                .bind(plan)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+            let mut tiny = f.policy.clone();
+            tiny.org_ceiling_bytes = 1;
+            assert_eq!(
+                execution::apply_once(&f.pool, &f.key, &tiny, &release, &claim)
+                    .await
+                    .unwrap(),
+                execution::Progress::Capacity
+            );
+            let disposition: String = unit.get("disposition");
+            if disposition != "already_current" {
+                let kind: String = unit.get("kind");
+                let suffix = if disposition == "insert" {
+                    "imported"
+                } else {
+                    "corrected"
+                };
+                let table = format!("fub_{kind}_record_{suffix}");
+                sqlx::raw_sql(&format!("CREATE FUNCTION test_history_execute_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic history execution fault'; END $$; CREATE TRIGGER zz_test_history_execute_fault AFTER INSERT ON {table} FOR EACH ROW EXECUTE FUNCTION test_history_execute_fault()")).execute(&pool).await.unwrap();
+                assert!(
+                    execution::apply_once(&f.pool, &f.key, &f.policy, &release, &claim)
+                        .await
+                        .is_err()
+                );
+                sqlx::raw_sql(&format!("DROP TRIGGER zz_test_history_execute_fault ON {table}; DROP FUNCTION test_history_execute_fault()")).execute(&pool).await.unwrap();
+            }
+            assert_eq!(
+                sqlx::query_scalar::<_, serde_json::Value>(checkpoint)
+                    .bind(plan)
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap(),
+                before
+            );
+            assert_eq!(
+                execution::apply_once(&f.pool, &f.key, &f.policy, &release, &claim)
+                    .await
+                    .unwrap(),
+                execution::Progress::Advanced
+            );
+        }
+        assert_eq!(
+            execution::apply_once(&f.pool, &f.key, &f.policy, &release, &claim)
+                .await
+                .unwrap(),
+            execution::Progress::Finished
+        );
+        let result=sqlx::query("SELECT state,counts,results,measured_bytes,retained_bytes,reserved_bytes FROM migration_family_refresh_plan WHERE id=$1").bind(plan).fetch_one(&pool).await.unwrap();
+        assert_eq!(result.get::<String, _>("state"), "completed");
+        assert_eq!(
+            result.get::<serde_json::Value, _>("counts"),
+            result.get::<serde_json::Value, _>("results")
+        );
+        assert_eq!(
+            result.get::<i64, _>("measured_bytes"),
+            result.get::<i64, _>("retained_bytes")
+        );
+        assert_eq!(result.get::<i64, _>("reserved_bytes"), 0);
+    }
+    assert_eq!(sqlx::query_scalar::<_,serde_json::Value>("SELECT jsonb_agg(to_jsonb(i)-ARRAY['refresh_bundle_id','refresh_plan_id','refresh_manifest_id'] ORDER BY id) FROM migration_history_import_identity i WHERE organization_id=$1 AND refresh_bundle_id IS NULL").bind(f.org).fetch_one(&pool).await.unwrap(),serde_json::Value::Array(original.as_array().unwrap().iter().cloned().map(|mut v|{for key in ["refresh_bundle_id","refresh_plan_id","refresh_manifest_id"]{v.as_object_mut().unwrap().remove(key);}v}).collect()));
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_history_import_identity WHERE organization_id=$1 AND refresh_bundle_id IS NOT NULL").bind(f.org).fetch_one(&pool).await.unwrap(),1);
+    let head=sqlx::query("SELECT h.*,i.refresh_manifest_id FROM migration_family_refresh_history_head h JOIN migration_history_import_identity i ON i.id=h.identity_id AND i.organization_id=h.organization_id WHERE h.organization_id=$1 AND i.refresh_bundle_id IS NOT NULL").bind(f.org).fetch_one(&pool).await.unwrap();
+    assert_eq!(head.get::<i64, _>("version"), 2);
+    assert!(head
+        .get::<Option<chrono::DateTime<chrono::Utc>>, _>("source_created_at")
+        .is_none());
+    let auth = crm_api::auth::AuthContext {
+        actor_user_id: UserId::new(f.actor),
+        actor_email: "review@synthetic.test".into(),
+        actor_display_name: "Review admin".into(),
+        active_organization_id: OrganizationId::new(f.org),
+        active_organization_name: "Synthetic".into(),
+        role: crm_api::domain::admin::Role::Admin,
+    };
+    let person = crm_api::ids::PersonId::new(head.get("person_id"));
+    let identity: Uuid = head.get("identity_id");
+    let versions = crm_api::domain::migration::history_review::versions(
+        &f.pool,
+        &f.key,
+        &auth,
+        person,
+        "fub_event_record_imported",
+        identity,
+        &Default::default(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(versions.items.len(), 2);
+    assert_eq!(versions.items[0]["version"], "2");
+    assert_eq!(versions.items[1]["version"], "1");
+    assert!(!serde_json::to_string(&versions)
+        .unwrap()
+        .contains("PRIVATE"));
+    let bytes:i64=sqlx::query_scalar("SELECT (SELECT octet_length(nonce)+octet_length(ciphertext) FROM migration_history_import_display WHERE id=$1)::bigint+(SELECT sum(octet_length(nonce)+octet_length(ciphertext)) FROM migration_family_refresh_history_display WHERE organization_id=$2 AND identity_id=$3)").bind(head.get::<Uuid,_>("refresh_manifest_id")).bind(f.org).bind(identity).fetch_one(&pool).await.unwrap();
+    let before: i64 = sqlx::query_scalar(
+        "SELECT retained_bytes FROM migration_snapshot_storage WHERE organization_id=$1",
+    )
+    .bind(f.org)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let mut erase = pool.begin().await.unwrap();
+    sqlx::query("SELECT set_config('crm.family_refresh_reader','fub-family-refresh-v1',true),set_config('crm.history_reader','fub-history-timeline-v1',true),set_config('crm.admitted_history_reader','fub-admitted-history-v1',true)").execute(&mut *erase).await.unwrap();
+    sqlx::query("UPDATE migration_history_import_identity SET erased_at=clock_timestamp() WHERE id=$1 AND organization_id=$2").bind(identity).bind(f.org).execute(&mut *erase).await.unwrap();
+    erase.commit().await.unwrap();
+    let after: i64 = sqlx::query_scalar(
+        "SELECT retained_bytes FROM migration_snapshot_storage WHERE organization_id=$1",
+    )
+    .bind(f.org)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(before - after, bytes);
+    assert!(crm_api::domain::migration::history_review::versions(
+        &f.pool,
+        &f.key,
+        &auth,
+        person,
+        "fub_event_record_imported",
+        identity,
+        &Default::default()
+    )
+    .await
+    .is_err());
+}

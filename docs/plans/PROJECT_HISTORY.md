@@ -2632,3 +2632,39 @@ projection is installed. Existing imported history review compatibility passes
 warnings denied (`/private/tmp/010g1-activity-final-clippy.log`); 55 preflight checks
 pass (`/private/tmp/010g1-activity-preflight-tests.log`). Final slice-wide gates
 remain pending.
+
+## 010g1 common HTTP and history reader checkpoint — 2026-09-16
+
+Metadata and activity execute through the same bounded queue with atomic
+native/result/head/accounting settlement. Scheduling remains disconnected.
+
+History review now projects exactly one current version per identity, preserving
+its stable entry ID and using the corrected source date and metadata. Missing
+current ciphertext fails closed. Bounded immutable version-list/detail readers
+and HTTP routes authenticate displays and scope cursors to the actor, workspace,
+identity, kind, revision and page size. Capture provenance is available in detail;
+message bodies remain outside this display contract. The temporary blanket
+corrected-history read block is removed.
+
+The focused synthetic correction regression passes for all three families,
+including versions 3/2/1, date-bucket movement, tenant isolation, cursor scope,
+missing ciphertext, HTTP validation and no-store responses
+(`/private/tmp/010g1-history-versions-final-db.log`). Existing imported-family
+review compatibility passes (`/private/tmp/010g1-history-projection-compat-db.log`).
+Clippy passes with warnings denied (`/private/tmp/010g1-family-http-final-clippy.log`).
+Web transport tests pass 3/3 and typecheck passes
+(`/private/tmp/010g1-history-transport-web.log`,
+`/private/tmp/010g1-history-versions-web-typecheck.log`). These are reader checks;
+history native execution and the final performance gate remain outstanding.
+
+Common HTTP routes now expose Prepare, immutable Plan revisions, Confirm, Resume,
+Cancel, bundle/family/mapping/item summaries and results. Typed receipt replay
+precedes fresh readiness lookup validation. Strict DTOs and body/page bounds are
+preserved; outer workspace middleware also stamps no-store on rejected requests.
+The combined admission/API regression passes, including missing-readiness replay,
+member rejection and malformed controls (`/private/tmp/010g1-family-http-final-db.log`).
+History version member/unauthenticated response checks pass
+(`/private/tmp/010g1-history-version-auth-db.log`); Clippy passes with warnings
+denied (`/private/tmp/010g1-family-http-verified-clippy.log`). Field/detail and
+Remainder routes remain pending with their typed implementations.
+

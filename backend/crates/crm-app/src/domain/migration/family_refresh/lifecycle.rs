@@ -150,6 +150,7 @@ pub async fn cancel(
     for plan in payers {
         sealing::settle_control(&mut tx, ctx.organization_id.0, id, plan).await?;
     }
+    sealing::release_terminal_controls(&mut tx, ctx.organization_id.0, id).await?;
     tx.commit().await?;
     Ok(response)
 }

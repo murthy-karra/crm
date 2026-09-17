@@ -445,16 +445,16 @@ fn candidate_branch(
         ACTOR
     };
     let (metadata, joins) = if external {
-        ("NULL::jsonb".into()," JOIN migration_history_import_identity hi ON hi.id=f.identity_id AND hi.organization_id=f.organization_id AND hi.erased_at IS NULL JOIN migration_history_import_display hd ON hd.id=COALESCE(f.manifest_id,f.admitted_manifest_id) AND hd.organization_id=f.organization_id AND ((f.plan_id IS NOT NULL AND hd.plan_id=f.plan_id AND hi.owner_run_id=f.attempt_id) OR (f.admitted_root_id IS NOT NULL AND hd.admitted_root_id=f.admitted_root_id AND hd.admitted_plan_id=f.admitted_plan_id AND hd.admitted_attempt_id=f.admitted_attempt_id AND hi.admitted_root_id=f.admitted_root_id AND hi.admitted_plan_id=f.admitted_plan_id AND hi.admitted_attempt_id=f.admitted_attempt_id AND hi.admitted_manifest_id=f.admitted_manifest_id)) AND hi.fact_id=f.id AND hi.person_id=f.person_id".into())
+        ("NULL::jsonb".into()," JOIN migration_history_import_identity hi ON hi.id=f.identity_id AND hi.organization_id=f.organization_id AND hi.erased_at IS NULL JOIN migration_history_import_display hd ON hd.id=COALESCE(f.manifest_id,f.admitted_manifest_id,f.refresh_manifest_id) AND hd.organization_id=f.organization_id AND ((f.plan_id IS NOT NULL AND hd.plan_id=f.plan_id AND hi.owner_run_id=f.attempt_id) OR (f.admitted_root_id IS NOT NULL AND hd.admitted_root_id=f.admitted_root_id AND hd.admitted_plan_id=f.admitted_plan_id AND hd.admitted_attempt_id=f.admitted_attempt_id AND hi.admitted_root_id=f.admitted_root_id AND hi.admitted_plan_id=f.admitted_plan_id AND hi.admitted_attempt_id=f.admitted_attempt_id AND hi.admitted_manifest_id=f.admitted_manifest_id) OR (f.refresh_bundle_id IS NOT NULL AND hd.refresh_bundle_id=f.refresh_bundle_id AND hd.refresh_plan_id=f.refresh_plan_id AND hd.refresh_manifest_id=f.refresh_manifest_id AND hi.refresh_bundle_id=f.refresh_bundle_id AND hi.refresh_plan_id=f.refresh_plan_id AND hi.refresh_manifest_id=f.refresh_manifest_id)) AND hi.fact_id=f.id AND hi.person_id=f.person_id".into())
     } else {
         native_parts(kind)
     };
     let extra = if corrected {
-        "f.stable_position,v.plan_id,NULL::uuid AS attempt_id,v.manifest_id,f.identity_id,v.source_time_basis,NULL::uuid AS admitted_root_id,v.id AS version_id,v.version,v.bundle_id,v.capture_id"
+        "f.stable_position,v.plan_id,NULL::uuid AS attempt_id,v.manifest_id,f.identity_id,v.source_time_basis,NULL::uuid AS admitted_root_id,v.id AS version_id,v.version,v.bundle_id,v.capture_id,NULL::uuid AS first_refresh_bundle_id"
     } else if external {
-        "f.stable_position,COALESCE(f.plan_id,f.admitted_plan_id) AS plan_id,COALESCE(f.attempt_id,f.admitted_attempt_id) AS attempt_id,COALESCE(f.manifest_id,f.admitted_manifest_id) AS manifest_id,f.identity_id,f.source_time_basis,f.admitted_root_id,NULL::uuid AS version_id,1::bigint AS version,NULL::uuid AS bundle_id,COALESCE((SELECT p.capture_id FROM migration_history_import_plan p WHERE p.id=f.plan_id AND p.organization_id=f.organization_id),(SELECT r.history_capture_id FROM migration_admitted_history_root r WHERE r.id=f.admitted_root_id AND r.organization_id=f.organization_id)) AS capture_id"
+        "f.stable_position,COALESCE(f.plan_id,f.admitted_plan_id,f.refresh_plan_id) AS plan_id,COALESCE(f.attempt_id,f.admitted_attempt_id) AS attempt_id,COALESCE(f.manifest_id,f.admitted_manifest_id,f.refresh_manifest_id) AS manifest_id,f.identity_id,f.source_time_basis,f.admitted_root_id,NULL::uuid AS version_id,1::bigint AS version,f.refresh_bundle_id AS bundle_id,COALESCE((SELECT p.capture_id FROM migration_history_import_plan p WHERE p.id=f.plan_id AND p.organization_id=f.organization_id),(SELECT r.history_capture_id FROM migration_admitted_history_root r WHERE r.id=f.admitted_root_id AND r.organization_id=f.organization_id),(SELECT p.history_capture_id FROM migration_family_refresh_plan p WHERE p.id=f.refresh_plan_id AND p.bundle_id=f.refresh_bundle_id AND p.organization_id=f.organization_id)) AS capture_id,f.refresh_bundle_id AS first_refresh_bundle_id"
     } else {
-        "NULL::bigint AS stable_position,NULL::uuid AS plan_id,NULL::uuid AS attempt_id,NULL::uuid AS manifest_id,NULL::uuid AS identity_id,NULL::text AS source_time_basis,NULL::uuid AS admitted_root_id,NULL::uuid AS version_id,NULL::bigint AS version,NULL::uuid AS bundle_id,NULL::uuid AS capture_id"
+        "NULL::bigint AS stable_position,NULL::uuid AS plan_id,NULL::uuid AS attempt_id,NULL::uuid AS manifest_id,NULL::uuid AS identity_id,NULL::text AS source_time_basis,NULL::uuid AS admitted_root_id,NULL::uuid AS version_id,NULL::bigint AS version,NULL::uuid AS bundle_id,NULL::uuid AS capture_id,NULL::uuid AS first_refresh_bundle_id"
     };
     let mut sql=format!("SELECT f.id,f.occurred_at,f.recorded_at,f.origin,f.correlation_id,{display} AS display_at,{actor} AS actor,CASE WHEN octet_length(m.value::text)<=16384 THEN m.value ELSE NULL END AS metadata,octet_length(m.value::text)>16384 AS metadata_overflow,{extra} FROM {} f LEFT JOIN app_user a ON a.id=f.{actor_column}{joins} CROSS JOIN LATERAL (SELECT {metadata} AS value) m WHERE f.organization_id=$1 AND f.person_id=$2",kind.table);
     if corrected {
@@ -608,6 +608,16 @@ async fn value(
     let metadata = if external {
         let display = if let Some(version) = row.try_get::<Option<Uuid>, _>("version_id")? {
             current_display(tx, key, scope, row, version).await
+        } else if let Some(bundle) = row.try_get::<Option<Uuid>, _>("first_refresh_bundle_id")? {
+            super::family_refresh::history_display::initial(
+                tx,
+                key,
+                scope.org,
+                bundle,
+                row.try_get("plan_id")?,
+                row.try_get("manifest_id")?,
+            )
+            .await
         } else if let Some(root) = row.try_get::<Option<Uuid>, _>("admitted_root_id")? {
             super::admitted_history_store::display(
                 tx,
@@ -642,16 +652,17 @@ async fn value(
         result["read_revision"] = json!(scope.revision.to_string());
         result["correlation_id"] = json!(row.try_get::<Uuid, _>("correlation_id")?);
         result["provenance"] = if external {
-            json!({"owner_kind":if row.try_get::<Option<Uuid>,_>("version_id")?.is_some(){"refresh"}else if row.try_get::<Option<Uuid>,_>("admitted_root_id")?.is_some(){"admitted"}else{"original"},"admitted_root_id":row.try_get::<Option<Uuid>,_>("admitted_root_id")?,"plan_id":row.try_get::<Uuid,_>("plan_id")?,"attempt_id":row.try_get::<Option<Uuid>,_>("attempt_id")?,"manifest_id":row.try_get::<Uuid,_>("manifest_id")?,"identity_id":row.try_get::<Uuid,_>("identity_id")?,"source_time_basis":row.try_get::<String,_>("source_time_basis")?,"stable_position":row.try_get::<i64,_>("stable_position")?.to_string(),"capture_id":row.try_get::<Uuid,_>("capture_id")?})
+            json!({"owner_kind":if row.try_get::<Option<Uuid>,_>("bundle_id")?.is_some(){"refresh"}else if row.try_get::<Option<Uuid>,_>("admitted_root_id")?.is_some(){"admitted"}else{"original"},"admitted_root_id":row.try_get::<Option<Uuid>,_>("admitted_root_id")?,"plan_id":row.try_get::<Uuid,_>("plan_id")?,"attempt_id":row.try_get::<Option<Uuid>,_>("attempt_id")?,"manifest_id":row.try_get::<Uuid,_>("manifest_id")?,"identity_id":row.try_get::<Uuid,_>("identity_id")?,"source_time_basis":row.try_get::<String,_>("source_time_basis")?,"stable_position":row.try_get::<i64,_>("stable_position")?.to_string(),"capture_id":row.try_get::<Uuid,_>("capture_id")?})
         } else {
             Value::Null
         };
     }
-    if external && row.try_get::<Option<Uuid>, _>("version_id")?.is_some() {
+    if external && row.try_get::<Option<Uuid>, _>("bundle_id")?.is_some() {
         result["version"] = json!(row.try_get::<i64, _>("version")?.to_string());
         if detail {
             result["provenance"]["bundle_id"] = json!(row.try_get::<Uuid, _>("bundle_id")?);
-            result["provenance"]["version_id"] = json!(row.try_get::<Uuid, _>("version_id")?);
+            result["provenance"]["version_id"] =
+                json!(row.try_get::<Option<Uuid>, _>("version_id")?);
         }
     }
     bounded(&result, if detail { DETAIL_BYTES } else { SUMMARY_BYTES })?;

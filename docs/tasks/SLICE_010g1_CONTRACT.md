@@ -709,3 +709,15 @@ authorized immutable receipt can replay before fresh readiness is required; a
 fresh consequential command still enforces the existing release gate. Exact
 Remainder and detailed field routes are not installed until their typed readers
 and commands are complete.
+
+### Native history execution and version UI checkpoint — 2026-09-16
+
+Migrations 030/031 add an exclusive refresh first-owner shape and guarded native
+history execution. Initial identities/displays/facts retain their original owner;
+corrections append immutable versions and advance the authenticated current head.
+All effects settle with the result and accounting in one transaction. The private
+count-maintenance trigger uses a fixed search path and runs as its owner after the
+application write guard; application callers cannot invoke counter helpers.
+Terminal bundles release residual control reservations, including the shared payer.
+The existing review UI exposes bounded metadata-only version lists and details.
+Remainder, detailed fields and the common refresh Web workflow remain outstanding.

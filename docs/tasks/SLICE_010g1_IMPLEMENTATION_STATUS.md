@@ -6,7 +6,7 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 ## Working constraints
 
 - Branch `codex/010g1-family-refresh`, base `dd140b0`; latest preceding history reader milestone
-  is **`70a1131`**. One primary writer; the previously authorized single
+  is **`94f4b88`**. One primary writer; the previously authorized single
   implementation reviewer remains reserved for the final review. Planning review
   READY, round 1. Preserve D-050's two review/fix rounds and final performance gate.
 - Do not merge, push or deploy. Preserve unrelated `docs/prompts/MODEL_ROUTING.md`
@@ -33,7 +33,7 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
   refresh baselines, accepted scan boundaries and first-coverage prerequisites.
 - History: retained full-source selection, original/admitted correction baselines,
   stable addition/current/correction proposals, diagnostics and observed/missing
-  ownership walks. Typed history correction tables remain application SELECT-only.
+  ownership walks. Typed history corrections now execute through guarded application writes.
 - Activity: explicit retained role/kind/timezone conversion, persisted insert/
   update/current/held proposals, source traversal and original/admitted missing-
   ownership traversal. Source moves outside the cohort remain ownership holds.
@@ -51,48 +51,35 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 ## Current verified milestone
 
-Metadata and activity execute through the same bounded queue with atomic
-native/result/head/accounting settlement. Scheduling remains disconnected.
+All three families now execute through the common bounded queue. History supports
+exclusive refresh-owned initial facts and immutable correction versions, with
+source/baseline reauthentication inside the final transaction. Result, typed fact,
+current head, maintained counts, accounting and cursor settle atomically. Completed
+and cancelled bundles release remaining control reservations. Scheduling remains
+disconnected pending complete readiness inventory and final verification.
 
-History review now projects exactly one current version per identity, preserving
-its stable entry ID and using the corrected source date and metadata. Missing
-current ciphertext fails closed. Bounded immutable version-list/detail readers
-and HTTP routes authenticate displays and scope cursors to the actor, workspace,
-identity, kind, revision and page size. Capture provenance is available in detail;
-message bodies remain outside this display contract. The temporary blanket
-corrected-history read block is removed.
+The history Web review shows current corrections and bounded prior-version pages
+and metadata details. Authority changes clear private state; late replies are
+ignored. Message bodies remain outside the history display contract.
 
-The focused synthetic correction regression passes for all three families,
-including versions 3/2/1, date-bucket movement, tenant isolation, cursor scope,
-missing ciphertext, HTTP validation and no-store responses
-(`/private/tmp/010g1-history-versions-final-db.log`). Existing imported-family
-review compatibility passes (`/private/tmp/010g1-history-projection-compat-db.log`).
-Clippy passes with warnings denied (`/private/tmp/010g1-family-http-final-clippy.log`).
-Web transport tests pass 3/3 and typecheck passes
-(`/private/tmp/010g1-history-transport-web.log`,
-`/private/tmp/010g1-history-versions-web-typecheck.log`). These are reader checks;
-history native execution and the final performance gate remain outstanding.
-
-Common HTTP routes now expose Prepare, immutable Plan revisions, Confirm, Resume,
-Cancel, bundle/family/mapping/item summaries and results. Typed receipt replay
-precedes fresh readiness lookup validation. Strict DTOs and body/page bounds are
-preserved; outer workspace middleware also stamps no-store on rejected requests.
-The combined admission/API regression passes, including missing-readiness replay,
-member rejection and malformed controls (`/private/tmp/010g1-family-http-final-db.log`).
-History version member/unauthenticated response checks pass
-(`/private/tmp/010g1-history-version-auth-db.log`); Clippy passes with warnings
-denied (`/private/tmp/010g1-family-http-verified-clippy.log`). Field/detail and
-Remainder routes remain pending with their typed implementations.
+Verified: 49 family-refresh database tests pass, including native history creation,
+correction, later-bundle ownership, injected rollback/retry, erasure and exact byte
+accounting (`/private/tmp/010g1-history-execution-family-db.log`). Preflight tests
+pass 55/55 (`/private/tmp/010g1-history-preflight-tests.log`). Clippy with warnings
+denied, formatting and diff checks pass. Web tests pass 18/18, typecheck and focused
+lint pass (`/private/tmp/010g1-history-versions-ui-{tests,typecheck,lint}.log`).
+Browser checks at 320, 640, 768, 1024, 1280 and 1536 pixels pass without overflow or
+page errors (`/private/tmp/010g1-history-browser/checks.json`); mobile and desktop
+screenshots were visually inspected. Temporary synthetic browser fixtures removed.
 
 ## Remaining implementation
 
-1. Bootstrap legacy baselines only where independently provable. Add refresh-owned
-   initial history identities with exclusive typed
-   owner shapes; extend existing ownership/baseline/reader adapters accordingly.
+1. Bootstrap legacy baselines only where independently provable; complete activity
+   refresh provenance in native review readers.
 2. Implement exact Remainder. Preserve frozen unfinished
    units, sources/mappings/targets and baseline heads; settled holds are not
    unfinished work. Complete cancellation/resume crash and capacity coverage.
-3. Complete history execution and activity edge coverage and metadata execution edge coverage,
+3. Complete activity and metadata execution edge coverage,
    including source/native/head/member/catalog revalidation, atomic results/
    accounting/heads and after-state production. Preserve compatible reader capability inventories.
 4. Finish bounded results, field fragments, proof and history-version readers;

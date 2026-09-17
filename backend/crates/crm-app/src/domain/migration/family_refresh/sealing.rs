@@ -61,6 +61,31 @@ pub(super) async fn settle_control(
         .await?;
     Ok(())
 }
+/// Terminal bundles cannot accept another control mutation. At most three
+/// selected plans and the original shared payer retain cancellation capacity;
+/// superseded non-payers release theirs during replanning.
+pub(super) async fn release_terminal_controls(
+    conn: &mut PgConnection,
+    org: Uuid,
+    bundle: Uuid,
+) -> Result<(), MigrationError> {
+    let rows=sqlx::query("SELECT r.token,r.plan_id,p.lease_epoch FROM migration_family_refresh_reservation r JOIN migration_family_refresh_plan p ON p.id=r.plan_id AND p.organization_id=r.organization_id JOIN migration_family_refresh_bundle b ON b.id=p.bundle_id AND b.organization_id=p.organization_id WHERE b.id=$1 AND b.organization_id=$2 AND b.state IN ('completed','cancelled') AND r.purpose='control' ORDER BY p.id LIMIT 5")
+        .bind(bundle).bind(org).fetch_all(&mut *conn).await?;
+    if rows.len() > 4 {
+        return Err(MigrationError::Crypto);
+    }
+    for row in rows {
+        sqlx::query("SELECT crm_family_refresh_settle($1,$2,$3,$4,$5,true)")
+            .bind(org)
+            .bind(bundle)
+            .bind(row.get::<Uuid, _>("plan_id"))
+            .bind(row.get::<Uuid, _>("token"))
+            .bind(row.get::<i64, _>("lease_epoch"))
+            .execute(&mut *conn)
+            .await?;
+    }
+    Ok(())
+}
 /// Bind ready families and the exact identities of excluded/unready groups. A
 /// preparing family's partial chain never becomes a confirmation digest.
 pub(super) async fn bundle_digest(

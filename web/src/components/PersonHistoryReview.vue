@@ -4,6 +4,7 @@ import Dialog from 'primevue/dialog'
 import Card from './Card.vue'
 import FormField from './FormField.vue'
 import HistoryTimelineEntry from './migration/HistoryTimelineEntry.vue'
+import HistoryVersions from './migration/HistoryVersions.vue'
 import { ApiError } from '../api/client'
 import { fetchHistoryInquiries, fetchHistoryTimeline, fetchHistoryTimelineDetail, useHistoryReviewAccess, type HistoryInquiry, type HistoryReviewCore, type HistoryReviewPage, type TimelineDates, type TimelineDetail, type TimelineEntry, type TimelineFamily } from '../api/historyReview'
 import { buttonClasses, dialogPt, INPUT_CLASSES } from '../lib/controls'
@@ -378,9 +379,11 @@ const detailPt = () => ({ ...dialogPt(), root: { class: 'glass-panel w-full max-
         >
           <div>
             <dt class="text-text-muted">
-              Import plan / attempt
+              {{ detail.provenance.owner_kind === 'refresh' ? 'Refresh plan' : 'Import plan / attempt' }}
             </dt><dd class="break-all">
-              {{ detail.provenance.plan_id }} / {{ detail.provenance.attempt_id }}
+              {{ detail.provenance.plan_id }}<template v-if="detail.provenance.attempt_id">
+                / {{ detail.provenance.attempt_id }}
+              </template>
             </dd>
           </div><div>
             <dt class="text-text-muted">
@@ -396,6 +399,14 @@ const detailPt = () => ({ ...dialogPt(), root: { class: 'glass-panel w-full max-
         </dl><p class="mt-3 break-all text-small text-text-muted">
           Correlation {{ detail.correlation_id }}
         </p>
+        <HistoryVersions
+          v-if="detail.provenance && detail.kind.startsWith('fub_')"
+          :person-id="personId"
+          :kind="detail.kind"
+          :identity="detail.provenance.identity_id"
+          :revision="detail.read_revision"
+          @stale="stale"
+        />
       </template>
       <template #footer>
         <button

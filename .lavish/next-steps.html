@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CRM implementation — next steps</title>
+  <style>
+    :root { --cream:#F7F2E8; --ink:#24231f; --muted:#716d63; --card:#fffdf8; --line:#ded7c9; --blue:#315c78; --green:#4b765d; --amber:#9a6b2f; }
+    html, body { margin:0; background:var(--cream); color:var(--ink); font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif; }
+    * { box-sizing:border-box; min-width:0; } p,h1,h2,h3,li,td,th { overflow-wrap:anywhere; }
+    main { max-width:1050px; margin:auto; padding:42px 22px 64px; }
+    .eyebrow { color:var(--blue); font-size:.76rem; letter-spacing:.12em; text-transform:uppercase; font-weight:750; }
+    h1 { font-size:clamp(2rem,5vw,4rem); line-height:1.02; max-width:760px; margin:10px 0 16px; letter-spacing:-.04em; }
+    .lead { color:var(--muted); font-size:1.08rem; max-width:730px; line-height:1.55; }
+    .grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin:28px 0; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:20px; box-shadow:0 8px 22px rgba(58,47,31,.06); }
+    .card h2 { margin:0 0 8px; font-size:1.05rem; }
+    .card p { margin:0; color:var(--muted); line-height:1.45; font-size:.94rem; }
+    .status { display:inline-flex; border-radius:999px; padding:5px 9px; font-size:.72rem; font-weight:750; margin-bottom:14px; }
+    .done { background:#e3f0e5; color:var(--green); } .next { background:#e5edf4; color:var(--blue); } .blocked { background:#f5ead8; color:var(--amber); }
+    .section { margin-top:34px; } .section h2 { font-size:1.35rem; margin:0 0 12px; }
+    .flow { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:18px; }
+    svg { display:block; width:100%; height:auto; color:var(--ink); }
+    .node { fill:#fffdf8; stroke:var(--line); stroke-width:2; } .node.next-node { stroke:#9eb8ca; } .node.block-node { stroke:#d9b77e; }
+    .label { font:700 15px Inter, sans-serif; fill:currentColor; } .small { font:500 12px Inter, sans-serif; fill:var(--muted); }
+    .arrow { stroke:var(--blue); stroke-width:2.5; fill:none; marker-end:url(#arrow); }
+    table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:14px; overflow:hidden; }
+    th,td { text-align:left; padding:12px 14px; border-bottom:1px solid var(--line); vertical-align:top; line-height:1.4; } th { font-size:.78rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; } td { font-size:.92rem; } tr:last-child td { border-bottom:0; }
+    ul { margin:8px 0 0 20px; padding:0; } li { margin:8px 0; line-height:1.45; }
+    .footer { color:var(--muted); margin-top:28px; font-size:.86rem; }
+    @media (max-width:760px) { main { padding:28px 15px 44px; } .grid { grid-template-columns:1fr; } .flow { padding:8px; } .label { font-size:12px; } .small { font-size:10px; } }
+  </style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">CRM implementation · 15 Sep 2026</div>
+  <h1>What happens next?</h1>
+  <p class="lead">The online People search slice is implemented and builds cleanly. The next work should make admitted history safe to execute, then close the environment gaps before any commit, deployment, or release decision.</p>
+
+  <div class="grid">
+    <article class="card"><span class="status done">COMPLETE</span><h2>Mobile discovery</h2><p>Rust API, iOS, and Android now search the Organization and let a user save a result for the next encrypted offline download.</p></article>
+    <article class="card"><span class="status next">NEXT</span><h2>Finish 010d3 execution</h2><p>Build the worker that classifies and atomically writes admitted facts, displays, identities, results, and settlement state.</p></article>
+    <article class="card"><span class="status blocked">ENVIRONMENT</span><h2>Close verification gaps</h2><p>Grant the test role access to <code>crm_dev</code> and install Java so database and Android checks can run.</p></article>
+  </div>
+
+  <section class="section"><h2>The implementation path</h2><div class="flow">
+    <svg viewBox="0 0 1000 210" role="img" aria-labelledby="flow-title flow-desc">
+      <title id="flow-title">Three-step path to release readiness</title><desc id="flow-desc">Finish the admitted-history worker, run database and native verification, then review and decide whether to publish.</desc>
+      <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#315c78"/></marker></defs>
+      <rect class="node next-node" x="20" y="55" width="280" height="100" rx="16"/><text class="label" x="42" y="90">1 · Finish worker</text><text class="small" x="42" y="116">Atomic admitted facts + recovery</text><text class="small" x="42" y="136">Preserve old owner branch</text>
+      <path class="arrow" d="M310 105 H345"/>
+      <rect class="node block-node" x="360" y="55" width="280" height="100" rx="16"/><text class="label" x="382" y="90">2 · Verify in real env</text><text class="small" x="382" y="116">PostgreSQL fixtures and Android</text><text class="small" x="382" y="136">Run focused failure-path checks</text>
+      <path class="arrow" d="M650 105 H685"/>
+      <rect class="node" x="700" y="55" width="280" height="100" rx="16"/><text class="label" x="722" y="90">3 · Review release</text><text class="small" x="722" y="116">Independent implementation review</text><text class="small" x="722" y="136">Then decide commit/deploy</text>
+    </svg>
+  </div></section>
+
+  <section class="section"><h2>Recommended order</h2><table><thead><tr><th>Order</th><th>Work</th><th>Exit evidence</th></tr></thead><tbody>
+    <tr><td>1</td><td>Implement the 010d3 worker and recovery path.</td><td>Atomic owner/fact/display tests, replay, cancellation, and exact remainder tests.</td></tr>
+    <tr><td>2</td><td>Repair local verification access and install Java.</td><td>DB fixtures run; Android compile passes.</td></tr>
+    <tr><td>3</td><td>Run focused review and update the status record.</td><td>No unresolved contract or tenant-isolation findings.</td></tr>
+    <tr><td>4</td><td>Only then make the publication decision.</td><td>User-approved commit, push, and deployment plan.</td></tr>
+  </tbody></table></section>
+
+  <section class="section grid">
+    <article class="card"><h2>Known constraints</h2><ul><li>DB tests currently fail before setup because the PostgreSQL role cannot use <code>crm_dev</code>.</li><li>Android verification cannot start without a Java runtime.</li><li>No commit, push, or deployment has been performed.</li></ul></article>
+    <article class="card"><h2>Decision to make later</h2><p>After the worker and checks pass, choose whether this slice is ready for a review commit or needs another implementation round. Deployment should follow only after that review.</p></article>
+  </section>
+  <p class="footer">Evidence recorded in <code>docs/tasks/MOBILE_007_010d3_IMPLEMENTATION_STATUS.md</code>. This page uses the requested warm cream canvas.</p>
+</main>
+</body>
+</html>

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lavish · Warm cream</title>
+<style>
+:root{color-scheme:light;--cream:#F7F2E8;--ink:#302E29;--muted:#726D62;--line:#DDD4C4;--paper:#FFFCF6;--accent:#53634E}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--cream);color:var(--ink)}
+body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.6}
+main{max-width:1080px;margin:auto;padding:56px 28px 90px}
+header{display:flex;justify-content:space-between;gap:20px;border-bottom:1px solid var(--line);padding-bottom:22px;font-size:12px;letter-spacing:.16em;text-transform:uppercase}
+.brand{font-weight:750}.quiet{color:var(--muted)}
+.hero{padding:86px 0 56px;max-width:760px}
+.eyebrow{color:var(--accent);font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+h1{font-family:Georgia,serif;font-size:clamp(46px,7vw,82px);line-height:1.05;font-weight:400;letter-spacing:-.045em;margin:20px 0 26px}
+.lead{font-size:19px;max-width:540px;color:var(--muted)}
+.sample{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:22px}
+.sample>*{min-width:0}
+article{background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:30px}
+h2{font-family:Georgia,serif;font-weight:400;font-size:28px;line-height:1.2;margin:0 0 15px}
+p{margin:0 0 16px;overflow-wrap:anywhere}
+.swatch{height:75px;background:var(--cream);border:1px solid var(--line);border-radius:10px;margin-bottom:18px}
+code{font-size:15px;color:var(--accent)}
+footer{margin-top:38px;font-size:13px;color:var(--muted)}
+@media(max-width:640px){main{padding:28px 20px 50px}.hero{padding:56px 0 32px}.sample{grid-template-columns:minmax(0,1fr)}header{flex-wrap:wrap}article{padding:24px}}
+</style>
+</head>
+<body><main>
+<header><span class="brand">Lavish</span><span class="quiet">A warmer canvas</span></header>
+<section class="hero"><div class="eyebrow">Your new page default</div><h1>A little warmth.<br>Room to think.</h1><p class="lead">Soft cream, dark ink, and quiet surfaces for plans, ideas, and the details worth reviewing.</p></section>
+<section class="sample" aria-label="Theme preview">
+<article><h2>Clear and comfortable.</h2><p>Generous spacing and a warm paper surface keep the page easy to read. Headings stand out, while supporting details stay calm.</p><p class="quiet">This preview uses your requested cream background. The preference is saved in your local Lavish skill.</p></article>
+<article><div class="swatch" aria-label="Warm cream color swatch"></div><h2>Warm cream</h2><code>#F7F2E8</code><p class="quiet" style="margin-top:12px">The page keeps its light appearance in both light and dark system modes.</p></article>
+</section>
+<footer>Lavish · Local style preview</footer>
+</main></body></html>

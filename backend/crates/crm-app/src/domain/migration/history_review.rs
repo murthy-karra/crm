@@ -8,12 +8,14 @@ use sqlx::{postgres::PgRow, PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
 
 use super::{activity_review, crypto, history_import};
+mod versions;
 use crate::{
     auth::{workspace, AuthContext},
     config::RawPayloadKey,
     domain::admin::Role,
     ids::{OrganizationId, PersonId},
 };
+pub use versions::{version, versions};
 
 const PAGE_BYTES: usize = 512 * 1024;
 const SUMMARY_BYTES: usize = 4096;
@@ -135,14 +137,6 @@ async fn begin<'a>(
     let parent = activity_review::review_binding(&mut tx, org, person)
         .await?
         .ok_or(ReviewError::NotFound)?;
-    // Until the version-aware projection is installed, a corrected identity
-    // must never fall back to its immutable first-import display. Metadata and
-    // activity refresh readers can already use the common capability barrier.
-    let corrected: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM migration_family_refresh_history_head WHERE organization_id=$1 AND person_id=$2 AND version>1)")
-        .bind(org.0).bind(person.0).fetch_one(&mut *tx).await?;
-    if corrected {
-        return Err(ReviewError::Unavailable);
-    }
     let state = sqlx::query(STATE_SQL)
         .bind(org.0)
         .bind(person.0)
@@ -396,8 +390,41 @@ fn native_parts(kind: Kind) -> (String, String) {
 /// The final kind discriminator preserves existing ranks, including the two
 /// rank-zero kinds, even when different fact tables deliberately share a UUID.
 fn candidate_sql(kind: Kind, dated: Dated, detail: bool, after: Option<&Key>) -> String {
+    let initial = candidate_branch(kind, dated, detail, after, Projection::Initial);
+    if kind.family == Family::Native {
+        return initial;
+    }
+    let current = candidate_branch(kind, dated, detail, after, Projection::Current);
+    if detail {
+        format!("({initial}) UNION ALL ({current}) LIMIT 1")
+    } else {
+        let position = if dated == Dated::Known {
+            "display_at"
+        } else {
+            "stable_position"
+        };
+        format!("({initial}) UNION ALL ({current}) ORDER BY {position} DESC,recorded_at DESC,id DESC LIMIT $8")
+    }
+}
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Projection {
+    Initial,
+    Current,
+    FirstVersion,
+    PriorVersions,
+}
+fn candidate_branch(
+    kind: Kind,
+    dated: Dated,
+    detail: bool,
+    after: Option<&Key>,
+    projection: Projection,
+) -> String {
+    let corrected = matches!(projection, Projection::Current | Projection::PriorVersions);
     let external = kind.family != Family::Native;
-    let display = if external {
+    let display = if corrected {
+        "h.source_created_at"
+    } else if external {
         "f.source_created_at"
     } else if kind.name == "contact_attempted" {
         "CASE WHEN f.corrects_id IS NOT NULL THEN f.recorded_at ELSE f.occurred_at END"
@@ -422,22 +449,61 @@ fn candidate_sql(kind: Kind, dated: Dated, detail: bool, after: Option<&Key>) ->
     } else {
         native_parts(kind)
     };
-    let extra = if external {
-        "f.stable_position,COALESCE(f.plan_id,f.admitted_plan_id) AS plan_id,COALESCE(f.attempt_id,f.admitted_attempt_id) AS attempt_id,COALESCE(f.manifest_id,f.admitted_manifest_id) AS manifest_id,f.identity_id,f.source_time_basis,f.admitted_root_id"
+    let extra = if corrected {
+        "f.stable_position,v.plan_id,NULL::uuid AS attempt_id,v.manifest_id,f.identity_id,v.source_time_basis,NULL::uuid AS admitted_root_id,v.id AS version_id,v.version,v.bundle_id,v.capture_id"
+    } else if external {
+        "f.stable_position,COALESCE(f.plan_id,f.admitted_plan_id) AS plan_id,COALESCE(f.attempt_id,f.admitted_attempt_id) AS attempt_id,COALESCE(f.manifest_id,f.admitted_manifest_id) AS manifest_id,f.identity_id,f.source_time_basis,f.admitted_root_id,NULL::uuid AS version_id,1::bigint AS version,NULL::uuid AS bundle_id,COALESCE((SELECT p.capture_id FROM migration_history_import_plan p WHERE p.id=f.plan_id AND p.organization_id=f.organization_id),(SELECT r.history_capture_id FROM migration_admitted_history_root r WHERE r.id=f.admitted_root_id AND r.organization_id=f.organization_id)) AS capture_id"
     } else {
-        "NULL::bigint AS stable_position,NULL::uuid AS plan_id,NULL::uuid AS attempt_id,NULL::uuid AS manifest_id,NULL::uuid AS identity_id,NULL::text AS source_time_basis,NULL::uuid AS admitted_root_id"
+        "NULL::bigint AS stable_position,NULL::uuid AS plan_id,NULL::uuid AS attempt_id,NULL::uuid AS manifest_id,NULL::uuid AS identity_id,NULL::text AS source_time_basis,NULL::uuid AS admitted_root_id,NULL::uuid AS version_id,NULL::bigint AS version,NULL::uuid AS bundle_id,NULL::uuid AS capture_id"
     };
     let mut sql=format!("SELECT f.id,f.occurred_at,f.recorded_at,f.origin,f.correlation_id,{display} AS display_at,{actor} AS actor,CASE WHEN octet_length(m.value::text)<=16384 THEN m.value ELSE NULL END AS metadata,octet_length(m.value::text)>16384 AS metadata_overflow,{extra} FROM {} f LEFT JOIN app_user a ON a.id=f.{actor_column}{joins} CROSS JOIN LATERAL (SELECT {metadata} AS value) m WHERE f.organization_id=$1 AND f.person_id=$2",kind.table);
+    if corrected {
+        let table = kind.table.replace("_imported", "_corrected");
+        sql = sql.replace(&format!("FROM {} f", kind.table), &format!("FROM migration_family_refresh_history_head h JOIN {table} v ON v.id=h.version_id AND v.identity_id=h.identity_id AND v.organization_id=h.organization_id AND v.version=h.version AND v.result_id=h.result_id JOIN {} f ON f.id=h.original_fact_id AND f.identity_id=h.identity_id AND f.organization_id=h.organization_id", kind.table));
+        sql = sql
+            .replace("f.occurred_at", "v.occurred_at")
+            .replace("f.recorded_at", "v.recorded_at")
+            .replace("f.origin", "v.origin")
+            .replace("f.correlation_id", "v.correlation_id")
+            .replace("a.id=f.actor_user_id", "a.id=v.actor_user_id");
+        let family = match kind.family {
+            Family::Events => "events",
+            Family::Calls => "calls",
+            Family::TextMessages => "text_messages",
+            _ => unreachable!(),
+        };
+        sql.push_str(&format!(
+            " AND h.organization_id=$1 AND h.person_id=$2 AND h.version>1 AND h.family='{family}'"
+        ));
+        if projection == Projection::PriorVersions {
+            sql = sql
+                .replace("v.id=h.version_id AND ", "")
+                .replace(
+                    " AND v.version=h.version AND v.result_id=h.result_id",
+                    " AND v.version<=h.version",
+                )
+                .replace("h.source_created_at", "v.source_created_at");
+        }
+    } else if external && projection == Projection::Initial {
+        sql.push_str(" AND NOT EXISTS(SELECT 1 FROM migration_family_refresh_history_head h WHERE h.organization_id=f.organization_id AND h.identity_id=f.identity_id AND h.version>1)");
+    }
     if detail {
+        if projection == Projection::PriorVersions {
+            sql.push_str(" AND hi.id=$3");
+            return sql;
+        }
+        if projection == Projection::FirstVersion {
+            sql.push_str(" AND hi.id=$3 LIMIT 1");
+            return sql;
+        }
         sql.push_str(" AND f.id=$3 LIMIT 1");
         return sql;
     }
     if external {
-        sql.push_str(if dated == Dated::Known {
-            " AND f.source_created_at IS NOT NULL"
-        } else {
-            " AND f.source_created_at IS NULL"
-        });
+        sql.push_str(&format!(
+            " AND {display} IS {}NULL",
+            if dated == Dated::Known { "NOT " } else { "" }
+        ));
     }
     let position = if dated == Dated::Known {
         display
@@ -474,7 +540,11 @@ fn candidate_sql(kind: Kind, dated: Dated, detail: bool, after: Option<&Key>) ->
     sql.push_str(&format!(
         " ORDER BY {position} DESC,f.recorded_at DESC,f.id DESC LIMIT $8"
     ));
-    sql
+    if corrected {
+        sql.replace("f.recorded_at", "v.recorded_at")
+    } else {
+        sql
+    }
 }
 /// The performance harness explains the actual closed reader statement.
 #[cfg(feature = "test-support")]
@@ -536,7 +606,9 @@ async fn value(
     }
     let external = kind.family != Family::Native;
     let metadata = if external {
-        let display = if let Some(root) = row.try_get::<Option<Uuid>, _>("admitted_root_id")? {
+        let display = if let Some(version) = row.try_get::<Option<Uuid>, _>("version_id")? {
+            current_display(tx, key, scope, row, version).await
+        } else if let Some(root) = row.try_get::<Option<Uuid>, _>("admitted_root_id")? {
             super::admitted_history_store::display(
                 tx,
                 key,
@@ -570,13 +642,53 @@ async fn value(
         result["read_revision"] = json!(scope.revision.to_string());
         result["correlation_id"] = json!(row.try_get::<Uuid, _>("correlation_id")?);
         result["provenance"] = if external {
-            json!({"owner_kind":if row.try_get::<Option<Uuid>,_>("admitted_root_id")?.is_some(){"admitted"}else{"original"},"admitted_root_id":row.try_get::<Option<Uuid>,_>("admitted_root_id")?,"plan_id":row.try_get::<Uuid,_>("plan_id")?,"attempt_id":row.try_get::<Uuid,_>("attempt_id")?,"manifest_id":row.try_get::<Uuid,_>("manifest_id")?,"identity_id":row.try_get::<Uuid,_>("identity_id")?,"source_time_basis":row.try_get::<String,_>("source_time_basis")?,"stable_position":row.try_get::<i64,_>("stable_position")?.to_string()})
+            json!({"owner_kind":if row.try_get::<Option<Uuid>,_>("version_id")?.is_some(){"refresh"}else if row.try_get::<Option<Uuid>,_>("admitted_root_id")?.is_some(){"admitted"}else{"original"},"admitted_root_id":row.try_get::<Option<Uuid>,_>("admitted_root_id")?,"plan_id":row.try_get::<Uuid,_>("plan_id")?,"attempt_id":row.try_get::<Option<Uuid>,_>("attempt_id")?,"manifest_id":row.try_get::<Uuid,_>("manifest_id")?,"identity_id":row.try_get::<Uuid,_>("identity_id")?,"source_time_basis":row.try_get::<String,_>("source_time_basis")?,"stable_position":row.try_get::<i64,_>("stable_position")?.to_string(),"capture_id":row.try_get::<Uuid,_>("capture_id")?})
         } else {
             Value::Null
         };
     }
+    if external && row.try_get::<Option<Uuid>, _>("version_id")?.is_some() {
+        result["version"] = json!(row.try_get::<i64, _>("version")?.to_string());
+        if detail {
+            result["provenance"]["bundle_id"] = json!(row.try_get::<Uuid, _>("bundle_id")?);
+            result["provenance"]["version_id"] = json!(row.try_get::<Uuid, _>("version_id")?);
+        }
+    }
     bounded(&result, if detail { DETAIL_BYTES } else { SUMMARY_BYTES })?;
     Ok(result)
+}
+// Authenticate only the metadata display for the exact projected head. Never
+// fall back to the initial display when a correction is missing or erased.
+async fn current_display(
+    tx: &mut Transaction<'_, Postgres>,
+    key: &RawPayloadKey,
+    scope: &Scope,
+    row: &PgRow,
+    version: Uuid,
+) -> Result<Value, super::MigrationError> {
+    use super::family_refresh::{
+        evidence::{Purpose, Scope as EvidenceScope},
+        model::Family as EvidenceFamily,
+    };
+    let display = sqlx::query("SELECT d.nonce,d.ciphertext,p.revision FROM migration_family_refresh_history_display d JOIN migration_family_refresh_plan p ON p.id=d.plan_id AND p.bundle_id=d.bundle_id AND p.organization_id=d.organization_id JOIN migration_family_refresh_result r ON r.id=d.result_id AND r.plan_id=p.id AND r.organization_id=d.organization_id JOIN migration_family_refresh_manifest m ON m.id=r.manifest_id AND m.plan_id=p.id AND m.organization_id=d.organization_id WHERE d.id=$1 AND d.organization_id=$2 AND d.identity_id=$3 AND d.plan_id=$4 AND d.bundle_id=$5 AND r.person_id=$6 AND r.target_id=$7 AND r.disposition='applied' AND m.disposition='correction' AND p.family='history' AND p.confirmed_at IS NOT NULL AND d.nonce IS NOT NULL")
+        .bind(version).bind(scope.org.0).bind(row.try_get::<Uuid,_>("identity_id")?)
+        .bind(row.try_get::<Uuid,_>("plan_id")?).bind(row.try_get::<Uuid,_>("bundle_id")?)
+        .bind(scope.person.0).bind(row.try_get::<Uuid,_>("id")?).fetch_optional(&mut **tx).await?
+        .ok_or(super::MigrationError::Crypto)?;
+    EvidenceScope {
+        organization: scope.org,
+        bundle: row.try_get("bundle_id")?,
+        plan: row.try_get("plan_id")?,
+        family: EvidenceFamily::History,
+        revision: display.try_get("revision")?,
+    }
+    .open(
+        key,
+        version,
+        Purpose::HistoryDisplay,
+        &display.try_get::<Vec<u8>, _>("nonce")?,
+        &display.try_get::<Vec<u8>, _>("ciphertext")?,
+    )
 }
 #[cfg(feature = "test-support")]
 #[derive(Default)]

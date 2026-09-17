@@ -30,6 +30,14 @@ pub fn router() -> Router<AppState> {
             "/api/people/{id}/migration-review/timeline/{kind}/{entry_id}",
             get(entry),
         )
+        .route(
+            "/api/people/{id}/history/{kind}/{identity}/versions",
+            get(versions),
+        )
+        .route(
+            "/api/people/{id}/history/{kind}/{identity}/versions/{version}",
+            get(version),
+        )
         .layer(middleware::map_response(no_store))
 }
 async fn no_store(mut response: Response) -> Response {
@@ -121,6 +129,53 @@ async fn entry(
             PersonId::new(person),
             &kind,
             id,
+        )
+        .await
+        .map_err(error)?,
+    )
+    .into_response())
+}
+
+async fn versions(
+    State(state): State<AppState>,
+    OrgAdminContext { auth }: OrgAdminContext,
+    path: Result<Path<(Uuid, String, Uuid)>, PathRejection>,
+    query: Result<Query<PageQuery>, QueryRejection>,
+) -> Result<Response, ApiError> {
+    let Path((person, kind, identity)) = path.map_err(|_| ApiError::MalformedRequest)?;
+    let Query(query) = query.map_err(|_| ApiError::MalformedRequest)?;
+    let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
+    Ok(Json(
+        history_review::versions(
+            pool,
+            &state.raw_payload_key,
+            &auth,
+            PersonId::new(person),
+            &kind,
+            identity,
+            &query,
+        )
+        .await
+        .map_err(error)?,
+    )
+    .into_response())
+}
+async fn version(
+    State(state): State<AppState>,
+    OrgAdminContext { auth }: OrgAdminContext,
+    path: Result<Path<(Uuid, String, Uuid, i64)>, PathRejection>,
+) -> Result<Response, ApiError> {
+    let Path((person, kind, identity, version)) = path.map_err(|_| ApiError::MalformedRequest)?;
+    let pool = state.db.as_ref().ok_or(ApiError::Unavailable)?;
+    Ok(Json(
+        history_review::version(
+            pool,
+            &state.raw_payload_key,
+            &auth,
+            PersonId::new(person),
+            &kind,
+            identity,
+            version,
         )
         .await
         .map_err(error)?,

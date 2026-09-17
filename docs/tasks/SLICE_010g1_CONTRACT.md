@@ -678,3 +678,22 @@ Common workspace guards now stamp the installed family reader capability, so
 retained captures and later refresh bundles remain usable after confirmation.
 Until current-version history projection is installed, corrected history fails
 closed instead of displaying stale first-import metadata.
+
+### Current history and immutable version readers
+
+Current history merges bounded initial and corrected branches. The initial branch
+excludes identities with a corrected head; the corrected branch joins its exact
+typed fact and authenticates its deletable metadata display. Stable entry IDs,
+current source-created date buckets and maintained cursor revisions are preserved.
+A missing current display never falls back to the first import. The temporary
+blanket history read block described above is superseded.
+
+`GET /api/people/{person}/history/{kind}/{identity}/versions` and
+`GET /api/people/{person}/history/{kind}/{identity}/versions/{version}` expose
+metadata-only versions through the current admin review gate. Version counters
+are decimal strings; pages default to 25/max 50, summaries to 4 KiB and responses
+to 512 KiB. Authenticated cursors bind actor, Organization, Person, workspace,
+identity, kind, revision, endpoint and page size. All responses are no-store.
+Detail provenance adds capture ID and, for corrections, bundle/version IDs and
+`owner_kind: refresh`; correction attempt IDs are null. Web transport types and
+request helpers match these additive contracts.

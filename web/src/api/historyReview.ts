@@ -18,12 +18,12 @@ export interface HistoryReviewPage<T> { items: T[]; next_cursor: string | null; 
 export interface HistoryInquiry { id: string; source: string; source_external_id: string | null; received_at: string }
 export interface TimelineEntry {
   kind: TimelineKind; id: string; display_at: string | null; occurred_at: string; recorded_at: string
-  actor: UserRef | null; origin: string; detail_url: string; metadata: Record<string, unknown>
+  actor: UserRef | null; origin: string; detail_url: string; metadata: Record<string, unknown>; version?: string
 }
 export interface TimelineDetail extends TimelineEntry {
   read_revision: string
   correlation_id: string
-  provenance: { plan_id: string; attempt_id: string; manifest_id: string; identity_id: string; source_time_basis: 'fub_record_created' | 'unknown'; stable_position: string } | null
+  provenance: { owner_kind?: 'original' | 'admitted' | 'refresh'; capture_id?: string; bundle_id?: string; version_id?: string; plan_id: string; attempt_id: string | null; manifest_id: string; identity_id: string; source_time_basis: 'fub_record_created' | 'unknown'; stable_position: string } | null
 }
 export interface TimelineFilters { family?: TimelineFamily; dated?: TimelineDates; limit?: number }
 const root = (person: string) => `/people/${encodeURIComponent(person)}/migration-review`
@@ -36,6 +36,9 @@ export const fetchHistoryReviewCore = (person: string, signal?: AbortSignal) => 
 export const fetchHistoryInquiries = (person: string, cursor?: string, signal?: AbortSignal, limit = 25) => apiFetch<HistoryReviewPage<HistoryInquiry>>(`${root(person)}/inquiries${pageQuery(cursor, limit)}`, { signal, cache: 'no-store' })
 export const fetchHistoryTimeline = (person: string, filters: TimelineFilters = {}, cursor?: string, signal?: AbortSignal) => apiFetch<HistoryReviewPage<TimelineEntry>>(`${root(person)}/timeline${pageQuery(cursor, filters.limit ?? 25, { family: filters.family ?? 'all', dated: filters.dated ?? 'known' })}`, { signal, cache: 'no-store' })
 export const fetchHistoryTimelineDetail = (person: string, kind: TimelineKind, id: string, signal?: AbortSignal) => apiFetch<TimelineDetail>(`${root(person)}/timeline/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`, { signal, cache: 'no-store' })
+const versionRoot = (person: string, kind: TimelineKind, identity: string) => `/people/${encodeURIComponent(person)}/history/${encodeURIComponent(kind)}/${encodeURIComponent(identity)}/versions`
+export const fetchHistoryVersions = (person: string, kind: TimelineKind, identity: string, cursor?: string, signal?: AbortSignal, limit = 25) => apiFetch<HistoryReviewPage<TimelineEntry>>(`${versionRoot(person, kind, identity)}${pageQuery(cursor, limit)}`, { signal, cache: 'no-store' })
+export const fetchHistoryVersion = (person: string, kind: TimelineKind, identity: string, version: string, signal?: AbortSignal) => apiFetch<TimelineDetail>(`${versionRoot(person, kind, identity)}/${encodeURIComponent(version)}`, { signal, cache: 'no-store' })
 export function historyKindLabel(kind: TimelineKind): string {
   const labels: Record<TimelineKind, string> = {
     person_recovered: 'Person recovered after mapping hold', person_admitted: 'Newly observed Person added', person_imported: 'Person imported', inquiry_received: 'Inquiry received', routing_decision: 'Inquiry routed', assignment_changed: 'Assignment changed', stage_changed: 'Stage changed', contact_attempted: 'Contact attempt recorded', call_completed: 'Call completed', correspondence: 'Correspondence captured', fub_event_record_imported: 'FUB event record', fub_call_record_imported: 'FUB call record', fub_text_record_imported: 'FUB text record',

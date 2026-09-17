@@ -433,6 +433,14 @@ async fn shared_evidence_is_charged_once_and_reservations_roll_back(pool: PgPool
 #[sqlx::test]
 #[ignore = "requires PostgreSQL migrator"]
 async fn history_corrections_preserve_identity_and_erase_current_date_bucket(pool: PgPool) {
+    history_corrections_scenario(pool, false).await;
+}
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn history_corrections_project_current_authenticated_metadata(pool: PgPool) {
+    history_corrections_scenario(pool, true).await;
+}
+async fn history_corrections_scenario(pool: PgPool, review: bool) {
     use crate::{db_history_capture_support as capture, db_history_import_support as history};
     let (f, parent, initial, book) = history::fixture(&pool).await;
     let import = history::ready(&f, parent, initial).await;
@@ -459,15 +467,218 @@ async fn history_corrections_preserve_identity_and_erase_current_date_bucket(poo
             .await
             .unwrap();
     }
-    sqlx::raw_sql(include_str!("fixtures/family_refresh_history.sql"))
-        .execute(&mut *tx)
-        .await
-        .unwrap();
+    let fixture = include_str!("fixtures/family_refresh_history.sql");
+    let fixture = if review {
+        format!(
+            "{} END $$;",
+            fixture
+                .split(" SELECT sum(retained_bytes) INTO before_capture_bytes")
+                .next()
+                .unwrap()
+        )
+    } else {
+        fixture.to_owned()
+    };
+    sqlx::raw_sql(&fixture).execute(&mut *tx).await.unwrap();
+    if review {
+        use crm_api::domain::migration::family_refresh::{
+            evidence::{Purpose, Scope},
+            model::Family,
+        };
+        // Migrator-only storage fixtures above deliberately use placeholder
+        // ciphertext. Install authenticated metadata before testing app reads.
+        sqlx::query("ALTER TABLE migration_family_refresh_history_display DISABLE TRIGGER history_display_guard").execute(&mut *tx).await.unwrap();
+        for row in sqlx::query("SELECT d.*,p.revision FROM migration_family_refresh_history_display d JOIN migration_family_refresh_plan p ON p.id=d.plan_id WHERE d.organization_id=$1")
+            .bind(f.org).fetch_all(&mut *tx).await.unwrap() {
+            let id:Uuid=row.get("id");
+            let sealed=Scope { organization:crm_api::ids::OrganizationId::new(f.org), bundle:row.get("bundle_id"), plan:row.get("plan_id"), family:Family::History, revision:row.get("revision") }
+                .seal(&f.key,id,Purpose::HistoryDisplay,&json!({"type":"Corrected metadata","marker":id})).unwrap();
+            sqlx::query("UPDATE migration_family_refresh_history_display SET nonce=$2,ciphertext=$3 WHERE id=$1").bind(id).bind(sealed.nonce.as_slice()).bind(sealed.ciphertext).execute(&mut *tx).await.unwrap();
+        }
+        sqlx::query("ALTER TABLE migration_family_refresh_history_display ENABLE TRIGGER history_display_guard").execute(&mut *tx).await.unwrap();
+    }
     sqlx::raw_sql(include_str!("fixtures/family_refresh_byte_inventory.sql"))
         .execute(&mut *tx)
         .await
         .unwrap();
     tx.commit().await.unwrap();
+    if review {
+        use crm_api::{
+            auth::AuthContext,
+            domain::{
+                admin::Role,
+                migration::history_review::{self as h, Dated, Family, ReviewError, TimelineQuery},
+            },
+            ids::{OrganizationId, PersonId, UserId},
+        };
+        let auth = AuthContext {
+            actor_user_id: UserId::new(f.actor),
+            actor_email: "review@synthetic.test".into(),
+            actor_display_name: "Review admin".into(),
+            active_organization_id: OrganizationId::new(f.org),
+            active_organization_name: "Synthetic".into(),
+            role: Role::Admin,
+        };
+        let heads = sqlx::query(
+            "SELECT * FROM migration_family_refresh_history_head WHERE organization_id=$1",
+        )
+        .bind(f.org)
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        for head in heads {
+            let person = PersonId::new(head.get("person_id"));
+            let (kind, family, dated) = match head.get::<String, _>("family").as_str() {
+                "events" => ("fub_event_record_imported", Family::Events, Dated::Unknown),
+                "calls" => ("fub_call_record_imported", Family::Calls, Dated::Known),
+                _ => (
+                    "fub_text_record_imported",
+                    Family::TextMessages,
+                    Dated::Known,
+                ),
+            };
+            let id: Uuid = head.get("original_fact_id");
+            let version: Uuid = head.get("version_id");
+            let detail = h::entry(&f.pool, &f.key, &auth, person, kind, id)
+                .await
+                .unwrap();
+            assert_eq!(detail["id"], json!(id));
+            assert_eq!(detail["version"], "3");
+            assert_eq!(detail["metadata"]["marker"], json!(version));
+            assert_eq!(detail["provenance"]["owner_kind"], "refresh");
+            assert_eq!(
+                detail["display_at"],
+                json!(head.get::<Option<chrono::DateTime<chrono::Utc>>, _>("source_created_at"))
+            );
+            let page = h::timeline(
+                &f.pool,
+                &f.key,
+                &auth,
+                person,
+                &TimelineQuery {
+                    family: Some(family),
+                    dated: Some(dated),
+                    limit: Some(1),
+                    cursor: None,
+                },
+            )
+            .await
+            .unwrap();
+            assert_eq!(page.items.len(), 1);
+            assert_eq!(page.items[0]["id"], json!(id));
+            assert!(page.next_cursor.is_none());
+            let opposite = if dated == Dated::Known {
+                Dated::Unknown
+            } else {
+                Dated::Known
+            };
+            assert!(h::timeline(
+                &f.pool,
+                &f.key,
+                &auth,
+                person,
+                &TimelineQuery {
+                    family: Some(family),
+                    dated: Some(opposite),
+                    limit: Some(1),
+                    cursor: None
+                }
+            )
+            .await
+            .unwrap()
+            .items
+            .is_empty());
+            let mut other = auth.clone();
+            other.active_organization_id = OrganizationId::new(Uuid::new_v4());
+            assert!(h::entry(&f.pool, &f.key, &other, person, kind, id)
+                .await
+                .is_err());
+            let identity: Uuid = head.get("identity_id");
+            let mut q = h::PageQuery {
+                limit: Some(1),
+                cursor: None,
+            };
+            for expected in [3, 2, 1] {
+                let versions = h::versions(&f.pool, &f.key, &auth, person, kind, identity, &q)
+                    .await
+                    .unwrap();
+                assert_eq!(versions.items.len(), 1);
+                assert_eq!(versions.items[0]["version"], expected.to_string());
+                let detail = h::version(&f.pool, &f.key, &auth, person, kind, identity, expected)
+                    .await
+                    .unwrap();
+                assert_eq!(detail["version"], expected.to_string());
+                if expected > 1 {
+                    assert_eq!(detail["metadata"]["type"], "Corrected metadata");
+                }
+                if let Some(cursor) = &versions.next_cursor {
+                    let wrong = h::PageQuery {
+                        limit: Some(2),
+                        cursor: Some(cursor.clone()),
+                    };
+                    assert!(matches!(
+                        h::versions(&f.pool, &f.key, &auth, person, kind, identity, &wrong).await,
+                        Err(ReviewError::Malformed)
+                    ));
+                    let wrong = h::PageQuery {
+                        limit: Some(1),
+                        cursor: Some(cursor.clone()),
+                    };
+                    assert!(h::versions(
+                        &f.pool,
+                        &f.key,
+                        &auth,
+                        person,
+                        kind,
+                        Uuid::new_v4(),
+                        &wrong
+                    )
+                    .await
+                    .is_err());
+                }
+                assert_eq!(versions.next_cursor.is_some(), expected > 1);
+                q.cursor = versions.next_cursor;
+            }
+            assert!(matches!(
+                h::version(&f.pool, &f.key, &auth, person, kind, identity, 4).await,
+                Err(ReviewError::NotFound)
+            ));
+            let route = format!(
+                "/api/people/{}/history/{kind}/{identity}/versions",
+                person.0
+            );
+            for suffix in ["?limit=1", "/2"] {
+                let response =
+                    crate::common::get_with_cookie(&f.app, &format!("{route}{suffix}"), &f.cookie)
+                        .await;
+                assert_eq!(response.status(), axum::http::StatusCode::OK);
+                assert_eq!(response.headers()["cache-control"], "no-store");
+            }
+            for suffix in ["?limit=51", "?unknown=true", "/0", "/not-a-version"] {
+                let response =
+                    crate::common::get_with_cookie(&f.app, &format!("{route}{suffix}"), &f.cookie)
+                        .await;
+                assert_eq!(response.status(), axum::http::StatusCode::BAD_REQUEST);
+                assert_eq!(response.headers()["cache-control"], "no-store");
+            }
+            // Missing current ciphertext must not resurrect initial metadata.
+            let mut tamper = pool.begin().await.unwrap();
+            sqlx::query(
+                "SELECT set_config('crm.family_refresh_reader','fub-family-refresh-v1',true)",
+            )
+            .execute(&mut *tamper)
+            .await
+            .unwrap();
+            sqlx::query("ALTER TABLE migration_family_refresh_history_display DISABLE TRIGGER history_display_guard").execute(&mut *tamper).await.unwrap();
+            sqlx::query("UPDATE migration_family_refresh_history_display SET nonce=NULL,ciphertext=NULL WHERE id=$1").bind(version).execute(&mut *tamper).await.unwrap();
+            sqlx::query("ALTER TABLE migration_family_refresh_history_display ENABLE TRIGGER history_display_guard").execute(&mut *tamper).await.unwrap();
+            tamper.commit().await.unwrap();
+            assert!(matches!(
+                h::entry(&f.pool, &f.key, &auth, person, kind, id).await,
+                Err(ReviewError::Unavailable)
+            ));
+        }
+    }
 }
 
 #[sqlx::test]

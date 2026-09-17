@@ -5,13 +5,13 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 ## Working constraints
 
-- Branch `codex/010g1-family-refresh`, base `dd140b0`; latest preceding metadata execution milestone
-  is **`1796ea3`**. One primary writer; the previously authorized single
+- Branch `codex/010g1-family-refresh`, base `dd140b0`; latest preceding activity execution milestone
+  is **`2ec476a`**. One primary writer; the previously authorized single
   implementation reviewer remains reserved for the final review. Planning review
   READY, round 1. Preserve D-050's two review/fix rounds and final performance gate.
 - Do not merge, push or deploy. Preserve unrelated `docs/prompts/MODEL_ROUTING.md`
   and `.lavish/`, the shared 010e5 runtime, local verified 010e6 and native stores.
-- No refresh HTTP commands or Web workflow are exposed yet. No refresh native
+- No common refresh command Web workflow is exposed yet; history version HTTP reads are installed. No refresh native
   executor is wired. This slice is not complete.
 
 ## Implemented foundation and preparation
@@ -51,24 +51,27 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 ## Current verified milestone
 
-Metadata and activity now execute through the same bounded queue. Notes/tasks
-revalidate frozen source conversion, mapped memberships, accepted scans, native
-rows/revisions and baseline heads. New activity identities use an exclusive
-refresh owner and are discoverable by later bundles. Native writes, identity,
-result, after-state, head and accounting commit atomically. Scheduling remains
-disconnected while history and the public workflow are completed.
+Metadata and activity execute through the same bounded queue with atomic
+native/result/head/accounting settlement. Scheduling remains disconnected.
 
-The focused activity checks pass, including capacity, update/addition result-fault
-rollback and retry, local-change holds, note conversion and fresh-bundle ownership
-recovery (`/private/tmp/010g1-activity-execution-final-db.log`). The integrated run
-passed 45/47; the two new tests failed only at their later snapshot setup because
-the common reader capability was absent. After adding that capability, both pass.
-The corrected-history reader temporarily fails closed until its current-version
-projection is installed. Existing imported history review compatibility passes
-(`/private/tmp/010g1-activity-reader-compat.log`). Library Clippy passes with
-warnings denied (`/private/tmp/010g1-activity-final-clippy.log`); 55 preflight checks
-pass (`/private/tmp/010g1-activity-preflight-tests.log`). Final slice-wide gates
-remain pending.
+History review now projects exactly one current version per identity, preserving
+its stable entry ID and using the corrected source date and metadata. Missing
+current ciphertext fails closed. Bounded immutable version-list/detail readers
+and HTTP routes authenticate displays and scope cursors to the actor, workspace,
+identity, kind, revision and page size. Capture provenance is available in detail;
+message bodies remain outside this display contract. The temporary blanket
+corrected-history read block is removed.
+
+The focused synthetic correction regression passes for all three families,
+including versions 3/2/1, date-bucket movement, tenant isolation, cursor scope,
+missing ciphertext, HTTP validation and no-store responses
+(`/private/tmp/010g1-history-versions-final-db.log`). Existing imported-family
+review compatibility passes (`/private/tmp/010g1-history-projection-compat-db.log`).
+Clippy passes with warnings denied (`/private/tmp/010g1-family-http-final-clippy.log`).
+Web transport tests pass 3/3 and typecheck passes
+(`/private/tmp/010g1-history-transport-web.log`,
+`/private/tmp/010g1-history-versions-web-typecheck.log`). These are reader checks;
+history native execution and the final performance gate remain outstanding.
 
 ## Remaining implementation
 

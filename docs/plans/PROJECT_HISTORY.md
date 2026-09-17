@@ -2611,3 +2611,24 @@ Library Clippy passes with warnings denied
 (`/private/tmp/010g1-metadata-execution-final-clippy.log`); 55 release-preflight
 checks pass (`/private/tmp/010g1-metadata-preflight-tests.log`). Formatting/diff
 checks pass. HTTP/Web exposure and the final slice-wide gates remain pending.
+
+## 010g1 activity execution — 2ec476a — 2026-09-16
+
+Metadata and activity now execute through the same bounded queue. Notes/tasks
+revalidate frozen source conversion, mapped memberships, accepted scans, native
+rows/revisions and baseline heads. New activity identities use an exclusive
+refresh owner and are discoverable by later bundles. Native writes, identity,
+result, after-state, head and accounting commit atomically. Scheduling remains
+disconnected while history and the public workflow are completed.
+
+The focused activity checks pass, including capacity, update/addition result-fault
+rollback and retry, local-change holds, note conversion and fresh-bundle ownership
+recovery (`/private/tmp/010g1-activity-execution-final-db.log`). The integrated run
+passed 45/47; the two new tests failed only at their later snapshot setup because
+the common reader capability was absent. After adding that capability, both pass.
+The corrected-history reader temporarily fails closed until its current-version
+projection is installed. Existing imported history review compatibility passes
+(`/private/tmp/010g1-activity-reader-compat.log`). Library Clippy passes with
+warnings denied (`/private/tmp/010g1-activity-final-clippy.log`); 55 preflight checks
+pass (`/private/tmp/010g1-activity-preflight-tests.log`). Final slice-wide gates
+remain pending.

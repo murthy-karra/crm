@@ -157,18 +157,20 @@
     {
       "path": "backend/crates/crm-app/src/auth/workspace.rs",
       "function": "read_check",
-      "start_line": 78,
-      "sha256": "6cfb35d52469d23435648a759905fea52eb9f632291cf29fa547a649c6235c8c",
-      "shared_revision": "D-090/010e6",
-      "shared_revision_note": "Both paired arms share current authorization and its recovery reader stamp. The three frozen baseline query bodies remain unchanged."
+      "start_line": 158,
+      "sha256": "819243528a5a5657331991ecf23091c96b2fbd09b426b70dc1c1d7ac6adfd75b",
+      "shared_revision": "D-092/010g1",
+      "shared_revision_note": "Both paired arms share current authorization. The exact change from D-090 is the added transaction-local crm.family_refresh_reader stamp in the existing SELECT, with no new round trip. The three frozen baseline reader bodies remain byte-exact; this is not a full historical authentication-stack comparison.",
+      "previous_shared_sha256": "6cfb35d52469d23435648a759905fea52eb9f632291cf29fa547a649c6235c8c"
     },
     {
       "path": "backend/crates/crm-app/src/auth/workspace.rs",
       "function": "ordinary",
-      "start_line": 47,
-      "sha256": "b6066c666695d422851f8dd15e2f4fce199235ef30700d064721f60551b792a0",
-      "shared_revision": "D-090/010e6",
-      "shared_revision_note": "Both paired arms share current authorization and its recovery reader stamp. The three frozen baseline query bodies remain unchanged."
+      "start_line": 117,
+      "sha256": "71f115ff41f64e5189f0c5a9e800653602c65551f8336c19eeab783aebfb33db",
+      "shared_revision": "D-092/010g1",
+      "shared_revision_note": "Both paired arms share current authorization. The exact change from D-090 is the added transaction-local crm.family_refresh_reader stamp in the existing SELECT, with no new round trip. The three frozen baseline reader bodies remain byte-exact; this is not a full historical authentication-stack comparison.",
+      "previous_shared_sha256": "b6066c666695d422851f8dd15e2f4fce199235ef30700d064721f60551b792a0"
     },
     {
       "path": "backend/crates/crm-app/src/auth/workspace.rs",

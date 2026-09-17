@@ -9,6 +9,25 @@ Use [PROJECT_STATE.md](PROJECT_STATE.md) for current work, live residuals and ne
 actions, and the [decision log](../decisions/DECISION_LOG.md) for authority.
 Per-slice verification/release records remain the detailed evidence.
 
+## 010g1 combined family refresh accepted locally — 2026-09-17
+
+Implementation on `codex/010g1-family-refresh` delivered the full accepted
+metadata/activity/history package. Milestones include common Web workflow
+`af19664`, exact Remainder and legacy proof `12586c3`, partial-cancellation fix
+`ebe05b6`, and query indexes/acceptance fixtures `dc26ccb`. Both independent
+implementation-review rounds closed; later verification fixes required no third
+review. The accepted Lavish session remained closed.
+
+[Final verification](../tasks/SLICE_010g1_VERIFICATION.md) records repository
+checks, 1,193 verified DB/API cases (including three corrected audit reruns), real
+production-Web desktop/390px acceptance, 83 query shapes at 25k People/50 members,
+and one passing measured paired Person/Today gate. It retains setup failures,
+the lifecycle bug found by Web acceptance, the stale physical byte audit, and the
+shared-authorization provenance correction before benchmark measurements.
+No merge, push or deployment was performed; shared runtime and unrelated changes
+were preserved. [Current status](../tasks/SLICE_010g1_IMPLEMENTATION_STATUS.md)
+records the completed local boundary and remaining out-of-scope product work.
+
 ## 010g1 foundation and discovery checkpoints — 2026-09-15
 
 Local staged implementation on `codex/010g1-family-refresh`, through `26323f6`.

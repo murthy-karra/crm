@@ -772,3 +772,14 @@ Release admission covers full schema/guard inventories, including native revisio
 tracking, and preflight checks retained family requirements. Confirm explicitly
 drains old shared workspace transactions before installing the permanent barrier.
 Final acceptance gates remain pending in the implementation status record.
+
+
+### Final local acceptance — 2026-09-17
+
+The combined metadata/activity/history package, exact Remainder APIs and Web
+workflow are implemented and locally verified. Migration 034 adds scoped review
+indexes; the readiness inventory includes them. Functional, production-Web,
+query-plan and paired Person/Today gates are closed in
+[the verification record](SLICE_010g1_VERIFICATION.md), including retained failed
+attempts and their corrections. Earlier checkpoint limitations above describe
+their historical implementation states. Merge, push and deployment remain deferred.

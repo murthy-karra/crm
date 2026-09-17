@@ -19,10 +19,11 @@ Keep the administrator review hold, full fidelity reporting and source-data gate
 **Current boundary — D-090/D-091:** 010e6 never-imported mapping-hold recovery
 is verified and merged locally as `2a4c207`; shared development remains 010e5.
 The user deferred deployment and selected one combined metadata/activity/history
-refresh package. [010g1](SLICE_010g1_COMBINED_FAMILY_REFRESH.md) owns its proposed
-scope and contracts. It preserves family-specific execution while combining
-review and delivery; its update/removal/correction policies are accepted under D-092 and implementation
-is in progress.
+refresh package. [010g1](SLICE_010g1_COMBINED_FAMILY_REFRESH.md) owns that accepted
+scope and its contracts. It preserves family-specific execution while combining
+review and delivery. Its D-092 implementation and
+[local acceptance gates](../tasks/SLICE_010g1_VERIFICATION.md) are complete; merge,
+push and deployment remain deferred.
 
 Write the next family specification just in time after the preceding evidence.
 010f3's assignment/contracts are accepted under D-082. 010f4 is the accepted

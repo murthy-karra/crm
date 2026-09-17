@@ -2,7 +2,7 @@
 
 Local acceptance under D-092 and the accepted combined-family plan. No merge,
 push, deployment, live FUB access or customer processing is authorized by this
-record. Final SQLx/database and paired-performance results are pending.
+record. **Local implementation acceptance passed on 2026-09-17.**
 
 ## Implementation and review
 
@@ -46,6 +46,22 @@ retained in the original logs and were corrected in follow-up browser checks.
 The pre-lifecycle-fix failed run is retained separately at
 `/private/tmp/010g1-final-browser-before-lifecycle-fix`.
 
+Fresh-schema SQLx/offline-cache validation passed. The serial broad run at the
+application code in `dc26ccb` ran 1,193 tests in 4,805.147 seconds: 1,190 passed
+and three older People-refresh accounting audits failed
+(`/private/tmp/010g1-final-db-gates.log`). Those audits omitted D-084 retained
+mapping evidence, fingerprints, digests, repair rows and mapping-head ownership.
+The independent physical byte inventory now includes them, retaining exact
+equality with the runtime ledger. All three corrected tests passed in 18.283
+seconds (`/private/tmp/010g1-final-audit-rerun.log`). Runtime accounting did not
+change. Thus all 1,193 functional cases are verified across the broad run and
+focused correction; the initial failures remain visible in the evidence.
+
+The serial gate excluded four explicit manual fixtures/older plan harnesses and
+did not enable `perf-harness`. Isolated API/preview processes were stopped after
+Web acceptance. The plan runner also tolerates its indexes already being present
+on a newly migrated fixture; this does not change the production migration.
+
 ## D-050 query plans
 
 Final evidence: `/private/tmp/010g1-final-query-plans-corrected/plans.json`, exact
@@ -76,11 +92,32 @@ settled/unfinished fixture positions were corrected before final collection.
 Reproduction instructions and runners are in
 [family_refresh_acceptance.md](../../backend/crates/crm-api/tests/fixtures/family_refresh_acceptance.md).
 
-## Remaining final gates
+## D-050 paired Person/Today gate — passed
 
-Fresh-schema SQLx/offline-cache check and serial DB/API/compatibility suite:
-`/private/tmp/010g1-final-db-gates.log` (running). The single paired Person/Today
-run remains pending and must set `CRM_MOBILE006_PAIRED_TODAY=1`.
+One measured paired run, with `CRM_MOBILE006_PAIRED_TODAY=1`, passed in 103.827
+seconds (`/private/tmp/010g1-final-paired-measurement.log`). Evidence is in
+`/private/tmp/crm-010g1-person-today/person-detail-paired.json` and
+`mobile006-today-paired.json`. Both arms share a build, fixture and clock; each has
+40 measured requests at concurrency one, alternating AB/BA. The fixture has
+25,000 People, 50 members, 75,018 notes and 100,017 tasks. Counts stayed unchanged.
+
+| Reader | Baseline p95 | Current p95 | D-050 current limit | Equality |
+| --- | ---: | ---: | ---: | --- |
+| Person detail | 19.23 ms | 21.60 ms | 44.23 ms | Complete JSON and bytes equal; frozen entry points verified |
+| Today | 62.33 ms | 63.26 ms | 87.33 ms | All DTOs equal; all samples complete |
+
+The initial invocation stopped in source-integrity preflight before any request
+measurement (`/private/tmp/010g1-final-paired.log`). Comparison with `2a4c207`
+proved that two shared authorization helpers changed only by adding the
+transaction-local family-reader stamp to their existing SELECT. Their manifest
+hashes/provenance were refreshed; the three frozen reader bodies remain
+byte-exact. As before, the pair uses current shared authorization and is not a
+full historical authentication-stack or production-capacity comparison. The
+failed preflight is retained, and no second measured benchmark was run.
+
+Post-audit workspace/all-target Clippy with `test-support` and warnings denied
+passed (`/private/tmp/010g1-final-audit-clippy.log`). Final formatting, browser-script
+syntax, plan-script syntax and diff checks pass. No acceptance gate remains open.
 
 ## Scope limits
 

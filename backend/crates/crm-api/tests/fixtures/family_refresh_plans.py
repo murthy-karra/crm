@@ -125,7 +125,7 @@ for name,call in [
     query='SELECT * FROM '+call
     checks.append({'name':name,'file':'database SQL-language function','sql':query,'sha256':hashlib.sha256(query.encode()).hexdigest(),'bindings':[],'bound':query})
 
-sql=['BEGIN;', (repo/'backend/crates/crm-api/migrations/20261008000034_fub_family_refresh_review_indexes.sql').read_text(),"SET LOCAL statement_timeout='300s';","SET LOCAL lock_timeout='10s';",'CREATE TEMP TABLE family_plan_evidence(name text,plan jsonb);']
+sql=['BEGIN;', (repo/'backend/crates/crm-api/migrations/20261008000034_fub_family_refresh_review_indexes.sql').read_text().replace('CREATE INDEX ', 'CREATE INDEX IF NOT EXISTS '),"SET LOCAL statement_timeout='300s';","SET LOCAL lock_timeout='10s';",'CREATE TEMP TABLE family_plan_evidence(name text,plan jsonb);']
 # Inert cardinality copies are not mutation/fidelity evidence. Suppress row
 # triggers, including FK triggers, only while filling this rolled-back fixture;
 # indexes and CHECK/UNIQUE constraints remain, and production reads run normally.

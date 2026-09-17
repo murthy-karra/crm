@@ -203,10 +203,11 @@ linked verification records; they are not claims about present runtime health.
 
 ## Next recommended action
 
-The user deferred deployment and requested combined family-refresh planning.
-[010g1](SLICE_010g1_COMBINED_FAMILY_REFRESH.md) now owns one metadata,
-notes/tasks and history update package accepted under D-092. Implementation is
-in progress; preserve the 010e5 runtime.
+The combined [010g1](SLICE_010g1_COMBINED_FAMILY_REFRESH.md) metadata,
+notes/tasks and history update package accepted under D-092 is implemented and
+[verified locally](../tasks/SLICE_010g1_VERIFICATION.md) on
+`codex/010g1-family-refresh`. Merge, push and deployment remain deferred by the
+user; preserve the 010e5 runtime.
 
 010e6 verification and local commit/merge are complete. Push and deployment
 require a subsequent user instruction. The current
@@ -220,8 +221,9 @@ No repeat implementation or release action is pending for Mobile006/010f4.
 ## Approval currently required
 
 010g1 P1–P4 and its declared shared contracts are accepted under D-092. Its
-independent planning review is READY; implementation is in progress. Deployment
-remains explicitly deferred.
+planning and two-round implementation reviews are complete; local implementation
+and final acceptance gates passed. Merge, push and deployment remain explicitly
+deferred.
 
 None for the completed D-084 implementation, publication, cleanup and shared-
 development release. D-084 superseded D-083's planning-only boundary.

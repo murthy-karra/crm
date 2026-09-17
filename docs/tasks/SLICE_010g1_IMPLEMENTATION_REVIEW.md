@@ -32,5 +32,9 @@ failure fix within the accepted lifecycle, not an additional review round.
 
 The repository gate passed before that small execution fix (1,037 Rust tests,
 1,327 Web tests, Clippy, production shape, doctests and supporting checks).
-Final compatibility, production-Web and D-050 evidence remain pending; this
-record does not establish slice completion or authorize deployment.
+Final compatibility, production-Web and both D-050 gates subsequently passed.
+The broad database run exposed three older byte-audit omissions; the independent
+physical inventory was completed and all three reruns passed without changing
+runtime accounting. See [final verification](SLICE_010g1_VERIFICATION.md) for
+results, retained failures and the paired-run provenance update. No third review
+round was used. Deployment remains deferred.

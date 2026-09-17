@@ -63,7 +63,7 @@ pub(crate) async fn claim_state(
     kind: &str,
     key: &[u8],
 ) -> Result<Value, MigrationError> {
-    Ok(sqlx::query_scalar("SELECT jsonb_build_object('target_id',target_id,'original_mapping_id',original_mapping_id,'admitted_mapping_id',admitted_mapping_id) FROM migration_metadata_catalog_claim WHERE organization_id=$1 AND source_account_id=$2 AND kind=$3 AND source_key=$4").bind(org.0).bind(account).bind(kind).bind(key).fetch_optional(c).await?.unwrap_or(Value::Null))
+    Ok(sqlx::query_scalar("SELECT jsonb_build_object('target_id',target_id,'original_mapping_id',original_mapping_id,'admitted_mapping_id',admitted_mapping_id)||CASE WHEN refresh_manifest_id IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('refresh_manifest_id',refresh_manifest_id) END FROM migration_metadata_catalog_claim WHERE organization_id=$1 AND source_account_id=$2 AND kind=$3 AND source_key=$4").bind(org.0).bind(account).bind(kind).bind(key).fetch_optional(c).await?.unwrap_or(Value::Null))
 }
 fn same_source(left: &FrozenMapping, right: &FrozenMapping) -> Result<bool, MigrationError> {
     Ok(left.source_id == right.source_id
@@ -88,6 +88,39 @@ pub(crate) async fn claim_equal(
     let Some(r)=sqlx::query("SELECT * FROM migration_metadata_catalog_claim WHERE organization_id=$1 AND source_account_id=$2 AND kind=$3 AND source_key=$4").bind(org.0).bind(account).bind(kind).bind(source_key).fetch_optional(&mut *c).await? else{return Ok(false)};
     if r.get::<Uuid, _>("target_id") != target {
         return Ok(false);
+    }
+    if let Some(id) = r.get::<Option<Uuid>, _>("refresh_manifest_id") {
+        use super::family_refresh::{
+            evidence::{Purpose, Scope},
+            model::Family,
+        };
+        let owner=sqlx::query("SELECT p.id,p.bundle_id,p.revision FROM migration_family_refresh_plan p JOIN migration_family_refresh_manifest u ON u.plan_id=p.id AND u.bundle_id=p.bundle_id AND u.organization_id=p.organization_id JOIN migration_family_refresh_bundle b ON b.id=p.bundle_id AND b.organization_id=p.organization_id WHERE p.id=$1 AND p.bundle_id=$2 AND p.organization_id=$3 AND p.family='metadata' AND u.id=$4 AND u.kind='catalog' AND b.source_account_id=$5 AND EXISTS(SELECT 1 FROM migration_family_refresh_result result WHERE result.manifest_id=u.id AND result.organization_id=u.organization_id AND result.disposition IN ('applied','already_current'))").bind(r.get::<Uuid,_>("refresh_plan_id")).bind(r.get::<Uuid,_>("refresh_bundle_id")).bind(org.0).bind(id).bind(account).fetch_optional(&mut *c).await?;
+        let Some(owner) = owner else { return Ok(false) };
+        let scope = Scope {
+            organization: org,
+            bundle: owner.get("bundle_id"),
+            plan: owner.get("id"),
+            family: Family::Metadata,
+            revision: owner.get("revision"),
+        };
+        let prior: FrozenMapping = scope.open(
+            key,
+            id,
+            Purpose::CatalogClaim,
+            r.get("evidence_nonce"),
+            r.get("evidence_ciphertext"),
+        )?;
+        if kind == "tag" {
+            return Ok(sqlx::query_scalar::<_, bool>(
+                "SELECT lower($1::text) IS NOT DISTINCT FROM lower($2::text)",
+            )
+            .bind(&f.label)
+            .bind(&prior.label)
+            .fetch_one(c)
+            .await?
+                && (f.label.is_some() || f.raw_choice == prior.raw_choice));
+        }
+        return same_source(f, &prior);
     }
     if let Some(id) = r.get::<Option<Uuid>, _>("admitted_mapping_id") {
         let owner=sqlx::query("SELECT i.snapshot_id,m.plan_id,m.parent_mapping_id FROM migration_admitted_metadata_mapping m JOIN migration_admitted_metadata_plan i ON i.id=m.plan_id AND i.organization_id=m.organization_id WHERE m.id=$1 AND m.organization_id=$2").bind(id).bind(org.0).fetch_one(&mut *c).await?;

@@ -78,11 +78,11 @@ pub async fn resolve(
     {
         return Err(MigrationError::InvalidInput);
     }
-    let (mut tx, b, p) = preparation::begin(pool, claim).await?;
+    let (mut tx, b, p) = preparation::read_begin(pool, claim).await?;
     let family = p.get::<String, _>("family");
     if !matches!(
         p.get::<String, _>("phase").as_str(),
-        "mappings" | "classify"
+        "mappings" | "classify" | "apply"
     ) || !matches!(
         (family.as_str(), kind),
         ("metadata", Kind::Person | Kind::Field)

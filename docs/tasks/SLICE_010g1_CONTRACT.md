@@ -619,3 +619,32 @@ The family release flag is server-owned and requires the matching artifact hash,
 gate version, capability and current release report. Its schema check is being
 extended with execution/read inventories before HTTP exposure; the slice is not
 release-ready while those components and final gates remain incomplete.
+
+### Atomic metadata execution checkpoint
+
+Migration 027 extends the shared catalog registry with a third, exclusive refresh
+owner tuple and composite manifest FK. Its insertion guard binds the exact next
+confirmed catalog unit, mapping, executor, workspace and live lease. Refresh
+claims are immutable and their encrypted evidence is metered once to their plan.
+Original/admitted claim evidence retains its existing shape; shared registry
+readers authenticate refresh claims against their successful immutable results.
+The application and release-preflight exact owner-constraint inventories agree.
+
+Migration 028 adds exact-next execution checkpoint fencing and measured positive
+native-byte growth. Authenticated encrypted recipes select only closed native
+SQL operations. A whole Person unit verifies source conversion, accepted scan,
+live identity, baseline head, native metadata revision/state, all successful
+catalog prerequisites and every before-state before writing. Catalog dependencies
+are rechecked in one bounded read: existing definitions include timestamps;
+created definitions must match their exact sealed inserted rows. PostgreSQL
+rechecks each mutation through its exact proof. Native writes, catalog claims,
+encrypted result/after-state, head CAS, action totals and byte settlement share
+one transaction. A failed result or settlement rolls everything back.
+
+Execution claims use 60-second leases and one manifest per turn. Success releases
+the lease; storage/integrity/source/readiness failures pause durably. Completion
+requires exact result-count reconciliation with every manifest position. The
+bounded result reader authenticates scope/filter/revision cursors and never loads
+ciphertext. The runner currently dispatches metadata only and is not connected to
+the application scheduler until the remaining family executors/readiness gates
+are complete. HTTP/Web exposure and final release gates remain pending.

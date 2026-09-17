@@ -101,7 +101,7 @@ pub async fn inspect(
     claim: &Claim,
     id: Uuid,
 ) -> Result<Inspection, MigrationError> {
-    let (mut tx, b, p) = preparation::begin(pool, claim).await?;
+    let (mut tx, b, p) = preparation::read_begin(pool, claim).await?;
     if p.get::<String, _>("family") != "metadata" || !p.get::<bool, _>("mappings_complete") {
         return Err(MigrationError::ImportBusy);
     }
@@ -159,7 +159,7 @@ pub async fn inspect(
             return Ok(Inspection::Held(h));
         }
     }
-    let (mut tx, _, _) = preparation::begin(pool, claim).await?;
+    let (mut tx, _, _) = preparation::read_begin(pool, claim).await?;
     let ready:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM migration_metadata_catalog_readiness WHERE organization_id=$1 AND state='ready' AND engine_version='fub-admitted-metadata-v1')")
         .bind(claim.organization.0).fetch_one(&mut *tx).await?;
     if !ready {
@@ -316,7 +316,7 @@ impl Context<'_> {
         let limit = if data.kind == "tag" { 200_i64 } else { 50_i64 };
         // At most native capacity + 1 candidates, including choices sharing a
         // destination field through different source definitions.
-        let rows=sqlx::query("SELECT m.*,p.source_key_hmac AS parent_key FROM migration_family_refresh_mapping m LEFT JOIN migration_family_refresh_mapping p ON p.id=m.parent_id AND p.plan_id=m.plan_id AND p.organization_id=m.organization_id WHERE m.plan_id=$1 AND m.organization_id=$2 AND m.kind=$3 AND m.disposition='create_matching' AND ($3<>'option' OR p.target_id=$4) ORDER BY m.id LIMIT $5")
+        let rows=sqlx::query("SELECT m.*,p.source_key_hmac AS parent_key FROM migration_family_refresh_mapping m LEFT JOIN migration_family_refresh_mapping p ON p.id=m.parent_id AND p.plan_id=m.plan_id AND p.organization_id=m.organization_id WHERE m.plan_id=$1 AND m.organization_id=$2 AND m.kind=$3 AND m.disposition='create_matching' AND NOT EXISTS(SELECT 1 FROM migration_family_refresh_manifest done JOIN migration_family_refresh_result r ON r.manifest_id=done.id AND r.organization_id=done.organization_id WHERE done.plan_id=m.plan_id AND done.organization_id=m.organization_id AND done.mapping_id=m.id AND r.disposition IN ('applied','already_current')) AND ($3<>'option' OR p.target_id=$4) ORDER BY m.id LIMIT $5")
             .bind(self.scope.plan).bind(self.scope.organization.0).bind(&data.kind).bind(parent).bind(limit+1).fetch_all(&mut *conn).await?;
         if rows.len() as i64 > limit {
             return Ok(false);
@@ -389,4 +389,85 @@ impl Context<'_> {
         }
         Ok(true)
     }
+}
+
+/// Revalidate the selected destination under the execution transaction's catalog
+/// lock. Parents created by earlier units are checked against their exact saved
+/// native proof instead of being mistaken for an unrelated preexisting target.
+pub(super) async fn revalidate_execution(
+    conn: &mut PgConnection,
+    key: &RawPayloadKey,
+    scope: Scope,
+    account: i64,
+    approved: &Evidence,
+    source: &Derived,
+) -> Result<Option<Hold>, MigrationError> {
+    let mut current = frozen(&approved.mapping, source)?;
+    let context = Context {
+        key,
+        scope,
+        account,
+    };
+    if let Some(hold) = context
+        .validate(
+            conn,
+            &approved.mapping,
+            source,
+            &mut current,
+            approved.field,
+        )
+        .await?
+    {
+        return Ok(Some(hold));
+    }
+    if serde_json::to_value(&current).map_err(|_| MigrationError::Crypto)?
+        != serde_json::to_value(&approved.frozen).map_err(|_| MigrationError::Crypto)?
+    {
+        return Ok(Some(Hold::TargetUnavailable));
+    }
+    if let (Some(parent), Some(frozen)) = (&approved.parent, &approved.parent_frozen) {
+        let target = parent.choice.columns().1.ok_or(MigrationError::Crypto)?;
+        let settled:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM migration_family_refresh_manifest u JOIN migration_family_refresh_result r ON r.manifest_id=u.id AND r.organization_id=u.organization_id WHERE u.plan_id=$1 AND u.organization_id=$2 AND u.kind='catalog' AND u.source_key_hmac=$3 AND r.target_id=$4 AND r.disposition IN ('applied','already_current'))").bind(scope.plan).bind(scope.organization.0).bind(&parent.source_key).bind(target).fetch_one(&mut *conn).await?;
+        if !settled {
+            return Ok(Some(Hold::TargetUnavailable));
+        }
+
+        match parent.choice {
+            Choice::CreateMatching { .. } => {
+                let proven:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM migration_family_refresh_manifest u JOIN migration_family_refresh_result r ON r.manifest_id=u.id AND r.organization_id=u.organization_id JOIN migration_family_refresh_write_proof w ON w.manifest_id=u.id AND w.organization_id=u.organization_id JOIN custom_field f ON f.id=w.target_id AND f.organization_id=w.organization_id WHERE u.plan_id=$1 AND u.organization_id=$2 AND u.kind='catalog' AND u.source_key_hmac=$3 AND r.disposition='applied' AND w.table_name='custom_field' AND w.operation='INSERT' AND w.target_id=$4 AND w.after_hash=crm_family_refresh_native_digest(to_jsonb(f)))").bind(scope.plan).bind(scope.organization.0).bind(&parent.source_key).bind(target).fetch_one(&mut *conn).await?;
+                if !proven {
+                    return Ok(Some(Hold::TargetUnavailable));
+                }
+            }
+            Choice::Existing { .. } => {
+                let source = mapping_selection::source(conn, key, scope, parent).await?;
+                let current = match mapping_selection::validate(
+                    conn,
+                    scope.organization,
+                    parent,
+                    &source,
+                    &Selection::Existing { target_id: target },
+                    None,
+                )
+                .await
+                {
+                    Ok((_, current)) => current,
+                    Err(MigrationError::InvalidImportChoice) => {
+                        return Ok(Some(Hold::TargetUnavailable))
+                    }
+                    Err(error) => return Err(error),
+                };
+                if serde_json::to_value(&current).map_err(|_| MigrationError::Crypto)?
+                    != serde_json::to_value(&parent.destination)
+                        .map_err(|_| MigrationError::Crypto)?
+                    || registry::target_state(conn, scope.organization, "field", target).await?
+                        != frozen.target_baseline
+                {
+                    return Ok(Some(Hold::TargetUnavailable));
+                }
+            }
+            _ => return Ok(Some(Hold::MappingRequired)),
+        }
+    }
+    Ok(None)
 }

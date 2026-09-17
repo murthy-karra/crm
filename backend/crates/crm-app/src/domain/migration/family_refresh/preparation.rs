@@ -11,6 +11,21 @@ pub(super) async fn begin(
     pool: &PgPool,
     claim: &Claim,
 ) -> Result<(Transaction<'static, Postgres>, PgRow, PgRow), MigrationError> {
+    admit(pool, claim, false).await
+}
+/// Read-only proof adapters are reusable while a confirmed unit owns a live
+/// execution lease. Preparation mutations retain their stricter admission.
+pub(super) async fn read_begin(
+    pool: &PgPool,
+    claim: &Claim,
+) -> Result<(Transaction<'static, Postgres>, PgRow, PgRow), MigrationError> {
+    admit(pool, claim, true).await
+}
+async fn admit(
+    pool: &PgPool,
+    claim: &Claim,
+    allow_execution: bool,
+) -> Result<(Transaction<'static, Postgres>, PgRow, PgRow), MigrationError> {
     if claim.epoch <= 0 {
         return Err(MigrationError::InvalidInput);
     }
@@ -22,16 +37,32 @@ pub(super) async fn begin(
     // immutable while preparing; it is rechecked below with the locked bundle.
     let executor=sqlx::query_scalar::<_,Uuid>("SELECT m.user_id FROM migration_family_refresh_bundle b JOIN organization_membership m ON m.organization_id=b.organization_id AND m.user_id=b.executor_user_id WHERE b.id=$1 AND b.organization_id=$2 AND m.role='admin' AND m.status='active' FOR SHARE OF m")
         .bind(claim.bundle).bind(claim.organization.0).fetch_optional(&mut *tx).await?.ok_or(MigrationError::Forbidden)?;
+    if allow_execution {
+        sqlx::query("SELECT id FROM organization WHERE id=$1 FOR UPDATE")
+            .bind(claim.organization.0)
+            .fetch_one(&mut *tx)
+            .await?;
+    }
     sqlx::query("SELECT organization_id FROM migration_snapshot_storage WHERE organization_id=$1 FOR UPDATE").bind(claim.organization.0).fetch_optional(&mut *tx).await?.ok_or(MigrationError::NotFound)?;
     let b=sqlx::query("SELECT * FROM migration_family_refresh_bundle WHERE id=$1 AND organization_id=$2 FOR UPDATE")
         .bind(claim.bundle).bind(claim.organization.0).fetch_optional(&mut *tx).await?.ok_or(MigrationError::NotFound)?;
     let p=sqlx::query("SELECT *,lease_expires_at>clock_timestamp() AS live_lease FROM migration_family_refresh_plan WHERE id=$1 AND bundle_id=$2 AND organization_id=$3 FOR UPDATE")
         .bind(claim.plan).bind(claim.bundle).bind(claim.organization.0).fetch_optional(&mut *tx).await?.ok_or(MigrationError::NotFound)?;
+    let preparing = b.get::<String, _>("state") == "preparing"
+        && b.get::<Option<DateTime<Utc>>, _>("confirmed_at").is_none()
+        && p.get::<String, _>("state") == "preparing"
+        && p.get::<Option<DateTime<Utc>>, _>("confirmed_at").is_none();
+    let executing = allow_execution
+        && matches!(
+            b.get::<String, _>("state").as_str(),
+            "queued" | "running" | "paused"
+        )
+        && b.get::<Option<DateTime<Utc>>, _>("confirmed_at").is_some()
+        && p.get::<String, _>("state") == "running"
+        && p.get::<Option<DateTime<Utc>>, _>("confirmed_at").is_some()
+        && !p.get::<bool, _>("cancel_requested");
     if b.get::<Uuid, _>("executor_user_id") != executor
-        || b.get::<String, _>("state") != "preparing"
-        || b.get::<Option<DateTime<Utc>>, _>("confirmed_at").is_some()
-        || p.get::<String, _>("state") != "preparing"
-        || p.get::<Option<DateTime<Utc>>, _>("confirmed_at").is_some()
+        || !(preparing || executing)
         || p.get::<Option<Uuid>, _>("lease_token") != Some(claim.token)
         || p.get::<i64, _>("lease_epoch") != claim.epoch
         || p.get::<Option<bool>, _>("live_lease") != Some(true)

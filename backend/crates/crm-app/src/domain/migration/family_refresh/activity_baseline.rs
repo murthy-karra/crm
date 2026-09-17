@@ -133,11 +133,11 @@ pub async fn discover(
         super::model::Kind::Task => "task",
         _ => return Err(MigrationError::InvalidInput),
     };
-    let (mut tx, b, p) = super::preparation::begin(pool, claim).await?;
+    let (mut tx, b, p) = super::preparation::read_begin(pool, claim).await?;
     if p.get::<String, _>("family") != "activity"
         || !matches!(
             p.get::<String, _>("phase").as_str(),
-            "mappings" | "classify"
+            "mappings" | "classify" | "apply"
         )
     {
         return Err(MigrationError::Conflict);

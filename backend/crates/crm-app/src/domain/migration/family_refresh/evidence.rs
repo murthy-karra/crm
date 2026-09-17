@@ -14,6 +14,7 @@ pub enum Purpose {
     MappingPatch,
     Manifest,
     NativeProof,
+    CatalogClaim,
     Result,
     HistoryDisplay,
     Receipt,
@@ -27,6 +28,7 @@ impl Purpose {
             Self::MappingPatch => "mapping-patch",
             Self::Manifest => "manifest",
             Self::NativeProof => "native-proof",
+            Self::CatalogClaim => "catalog-claim",
             Self::Result => "result",
             Self::HistoryDisplay => "history-display",
             Self::Receipt => "receipt",
@@ -35,7 +37,7 @@ impl Purpose {
     fn limit(self) -> usize {
         match self {
             Self::Binding | Self::Mapping | Self::MappingPatch | Self::Receipt => 64 * 1024,
-            Self::Source | Self::NativeProof => 4 * 1024 * 1024,
+            Self::Source | Self::NativeProof | Self::CatalogClaim => 4 * 1024 * 1024,
             Self::Manifest | Self::Result => 64 * 1024 * 1024,
             Self::HistoryDisplay => 4096,
         }

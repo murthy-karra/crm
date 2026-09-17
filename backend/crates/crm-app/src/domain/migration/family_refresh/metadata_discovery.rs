@@ -34,11 +34,11 @@ pub async fn discover(
     claim: &Claim,
     cohort: Uuid,
 ) -> Result<Discovery, MigrationError> {
-    let (mut tx, b, p) = preparation::begin(pool, claim).await?;
+    let (mut tx, b, p) = preparation::read_begin(pool, claim).await?;
     if p.get::<String, _>("family") != "metadata"
         || !matches!(
             p.get::<String, _>("phase").as_str(),
-            "mappings" | "classify"
+            "mappings" | "classify" | "apply"
         )
     {
         return Err(MigrationError::Conflict);

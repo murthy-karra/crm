@@ -5,8 +5,8 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 ## Working constraints
 
-- Branch `codex/010g1-family-refresh`, base `dd140b0`; latest committed Person metadata preparation
-  is **`c217df7`**. One primary writer; the previously authorized single
+- Branch `codex/010g1-family-refresh`, base `dd140b0`; latest committed sealing/lifecycle milestone
+  is **`9796b2c`**. One primary writer; the previously authorized single
   implementation reviewer remains reserved for the final review. Planning review
   READY, round 1. Preserve D-050's two review/fix rounds and final performance gate.
 - Do not merge, push or deploy. Preserve unrelated `docs/prompts/MODEL_ROUTING.md`
@@ -51,21 +51,28 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 ## Current verified milestone
 
-Person metadata preparation is committed at `c217df7`. The next checkpoint adds
-encrypted exact-row write recipes, bounded keyed sealing, ten-minute readiness,
-exact typed Confirm, scoped Cancel, explicit-admin Resume, and durable revoked-
-executor pause. Fixed-payer accounting and shared preparation survive partial
-cancellation. No native refresh execution or HTTP/Web workflow is exposed yet.
+Metadata execution now applies closed encrypted native recipes, refresh-owned
+catalog claims and atomic whole-Person deltas. Each commit revalidates source,
+identity, native state/revision, head and catalog snapshots; native writes,
+authenticated after-state, result, head CAS, counts and measured bytes settle
+atomically. The bounded execution runner releases each successful lease and can
+pause for storage, integrity or release readiness. It currently dispatches only
+metadata and is not connected to the application scheduler.
 
-The integrated family run passed 41 of 42 tests, including exact Confirm,
-rollback/replay and queued cancellation. Correcting the new revocation fixture
-and its shared-byte settlement then passed focused revocation/Resume coverage;
-the new partial-payer cancellation scenario passed too. Logs:
-`/private/tmp/010g1-lifecycle-family-db.log`,
-`/private/tmp/010g1-family_refresh_revoked_executor-db.log`, and
-`/private/tmp/010g1-family_refresh_partial_cancel-db.log`.
-Final library Clippy evidence is `/private/tmp/010g1-lifecycle-final-clippy.log`.
-Formatting/diff checks pass. The complete final slice-wide gates remain pending.
+Focused tests verify capacity, native/result rollback and retry, result pagination
+and tenant isolation, running cancellation/replay, full completion/count
+reconciliation and changed-catalog holds. Evidence:
+`/private/tmp/010g1-metadata-execution-db.log` and
+`/private/tmp/010g1-metadata-execution-terminal-db.log`.
+The integrated family run passed all 45 tests
+(`/private/tmp/010g1-metadata-execution-family-db.log`).
+Final focused execution checks also pass, including durable release-readiness
+pause, explicit Resume and completion
+(`/private/tmp/010g1-metadata-execution-final-db.log`).
+Library Clippy passes with warnings denied
+(`/private/tmp/010g1-metadata-execution-final-clippy.log`); 55 release-preflight
+checks pass (`/private/tmp/010g1-metadata-preflight-tests.log`). Formatting/diff
+checks pass. HTTP/Web exposure and the final slice-wide gates remain pending.
 
 ## Remaining implementation
 
@@ -75,9 +82,9 @@ Formatting/diff checks pass. The complete final slice-wide gates remain pending.
 2. Implement exact Remainder. Preserve frozen unfinished
    units, sources/mappings/targets and baseline heads; settled holds are not
    unfinished work. Complete cancellation/resume crash and capacity coverage.
-3. Implement metadata/activity/history execution, typed write proofs, exact source/
-   native/head/member/catalog revalidation, atomic results/accounting/heads and
-   after-state production. Preserve compatible reader capability inventories.
+3. Complete activity/history execution and metadata execution edge coverage,
+   including source/native/head/member/catalog revalidation, atomic results/
+   accounting/heads and after-state production. Preserve compatible reader capability inventories.
 4. Finish bounded results, field fragments, proof and history-version readers;
    wire HTTP routes and the common Web review/confirm/progress workflow. Preserve
    existing mobile/Operator/read-path compatibility and review-workspace gates.

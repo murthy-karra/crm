@@ -1167,6 +1167,22 @@ async fn family_refresh_catalog_handover_preserves_original_owners_and_charges(m
 async fn family_refresh_person_metadata_proposal_is_atomic_and_preserves_null_gaps(
     migrator: PgPool,
 ) {
+    metadata_execution_scenario(migrator, 0).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[ignore = "requires PostgreSQL migrator"]
+async fn family_refresh_metadata_execution_completes_and_reconciles(migrator: PgPool) {
+    metadata_execution_scenario(migrator, 1).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[ignore = "requires PostgreSQL migrator"]
+async fn family_refresh_metadata_execution_holds_changed_catalog(migrator: PgPool) {
+    metadata_execution_scenario(migrator, 2).await;
+}
+
+async fn metadata_execution_scenario(migrator: PgPool, mode: u8) {
     use crm_api::{
         auth::workspace::ReleaseReadiness,
         domain::migration::family_refresh::{
@@ -1641,6 +1657,237 @@ async fn family_refresh_person_metadata_proposal_is_atomic_and_preserves_null_ga
         native_before,
         "confirmation queues work without mutating native rows"
     );
+
+    use crm_api::domain::migration::family_refresh::{
+        execution, native_baseline::ResultData, result_queries,
+    };
+    let executing = execution::claim_next(&f.pool).await.unwrap().unwrap();
+    assert_eq!(executing.plan, claim.plan);
+    for turn in 0..30 {
+        let next=sqlx::query("SELECT u.kind,u.disposition,u.source_id FROM migration_family_refresh_plan p JOIN migration_family_refresh_manifest u ON u.plan_id=p.id AND u.organization_id=p.organization_id AND u.position=p.apply_position+1 WHERE p.id=$1").bind(claim.plan).fetch_one(&migrator).await.unwrap();
+        if next.get::<String, _>("kind") == "metadata"
+            && next.get::<String, _>("disposition") == "update"
+        {
+            break;
+        }
+        assert_eq!(
+            execution::apply_once(&f.pool, &f.key, &f.policy, &release, &executing)
+                .await
+                .unwrap(),
+            execution::Progress::Advanced
+        );
+        assert!(turn < 29);
+    }
+    let execution_checkpoint="SELECT jsonb_build_object('position',apply_position,'results',results,'measured',measured_bytes,'retained',retained_bytes,'reserved',reserved_bytes,'heads',(SELECT count(*) FROM migration_family_refresh_head WHERE organization_id=p.organization_id),'receipts',(SELECT count(*) FROM migration_family_refresh_result WHERE plan_id=p.id)) FROM migration_family_refresh_plan p WHERE id=$1";
+    let before_execution: Value = sqlx::query_scalar(execution_checkpoint)
+        .bind(claim.plan)
+        .fetch_one(&migrator)
+        .await
+        .unwrap();
+    let before_person: Value = sqlx::query_scalar(native_sql)
+        .bind(f.org)
+        .fetch_one(&migrator)
+        .await
+        .unwrap();
+    if mode == 2 {
+        sqlx::query("UPDATE tag SET name='Locally renamed',updated_at=clock_timestamp() WHERE organization_id=$1 AND id IN (SELECT target_id FROM migration_family_refresh_manifest WHERE plan_id=$2 AND kind='catalog' AND disposition='insert')").bind(f.org).bind(claim.plan).execute(&migrator).await.unwrap();
+        assert_eq!(
+            execution::apply_once(&f.pool, &f.key, &f.policy, &release, &executing)
+                .await
+                .unwrap(),
+            execution::Progress::Advanced
+        );
+        let reason:String=sqlx::query_scalar("SELECT r.reason FROM migration_family_refresh_result r JOIN migration_family_refresh_manifest u ON u.id=r.manifest_id AND u.organization_id=r.organization_id WHERE r.plan_id=$1 AND u.kind='metadata' AND u.source_id='101' AND r.disposition='held'").bind(claim.plan).fetch_one(&migrator).await.unwrap();
+        assert_eq!(reason, "target_unavailable");
+        assert!(!sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM migration_family_refresh_head WHERE organization_id=$1)"
+        )
+        .bind(f.org)
+        .fetch_one(&migrator)
+        .await
+        .unwrap());
+        assert_eq!(
+            sqlx::query_scalar::<_, Value>(native_sql)
+                .bind(f.org)
+                .fetch_one(&migrator)
+                .await
+                .unwrap(),
+            before_person
+        );
+        return;
+    }
+    assert_eq!(
+        execution::apply_once(&f.pool, &f.key, &tiny, &release, &executing)
+            .await
+            .unwrap(),
+        execution::Progress::Capacity
+    );
+    sqlx::raw_sql("CREATE FUNCTION test_native_result_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic native result fault'; END $$; CREATE TRIGGER test_native_result_fault BEFORE INSERT ON migration_family_refresh_result FOR EACH ROW EXECUTE FUNCTION test_native_result_fault()").execute(&migrator).await.unwrap();
+    assert!(
+        execution::apply_once(&f.pool, &f.key, &f.policy, &release, &executing)
+            .await
+            .is_err()
+    );
+    sqlx::raw_sql("DROP TRIGGER test_native_result_fault ON migration_family_refresh_result; DROP FUNCTION test_native_result_fault()").execute(&migrator).await.unwrap();
+    assert_eq!(
+        sqlx::query_scalar::<_, Value>(native_sql)
+            .bind(f.org)
+            .fetch_one(&migrator)
+            .await
+            .unwrap(),
+        before_person,
+        "a fault after native SQL rolls back every Person mutation"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, Value>(execution_checkpoint)
+            .bind(claim.plan)
+            .fetch_one(&migrator)
+            .await
+            .unwrap(),
+        before_execution
+    );
+    execution::apply_once(&f.pool, &f.key, &f.policy, &release, &executing)
+        .await
+        .unwrap();
+    let successful=sqlx::query("SELECT r.* FROM migration_family_refresh_result r JOIN migration_family_refresh_manifest u ON u.id=r.manifest_id AND u.organization_id=r.organization_id WHERE r.plan_id=$1 AND u.kind='metadata' AND u.source_id='101'").bind(claim.plan).fetch_one(&migrator).await.unwrap();
+    assert_eq!(successful.get::<String, _>("disposition"), "applied");
+    let proof: ResultData = Scope {
+        organization: claim.organization,
+        bundle: claim.bundle,
+        plan: claim.plan,
+        family: Family::Metadata,
+        revision: sealed.get("revision"),
+    }
+    .open(
+        &f.key,
+        successful.get("id"),
+        Purpose::Result,
+        successful.get("nonce"),
+        successful.get("ciphertext"),
+    )
+    .unwrap();
+    let proof = proof.after_state.unwrap();
+    let crm_api::domain::migration::family_refresh::native_baseline::State::Metadata {
+        snapshot,
+        ..
+    } = proof.state
+    else {
+        panic!("metadata after-state")
+    };
+    assert_eq!(snapshot.head, Some(successful.get::<Uuid, _>("id")));
+    assert_eq!(snapshot.revision, native.expected_revision + 3);
+    assert_eq!(sqlx::query_scalar::<_,Uuid>("SELECT result_id FROM migration_family_refresh_head WHERE organization_id=$1 AND kind='metadata'").bind(f.org).fetch_one(&migrator).await.unwrap(),successful.get::<Uuid,_>("id"));
+    let native_after: Value = sqlx::query_scalar(native_sql)
+        .bind(f.org)
+        .fetch_one(&migrator)
+        .await
+        .unwrap();
+    assert_ne!(native_after, before_person);
+    let page = result_queries::results(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        claim.bundle,
+        result_queries::ResultPage {
+            family: Family::Metadata,
+            plan_id: claim.plan,
+            cohort_id: None,
+            outcome: None,
+            limit: Some(1),
+            cursor: None,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(page.items.len(), 1);
+    assert!(page.next_cursor.is_some());
+    let mut foreign = f.ctx.clone();
+    foreign.organization_id = crm_api::ids::OrganizationId::new(Uuid::new_v4());
+    assert!(result_queries::results(
+        &f.pool,
+        &f.key,
+        &foreign,
+        claim.bundle,
+        result_queries::ResultPage {
+            family: Family::Metadata,
+            plan_id: claim.plan,
+            cohort_id: None,
+            outcome: None,
+            limit: Some(1),
+            cursor: page.next_cursor.clone()
+        }
+    )
+    .await
+    .is_err());
+    if mode == 1 {
+        preparation_worker::release(&f.pool, &executing)
+            .await
+            .unwrap();
+        assert_eq!(
+            execution::run_once(&f.pool, &f.key, &f.policy, None)
+                .await
+                .unwrap(),
+            Progress::Paused
+        );
+        assert_eq!(
+            sqlx::query_scalar::<_, String>(
+                "SELECT pause_reason FROM migration_family_refresh_plan WHERE id=$1"
+            )
+            .bind(claim.plan)
+            .fetch_one(&migrator)
+            .await
+            .unwrap(),
+            "release_not_ready"
+        );
+        assert_eq!(
+            sqlx::query_scalar::<_, Value>(native_sql)
+                .bind(f.org)
+                .fetch_one(&migrator)
+                .await
+                .unwrap(),
+            native_after
+        );
+        use crm_api::domain::migration::family_refresh::{lifecycle::FamilyControl, resume};
+        let resumed = resume::resume(
+            &f.pool,
+            &f.key,
+            &f.policy,
+            &release,
+            &f.ctx,
+            claim.bundle,
+            FamilyControl {
+                request_id: Uuid::new_v4(),
+                expected_revision: admitted.revision.clone(),
+                families: vec![Family::Metadata],
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(resumed.state, "queued");
+        for turn in 0..30 {
+            match execution::run_once(&f.pool, &f.key, &f.policy, Some(&release))
+                .await
+                .unwrap()
+            {
+                Progress::Advanced => assert!(turn < 29),
+                Progress::Idle => break,
+                Progress::Paused => panic!("unexpected pause"),
+            }
+        }
+        let completed = sqlx::query("SELECT p.state,p.position,p.apply_position,p.results,b.state AS bundle_state FROM migration_family_refresh_plan p JOIN migration_family_refresh_bundle b ON b.id=p.bundle_id WHERE p.id=$1").bind(claim.plan).fetch_one(&migrator).await.unwrap();
+        assert_eq!(completed.get::<String, _>("state"), "completed");
+        assert_eq!(completed.get::<String, _>("bundle_state"), "completed");
+        assert_eq!(
+            completed.get::<i64, _>("position"),
+            completed.get::<i64, _>("apply_position")
+        );
+        let totals: crm_api::domain::migration::family_refresh::model::Counts =
+            serde_json::from_value(completed.get("results")).unwrap();
+        assert!(totals.reconciles());
+        assert_eq!(totals.units, completed.get::<i64, _>("position") as u64);
+        assert!(execution::claim_next(&f.pool).await.unwrap().is_none());
+        return;
+    }
     use crm_api::domain::migration::family_refresh::lifecycle::{self, FamilyControl};
     let cancel_id = Uuid::new_v4();
     let cancel_command = || FamilyControl {
@@ -1665,6 +1912,6 @@ async fn family_refresh_person_metadata_proposal_is_atomic_and_preserves_null_ga
             .fetch_one(&migrator)
             .await
             .unwrap(),
-        native_before
+        native_after
     );
 }

@@ -107,7 +107,7 @@ pub async fn convert(
     if !record.reasons.is_empty() {
         return Ok(Conversion::Held(Hold::UnsupportedSource));
     }
-    let (mut tx, b, p) = preparation::begin(pool, claim).await?;
+    let (mut tx, b, p) = preparation::read_begin(pool, claim).await?;
     if p.get::<String, _>("family") != "metadata" || !p.get::<bool, _>("catalog_walk_complete") {
         return Err(MigrationError::ImportBusy);
     }

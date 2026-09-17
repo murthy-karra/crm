@@ -88,7 +88,7 @@ pub async fn convert(
     let Derived::Activity(record) = &selected.record else {
         return Err(MigrationError::Crypto);
     };
-    let (mut tx, b, p) = preparation::begin(pool, claim).await?;
+    let (mut tx, b, p) = preparation::read_begin(pool, claim).await?;
     if p.get::<String, _>("family") != "activity" || !p.get::<bool, _>("mappings_complete") {
         return Err(MigrationError::ImportBusy);
     }
@@ -167,7 +167,7 @@ pub async fn convert(
             }
         }
     }
-    let (mut tx, _, _) = preparation::begin(pool, claim).await?;
+    let (mut tx, _, _) = preparation::read_begin(pool, claim).await?;
     let mut uses = timezone.into_iter().collect::<Vec<_>>();
     let mut roles = BTreeMap::<String, Option<Uuid>>::new();
     let mut members = Members {

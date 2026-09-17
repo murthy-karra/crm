@@ -45,7 +45,7 @@ pub async fn qualify_field(
     let Some(name) = field.name.as_ref() else {
         return Ok(Qualification::Held(Hold::UnsupportedSource));
     };
-    let (mut tx, b, p) = preparation::begin(pool, claim).await?;
+    let (mut tx, b, p) = preparation::read_begin(pool, claim).await?;
     if p.get::<String, _>("family") != "metadata" || !p.get::<bool, _>("mappings_complete") {
         return Err(MigrationError::ImportBusy);
     }

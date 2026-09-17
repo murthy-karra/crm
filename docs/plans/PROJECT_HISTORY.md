@@ -2571,3 +2571,18 @@ update, null/missing gaps, outside/missing Persons and unchanged numeric values
 (`/private/tmp/010g1-person-metadata-number-db.log`). Library Clippy passed with
 warnings denied (`/private/tmp/010g1-person-metadata-final-clippy.log`); formatting
 and diff checks passed. Final slice-wide gates remain outstanding.
+
+## 010g1 sealing and lifecycle — 9796b2c — 2026-09-16
+
+Encrypted native row recipes and bounded keyed sealing established exact ready
+counts, digests and ten-minute expiry. Typed Confirm queues exact selected plans
+with a permanent capability requirement and replayable receipt. Cancel preserves
+completed units and shared payer preparation; Resume explicitly adopts the admin
+and atomically replenishes control capacity. Revoked executors pause durably.
+The integrated run passed 41/42; the corrected revocation fixture and settlement
+path passed its focused rerun, and partial-payer cancellation passed separately.
+Evidence: `/private/tmp/010g1-lifecycle-family-db.log`,
+`/private/tmp/010g1-family_refresh_revoked_executor-db.log`,
+`/private/tmp/010g1-family_refresh_partial_cancel-db.log`, and
+`/private/tmp/010g1-lifecycle-final-clippy.log`. No HTTP or native executor was
+connected to the scheduler in this milestone.

@@ -60,6 +60,17 @@ pub async fn confirm(
     id: Uuid,
     cmd: ConfirmFamilyRefresh,
 ) -> Result<PreparedBundle, MigrationError> {
+    confirm_with_readiness(pool, key, Some(release), ctx, id, cmd).await
+}
+
+pub async fn confirm_with_readiness(
+    pool: &PgPool,
+    key: &RawPayloadKey,
+    release: Option<&ReleaseReadiness>,
+    ctx: &CommandContext,
+    id: Uuid,
+    cmd: ConfirmFamilyRefresh,
+) -> Result<PreparedBundle, MigrationError> {
     let expected = revision(&cmd.expected_revision)?;
     let selected: BTreeSet<_> = cmd.families.iter().map(|p| p.family).collect();
     if selected.is_empty()
@@ -95,6 +106,7 @@ pub async fn confirm(
         return scope.open(key,cmd.request_id,Purpose::Receipt,r.get("nonce"),r.get("ciphertext"));
     }
     release
+        .ok_or(MigrationError::ReleaseNotReady)?
         .require_family_refresh(&mut tx)
         .await
         .map_err(|_| MigrationError::ReleaseNotReady)?;

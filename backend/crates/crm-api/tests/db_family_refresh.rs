@@ -654,6 +654,22 @@ async fn history_corrections_scenario(pool: PgPool, review: bool) {
                 assert_eq!(response.status(), axum::http::StatusCode::OK);
                 assert_eq!(response.headers()["cache-control"], "no-store");
             }
+            for cookie in [f.member_cookie.as_str(), ""] {
+                for suffix in ["?limit=1", "/2"] {
+                    let response =
+                        crate::common::get_with_cookie(&f.app, &format!("{route}{suffix}"), cookie)
+                            .await;
+                    assert_eq!(
+                        response.status(),
+                        if cookie.is_empty() {
+                            axum::http::StatusCode::UNAUTHORIZED
+                        } else {
+                            axum::http::StatusCode::FORBIDDEN
+                        }
+                    );
+                    assert_eq!(response.headers()["cache-control"], "no-store");
+                }
+            }
             for suffix in ["?limit=51", "?unknown=true", "/0", "/not-a-version"] {
                 let response =
                     crate::common::get_with_cookie(&f.app, &format!("{route}{suffix}"), &f.cookie)

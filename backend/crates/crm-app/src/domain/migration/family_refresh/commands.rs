@@ -68,6 +68,17 @@ pub async fn prepare(
     ctx: &CommandContext,
     cmd: PrepareFamilyRefresh,
 ) -> Result<PreparedBundle, MigrationError> {
+    prepare_with_readiness(pool, key, policy, Some(release), ctx, cmd).await
+}
+
+pub async fn prepare_with_readiness(
+    pool: &PgPool,
+    key: &RawPayloadKey,
+    policy: &SnapshotPolicy,
+    release: Option<&ReleaseReadiness>,
+    ctx: &CommandContext,
+    cmd: PrepareFamilyRefresh,
+) -> Result<PreparedBundle, MigrationError> {
     let families = cmd.families()?;
     let digest = crypto::request_digest(
         key,
@@ -191,7 +202,10 @@ pub async fn prepare(
             "profile_version":h.get::<String,_>("profile_version"),"parser_version":h.get::<String,_>("parser_version"),"schema_version":h.get::<String,_>("schema_version"),"source_user_id":h.get::<i64,_>("source_user_id").to_string(),"source_user_evidence_revision":h.get::<i32,_>("source_user_evidence_revision").to_string()});
     }
     if families.contains(&Family::Metadata) {
-        release.require_admitted_metadata(&mut tx).await?;
+        release
+            .ok_or(MigrationError::ReleaseNotReady)?
+            .require_admitted_metadata(&mut tx)
+            .await?;
         super::super::admitted_metadata::handover_qualified(&mut tx, key, ctx).await?;
     }
     let bundle = Uuid::new_v4();

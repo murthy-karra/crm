@@ -11,10 +11,26 @@ use axum::response::{IntoResponse, Response};
 
 pub async fn guard(State(state): State<AppState>, request: Request, next: Next) -> Response {
     let mobile = request.uri().path().starts_with("/api/mobile/v1/");
-    let no_store = request
+    let family_refresh = request
         .uri()
         .path()
-        .starts_with("/api/migrations/fub/activity-imports")
+        .starts_with("/api/migrations/fub/family-refreshes");
+    let history_versions = request
+        .extensions()
+        .get::<MatchedPath>()
+        .is_some_and(|route| {
+            matches!(
+                route.as_str(),
+                "/api/people/{id}/history/{kind}/{identity}/versions"
+                    | "/api/people/{id}/history/{kind}/{identity}/versions/{version}"
+            )
+        });
+    let no_store = family_refresh
+        || history_versions
+        || request
+            .uri()
+            .path()
+            .starts_with("/api/migrations/fub/activity-imports")
         || request
             .uri()
             .path()
@@ -109,6 +125,8 @@ async fn guard_inner(State(state): State<AppState>, request: Request, next: Next
                             | "/api/people/{id}/migration-review/inquiries"
                             | "/api/people/{id}/migration-review/timeline"
                             | "/api/people/{id}/migration-review/timeline/{kind}/{entry_id}"
+                            | "/api/people/{id}/history/{kind}/{identity}/versions"
+                            | "/api/people/{id}/history/{kind}/{identity}/versions/{version}"
                             | "/api/people/{id}/migration-review/notes"
                             | "/api/people/{id}/migration-review/notes/{note_id}"
                             | "/api/people/{id}/migration-review/tasks"

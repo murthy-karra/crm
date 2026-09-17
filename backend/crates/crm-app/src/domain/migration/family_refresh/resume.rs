@@ -28,6 +28,18 @@ pub async fn resume(
     id: Uuid,
     cmd: FamilyControl,
 ) -> Result<PreparedBundle, MigrationError> {
+    resume_with_readiness(pool, key, policy, Some(release), ctx, id, cmd).await
+}
+
+pub async fn resume_with_readiness(
+    pool: &PgPool,
+    key: &RawPayloadKey,
+    policy: &SnapshotPolicy,
+    release: Option<&ReleaseReadiness>,
+    ctx: &CommandContext,
+    id: Uuid,
+    cmd: FamilyControl,
+) -> Result<PreparedBundle, MigrationError> {
     let expected = revision(&cmd.expected_revision)?;
     let selected: BTreeSet<_> = cmd.families.iter().copied().collect();
     if selected.is_empty() || selected.len() != cmd.families.len() {
@@ -55,6 +67,7 @@ pub async fn resume(
         return scope.open(key,cmd.request_id,Purpose::Receipt,r.get("nonce"),r.get("ciphertext"));
     }
     release
+        .ok_or(MigrationError::ReleaseNotReady)?
         .require_family_refresh(&mut tx)
         .await
         .map_err(|_| MigrationError::ReleaseNotReady)?;

@@ -5,13 +5,13 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 ## Working constraints
 
-- Branch `codex/010g1-family-refresh`, base `dd140b0`; latest preceding activity execution milestone
-  is **`2ec476a`**. One primary writer; the previously authorized single
+- Branch `codex/010g1-family-refresh`, base `dd140b0`; latest preceding history reader milestone
+  is **`70a1131`**. One primary writer; the previously authorized single
   implementation reviewer remains reserved for the final review. Planning review
   READY, round 1. Preserve D-050's two review/fix rounds and final performance gate.
 - Do not merge, push or deploy. Preserve unrelated `docs/prompts/MODEL_ROUTING.md`
   and `.lavish/`, the shared 010e5 runtime, local verified 010e6 and native stores.
-- No common refresh command Web workflow is exposed yet; history version HTTP reads are installed. No refresh native
+- Common refresh HTTP commands/readers and history version reads are installed; the Web workflow remains pending. No refresh native
   executor is wired. This slice is not complete.
 
 ## Implemented foundation and preparation
@@ -72,6 +72,17 @@ Web transport tests pass 3/3 and typecheck passes
 (`/private/tmp/010g1-history-transport-web.log`,
 `/private/tmp/010g1-history-versions-web-typecheck.log`). These are reader checks;
 history native execution and the final performance gate remain outstanding.
+
+Common HTTP routes now expose Prepare, immutable Plan revisions, Confirm, Resume,
+Cancel, bundle/family/mapping/item summaries and results. Typed receipt replay
+precedes fresh readiness lookup validation. Strict DTOs and body/page bounds are
+preserved; outer workspace middleware also stamps no-store on rejected requests.
+The combined admission/API regression passes, including missing-readiness replay,
+member rejection and malformed controls (`/private/tmp/010g1-family-http-final-db.log`).
+History version member/unauthenticated response checks pass
+(`/private/tmp/010g1-history-version-auth-db.log`); Clippy passes with warnings
+denied (`/private/tmp/010g1-family-http-verified-clippy.log`). Field/detail and
+Remainder routes remain pending with their typed implementations.
 
 ## Remaining implementation
 

@@ -166,6 +166,59 @@ async fn family_refresh_prepare_combined_is_atomic_metered_and_replay_safe(pool:
         serde_json::to_value(replay).unwrap(),
         serde_json::to_value(&prepared).unwrap()
     );
+    let replay_without_readiness =
+        commands::prepare_with_readiness(&f.pool, &f.key, &tiny, None, &f.ctx, input())
+            .await
+            .unwrap();
+    assert_eq!(
+        serde_json::to_value(replay_without_readiness).unwrap(),
+        serde_json::to_value(&prepared).unwrap()
+    );
+    let root = "/api/migrations/fub/family-refreshes";
+    let response = crate::common::post_json_with_cookie(
+        &f.app,
+        root,
+        &f.cookie,
+        serde_json::to_value(input()).unwrap(),
+    )
+    .await;
+    assert_eq!(response.status(), axum::http::StatusCode::CREATED);
+    assert_eq!(response.headers()["cache-control"], "no-store");
+    assert_eq!(
+        crate::common::body_json(response).await,
+        serde_json::to_value(&prepared).unwrap()
+    );
+    let id = prepared.bundle_id;
+    let plan = prepared.families[0].plan_id;
+    for route in [
+        format!("{root}?parent_import_id={parent}"),
+        format!("{root}/{id}"),
+        format!("{root}/{id}/families"),
+        format!("{root}/{id}/items?family=metadata&plan_id={plan}"),
+        format!("{root}/{id}/mappings?family=metadata&plan_id={plan}"),
+        format!("{root}/{id}/results?family=metadata&plan_id={plan}"),
+    ] {
+        for (cookie, status) in [
+            (&f.cookie, axum::http::StatusCode::OK),
+            (&f.member_cookie, axum::http::StatusCode::FORBIDDEN),
+        ] {
+            let response = crate::common::get_with_cookie(&f.app, &route, cookie).await;
+            assert_eq!(response.status(), status, "{route}");
+            assert_eq!(response.headers()["cache-control"], "no-store");
+        }
+    }
+    for endpoint in ["plans", "confirm", "resume", "cancel"] {
+        let route = format!("{root}/{id}/{endpoint}");
+        let response = crate::common::post_json_with_cookie(
+            &f.app,
+            &route,
+            &f.cookie,
+            json!({"untrusted_role":"admin"}),
+        )
+        .await;
+        assert_eq!(response.status(), axum::http::StatusCode::BAD_REQUEST);
+        assert_eq!(response.headers()["cache-control"], "no-store");
+    }
     let after: serde_json::Value = sqlx::query_scalar(
         "SELECT to_jsonb(s) FROM migration_snapshot_storage s WHERE organization_id=$1",
     )

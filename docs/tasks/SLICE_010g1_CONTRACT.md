@@ -697,3 +697,15 @@ identity, kind, revision, endpoint and page size. All responses are no-store.
 Detail provenance adds capture ID and, for corrections, bundle/version IDs and
 `owner_kind: refresh`; correction attempt IDs are null. Web transport types and
 request helpers match these additive contracts.
+
+### Common HTTP admission and lifecycle
+
+The family-refresh root now serves typed Prepare/list and scoped detail, families,
+plans, confirm, resume, cancel, mappings, items and results routes. POST bodies
+reject unknown fields and are capped at 8 KiB (mapping Plan patches: 256 KiB).
+All results, including session/workspace/role and extractor failures, are no-store.
+Prepare/Confirm/Resume accept optional current readiness internally so an already
+authorized immutable receipt can replay before fresh readiness is required; a
+fresh consequential command still enforces the existing release gate. Exact
+Remainder and detailed field routes are not installed until their typed readers
+and commands are complete.

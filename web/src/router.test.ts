@@ -53,6 +53,22 @@ beforeEach(() => {
 })
 
 describe('router guards (SLICE_004 §10)', () => {
+  it('does not replay a public invitation over its successful acceptance navigation', async () => {
+    const lifecycle = await import('./sessionLifecycle')
+    vi.mocked(fetchMe).mockResolvedValue(ADMIN)
+    const router = freshRouter()
+    await router.push('/invite/synthetic-invitation')
+    const epoch = lifecycle.beginSessionTransition()
+    // Acceptance's callback starts navigation while the new cookie's /me
+    // verification settles. Replaying the old public route can cancel it.
+    const navigation = router.push('/today')
+    window.localStorage.removeItem(`crm.session-lifecycle.v1.pending.${epoch}`)
+    expect(lifecycle.completeSessionVerification(lifecycle.currentSessionGeneration())).toBe(true)
+    await navigation
+    await vi.waitFor(() => expect(lifecycle.useRouteAuthorizationReplayPending().value).toBe(false))
+    expect(router.currentRoute.value.path).toBe('/today')
+  })
+
   it('sends an unauthenticated visitor to /login, preserving the intended destination', async () => {
     // Persistent, not "Once": the guard re-runs (and re-fetches `me`, since
     // the query has no cached data after a 401) for the redirect target

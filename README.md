@@ -232,7 +232,7 @@ The response is HTTP 200 with `{"status":"ok"}` and a non-empty `x-request-id` h
 
 ### Checks
 
-Run the complete repository gate with no services running:
+Run the service-free repository gate:
 
 ```sh
 ./scripts/check
@@ -240,11 +240,20 @@ Run the complete repository gate with no services running:
 
 The Rust half runs in the foreground, in order: `cargo fmt --check`; `cargo clippy` (warnings denied); a production-shape `cargo check` (no test targets, so test-only symbols can't leak into deploy builds); the crate-boundary dependency fences (`cargo tree`, D-028 §5); `cargo nextest run`; and `cargo test --doc` (nextest cannot run doctests, and the `ids.rs` `compile_fail` doctests are load-bearing type-safety pins). Concurrently, the web half (lint, typecheck, Vitest, build) and the email-worker's `node --test` suite run in the background, their output printed as one block at the end — a web failure still fails the gate. Database-backed tests are compiled here (so fmt/clippy cover them) but `#[ignore]`d, so this stays service-free. Everything type-checks `query!`/`query_as!` macro calls offline against the committed `backend/.sqlx/` cache (root `.cargo/config.toml` sets `SQLX_OFFLINE=true` for every cargo invocation) rather than a live database — see "Offline query cache" below. Requires `cargo-nextest` (bootstrap installs it).
 
-Run the database-backed suite against the running local container (requires `dev-services up`; never prints a credential value):
+Run the database-backed suite and all stateful Web E2E journeys (requires `dev-services up`; never prints a credential value):
 
 ```sh
 ./scripts/check-db
 ```
+
+After the database integration suite passes, this command automatically runs all
+registered Playwright journey families, four at a time. Any E2E failure fails the
+gate; there is no separate opt-in. Set `CRM_E2E_CONCURRENCY=2` for a smaller Docker
+resource budget. Each family owns fresh services and data, while unchanged Docker
+images are reused. Reports, traces and videos are retained in `.e2e/runs/<run>/`.
+Docker Compose v2 and Python 3.10+ are required for this phase; it uses no live
+provider accounts or development database. See [E2E instructions](e2e/README.md).
+The service-free `check` also runs the E2E runner's safety/cache unit tests.
 
 This first checks that Centrifugo answers its health endpoint (a clear, immediate failure — never a skip — if the container is down), then re-verifies `backend/.sqlx/` against a throwaway, freshly-migrated database (`cargo sqlx prepare --check --workspace`, catching schema/type drift an offline compile cannot), then exercises the full session lifecycle, tenant isolation between two Organizations, session/membership revocation, the `crm_migrator`/`crm_app` role boundary, the append-only fact tables, the full lead-intake flow (including its two concurrency races), the Today read model, the realtime publisher's exact event contract per command, the Operator endpoint (validation, concurrency limits, tenant isolation through every tool, prompt-injection containment, and the append-only turn ledger — all driven by a scripted provider, never a real model), and — against the real Centrifugo container, reading `CENTRIFUGO_*` values from the environment because they must match the running container — connection-token scoping, cross-Organization channel isolation, expired/mis-signed token rejection, and no-replay reconnect recovery. Each DB-backed test runs against its own fresh ephemeral database with migrations applied from scratch. Requires sqlx-cli (see prerequisites above).
 

@@ -5,7 +5,8 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
 
-python3 -B -m unittest discover -s "$repo_root/scripts/tests" -p test_migration_release_preflight.py
+python3 -B -m unittest discover -s "$repo_root/scripts/tests" -p 'test_*.py'
+(cd "$repo_root" && python3 -B -m unittest e2e.test_runner)
 
 total_start=$SECONDS
 step_start=$SECONDS

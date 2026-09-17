@@ -1,0 +1,13 @@
+{
+  "name": "crm-journey-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test support/*.test.mjs",
+    "journey": "playwright test"
+  },
+  "dependencies": {
+    "@playwright/test": "1.63.0",
+    "pg": "8.16.3"
+  }
+}

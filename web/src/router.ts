@@ -251,6 +251,11 @@ export function createAppRouter(history: RouterHistory): Router {
     void router.isReady().catch(() => {}).then(() => {
       const current = router.currentRoute.value
       if (current === START_LOCATION) return undefined
+      // Invitation pages remain public for either identity. Replaying one
+      // cannot add authorization, but can cancel its acceptance callback's
+      // in-flight navigation to Today. Private destinations still run their
+      // normal guards, and login still replays to its authenticated landing.
+      if (current.meta.public && current.meta.allowAuthenticated) return undefined
       return router.replace({
         path: current.path,
         query: current.query,

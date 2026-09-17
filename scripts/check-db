@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs the DB-backed checks and test suite against the local container.
+# Runs DB-backed checks against the local container, then isolated Web E2E.
 # Requires ./scripts/dev-services up first. Never printed: any credential
 # value from .env.
 set -euo pipefail
@@ -117,6 +117,12 @@ echo "==> cargo nextest run --run-ignored only"
 # `cargo test --doc` from ./scripts/check.
 cd "$repo_root/backend"
 cargo nextest run --workspace --locked --run-ignored only
+step_done
+
+echo "==> stateful Web E2E (all families, isolated Docker environments)"
+# The runner ignores development credentials, reuses immutable images, and owns
+# fresh services/data for each family. Its nonzero exit fails this gate too.
+"$script_dir/e2e" --all --concurrency "${CRM_E2E_CONCURRENCY:-4}" --timeout 900
 step_done
 
 echo "==> all checks passed [total $((SECONDS - total_start))s]"

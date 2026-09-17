@@ -1,0 +1,155 @@
+{
+  "leads": {
+    "seed": "leads-v1",
+    "steps": [
+      "Verify seed and sign in distinct actors",
+      "New lead reaches People and Today through real realtime",
+      "Log contact clears inquiry work and records a fact",
+      "Repeat inquiry reuses the Person and preserves attribution",
+      "Change stage and hand work to another agent",
+      "Reload and a fresh session preserve accumulated state",
+      "Foreign Organization cannot read, mutate or receive events",
+      "Lost committed response retries the same submission once",
+      "Missed events and failed publication recover by refetch",
+      "Deactivation revokes session and realtime without erasing history",
+      "Verify final family isolation, request ledger and external silence"
+    ]
+  },
+  "workspace": {
+    "seed": "workspace-v1",
+    "steps": [
+      "Platform identity starts without tenant access",
+      "Create workspaces and their default stages through the Web",
+      "Invite and accept the first admin; reject invitation replay",
+      "Invite two members and enforce role boundaries",
+      "Reject demotion and deactivation of the last admin",
+      "Promote and demote a member with durable role history",
+      "Revoke and reissue invitations without reusing credentials",
+      "Deactivate a signed-in agent, retain attribution, then restore access",
+      "Enforce cross-Organization administration boundaries",
+      "Restore admin access through the platform without CRM access",
+      "Log out and switch identities without stale tenant data",
+      "Verify persisted state, audit attribution and family isolation"
+    ]
+  },
+  "tasks": {
+    "seed": "tasks-v1",
+    "steps": [
+      "Seeded workspace and independent task ownership",
+      "Create overdue work for another agent",
+      "Task permissions and tenant isolation",
+      "Complete from Today and verify history",
+      "Reopen completed work and recover persisted state",
+      "Snooze and verify the due-window boundary",
+      "Edit and transfer task responsibility",
+      "Complete only the task while inquiry work remains",
+      "Delete task content and verify tombstone",
+      "Prove scoped realtime and exact family isolation"
+    ]
+  },
+  "relationships": {
+    "seed": "relationships-v1",
+    "steps": [
+      "Seeded Person and isolated member sessions",
+      "Author creates and edits a shared note",
+      "Note ownership denial and admin tombstone deletion",
+      "Create and apply one normalized tag",
+      "Tag management changes with usage and role",
+      "Admin creates four typed field definitions",
+      "Members set and edit typed values",
+      "Invalid and cross-Organization writes leave state unchanged",
+      "Archive and restore definitions and options preserve values",
+      "Clear a value and verify durable isolated state"
+    ]
+  },
+  "lists": {
+    "seed": "lists-v1",
+    "steps": [
+      "Verify the isolated book and live actor sessions",
+      "Compose and persist a sorted personal list",
+      "Connect Today and keep unsaved previews private",
+      "Refresh list counts and membership through realtime",
+      "Share symbolic criteria and duplicate a personal copy",
+      "Enforce creator privacy and cross-Organization denial",
+      "Report a deleted tag as a partial Today source",
+      "Repair criteria and reject a stale revision",
+      "Delete the list and verify durable cleanup and isolation"
+    ]
+  },
+  "routing": {
+    "seed": "routing-v1",
+    "steps": [
+      "Seed operational intake and configure default assignment",
+      "Deliver pinned lead and prove default routing",
+      "Replay delivery and reject invalid transport",
+      "Switch to unassigned and preserve visible intake",
+      "Rotate through active members without consuming duplicate turns",
+      "Keep existing ownership on repeat inquiry",
+      "Inspect unresolved metadata and enforce raw-content access",
+      "Retry unresolved mail then discard without resurrection",
+      "Verify encrypted intake, scoped realtime and family isolation"
+    ]
+  },
+  "correspondence": {
+    "seed": "correspondence-v1",
+    "steps": [
+      "Verify capture addresses and isolated relationship book",
+      "Capture outbound mail and clear inquiry work",
+      "Capture reply-all and re-arm Today in realtime",
+      "Capture the next response and clear reply work",
+      "Recover backdated correspondence without duplicate history",
+      "Keep held correspondence private and tenant scoped",
+      "Link and dismiss held mail through the Web",
+      "Rotate the capture address and reject the old credential",
+      "Verify encrypted retention, metadata-only history and isolation"
+    ]
+  },
+  "operator": {
+    "seed": "operator-v1",
+    "steps": [
+      "Seeded work and authorized Operator read",
+      "Explain Today through authoritative tools",
+      "Dismiss a task proposal without creating work",
+      "Confirm one task and reject repeat confirmation",
+      "Complete with a receipt and Undo",
+      "Denied completion and foreign Person stay protected",
+      "Provider failure preserves application state",
+      "Reload and verify private audit and isolated durable state"
+    ]
+  },
+  "migration": {
+    "seed": "migration-v1",
+    "steps": [
+      "Connect synthetic source in an empty workspace",
+      "Assess source access and retain a durable report",
+      "Capture core source evidence and inspect coverage",
+      "Prepare overlap preview and immutable People plan",
+      "Map stages and agents without business writes",
+      "Confirm exact reviewed plan and enter review hold",
+      "Reconcile distinct imported People and provenance",
+      "Enforce member tenant and ordinary-mutation holds",
+      "Import retained tags and custom fields",
+      "Import readable notes and timezone-qualified tasks",
+      "Capture and import historical metadata without contact credit",
+      "Capture later source and compare retained changes",
+      "Review combined metadata activity and history refresh",
+      "Cancel one confirmed family while other families finish",
+      "Apply the exact unfinished activity remainder",
+      "Reload retained migration results and prove isolation"
+    ]
+  },
+  "calls": {
+    "seed": "calls-v1",
+    "steps": [
+      "Seed a callable Person with separate caller and owner",
+      "Start and ring through the real API and provider adapter",
+      "Answer records contact credit and rejects other callers",
+      "Reload recovers the caller-owned required outcome",
+      "Choose and correct the outcome without rewriting history",
+      "Busy produces an attempt and requires an explicit outcome",
+      "Provider and microphone failures produce no contact credit",
+      "Operator call dismissal and confirmation use the same lifecycle",
+      "Verify durable call facts and isolated provider evidence"
+    ]
+  }
+}

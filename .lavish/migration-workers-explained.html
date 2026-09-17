@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Migration workers, explained simply</title>
+  <style>
+    :root {
+      --cream: #F7F2E8;
+      --paper: #fffdf8;
+      --ink: #27282e;
+      --muted: #646772;
+      --subtle: #8b897f;
+      --line: #e5ded1;
+      --blue: #486789;
+      --blue-soft: #edf2f9;
+      --green: #486e59;
+      --green-soft: #edf5f0;
+      --amber: #9a641a;
+      --amber-soft: #fff4e5;
+      --violet: #6d5889;
+      --violet-soft: #f2eef7;
+      --shadow: 0 16px 40px rgba(60, 48, 28, .08);
+      --radius: 18px;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: var(--cream); color: var(--ink); font-family: var(--sans); }
+    body { line-height: 1.55; }
+    main { width: min(1120px, calc(100% - 32px)); margin: 0 auto; padding: 56px 0 80px; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { max-width: 820px; font-size: clamp(36px, 6vw, 68px); line-height: .98; letter-spacing: -.055em; margin-bottom: 22px; }
+    h2 { font-size: clamp(25px, 4vw, 38px); line-height: 1.08; letter-spacing: -.035em; margin-bottom: 12px; }
+    h3 { font-size: 17px; line-height: 1.2; margin-bottom: 8px; }
+    p { color: var(--muted); }
+    .eyebrow { color: var(--blue); text-transform: uppercase; letter-spacing: .14em; font-size: 11px; font-weight: 800; margin-bottom: 14px; }
+    .lede { max-width: 720px; font-size: 19px; line-height: 1.5; }
+    .hero { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(260px, .75fr); gap: 28px; align-items: end; margin-bottom: 42px; }
+    .hero-note { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; box-shadow: var(--shadow); }
+    .hero-note strong { display: block; font-size: 28px; letter-spacing: -.04em; margin-bottom: 6px; }
+    .hero-note span { color: var(--muted); font-size: 14px; }
+    section { margin-top: 62px; }
+    .section-intro { max-width: 760px; margin-bottom: 22px; }
+    .panel { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; box-shadow: var(--shadow); min-width: 0; }
+    .panel.soft-blue { background: var(--blue-soft); border-color: #d7e0ed; }
+    .panel.soft-green { background: var(--green-soft); border-color: #d7e8dc; }
+    .panel.soft-amber { background: var(--amber-soft); border-color: #f2dec1; }
+    .grid-2, .grid-3 { display: grid; gap: 18px; min-width: 0; }
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .kicker { font-size: 12px; color: var(--subtle); text-transform: uppercase; letter-spacing: .12em; font-weight: 800; }
+    .big-number { font-size: 44px; line-height: 1; letter-spacing: -.06em; font-weight: 800; margin: 8px 0; }
+    .small { font-size: 13px; color: var(--muted); }
+    .tag { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 9px; font-size: 12px; font-weight: 750; margin: 2px 3px 2px 0; }
+    .tag.blue { background: var(--blue-soft); color: var(--blue); }
+    .tag.green { background: var(--green-soft); color: var(--green); }
+    .tag.amber { background: var(--amber-soft); color: var(--amber); }
+    .tag.violet { background: var(--violet-soft); color: var(--violet); }
+    figure { margin: 0; }
+    figcaption { font-size: 13px; color: var(--muted); margin-top: 12px; }
+    svg { display: block; width: 100%; height: auto; overflow: visible; }
+    svg text { font-family: var(--sans); fill: var(--ink); }
+    .diagram { background: #fffdf8; border: 1px solid var(--line); border-radius: 16px; padding: 14px; }
+    .worker-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+    .worker { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; align-items: start; padding: 12px; background: #fff; border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
+    .worker-icon { width: 27px; height: 27px; border-radius: 9px; background: var(--blue-soft); color: var(--blue); display: grid; place-items: center; font-weight: 850; font-size: 12px; }
+    .worker b { display: block; font-size: 14px; line-height: 1.25; }
+    .worker span { display: block; color: var(--muted); font-size: 12px; margin-top: 3px; }
+    .steps { counter-reset: step; display: grid; gap: 12px; }
+    .step { counter-increment: step; display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 13px; align-items: start; }
+    .step::before { content: counter(step); width: 32px; height: 32px; border-radius: 50%; background: var(--blue); color: #fff; display: grid; place-items: center; font-weight: 800; }
+    .step p { margin-bottom: 0; font-size: 14px; }
+    .step strong { color: var(--ink); }
+    .compare { display: grid; grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr); gap: 14px; align-items: stretch; }
+    .compare .versus { display: grid; place-items: center; color: var(--subtle); font-weight: 800; }
+    .option { padding: 20px; border-radius: 16px; border: 1px solid var(--line); background: var(--paper); }
+    .option h3 { display: flex; justify-content: space-between; gap: 8px; }
+    .option ul { padding-left: 20px; margin-bottom: 0; color: var(--muted); font-size: 14px; }
+    .recommendation { border-left: 4px solid var(--green); padding: 13px 16px; background: var(--green-soft); border-radius: 0 12px 12px 0; margin-top: 18px; }
+    .codeish { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+    details { border-top: 1px solid var(--line); padding: 13px 0; }
+    details:first-of-type { border-top: 0; }
+    summary { cursor: pointer; font-weight: 750; }
+    .footer { margin-top: 60px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--subtle); font-size: 12px; }
+    @media (max-width: 760px) {
+      main { width: min(100% - 22px, 680px); padding-top: 32px; }
+      .hero, .grid-2, .grid-3, .compare { grid-template-columns: 1fr; }
+      .compare .versus { min-height: 24px; }
+      .worker-list { grid-template-columns: 1fr; }
+      section { margin-top: 44px; }
+      .panel { padding: 18px; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <div>
+      <div class="eyebrow">A beginner-friendly map of the migration system</div>
+      <h1>Fourteen tiny clerks, one API process, one shared ledger.</h1>
+      <p class="lede">The “workers” are background loops inside the Rust API. They are not fourteen servers. Each one watches a different kind of migration work, claims a small piece, does it, and writes the result back to PostgreSQL.</p>
+    </div>
+    <aside class="hero-note">
+      <strong>14 tasks × 1 API</strong>
+      <span>That is the current shape per API process. The three APIs on this Mac are a development API plus two mobile test fixtures.</span>
+    </aside>
+  </header>
+
+  <section>
+    <div class="section-intro">
+      <div class="eyebrow">Start here</div>
+      <h2>What is a worker?</h2>
+      <p>A worker is just a small background loop. It wakes up, asks “is there work for me?”, handles a bounded batch, records what happened, and sleeps again. When there is no work, it does not sit in a separate server waiting for a customer.</p>
+    </div>
+    <figure class="diagram">
+      <svg viewBox="0 0 1000 390" role="img" aria-labelledby="process-title process-desc">
+        <title id="process-title">One API process contains the HTTP server and background worker tasks</title>
+        <desc id="process-desc">A large API process box contains an HTTP server and fourteen worker bubbles. All workers read and write to one PostgreSQL ledger.</desc>
+        <rect x="26" y="30" width="650" height="310" rx="24" fill="#f8f4ec" stroke="#d8cfc0" stroke-width="2" id="api-box"/>
+        <text x="55" y="65" font-size="20" font-weight="800">one crm-api process</text>
+        <text x="55" y="88" font-size="13" fill="#646772">One OS process. Many lightweight async tasks.</text>
+        <rect x="55" y="112" width="180" height="66" rx="14" fill="#edf2f9" stroke="#cddceb" id="http-box"/>
+        <text x="76" y="140" font-size="16" font-weight="800">HTTP + auth</text>
+        <text x="76" y="160" font-size="12">browser / mobile requests</text>
+        <g id="worker-bubbles">
+          <circle cx="300" cy="130" r="20" fill="#edf5f0" stroke="#c8dfd0"/><circle cx="355" cy="130" r="20" fill="#edf5f0" stroke="#c8dfd0"/><circle cx="410" cy="130" r="20" fill="#edf5f0" stroke="#c8dfd0"/><circle cx="465" cy="130" r="20" fill="#edf5f0" stroke="#c8dfd0"/><circle cx="520" cy="130" r="20" fill="#edf5f0" stroke="#c8dfd0"/><circle cx="575" cy="130" r="20" fill="#edf5f0" stroke="#c8dfd0"/>
+          <circle cx="300" cy="195" r="20" fill="#f2eef7" stroke="#ded3ec"/><circle cx="355" cy="195" r="20" fill="#f2eef7" stroke="#ded3ec"/><circle cx="410" cy="195" r="20" fill="#f2eef7" stroke="#ded3ec"/><circle cx="465" cy="195" r="20" fill="#f2eef7" stroke="#ded3ec"/><circle cx="520" cy="195" r="20" fill="#f2eef7" stroke="#ded3ec"/><circle cx="575" cy="195" r="20" fill="#f2eef7" stroke="#ded3ec"/>
+          <circle cx="300" cy="260" r="20" fill="#fff4e5" stroke="#efd8b6"/><circle cx="355" cy="260" r="20" fill="#fff4e5" stroke="#efd8b6"/><circle cx="410" cy="260" r="20" fill="#fff4e5" stroke="#efd8b6"/><circle cx="465" cy="260" r="20" fill="#fff4e5" stroke="#efd8b6"/><circle cx="520" cy="260" r="20" fill="#fff4e5" stroke="#efd8b6"/><circle cx="575" cy="260" r="20" fill="#fff4e5" stroke="#efd8b6"/>
+          <text x="300" y="135" text-anchor="middle" font-size="11">1</text><text x="355" y="135" text-anchor="middle" font-size="11">2</text><text x="410" y="135" text-anchor="middle" font-size="11">3</text><text x="465" y="135" text-anchor="middle" font-size="11">4</text><text x="520" y="135" text-anchor="middle" font-size="11">5</text><text x="575" y="135" text-anchor="middle" font-size="11">6</text>
+          <text x="300" y="200" text-anchor="middle" font-size="11">7</text><text x="355" y="200" text-anchor="middle" font-size="11">8</text><text x="410" y="200" text-anchor="middle" font-size="11">9</text><text x="465" y="200" text-anchor="middle" font-size="11">10</text><text x="520" y="200" text-anchor="middle" font-size="11">11</text><text x="575" y="200" text-anchor="middle" font-size="11">12</text>
+          <text x="300" y="265" text-anchor="middle" font-size="11">13</text><text x="355" y="265" text-anchor="middle" font-size="11">14</text>
+        </g>
+        <text x="452" y="306" text-anchor="middle" font-size="12" fill="#646772">background migration tasks</text>
+        <rect x="750" y="120" width="210" height="120" rx="18" fill="#fff4e5" stroke="#efd8b6" stroke-width="2" id="db-box"/>
+        <text x="855" y="158" text-anchor="middle" font-size="18" font-weight="800">PostgreSQL</text>
+        <text x="855" y="181" text-anchor="middle" font-size="12">the shared ledger</text>
+        <text x="855" y="204" text-anchor="middle" font-size="12">queue • lease • result</text>
+        <path d="M676 176 H750" stroke="#9a641a" stroke-width="3" marker-end="url(#arrow)"/><path d="M750 215 H676" stroke="#9a641a" stroke-width="3" marker-end="url(#arrow)"/>
+        <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#9a641a"/></marker></defs>
+      </svg>
+      <figcaption>The workers are concurrent tasks inside one process. PostgreSQL remains the authority: workers use it to claim work and record results.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="section-intro">
+      <div class="eyebrow">The fourteen roles</div>
+      <h2>What does each worker do?</h2>
+      <p>These names sound bigger than they are. Each one owns a narrow slice of the migration pipeline. Most of the time, most of them are idle.</p>
+    </div>
+    <div class="worker-list">
+      <div class="worker"><div class="worker-icon">1</div><div><b>Core change</b><span>Applies safe changes to the original imported records.</span></div></div>
+      <div class="worker"><div class="worker-icon">2</div><div><b>People refresh</b><span>Updates People when a later source snapshot changes them.</span></div></div>
+      <div class="worker"><div class="worker-icon">3</div><div><b>People admission</b><span>Decides which newly found People can enter the workspace.</span></div></div>
+      <div class="worker"><div class="worker-icon">4</div><div><b>Admitted-People refresh</b><span>Refreshes records that already passed the admission gate.</span></div></div>
+      <div class="worker"><div class="worker-icon">5</div><div><b>Admitted metadata</b><span>Imports tags and custom fields for admitted People.</span></div></div>
+      <div class="worker"><div class="worker-icon">6</div><div><b>General migration</b><span>Runs the older, shared import queue used by earlier slices.</span></div></div>
+      <div class="worker"><div class="worker-icon">7</div><div><b>Snapshot</b><span>Creates a stable picture of source data before processing it.</span></div></div>
+      <div class="worker"><div class="worker-icon">8</div><div><b>History capture</b><span>Fetches qualifying source history and stores a retained checkpoint.</span></div></div>
+      <div class="worker"><div class="worker-icon">9</div><div><b>History import</b><span>Turns a retained checkpoint into durable history facts.</span></div></div>
+      <div class="worker"><div class="worker-icon">10</div><div><b>Admitted-history import</b><span>Imports history only for People who successfully passed admission.</span></div></div>
+      <div class="worker"><div class="worker-icon">11</div><div><b>People import</b><span>Builds the original People records from source data.</span></div></div>
+      <div class="worker"><div class="worker-icon">12</div><div><b>Activity import</b><span>Imports notes, tasks, calls, or other activity records.</span></div></div>
+      <div class="worker"><div class="worker-icon">13</div><div><b>Admitted activity</b><span>Imports activity only after the Person is admitted.</span></div></div>
+      <div class="worker"><div class="worker-icon">14</div><div><b>Metadata import</b><span>Processes the older metadata queue and its review states.</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-intro">
+      <div class="eyebrow">One migration, end to end</div>
+      <h2>Example: admitted-People history</h2>
+      <p>Mobile007 is the mobile feature name. 010d3 is the migration feature name. For this example, the capture worker and admitted-history worker do most of the special work; the other workers keep supporting queues available.</p>
+    </div>
+    <div class="panel">
+      <div class="steps">
+        <div class="step"><div><strong>Admin asks for a preview.</strong><p>The API checks the Organization, source connection, migration workspace, and which People are truly admitted.</p></div></div>
+        <div class="step"><div><strong>Capture stores a safe checkpoint.</strong><p>The history-capture worker reads qualifying retained source data and stores an encrypted checkpoint. The later import does not need to call the source again.</p></div></div>
+        <div class="step"><div><strong>Admin reviews and confirms.</strong><p>The Web screen shows counts, held records, and ambiguity. Confirmation is required before facts are written.</p></div></div>
+        <div class="step"><div><strong>One worker claims a small batch.</strong><p>The admitted-history worker claims up to 50 units with a lease. If another API replica sees the same row, the lease prevents duplicate work.</p></div></div>
+        <div class="step"><div><strong>Facts and provenance are written.</strong><p>Each result is linked to the correct Person and source identity. Success, hold, or failure is recorded separately.</p></div></div>
+        <div class="step"><div><strong>Cancel and resume stay exact.</strong><p>Completed facts remain. The unprocessed remainder is recorded, so Resume continues from the right place without re-importing settled work.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-intro">
+      <div class="eyebrow">The question behind the CPU spike</div>
+      <h2>Could one supervisor wake workers up?</h2>
+      <p>Yes. That would be a different runtime shape, not a change to the migration rules. The database must remain the source of truth even if a supervisor sends wake-up signals.</p>
+    </div>
+    <div class="compare">
+      <div class="option">
+        <h3>Current: workers check the ledger <span class="tag blue">today</span></h3>
+        <ul>
+          <li>One API process owns the HTTP server and worker tasks.</li>
+          <li>Each worker wakes on a timer, usually once per second or slower.</li>
+          <li>It claims work with a database lease.</li>
+          <li>Simple to run and already implemented.</li>
+          <li>Idle workers create repeated database reads.</li>
+        </ul>
+      </div>
+      <div class="versus">vs</div>
+      <div class="option soft-green">
+        <h3>Possible later: supervisor + worker process <span class="tag green">proposal</span></h3>
+        <ul>
+          <li>A supervisor watches for new queue work.</li>
+          <li>It sends a wake-up signal to a worker process.</li>
+          <li>The worker still claims from PostgreSQL before doing anything.</li>
+          <li>A slow safety sweep handles missed signals or restarts.</li>
+          <li>Fewer idle reads, but more moving parts to operate.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="recommendation"><strong>My recommendation:</strong> keep the in-process model for the first production deployment, with one API pod. Before adding multiple API replicas, measure worker and database load. If idle polling is still material, extract one dedicated migration-worker Deployment or add a supervisor with durable wake-up semantics. A notification must be a hint, never the only record of work.</div>
+  </section>
+
+  <section>
+    <div class="section-intro">
+      <div class="eyebrow">How the supervisor idea would work</div>
+      <h2>Signal first, verify second</h2>
+      <p>The safe design is not “the supervisor tells the worker what is true.” It is “the supervisor says something may have changed; the worker checks the authoritative ledger.”</p>
+    </div>
+    <figure class="diagram">
+      <svg viewBox="0 0 1000 300" role="img" aria-labelledby="super-title super-desc">
+        <title id="super-title">Supervisor and worker design</title>
+        <desc id="super-desc">A write creates durable queue state in PostgreSQL, a supervisor receives a wake-up hint, and a worker verifies and claims the work from PostgreSQL.</desc>
+        <defs><marker id="arrow2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#486789"/></marker></defs>
+        <rect x="30" y="92" width="170" height="92" rx="16" fill="#edf2f9" stroke="#cddceb" id="writer"/><text x="115" y="127" text-anchor="middle" font-size="17" font-weight="800">API command</text><text x="115" y="150" text-anchor="middle" font-size="12">creates queue row</text>
+        <rect x="300" y="60" width="220" height="156" rx="18" fill="#fff4e5" stroke="#efd8b6" id="supervisor-db"/><text x="410" y="99" text-anchor="middle" font-size="18" font-weight="800">PostgreSQL</text><text x="410" y="122" text-anchor="middle" font-size="12">durable queue + lease</text><text x="410" y="150" text-anchor="middle" font-size="12">notification = hint</text><text x="410" y="177" text-anchor="middle" font-size="12">truth = row state</text>
+        <rect x="620" y="42" width="155" height="72" rx="16" fill="#f2eef7" stroke="#ded3ec" id="supervisor"/><text x="698" y="72" text-anchor="middle" font-size="16" font-weight="800">Supervisor</text><text x="698" y="94" text-anchor="middle" font-size="12">wake-up watcher</text>
+        <rect x="620" y="162" width="155" height="72" rx="16" fill="#edf5f0" stroke="#c8dfd0" id="worker"/><text x="698" y="192" text-anchor="middle" font-size="16" font-weight="800">Worker</text><text x="698" y="214" text-anchor="middle" font-size="12">claims + processes</text>
+        <path d="M200 138 H300" stroke="#486789" stroke-width="3" marker-end="url(#arrow2)"/><path d="M520 100 H620" stroke="#486789" stroke-width="3" marker-end="url(#arrow2)"/><path d="M520 178 H620" stroke="#486789" stroke-width="3" marker-end="url(#arrow2)"/><path d="M698 114 V162" stroke="#486789" stroke-width="3" stroke-dasharray="6 6" marker-end="url(#arrow2)"/>
+        <text x="558" y="91" text-anchor="middle" font-size="11" fill="#646772">wake hint</text><text x="558" y="169" text-anchor="middle" font-size="11" fill="#646772">claim/check</text>
+        <rect x="825" y="92" width="145" height="92" rx="16" fill="#f8f4ec" stroke="#d8cfc0" id="safety"/><text x="898" y="126" text-anchor="middle" font-size="15" font-weight="800">Safety sweep</text><text x="898" y="149" text-anchor="middle" font-size="12">every 30–60s</text><text x="898" y="169" text-anchor="middle" font-size="12">missed signals recover</text>
+        <path d="M775 198 H825" stroke="#9a641a" stroke-width="3" marker-end="url(#arrow2)"/>
+      </svg>
+      <figcaption>A supervisor reduces idle polling, but it cannot replace durable queue rows, leases, retries, or a periodic recovery sweep.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="grid-3">
+      <div class="panel soft-blue"><div class="kicker">Mobile006</div><div class="big-number">feature</div><p>Offline tags and custom fields on the phone. It is an app capability, not a production pod.</p></div>
+      <div class="panel soft-green"><div class="kicker">Mobile007</div><div class="big-number">feature</div><p>Find and save People from the phone. It shares the same mobile API and database authority.</p></div>
+      <div class="panel soft-amber"><div class="kicker">Production</div><div class="big-number">one fleet</div><p>One versioned API/Web release contains both features. Test-only API ports 3101 and 3106 disappear.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-intro"><div class="eyebrow">Bottom line</div><h2>What should we do?</h2></div>
+    <div class="panel">
+      <details open><summary>Now</summary><p>Run one shared-development API. Stop the two mobile fixture APIs when mobile testing is finished. That immediately removes roughly two redundant copies of the worker set.</p></details>
+      <details><summary>Before production has multiple API replicas</summary><p>Measure database traffic, source rate limits, connection usage, and lease handoff. Decide whether in-process workers remain replicated or move to one dedicated worker Deployment.</p></details>
+      <details><summary>If we build the supervisor design</summary><p>Use PostgreSQL queue rows and leases as the truth. Use notifications only as wake-up hints. Keep a slow safety sweep so a lost signal cannot strand work.</p></details>
+    </div>
+  </section>
+
+  <div class="footer">Sources: <span class="codeish">backend/crates/crm-api/src/lib.rs</span>, <span class="codeish">docs/architecture/ARCHITECTURE_BASELINE.md</span>, and <span class="codeish">docs/plans/PRODUCTION_READINESS.md</span>. Current worker counts describe the checked-in API composition, not a final production topology.</div>
+</main>
+</body>
+</html>

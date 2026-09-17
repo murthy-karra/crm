@@ -75,6 +75,40 @@ limit, ownership boundaries and isolated build/test resources. When delegated,
 prefer a compact self-contained brief over a full conversation fork where the
 runner supports it; include all relevant approvals, restrictions and dependencies.
 
+## Claude Code side: effort per stage
+
+Recorded **2026-09-15** after reviewing Anthropic's published effort/cost
+measurements. The Claude session runs Fable 5.1; the three helper agents in
+`~/.claude/agents/` (crm-planner, crm-reviewer, crm-tester) inherit the session
+effort unless their frontmatter sets `effort:`. Stage defaults:
+
+| Stage | Effort | Basis |
+|---|---|---|
+| Coordination thread: discover, reconcile, state, final gates | `high` | flat curve for knowledge work; `max` adds cost and overthinking |
+| Fact-finding sweeps before planning (Explore agent) | `low` | subagent work; fewer, consolidated tool calls |
+| 02/03 crm-planner | `high` | over-gathering at higher effort is the stall mode already recorded |
+| 04/06 crm-reviewer | `high`; `xhigh` only for money, history or erasure rungs | D-050 filters findings; more findings is not more value |
+| 06 crm-tester | `high`; `xhigh` for TRUST-heavy rungs | adversarial search is the one curve where each step bought points |
+| 05 implementation lane on Claude | Sonnet 5 `high`, or Fable `medium` as a measured trial | coding is the steep curve: `medium` loses about 2 points for half the cost |
+| 07 deploy with a proven runbook, 09 handoff | `medium` | mechanical |
+| One named hard problem with a bounded objective | `max` | the only place the measurements show it earning its cost |
+
+Rules:
+
+- Lanes run at the assigned level and use the gates as the failure signal. After
+  two failed repairs at that level, relaunch the fix one level up with the failing
+  check as the brief (escalation rule 3 below). This happens inside the lane and
+  does not consume a D-050 review round.
+- Do not run implementation lanes at `max`: at higher effort Fable performs
+  unrequested tidying and refactoring, which AGENTS.md forbids.
+- The Agent tool has no per-call effort parameter; a different level needs a
+  separate agent file (for example a `crm-reviewer-deep` at `xhigh`).
+- The session default lives in `~/.claude/settings.json` (`effortLevel`), which
+  is global to all projects; changing it is the user's call.
+- Published figures are mostly Fable 5 / Opus 5; nothing is published for
+  `xhigh` or `max` on Fable 5.1. Measure one rung at `high` against the previous
+  rung at `max` using the handoff record before treating this as settled.
+
 ## Escalate based on evidence
 
 1. Before escalation, check the brief, evidence and environment. Missing services,

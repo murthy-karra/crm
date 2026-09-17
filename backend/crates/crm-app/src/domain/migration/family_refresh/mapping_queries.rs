@@ -199,3 +199,101 @@ pub async fn mappings(
     tx.commit().await?;
     Ok(result)
 }
+
+/// Current scoped suggestions only. Selecting one still goes through Plan,
+/// which snapshots and revalidates its exact compatible destination.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TargetPage {
+    pub limit: Option<u16>,
+    pub cursor: Option<String>,
+}
+#[derive(Serialize)]
+pub struct Target {
+    pub id: Uuid,
+    pub label: String,
+    pub field_type: Option<String>,
+    pub status: Option<String>,
+}
+#[derive(Serialize)]
+pub struct Targets {
+    pub mapping_id: Uuid,
+    pub items: Vec<Target>,
+    pub next_cursor: Option<String>,
+}
+#[tracing::instrument(skip_all,fields(organization_id=%ctx.organization_id.0,bundle_id=%bundle,mapping_id=%mapping))]
+pub async fn targets(
+    pool: &PgPool,
+    key: &RawPayloadKey,
+    ctx: &CommandContext,
+    bundle: Uuid,
+    mapping: Uuid,
+    q: TargetPage,
+) -> Result<Targets, MigrationError> {
+    let limit = q.limit.unwrap_or(25);
+    if limit == 0 || limit > PAGE_MAX {
+        return Err(MigrationError::InvalidInput);
+    }
+    let mut tx = super::queries::begin(pool, ctx).await?;
+    let b=sqlx::query("SELECT b.revision,b.parent_import_id,b.parent_plan_id,o.workspace_revision FROM migration_family_refresh_bundle b JOIN migration_workspace w ON w.organization_id=b.organization_id AND w.import_id=b.parent_import_id AND w.plan_id=b.parent_plan_id JOIN organization o ON o.id=b.organization_id WHERE b.id=$1 AND b.organization_id=$2 FOR SHARE OF b").bind(bundle).bind(ctx.organization_id.0).fetch_optional(&mut *tx).await?.ok_or(MigrationError::NotFound)?;
+    let row=sqlx::query("SELECT m.kind,m.plan_id,p.revision,parent.target_id AS parent_target FROM migration_family_refresh_mapping m JOIN migration_family_refresh_plan p ON p.id=m.plan_id AND p.bundle_id=m.bundle_id AND p.organization_id=m.organization_id LEFT JOIN migration_family_refresh_mapping parent ON parent.id=m.parent_id AND parent.plan_id=m.plan_id AND parent.organization_id=m.organization_id WHERE m.id=$1 AND m.bundle_id=$2 AND m.organization_id=$3 FOR SHARE OF p").bind(mapping).bind(bundle).bind(ctx.organization_id.0).fetch_optional(&mut *tx).await?.ok_or(MigrationError::NotFound)?;
+    let kind: String = row.get("kind");
+    let scope=serde_json::to_string(&serde_json::json!({"engine":ENGINE,"actor":ctx.actor_user_id.0,"organization":ctx.organization_id.0,"bundle":bundle,"bundle_revision":b.get::<i64,_>("revision"),"parent":b.get::<Uuid,_>("parent_import_id"),"workspace":b.get::<Uuid,_>("parent_plan_id"),"workspace_revision":b.get::<i64,_>("workspace_revision"),"plan":row.get::<Uuid,_>("plan_id"),"plan_revision":row.get::<i64,_>("revision"),"mapping":mapping,"kind":kind,"endpoint":"mapping_targets","limit":limit,"order":"id_asc"})).map_err(|_|MigrationError::Crypto)?;
+    let after: Option<Uuid> = snapshot::decode_cursor(
+        key,
+        ctx.organization_id,
+        bundle,
+        &scope,
+        q.cursor.as_deref(),
+    )?
+    .map(serde_json::from_value)
+    .transpose()
+    .map_err(|_| MigrationError::InvalidInput)?;
+    let sql=match kind.as_str(){
+        "tag"=>"SELECT id,name AS label,NULL::text AS field_type,NULL::text AS status FROM tag WHERE organization_id=$1 AND ($2::uuid IS NULL OR id>$2) AND $3::uuid IS NULL ORDER BY id LIMIT $4",
+        "field"=>"SELECT id,label,field_type,NULL::text AS status FROM custom_field WHERE organization_id=$1 AND archived_at IS NULL AND ($2::uuid IS NULL OR id>$2) AND $3::uuid IS NULL ORDER BY id LIMIT $4",
+        "option"=>"SELECT o.id,o.label,NULL::text AS field_type,NULL::text AS status FROM custom_field_option o JOIN custom_field f ON f.id=o.field_id AND f.organization_id=o.organization_id WHERE o.organization_id=$1 AND o.archived_at IS NULL AND f.archived_at IS NULL AND ($2::uuid IS NULL OR o.id>$2) AND o.field_id=$3 ORDER BY o.id LIMIT $4",
+        "note_author"|"task_creator"=>"SELECT u.id,u.display_name AS label,NULL::text AS field_type,m.status FROM organization_membership m JOIN app_user u ON u.id=m.user_id WHERE m.organization_id=$1 AND ($2::uuid IS NULL OR u.id>$2) AND $3::uuid IS NULL ORDER BY u.id LIMIT $4",
+        "task_assignee"=>"SELECT u.id,u.display_name AS label,NULL::text AS field_type,m.status FROM organization_membership m JOIN app_user u ON u.id=m.user_id WHERE m.organization_id=$1 AND m.status='active' AND ($2::uuid IS NULL OR u.id>$2) AND $3::uuid IS NULL ORDER BY u.id LIMIT $4",
+        _=>return Err(MigrationError::InvalidInput),
+    };
+    let rows = sqlx::query(sql)
+        .bind(ctx.organization_id.0)
+        .bind(after)
+        .bind(row.get::<Option<Uuid>, _>("parent_target"))
+        .bind(i64::from(limit) + 1)
+        .fetch_all(&mut *tx)
+        .await?;
+    let items: Vec<Target> = rows
+        .iter()
+        .take(usize::from(limit))
+        .map(|r| Target {
+            id: r.get("id"),
+            label: r.get("label"),
+            field_type: r.get("field_type"),
+            status: r.get("status"),
+        })
+        .collect();
+    for item in &items {
+        super::queries::bounded(item, 4096)?;
+    }
+    let next_cursor = if rows.len() > items.len() {
+        Some(snapshot::encode_cursor(
+            key,
+            ctx.organization_id,
+            bundle,
+            &scope,
+            &serde_json::json!(items.last().ok_or(MigrationError::Crypto)?.id),
+        )?)
+    } else {
+        None
+    };
+    let result = Targets {
+        mapping_id: mapping,
+        items,
+        next_cursor,
+    };
+    super::queries::bounded(&result, RESPONSE_BYTES)?;
+    tx.commit().await?;
+    Ok(result)
+}

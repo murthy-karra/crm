@@ -1861,6 +1861,8 @@ async fn activity_execution_scenario(pool: PgPool, mode: u8) {
     }
     let mut changed = db_activity_source::task(21);
     changed["name"] = json!("Updated retained title");
+    changed["reviewLargeNumber"] = json!(9007199254740993123_u64);
+    changed["reviewLongValue"] = json!("🙂é".repeat(6000));
     f.reader.set_records(
         Stream::TasksOpen,
         vec![
@@ -2013,6 +2015,76 @@ async fn activity_execution_scenario(pool: PgPool, mode: u8) {
         family: Family::Activity,
         revision: 2,
     };
+    let mapping:Uuid=sqlx::query_scalar("SELECT id FROM migration_family_refresh_mapping WHERE plan_id=$1 AND kind='task_assignee' LIMIT 1").bind(plan).fetch_one(&pool).await.unwrap();
+    use crm_api::domain::migration::family_refresh::mapping_queries::{targets, TargetPage};
+    let targets_page = targets(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        claim.bundle,
+        mapping,
+        TargetPage {
+            limit: Some(1),
+            cursor: None,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(targets_page.items.len(), 1);
+    assert_eq!(targets_page.items[0].status.as_deref(), Some("active"));
+    if let Some(cursor) = targets_page.next_cursor {
+        assert!(targets(
+            &f.pool,
+            &f.key,
+            &f.ctx,
+            claim.bundle,
+            mapping,
+            TargetPage {
+                limit: Some(2),
+                cursor: Some(cursor.clone())
+            }
+        )
+        .await
+        .is_err());
+        let next = targets(
+            &f.pool,
+            &f.key,
+            &f.ctx,
+            claim.bundle,
+            mapping,
+            TargetPage {
+                limit: Some(1),
+                cursor: Some(cursor),
+            },
+        )
+        .await
+        .unwrap();
+        assert_ne!(targets_page.items[0].id, next.items[0].id);
+    }
+    assert!(targets(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        Uuid::new_v4(),
+        mapping,
+        TargetPage {
+            limit: None,
+            cursor: None
+        }
+    )
+    .await
+    .is_err());
+    let response = crate::common::get_with_cookie(
+        &f.app,
+        &format!(
+            "/api/migrations/fub/family-refreshes/{}/mappings/{mapping}/targets",
+            claim.bundle
+        ),
+        &f.cookie,
+    )
+    .await;
+    assert_eq!(response.status(), axum::http::StatusCode::OK);
+    assert_eq!(response.headers()["cache-control"], "no-store");
     let mut ids = Vec::new();
     for source in ["21", "22"] {
         let Prepared::Unit(id) = activity_plan::prepare_unit(
@@ -2028,6 +2100,7 @@ async fn activity_execution_scenario(pool: PgPool, mode: u8) {
         .unwrap() else {
             panic!("qualified proposal must persist")
         };
+        assert_review_fields(&f, claim.bundle, id, false).await;
         ids.push(id);
         let row = sqlx::query("SELECT * FROM migration_family_refresh_manifest WHERE id=$1")
             .bind(id)
@@ -2205,6 +2278,12 @@ async fn activity_execution_scenario(pool: PgPool, mode: u8) {
     if mode == 2 {
         sqlx::query("UPDATE task SET title='Local task title' WHERE organization_id=$1 AND source_external_id LIKE '%:21'").bind(f.org).execute(&pool).await.unwrap();
     }
+    let review_revision_before: i64 =
+        sqlx::query_scalar(crm_api::domain::migration::activity_review::REVIEW_REVISION_SQL)
+            .bind(f.org)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     let executing = execution::claim_next(&f.pool).await.unwrap().unwrap();
     let checkpoint_sql="SELECT jsonb_build_object('tasks',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM task t WHERE organization_id=p.organization_id),'heads',(SELECT count(*) FROM migration_family_refresh_head WHERE organization_id=p.organization_id),'identities',(SELECT count(*) FROM migration_activity_identity WHERE organization_id=p.organization_id),'results',(SELECT count(*) FROM migration_family_refresh_result WHERE plan_id=p.id),'position',apply_position,'measured',measured_bytes,'retained',retained_bytes,'reserved',reserved_bytes) FROM migration_family_refresh_plan p WHERE id=$1";
     let before: serde_json::Value = sqlx::query_scalar(checkpoint_sql)
@@ -2315,6 +2394,48 @@ async fn activity_execution_scenario(pool: PgPool, mode: u8) {
         .unwrap(),
         if mode == 2 { 2 } else { 3 }
     );
+    let coverage=sqlx::query("SELECT counts->>'source_only' AS proposed,results->>'source_only' AS settled FROM migration_family_refresh_plan WHERE id=$1").bind(plan).fetch_one(&pool).await.unwrap();
+    assert_eq!(
+        coverage.get::<String, _>("proposed"),
+        coverage.get::<String, _>("settled")
+    );
+    let review_revision_after: i64 =
+        sqlx::query_scalar(crm_api::domain::migration::activity_review::REVIEW_REVISION_SQL)
+            .bind(f.org)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(review_revision_after > review_revision_before);
+    let person: Uuid =
+        sqlx::query_scalar("SELECT person_id FROM migration_family_refresh_cohort WHERE id=$1")
+            .bind(cohort)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let response = crate::common::get_with_cookie(
+        &f.app,
+        &format!("/api/people/{person}/migration-review/tasks?state=open"),
+        &f.cookie,
+    )
+    .await;
+    assert_eq!(response.status(), axum::http::StatusCode::OK);
+    let page = crate::common::body_json(response).await;
+    assert_eq!(page["activity_revision"], review_revision_after.to_string());
+    let tasks = page["items"].as_array().unwrap();
+    let new_task = tasks
+        .iter()
+        .find(|r| r["refresh_provenance"]["source_id"] == "22")
+        .expect("new refresh owner exposes review provenance");
+    assert!(new_task["provenance"].is_null());
+    assert_eq!(
+        new_task["refresh_provenance"]["bundle_id"],
+        claim.bundle.to_string()
+    );
+    if mode == 1 {
+        assert!(tasks
+            .iter()
+            .any(|r| r["refresh_provenance"]["source_id"] == "21" && !r["provenance"].is_null()));
+    }
     let results=sqlx::query("SELECT r.*,s.source_id FROM migration_family_refresh_result r JOIN migration_family_refresh_manifest u ON u.id=r.manifest_id AND u.organization_id=r.organization_id JOIN migration_family_refresh_source s ON s.id=u.source_row_id AND s.organization_id=u.organization_id WHERE r.plan_id=$1").bind(plan).fetch_all(&pool).await.unwrap();
     for row in results {
         let source: String = row.get("source_id");
@@ -3772,6 +3893,8 @@ async fn family_refresh_history_execution_is_atomic_versioned_and_refresh_owned(
         );
         assert_eq!(counts.inserts, u64::from(round == 0));
         assert_eq!(counts.history_corrections, if round == 0 { 2 } else { 1 });
+        let review_item: Uuid=sqlx::query_scalar("SELECT id FROM migration_family_refresh_manifest WHERE plan_id=$1 AND disposition IN ('insert','correction') ORDER BY position LIMIT 1").bind(plan).fetch_one(&pool).await.unwrap();
+        assert_review_fields(&f, bundle.bundle_id, review_item, true).await;
         let request = Uuid::new_v4();
         let input = || ConfirmFamilyRefresh {
             request_id: request,
@@ -3933,6 +4056,173 @@ async fn family_refresh_history_execution_is_atomic_versioned_and_refresh_owned(
         "fub_event_record_imported",
         identity,
         &Default::default()
+    )
+    .await
+    .is_err());
+}
+
+async fn assert_review_fields(
+    f: &import_support::Fixture,
+    bundle: Uuid,
+    item: Uuid,
+    history: bool,
+) {
+    use crm_api::domain::migration::family_refresh::field_queries::{
+        self as q, FragmentQuery, Page,
+    };
+    let mut cursor = None;
+    let mut seen = std::collections::BTreeSet::new();
+    let mut sections = std::collections::BTreeSet::new();
+    loop {
+        let page = q::fields(
+            &f.pool,
+            &f.key,
+            &f.ctx,
+            bundle,
+            item,
+            Page {
+                limit: Some(1),
+                cursor: cursor.clone(),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(page.items.len(), 1);
+        let field = &page.items[0];
+        assert!(seen.insert(field.id.clone()));
+        sections.insert(field.section.clone());
+        assert!(serde_json::to_vec(field).unwrap().len() < 4096);
+        let mut next = None;
+        let mut text = String::new();
+        loop {
+            let part = q::fragment(
+                &f.pool,
+                &f.key,
+                &f.ctx,
+                bundle,
+                item,
+                &field.id,
+                FragmentQuery { cursor: next },
+            )
+            .await
+            .unwrap();
+            assert_eq!(part.offset, text.len().to_string());
+            assert_eq!(part.total_bytes, field.total_bytes);
+            assert!(part.text.len() <= 16384);
+            text.push_str(&part.text);
+            next = part.next_cursor;
+            if next.is_none() {
+                break;
+            }
+        }
+        assert_eq!(text.len().to_string(), field.total_bytes);
+        let _: serde_json::Value = serde_json::from_str(&text).unwrap();
+        if field.label == "reviewLargeNumber" {
+            assert_eq!(text, "{\"reviewLargeNumber\":9007199254740993123e0}");
+        }
+        if field.label == "reviewLongValue" {
+            assert_eq!(
+                serde_json::from_str::<serde_json::Value>(&text).unwrap()["reviewLongValue"],
+                "🙂é".repeat(6000)
+            );
+        }
+
+        if history {
+            for private in [
+                "IMPORT_BODY_SENTINEL",
+                "IMPORT_PHONE_SENTINEL",
+                "semantic_hmac",
+                "ciphertext",
+            ] {
+                assert!(!text.contains(private));
+            }
+        }
+        if let Some(token) = page.next_cursor.as_ref() {
+            assert!(q::fields(
+                &f.pool,
+                &f.key,
+                &f.ctx,
+                bundle,
+                item,
+                Page {
+                    limit: Some(2),
+                    cursor: Some(token.clone())
+                }
+            )
+            .await
+            .is_err());
+            assert!(q::fragment(
+                &f.pool,
+                &f.key,
+                &f.ctx,
+                bundle,
+                item,
+                &field.id,
+                FragmentQuery {
+                    cursor: Some(token.clone())
+                }
+            )
+            .await
+            .is_err());
+        }
+        cursor = page.next_cursor;
+        if cursor.is_none() {
+            break;
+        }
+    }
+    let root = format!("/api/migrations/fub/family-refreshes/{bundle}/items/{item}/fields");
+    for route in [root.clone(), format!("{root}/{}", seen.first().unwrap())] {
+        for (cookie, status) in [
+            (&f.cookie, axum::http::StatusCode::OK),
+            (&f.member_cookie, axum::http::StatusCode::FORBIDDEN),
+        ] {
+            let response = crate::common::get_with_cookie(&f.app, &route, cookie).await;
+            assert_eq!(response.status(), status, "{route}");
+            assert_eq!(response.headers()["cache-control"], "no-store");
+        }
+    }
+    assert!(sections.contains("source"));
+    if !history {
+        assert!(sections.contains("after"));
+    }
+    let mut foreign = f.ctx.clone();
+    foreign.organization_id = OrganizationId::new(Uuid::new_v4());
+    assert!(q::fields(
+        &f.pool,
+        &f.key,
+        &foreign,
+        bundle,
+        item,
+        Page {
+            limit: None,
+            cursor: None
+        }
+    )
+    .await
+    .is_err());
+    assert!(q::fields(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        bundle,
+        Uuid::new_v4(),
+        Page {
+            limit: None,
+            cursor: None
+        }
+    )
+    .await
+    .is_err());
+    assert!(q::fields(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        bundle,
+        item,
+        Page {
+            limit: Some(51),
+            cursor: None
+        }
     )
     .await
     .is_err());

@@ -2668,3 +2668,27 @@ History version member/unauthenticated response checks pass
 denied (`/private/tmp/010g1-family-http-verified-clippy.log`). Field/detail and
 Remainder routes remain pending with their typed implementations.
 
+
+## 010g1 native history execution checkpoint — 2026-09-16
+
+All three families now execute through the common bounded queue. History supports
+exclusive refresh-owned initial facts and immutable correction versions, with
+source/baseline reauthentication inside the final transaction. Result, typed fact,
+current head, maintained counts, accounting and cursor settle atomically. Completed
+and cancelled bundles release remaining control reservations. Scheduling remains
+disconnected pending complete readiness inventory and final verification.
+
+The history Web review shows current corrections and bounded prior-version pages
+and metadata details. Authority changes clear private state; late replies are
+ignored. Message bodies remain outside the history display contract.
+
+Verified: 49 family-refresh database tests pass, including native history creation,
+correction, later-bundle ownership, injected rollback/retry, erasure and exact byte
+accounting (`/private/tmp/010g1-history-execution-family-db.log`). Preflight tests
+pass 55/55 (`/private/tmp/010g1-history-preflight-tests.log`). Clippy with warnings
+denied, formatting and diff checks pass. Web tests pass 18/18, typecheck and focused
+lint pass (`/private/tmp/010g1-history-versions-ui-{tests,typecheck,lint}.log`).
+Browser checks at 320, 640, 768, 1024, 1280 and 1536 pixels pass without overflow or
+page errors (`/private/tmp/010g1-history-browser/checks.json`); mobile and desktop
+screenshots were visually inspected. Temporary synthetic browser fixtures removed.
+

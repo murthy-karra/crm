@@ -251,8 +251,17 @@ pub(super) async fn finish_inserted(
     } else {
         serde_json::from_value(p.get("results")).map_err(|_| MigrationError::Crypto)?
     };
+    // Coverage is a fact about retained source, independent of whether a native
+    // write became held. A late local edit must not erase source-only reporting.
+    let frozen: Counts =
+        serde_json::from_value(unit.get("counts")).map_err(|_| MigrationError::Crypto)?;
+    if !frozen.reconciles() {
+        return Err(MigrationError::Crypto);
+    }
+    let mut unit_counts = result.counts;
+    unit_counts.source_only = frozen.source_only;
     let counts = prior
-        .checked_add(&result.counts)
+        .checked_add(&unit_counts)
         .filter(Counts::reconciles)
         .ok_or(MigrationError::Crypto)?;
     sqlx::query("UPDATE migration_family_refresh_plan SET apply_position=$3,results=$4 WHERE id=$1 AND organization_id=$2").bind(claim.plan).bind(claim.organization.0).bind(unit.get::<i64,_>("position")).bind(serde_json::to_value(counts).map_err(|_|MigrationError::Crypto)?).execute(&mut *tx).await?;

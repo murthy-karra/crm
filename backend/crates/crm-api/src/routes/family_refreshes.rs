@@ -54,8 +54,20 @@ pub fn router() -> Router<AppState> {
             get(mappings),
         )
         .route(
+            "/api/migrations/fub/family-refreshes/{id}/mappings/{mapping}/targets",
+            get(targets),
+        )
+        .route(
             "/api/migrations/fub/family-refreshes/{id}/items",
             get(items),
+        )
+        .route(
+            "/api/migrations/fub/family-refreshes/{id}/items/{item}/fields",
+            get(fields),
+        )
+        .route(
+            "/api/migrations/fub/family-refreshes/{id}/items/{item}/fields/{field}",
+            get(field),
         )
         .route(
             "/api/migrations/fub/family-refreshes/{id}/results",
@@ -287,4 +299,62 @@ async fn cancel(
         ),
     )
         .into_response())
+}
+
+async fn fields(
+    State(s): State<AppState>,
+    a: OrgAdminContext,
+    p: Result<Path<(Uuid, Uuid)>, PathRejection>,
+    q: Result<Query<f::field_queries::Page>, QueryRejection>,
+) -> Result<Response, ApiError> {
+    let pool = s.db.as_ref().ok_or(ApiError::Unavailable)?;
+    let ctx = CommandContext::from_auth(&a.auth);
+    let (bundle, item) = path(p)?;
+    Ok(Json(
+        f::field_queries::fields(pool, &s.raw_payload_key, &ctx, bundle, item, query(q)?)
+            .await
+            .map_err(error)?,
+    )
+    .into_response())
+}
+async fn field(
+    State(s): State<AppState>,
+    a: OrgAdminContext,
+    p: Result<Path<(Uuid, Uuid, String)>, PathRejection>,
+    q: Result<Query<f::field_queries::FragmentQuery>, QueryRejection>,
+) -> Result<Response, ApiError> {
+    let pool = s.db.as_ref().ok_or(ApiError::Unavailable)?;
+    let ctx = CommandContext::from_auth(&a.auth);
+    let (bundle, item, field) = path(p)?;
+    Ok(Json(
+        f::field_queries::fragment(
+            pool,
+            &s.raw_payload_key,
+            &ctx,
+            bundle,
+            item,
+            &field,
+            query(q)?,
+        )
+        .await
+        .map_err(error)?,
+    )
+    .into_response())
+}
+
+async fn targets(
+    State(s): State<AppState>,
+    a: OrgAdminContext,
+    p: Result<Path<(Uuid, Uuid)>, PathRejection>,
+    q: Result<Query<f::mapping_queries::TargetPage>, QueryRejection>,
+) -> Result<Response, ApiError> {
+    let pool = s.db.as_ref().ok_or(ApiError::Unavailable)?;
+    let ctx = CommandContext::from_auth(&a.auth);
+    let (bundle, mapping) = path(p)?;
+    Ok(Json(
+        f::mapping_queries::targets(pool, &s.raw_payload_key, &ctx, bundle, mapping, query(q)?)
+            .await
+            .map_err(error)?,
+    )
+    .into_response())
 }

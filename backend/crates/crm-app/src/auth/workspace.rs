@@ -1397,6 +1397,7 @@ mod history_capture_readiness_tests {
             admitted_history: true,
             mapping_repair: true,
             people_recovery: true,
+            family_refresh: true,
         };
         assert!(ready.admitted_activity_ready());
         assert!(ready.history_capture_ready());

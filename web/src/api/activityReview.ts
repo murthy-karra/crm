@@ -4,6 +4,7 @@ import { apiFetch } from './client'
 import { useImportAccess } from './imports'
 import type { HistoryEntry, PersonDetailResponse, TaskKind, UserRef } from './types'
 
+export interface ReviewRefreshProvenance { bundle_id: string; item_id: string; revision: string; source_account_id: string; source_id: string }
 export interface ReviewProvenance {
   activity_import_id: string; result_id: string; source_account_id: string; source_id: string; source_url: string
 }
@@ -39,13 +40,13 @@ export interface ActivityReviewCore extends Omit<PersonDetailResponse, 'history'
 }
 export interface ReviewNote {
   id: string; created_at: string; updated_at: string; author: UserRef | null
-  can_manage: false; provenance: ReviewProvenance | null; excerpt: string; has_more: boolean
+  can_manage: false; provenance: ReviewProvenance | null; refresh_provenance?: ReviewRefreshProvenance | null; excerpt: string; has_more: boolean
 }
 export interface ReviewFullNote extends Omit<ReviewNote, 'excerpt' | 'has_more'> { body: string }
 export interface ReviewTask {
   id: string; title: string; kind: TaskKind; due_at: string | null; completed_at: string | null
   created_at: string; updated_at: string; assignee: UserRef | null; created_by: UserRef | null
-  completed_by: UserRef | null; can_manage: false; provenance: ReviewProvenance | null
+  completed_by: UserRef | null; can_manage: false; provenance: ReviewProvenance | null; refresh_provenance?: ReviewRefreshProvenance | null
 }
 export interface ReviewPage<T> { items: T[]; next_cursor: string | null; activity_revision: string }
 export type ReviewTaskState = 'open' | 'completed'

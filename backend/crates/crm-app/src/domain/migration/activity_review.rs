@@ -177,7 +177,7 @@ WHERE w.organization_id=$1 AND p.id=$2"#)
         .fetch_optional(&mut **tx)
         .await
 }
-pub const REVIEW_REVISION_SQL: &str = "SELECT COALESCE((SELECT sum(activity_revision) FROM migration_activity_import WHERE organization_id=$1),0)::bigint + COALESCE((SELECT sum(activity_revision) FROM migration_admitted_activity_import WHERE organization_id=$1),0)::bigint";
+pub const REVIEW_REVISION_SQL: &str = "SELECT COALESCE((SELECT sum(activity_revision) FROM migration_activity_import WHERE organization_id=$1),0)::bigint + COALESCE((SELECT sum(activity_revision) FROM migration_admitted_activity_import WHERE organization_id=$1),0)::bigint + COALESCE((SELECT sum(apply_position) FROM migration_family_refresh_plan WHERE organization_id=$1 AND family='activity'),0)::bigint";
 pub const REVIEW_COUNTS_SQL: &str = r#"SELECT
  (SELECT count(*) FROM note WHERE organization_id=$1 AND person_id=$2 AND deleted_at IS NULL) AS notes,
  (SELECT count(*) FROM task WHERE organization_id=$1 AND person_id=$2 AND deleted_at IS NULL AND completed_at IS NULL) AS open_tasks,
@@ -293,7 +293,7 @@ fn decode(
 
 pub const NOTES_PAGE_SQL: &str = r#"SELECT n.id,n.created_at,n.updated_at,left(n.body,512) AS excerpt,
  char_length(n.body)>512 AS has_more,n.author_user_id,u.display_name AS author_name,
- COALESCE(i.import_id,i.admitted_import_id) AS activity_import_id,i.source_account_id,i.source_id,(i.admitted_import_id IS NOT NULL) AS admitted_activity,COALESCE(r.id,ar.id) AS result_id
+ COALESCE(i.import_id,i.admitted_import_id) AS activity_import_id,i.source_account_id,i.source_id,(i.admitted_import_id IS NOT NULL) AS admitted_activity,COALESCE(r.id,ar.id) AS result_id,fr.bundle_id AS refresh_bundle_id,fr.manifest_id AS refresh_item_id,fb.revision AS refresh_revision
 FROM note n LEFT JOIN app_user u ON u.id=n.author_user_id
 LEFT JOIN migration_activity_identity i ON i.organization_id=n.organization_id AND i.kind='note' AND i.target_id=n.id
  AND n.source='fub' AND n.source_external_id='v1:'||i.source_account_id::text||':'||i.source_id
@@ -301,11 +301,16 @@ LEFT JOIN migration_activity_result r ON r.organization_id=i.organization_id AND
  AND r.plan_id=i.plan_id AND r.manifest_id=i.manifest_id AND r.person_id=n.person_id AND r.target_id=n.id
 LEFT JOIN migration_admitted_activity_result ar ON ar.organization_id=i.organization_id AND ar.import_id=i.admitted_import_id
  AND ar.plan_id=i.admitted_plan_id AND ar.manifest_id=i.admitted_manifest_id AND ar.person_id=n.person_id AND ar.target_id=n.id
+LEFT JOIN migration_family_refresh_head fh ON fh.organization_id=i.organization_id AND fh.source_account_id=i.source_account_id
+ AND fh.kind=i.kind AND fh.target_id=i.target_id AND fh.person_id=n.person_id
+LEFT JOIN migration_family_refresh_result fr ON fr.id=fh.result_id AND fr.organization_id=fh.organization_id
+ AND fr.person_id=n.person_id AND fr.target_id=n.id AND fr.disposition IN ('applied','already_current')
+LEFT JOIN migration_family_refresh_bundle fb ON fb.id=fr.bundle_id AND fb.organization_id=fr.organization_id
 WHERE n.organization_id=$1 AND n.person_id=$2 AND n.deleted_at IS NULL
  AND ($3::timestamptz IS NULL OR (n.created_at,n.id)>($3,$4))
 ORDER BY n.created_at,n.id LIMIT $5"#;
 pub const NOTE_DETAIL_SQL: &str = r#"SELECT n.id,n.created_at,n.updated_at,n.body,n.author_user_id,u.display_name AS author_name,
- COALESCE(i.import_id,i.admitted_import_id) AS activity_import_id,i.source_account_id,i.source_id,(i.admitted_import_id IS NOT NULL) AS admitted_activity,COALESCE(r.id,ar.id) AS result_id
+ COALESCE(i.import_id,i.admitted_import_id) AS activity_import_id,i.source_account_id,i.source_id,(i.admitted_import_id IS NOT NULL) AS admitted_activity,COALESCE(r.id,ar.id) AS result_id,fr.bundle_id AS refresh_bundle_id,fr.manifest_id AS refresh_item_id,fb.revision AS refresh_revision
 FROM note n LEFT JOIN app_user u ON u.id=n.author_user_id
 LEFT JOIN migration_activity_identity i ON i.organization_id=n.organization_id AND i.kind='note' AND i.target_id=n.id
  AND n.source='fub' AND n.source_external_id='v1:'||i.source_account_id::text||':'||i.source_id
@@ -313,6 +318,11 @@ LEFT JOIN migration_activity_result r ON r.organization_id=i.organization_id AND
  AND r.plan_id=i.plan_id AND r.manifest_id=i.manifest_id AND r.person_id=n.person_id AND r.target_id=n.id
 LEFT JOIN migration_admitted_activity_result ar ON ar.organization_id=i.organization_id AND ar.import_id=i.admitted_import_id
  AND ar.plan_id=i.admitted_plan_id AND ar.manifest_id=i.admitted_manifest_id AND ar.person_id=n.person_id AND ar.target_id=n.id
+LEFT JOIN migration_family_refresh_head fh ON fh.organization_id=i.organization_id AND fh.source_account_id=i.source_account_id
+ AND fh.kind=i.kind AND fh.target_id=i.target_id AND fh.person_id=n.person_id
+LEFT JOIN migration_family_refresh_result fr ON fr.id=fh.result_id AND fr.organization_id=fh.organization_id
+ AND fr.person_id=n.person_id AND fr.target_id=n.id AND fr.disposition IN ('applied','already_current')
+LEFT JOIN migration_family_refresh_bundle fb ON fb.id=fr.bundle_id AND fb.organization_id=fr.organization_id
 WHERE n.organization_id=$1 AND n.person_id=$2 AND n.id=$3 AND n.deleted_at IS NULL"#;
 
 fn actor(row: &PgRow, id_column: &str, name_column: &str) -> Result<Value, ReviewError> {
@@ -344,10 +354,20 @@ fn provenance(row: &PgRow) -> Result<Value, ReviewError> {
         "source_id":row.try_get::<String,_>("source_id")?,
         "source_url":format!("/api/migrations/fub/{base}/{child}/results/{result}/fields/all")}))
 }
+fn refresh_provenance(row: &PgRow) -> Result<Value, ReviewError> {
+    let Some(bundle) = row.try_get::<Option<Uuid>, _>("refresh_bundle_id")? else {
+        return Ok(Value::Null);
+    };
+    Ok(json!({"bundle_id":bundle,
+        "item_id":row.try_get::<Option<Uuid>,_>("refresh_item_id")?.ok_or(ReviewError::Unavailable)?,
+        "revision":row.try_get::<Option<i64>,_>("refresh_revision")?.ok_or(ReviewError::Unavailable)?.to_string(),
+        "source_account_id":row.try_get::<i64,_>("source_account_id")?.to_string(),
+        "source_id":row.try_get::<String,_>("source_id")?}))
+}
 fn note_value(row: &PgRow, full: bool) -> Result<Value, ReviewError> {
     let mut v = json!({"id":row.try_get::<Uuid,_>("id")?,"created_at":row.try_get::<DateTime<Utc>,_>("created_at")?,
         "updated_at":row.try_get::<DateTime<Utc>,_>("updated_at")?,"author":actor(row,"author_user_id","author_name")?,
-        "can_manage":false,"provenance":provenance(row)?});
+        "can_manage":false,"provenance":provenance(row)?,"refresh_provenance":refresh_provenance(row)?});
     if full {
         v["body"] = json!(row.try_get::<String, _>("body")?);
     } else {
@@ -417,7 +437,7 @@ pub async fn note(
 pub const TASKS_OPEN_PAGE_SQL: &str = r#"SELECT t.id,t.title,t.kind,t.due_at,t.completed_at,t.created_at,t.updated_at,
  t.assignee_user_id,a.display_name AS assignee_name,t.created_by_user_id,c.display_name AS creator_name,
  t.completed_by_user_id,b.display_name AS completer_name,
- COALESCE(i.import_id,i.admitted_import_id) AS activity_import_id,i.source_account_id,i.source_id,(i.admitted_import_id IS NOT NULL) AS admitted_activity,COALESCE(r.id,ar.id) AS result_id
+ COALESCE(i.import_id,i.admitted_import_id) AS activity_import_id,i.source_account_id,i.source_id,(i.admitted_import_id IS NOT NULL) AS admitted_activity,COALESCE(r.id,ar.id) AS result_id,fr.bundle_id AS refresh_bundle_id,fr.manifest_id AS refresh_item_id,fb.revision AS refresh_revision
 FROM task t LEFT JOIN app_user a ON a.id=t.assignee_user_id LEFT JOIN app_user c ON c.id=t.created_by_user_id
  LEFT JOIN app_user b ON b.id=t.completed_by_user_id
 LEFT JOIN migration_activity_identity i ON i.organization_id=t.organization_id AND i.kind='task' AND i.target_id=t.id
@@ -426,6 +446,11 @@ LEFT JOIN migration_activity_result r ON r.organization_id=i.organization_id AND
  AND r.plan_id=i.plan_id AND r.manifest_id=i.manifest_id AND r.person_id=t.person_id AND r.target_id=t.id
 LEFT JOIN migration_admitted_activity_result ar ON ar.organization_id=i.organization_id AND ar.import_id=i.admitted_import_id
  AND ar.plan_id=i.admitted_plan_id AND ar.manifest_id=i.admitted_manifest_id AND ar.person_id=t.person_id AND ar.target_id=t.id
+LEFT JOIN migration_family_refresh_head fh ON fh.organization_id=i.organization_id AND fh.source_account_id=i.source_account_id
+ AND fh.kind=i.kind AND fh.target_id=i.target_id AND fh.person_id=t.person_id
+LEFT JOIN migration_family_refresh_result fr ON fr.id=fh.result_id AND fr.organization_id=fh.organization_id
+ AND fr.person_id=t.person_id AND fr.target_id=t.id AND fr.disposition IN ('applied','already_current')
+LEFT JOIN migration_family_refresh_bundle fb ON fb.id=fr.bundle_id AND fb.organization_id=fr.organization_id
 WHERE t.organization_id=$1 AND t.person_id=$2 AND t.deleted_at IS NULL AND t.completed_at IS NULL
  AND ($4::uuid IS NULL OR ($3::timestamptz IS NULL AND t.due_at IS NULL AND t.id>$4)
   OR ($3::timestamptz IS NOT NULL AND (t.due_at IS NULL OR (t.due_at,t.id)>($3,$4))))
@@ -433,7 +458,7 @@ ORDER BY t.due_at NULLS LAST,t.id LIMIT $5"#;
 pub const TASKS_COMPLETED_PAGE_SQL: &str = r#"SELECT t.id,t.title,t.kind,t.due_at,t.completed_at,t.created_at,t.updated_at,
  t.assignee_user_id,a.display_name AS assignee_name,t.created_by_user_id,c.display_name AS creator_name,
  t.completed_by_user_id,b.display_name AS completer_name,
- COALESCE(i.import_id,i.admitted_import_id) AS activity_import_id,i.source_account_id,i.source_id,(i.admitted_import_id IS NOT NULL) AS admitted_activity,COALESCE(r.id,ar.id) AS result_id
+ COALESCE(i.import_id,i.admitted_import_id) AS activity_import_id,i.source_account_id,i.source_id,(i.admitted_import_id IS NOT NULL) AS admitted_activity,COALESCE(r.id,ar.id) AS result_id,fr.bundle_id AS refresh_bundle_id,fr.manifest_id AS refresh_item_id,fb.revision AS refresh_revision
 FROM task t LEFT JOIN app_user a ON a.id=t.assignee_user_id LEFT JOIN app_user c ON c.id=t.created_by_user_id
  LEFT JOIN app_user b ON b.id=t.completed_by_user_id
 LEFT JOIN migration_activity_identity i ON i.organization_id=t.organization_id AND i.kind='task' AND i.target_id=t.id
@@ -442,6 +467,11 @@ LEFT JOIN migration_activity_result r ON r.organization_id=i.organization_id AND
  AND r.plan_id=i.plan_id AND r.manifest_id=i.manifest_id AND r.person_id=t.person_id AND r.target_id=t.id
 LEFT JOIN migration_admitted_activity_result ar ON ar.organization_id=i.organization_id AND ar.import_id=i.admitted_import_id
  AND ar.plan_id=i.admitted_plan_id AND ar.manifest_id=i.admitted_manifest_id AND ar.person_id=t.person_id AND ar.target_id=t.id
+LEFT JOIN migration_family_refresh_head fh ON fh.organization_id=i.organization_id AND fh.source_account_id=i.source_account_id
+ AND fh.kind=i.kind AND fh.target_id=i.target_id AND fh.person_id=t.person_id
+LEFT JOIN migration_family_refresh_result fr ON fr.id=fh.result_id AND fr.organization_id=fh.organization_id
+ AND fr.person_id=t.person_id AND fr.target_id=t.id AND fr.disposition IN ('applied','already_current')
+LEFT JOIN migration_family_refresh_bundle fb ON fb.id=fr.bundle_id AND fb.organization_id=fr.organization_id
 WHERE t.organization_id=$1 AND t.person_id=$2 AND t.deleted_at IS NULL AND t.completed_at IS NOT NULL
  AND ($3::timestamptz IS NULL OR (t.completed_at,t.id)>($3,$4))
 ORDER BY t.completed_at,t.id LIMIT $5"#;
@@ -455,7 +485,7 @@ fn task_value(row: &PgRow) -> Result<Value, ReviewError> {
         "completed_at":row.try_get::<Option<DateTime<Utc>>,_>("completed_at")?,
         "created_at":row.try_get::<DateTime<Utc>,_>("created_at")?,"updated_at":row.try_get::<DateTime<Utc>,_>("updated_at")?,
         "assignee":actor(row,"assignee_user_id","assignee_name")?,"created_by":actor(row,"created_by_user_id","creator_name")?,
-        "completed_by":actor(row,"completed_by_user_id","completer_name")?,"can_manage":false,"provenance":provenance(row)?}),
+        "completed_by":actor(row,"completed_by_user_id","completer_name")?,"can_manage":false,"provenance":provenance(row)?,"refresh_provenance":refresh_provenance(row)?}),
     )
 }
 pub async fn tasks(

@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import Dialog from 'primevue/dialog'
 import Card from './Card.vue'
 import StageLabel from './StageLabel.vue'
+import FamilyRefreshFields from './migration/FamilyRefreshFields.vue'
 import PersonImportProvenance from './migration/PersonImportProvenance.vue'
 import PersonMetadataProvenance from './migration/PersonMetadataProvenance.vue'
 import PersonAdmittedMetadataProvenance from './migration/PersonAdmittedMetadataProvenance.vue'
@@ -11,7 +12,7 @@ import ActivityFieldViewer from './migration/ActivityFieldViewer.vue'
 import { ApiError } from '../api/client'
 import {
   fetchReviewNote, fetchReviewNotes, fetchReviewTasks,
-  type ReviewFullNote, type ReviewNote, type ReviewPage, type ReviewProvenance, type ReviewTask,
+  type ReviewRefreshProvenance, type ReviewFullNote, type ReviewNote, type ReviewPage, type ReviewProvenance, type ReviewTask,
 } from '../api/activityReview'
 import { useHistoryReviewCore } from '../api/historyReview'
 import PersonHistoryReview from './PersonHistoryReview.vue'
@@ -34,6 +35,7 @@ const fullNote = ref<ReviewFullNote | null>(null)
 const noteLoading = ref(false)
 const noteError = ref<unknown>(null)
 const selectedSource = ref<ReviewProvenance | null>(null)
+const selectedRefreshSource = ref<ReviewRefreshProvenance | null>(null)
 const noteTitle = useId()
 const sourceTitle = useId()
 let generation = 0
@@ -49,6 +51,7 @@ function reset() {
   for (const state of [notes, open, completed]) Object.assign(state, { page: null, cursor: '', loading: false, error: null })
   closeNote()
   selectedSource.value = null
+  selectedRefreshSource.value = null
 }
 function current(epoch: number) { return !disposed && epoch === generation && access.enabled.value && !!core.value && !refreshing.value }
 async function refresh() {
@@ -98,6 +101,7 @@ async function inspectNote(id: string) {
   if (!core.value || !access.enabled.value) return
   selectedNote.value = id; fullNote.value = null; noteError.value = null; noteLoading.value = true
   selectedSource.value = null
+  selectedRefreshSource.value = null
   const epoch = generation
   const noteEpoch = ++noteGeneration
   const controller = new AbortController(); requests.add(controller)
@@ -377,11 +381,11 @@ const sourceFamily = computed(() => {
               Completed {{ formatAbsoluteTime(task.completed_at) }} · CRM completer: {{ task.completed_by?.display_name ?? 'Not recorded' }}
             </p>
             <button
-              v-if="task.provenance"
+              v-if="task.provenance || task.refresh_provenance"
               type="button"
               :class="buttonClasses('secondary')"
               :aria-label="`Inspect source for ${task.title}`"
-              @click="selectedSource = task.provenance"
+              @click="task.refresh_provenance ? selectedRefreshSource = task.refresh_provenance : selectedSource = task.provenance"
             >
               Inspect task source
             </button>
@@ -463,13 +467,13 @@ const sourceFamily = computed(() => {
           tabindex="0"
           aria-label="Full native note body"
         >{{ fullNote.body }}</pre><button
-          v-if="fullNote.provenance"
+          v-if="fullNote.provenance || fullNote.refresh_provenance"
           type="button"
           :class="buttonClasses('secondary')"
           class="mt-3"
-          @click="selectedSource = fullNote.provenance; closeNote()"
+          @click="fullNote.refresh_provenance ? selectedRefreshSource = fullNote.refresh_provenance : selectedSource = fullNote.provenance; closeNote()"
         >
-          Inspect original note source
+          {{ fullNote.refresh_provenance ? 'Inspect refreshed note source' : 'Inspect original note source' }}
         </button>
       </template>
       <template #footer>
@@ -490,12 +494,12 @@ const sourceFamily = computed(() => {
       </template>
     </Dialog>
     <Dialog
-      :visible="!!selectedSource && access.enabled.value"
+      :visible="(!!selectedSource || !!selectedRefreshSource) && access.enabled.value"
       :aria-labelledby="sourceTitle"
       modal
       :closable="false"
       :pt="dialogPt()"
-      @update:visible="(value: boolean) => !value && (selectedSource = null)"
+      @update:visible="(value: boolean) => { if (!value) { selectedSource = null; selectedRefreshSource = null } }"
     >
       <template #header>
         <h2
@@ -505,7 +509,17 @@ const sourceFamily = computed(() => {
           Imported activity source
         </h2>
       </template>
-      <template v-if="selectedSource">
+      <template v-if="selectedRefreshSource">
+        <p class="break-all text-small text-text-muted">
+          FUB account {{ selectedRefreshSource.source_account_id }} · Source record {{ selectedRefreshSource.source_id }}
+        </p>
+        <FamilyRefreshFields
+          :bundle-id="selectedRefreshSource.bundle_id"
+          :item-id="selectedRefreshSource.item_id"
+          :revision="selectedRefreshSource.revision"
+        />
+      </template>
+      <template v-else-if="selectedSource">
         <p class="break-all text-small text-text-muted">
           FUB account {{ selectedSource.source_account_id }} · Source record {{ selectedSource.source_id }}. Source actor evidence is separate from linked CRM users.
         </p><ActivityFieldViewer
@@ -520,7 +534,7 @@ const sourceFamily = computed(() => {
         <button
           type="button"
           :class="buttonClasses('secondary')"
-          @click="selectedSource = null"
+          @click="selectedSource = null; selectedRefreshSource = null"
         >
           Close source
         </button>

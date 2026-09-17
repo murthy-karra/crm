@@ -6,7 +6,7 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 ## Working constraints
 
 - Branch `codex/010g1-family-refresh`, base `dd140b0`; latest preceding history reader milestone
-  is **`94f4b88`**. One primary writer; the previously authorized single
+  is **`c965e83`**. One primary writer; the previously authorized single
   implementation reviewer remains reserved for the final review. Planning review
   READY, round 1. Preserve D-050's two review/fix rounds and final performance gate.
 - Do not merge, push or deploy. Preserve unrelated `docs/prompts/MODEL_ROUTING.md`
@@ -51,39 +51,43 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 ## Current verified milestone
 
-All three families now execute through the common bounded queue. History supports
-exclusive refresh-owned initial facts and immutable correction versions, with
-source/baseline reauthentication inside the final transaction. Result, typed fact,
-current head, maintained counts, accounting and cursor settle atomically. Completed
-and cancelled bundles release remaining control reservations. Scheduling remains
-disconnected pending complete readiness inventory and final verification.
+Bounded field inventory and UTF-8 fragment routes now review frozen source,
+before/after values, changes and mapping choices without exposing proof envelopes.
+Source numeric values retain lossless canonical JSON (including integers beyond
+JavaScript's safe range). Fragments are at most 16 KiB, summaries at most 4 KiB;
+cursors bind the actor, workspace, bundle, plan, revision, item, endpoint and size.
+Current scoped mapping-target suggestions remain subject to typed Plan validation.
+Family summaries now include settled counts and retained/reserved/limit bytes.
 
-The history Web review shows current corrections and bounded prior-version pages
-and metadata details. Authority changes clear private state; late replies are
-ignored. Message bodies remain outside the history display contract.
+Native activity review exposes separate refresh provenance for first refresh
+owners and later updates. Its page revision includes refresh execution positions,
+so new committed work invalidates old page series. Source-only coverage survives
+late native holds. The bounded field Web viewer opens from native activity review
+and clears private state on authority/revision changes.
 
-Verified: 49 family-refresh database tests pass, including native history creation,
-correction, later-bundle ownership, injected rollback/retry, erasure and exact byte
-accounting (`/private/tmp/010g1-history-execution-family-db.log`). Preflight tests
-pass 55/55 (`/private/tmp/010g1-history-preflight-tests.log`). Clippy with warnings
-denied, formatting and diff checks pass. Web tests pass 18/18, typecheck and focused
-lint pass (`/private/tmp/010g1-history-versions-ui-{tests,typecheck,lint}.log`).
-Browser checks at 320, 640, 768, 1024, 1280 and 1536 pixels pass without overflow or
-page errors (`/private/tmp/010g1-history-browser/checks.json`); mobile and desktop
-screenshots were visually inspected. Temporary synthetic browser fixtures removed.
+Verified: all 49 family-refresh database tests pass
+(`/private/tmp/010g1-review-apis-final-db.log`), including field/API/tenant/cursor
+checks, exact long Unicode reconstruction, large canonical numbers, mapping
+suggestions, activity provenance and source-only reporting. Family unit tests pass
+42/42 (`/private/tmp/010g1-fields-unit-final.log`); an existing test-only readiness
+initializer missing the family flag was fixed. Clippy with warnings denied passes
+(`/private/tmp/010g1-review-apis-clippy.log`). Field/native activity Web tests pass
+20/20; focused lint/typecheck pass. Six viewport checks and mobile/desktop visual
+inspection pass (`/private/tmp/010g1-fields-browser/checks.json`). The common Web
+panel is being built; Remainder, scheduler admission and final gates remain.
 
 ## Remaining implementation
 
-1. Bootstrap legacy baselines only where independently provable; complete activity
-   refresh provenance in native review readers.
+1. Bootstrap legacy baselines only where independently provable; preserve all
+   current first-owner and corrected-version reader compatibility.
 2. Implement exact Remainder. Preserve frozen unfinished
    units, sources/mappings/targets and baseline heads; settled holds are not
    unfinished work. Complete cancellation/resume crash and capacity coverage.
 3. Complete activity and metadata execution edge coverage,
    including source/native/head/member/catalog revalidation, atomic results/
    accounting/heads and after-state production. Preserve compatible reader capability inventories.
-4. Finish bounded results, field fragments, proof and history-version readers;
-   wire HTTP routes and the common Web review/confirm/progress workflow. Preserve
+4. Finish the common Web review/confirm/progress workflow, exact Remainder and
+   complete scheduler/readiness admission. Preserve
    existing mobile/Operator/read-path compatibility and review-workspace gates.
 5. Run the authorized independent implementation review, required database/API/
    browser/final-tree checks and the single realistic paired-relative + EXPLAIN

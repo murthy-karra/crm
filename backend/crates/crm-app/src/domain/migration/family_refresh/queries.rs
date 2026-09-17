@@ -50,6 +50,11 @@ pub struct FamilySummary {
     pub digest: Option<String>,
     pub expires_at: Option<DateTime<Utc>>,
     pub counts: Counts,
+    pub results: Counts,
+    pub completed_units: String,
+    pub retained_bytes: String,
+    pub reserved_bytes: String,
+    pub run_byte_limit: String,
 }
 #[derive(Serialize)]
 pub struct Families {
@@ -206,7 +211,7 @@ pub async fn detail(
     let bundle = bundle(&row)?;
     // The partial unique index permits at most one non-superseded plan per
     // selected family. Lock in UUID order after the bundle, as preparation does.
-    let rows=sqlx::query("SELECT id,family,revision,state,phase,pause_reason,digest,expires_at,CASE WHEN octet_length(counts::text)<=4096 THEN counts END AS counts FROM migration_family_refresh_plan WHERE bundle_id=$1 AND organization_id=$2 AND state<>'superseded' ORDER BY id LIMIT 4 FOR SHARE")
+    let rows=sqlx::query("SELECT id,family,revision,state,phase,pause_reason,digest,expires_at,apply_position,retained_bytes,reserved_bytes,run_byte_limit,CASE WHEN octet_length(results::text)<=4096 THEN results END AS results,CASE WHEN octet_length(counts::text)<=4096 THEN counts END AS counts FROM migration_family_refresh_plan WHERE bundle_id=$1 AND organization_id=$2 AND state<>'superseded' ORDER BY id LIMIT 4 FOR SHARE")
         .bind(id).bind(ctx.organization_id.0).fetch_all(&mut *tx).await?;
     if rows.is_empty() || rows.len() > 3 {
         return Err(MigrationError::Crypto);
@@ -224,6 +229,17 @@ pub async fn detail(
         if !counts.reconciles() {
             return Err(MigrationError::Crypto);
         }
+        let raw: serde_json::Value = row
+            .get::<Option<serde_json::Value>, _>("results")
+            .ok_or(MigrationError::Crypto)?;
+        let results: Counts = if raw == serde_json::json!({}) {
+            Counts::default()
+        } else {
+            serde_json::from_value(raw).map_err(|_| MigrationError::Crypto)?
+        };
+        if !results.reconciles() {
+            return Err(MigrationError::Crypto);
+        }
         let summary = FamilySummary {
             plan_id: row.get("id"),
             family: serde_json::from_value(serde_json::json!(row.get::<String, _>("family")))
@@ -237,6 +253,11 @@ pub async fn detail(
                 .map(|bytes| crate::domain::migration::imports::hex(&bytes)),
             expires_at: row.get("expires_at"),
             counts,
+            results,
+            completed_units: row.get::<i64, _>("apply_position").to_string(),
+            retained_bytes: row.get::<i64, _>("retained_bytes").to_string(),
+            reserved_bytes: row.get::<i64, _>("reserved_bytes").to_string(),
+            run_byte_limit: row.get::<i64, _>("run_byte_limit").to_string(),
         };
         bounded(&summary, 4096)?;
         families.push(summary);

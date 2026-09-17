@@ -721,3 +721,20 @@ application write guard; application callers cannot invoke counter helpers.
 Terminal bundles release residual control reservations, including the shared payer.
 The existing review UI exposes bounded metadata-only version lists and details.
 Remainder, detailed fields and the common refresh Web workflow remain outstanding.
+
+### Bounded field review and activity provenance checkpoint — 2026-09-16
+
+`GET /family-refreshes/{bundle}/items/{item}/fields` lists default 25/max 50
+field descriptors. `GET .../fields/{field}` returns at most 16 KiB of UTF-8 JSON
+text, decimal-string total byte length/offset and an authenticated continuation.
+Opaque field IDs do not contain source values. Canonical source numbers are not
+parsed through floating point. Metadata/activity may expose their retained
+source values; history remains metadata-only. Proof hashes, encryption envelopes,
+leases and internal ownership evidence are not projected as review fields.
+`GET /family-refreshes/{bundle}/mappings/{mapping}/targets` provides bounded,
+scoped current destination suggestions; Plan owns compatibility and snapshots.
+Family summaries add results, completed_units and retained/reserved/limit byte
+strings. Native activity rows add optional `refresh_provenance` with bundle/item/
+revision/source identity, keeping existing first-import provenance distinct.
+The activity read revision includes committed refresh positions. Source-only
+coverage is retained even when a unit becomes held during execution.

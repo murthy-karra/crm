@@ -10,7 +10,7 @@ export interface RefreshBundle {
   id: string; parent_import_id: string; revision: string; state: string; core_report_id: string | null; history_capture_id: string | null
   predecessor_id: string | null; digest: string | null; created_at: string; confirmed_at: string | null
 }
-export interface RefreshPlan { plan_id: string; family: RefreshFamily; revision: string; state: string; phase: string; pause_reason: string | null; digest: string | null; expires_at: string | null; counts: RefreshCounts; results: RefreshCounts; completed_units: string; retained_bytes: string; reserved_bytes: string; run_byte_limit: string }
+export interface RefreshPlan { plan_id: string; family: RefreshFamily; revision: string; state: string; phase: string; pause_reason: string | null; digest: string | null; expires_at: string | null; counts: RefreshCounts; results: RefreshCounts; completed_units: string; remainder_eligible: boolean; retained_bytes: string; reserved_bytes: string; run_byte_limit: string }
 export interface RefreshDetail { bundle: RefreshBundle; families: RefreshPlan[] }
 export interface RefreshPrepared { bundle_id: string; revision: string; state: string; families: { family: RefreshFamily; plan_id: string; revision: string }[] }
 export interface RefreshPrepare { request_id: string; parent_import_id: string; core_report_id: string | null; history_capture_id: string | null; families: RefreshFamily[] }
@@ -41,6 +41,7 @@ export const prepareFamilyRefresh = (body: RefreshPrepare) => post<RefreshPrepar
 export const replanFamilyRefresh = (id: string, body: RefreshReplan) => post<RefreshPrepared>(`${at(id)}/plans`, body)
 export const confirmFamilyRefresh = (id: string, body: RefreshConfirm) => post<RefreshPrepared>(`${at(id)}/confirm`, body)
 export const cancelFamilyRefresh = (id: string, body: RefreshControl) => post<RefreshPrepared>(`${at(id)}/cancel`, body)
+export const remainderFamilyRefresh = (id: string, body: RefreshControl) => post<RefreshPrepared>(`${at(id)}/remainder`, body)
 export const resumeFamilyRefresh = (id: string, body: RefreshControl) => post<RefreshPrepared>(`${at(id)}/resume`, body)
 export const fetchRefreshMappings = (id: string, family: RefreshFamily, plan: string, cursor?: string, signal?: AbortSignal) => read<RefreshPage<RefreshMapping> & { inventory_complete: boolean }>(`${at(id)}/mappings${query({ family, plan_id: plan, limit: '25', cursor })}`, signal)
 export const fetchRefreshItems = (id: string, family: RefreshFamily, plan: string, cursor?: string, signal?: AbortSignal, filters: { outcome?: string; cohort_id?: string } = {}) => read<RefreshPage<RefreshItem>>(`${at(id)}/items${query({ family, plan_id: plan, limit: '25', cursor, ...filters })}`, signal)

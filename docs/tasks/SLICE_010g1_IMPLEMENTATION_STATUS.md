@@ -5,116 +5,70 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 ## Working constraints
 
-- Branch `codex/010g1-family-refresh`, base `dd140b0`; latest preceding history reader milestone
-  is **`9b03868`**. One primary writer; the previously authorized single
-  implementation reviewer remains reserved for the final review. Planning review
-  READY, round 1. Preserve D-050's two review/fix rounds and final performance gate.
+- Branch `codex/010g1-family-refresh`; preceding common Web milestone `af19664`.
+- One primary writer and one authorized independent implementation reviewer.
+  Round 1 found two issues, both fixed with regressions; final review closure
+  remains pending. Preserve D-050's two-round limit and one final paired gate.
 - Do not merge, push or deploy. Preserve unrelated `docs/prompts/MODEL_ROUTING.md`
-  and `.lavish/`, the shared 010e5 runtime, local verified 010e6 and native stores.
-- Common refresh HTTP commands/readers, history version reads and the Web review workflow are installed; exact Remainder remains pending. No refresh native
-  executor is wired. This slice is not complete.
+  and `.lavish/`, the shared runtime and native stores.
 
-## Implemented foundation and preparation
+## Implemented
 
-- Typed retained-only Prepare and immutable mapping Plan revisions; authorized
-  replay receipts; explicit scoped target snapshots; stable prospective IDs;
-  bounded bundle/family/item/mapping summaries with authenticated scoped cursors.
-- Frozen original/admitted/recovered cohorts, a shared metered core index and a
-  separate history index. Complete source reconciliation precedes Person filtering;
-  metadata/activity stream completeness is independently qualified. Shared source
-  encryption and accounting retain the original payer across mapping revisions.
-- Atomic capacity reservation/settlement, source-run/Organization ledgers, metered
-  control capacity, guarded leases/checkpoints, immutable evidence and native
-  proof foundations. Preparation uses the existing scheduler's bounded turns.
-- Pure atomic Person metadata and note/task delta policies, positive ownership,
-  local-state/revision protection, separate destructive-action counts and history
-  correction policies. Original/admitted successful metadata/activity results now
-  retain exact encrypted after-state. Read adapters authenticate first and prior
-  refresh baselines, accepted scan boundaries and first-coverage prerequisites.
-- History: retained full-source selection, original/admitted correction baselines,
-  stable addition/current/correction proposals, diagnostics and observed/missing
-  ownership walks. Typed history corrections now execute through guarded application writes.
-- Activity: explicit retained role/kind/timezone conversion, persisted insert/
-  update/current/held proposals, source traversal and original/admitted missing-
-  ownership traversal. Source moves outside the cohort remain ownership holds.
-  Native rows, global identities and baseline heads do not change in preparation.
-- Metadata catalog: bounded mapping inventory; full occurrence field-name checks;
-  database-folded choice collisions; exact registry and destination inspection;
-  stable prospective IDs; native capacity/label and duplicate-target checks;
-  all-option requirements for new choice fields. Typed admission now establishes
-  compatible shared registry readiness; bounded worker catalog outcomes precede
-  Person proposals.
-- New bundles choose mapping representatives in capture/item/element order. Old
-  bundles retain their original UUID cursor semantics and cannot qualify old tag
-  choices; pre-name-index sources also require fresh bundles. Replanning does not
-  rewrite an old shared source index.
+- Retained-only Prepare, immutable Plan revisions, scoped bounded summaries,
+  mapping inventory/targets, exact field fragments, source accounting and frozen
+  original/admitted/recovered cohorts. Shared core and separate history indexes
+  remain encrypted, metered and resumable.
+- Whole-Person metadata deltas, note/task updates and additions, immutable history
+  corrections/current projections. Typed native permits revalidate authority,
+  source/head/revision, mappings and complete state atomically with results and
+  accounting. New first imports preserve explicit after-state.
+- Legacy original/admitted activity reconstructs initial native state only from
+  immutable global identity, successful manifest/result and decrypted native
+  payload. Metadata reconstructs positive link/value writes and aliases, including
+  admitted choice mappings and native decimal scale. Revision-install ledger
+  evidence and immutable Person creation facts reject pre-revision/incomplete
+  proof; complete state/revision comparison rejects local changes and ABA.
+- Exact Remainder copies only frozen unfinished eligible units. It carries settled
+  catalog prerequisites as non-executing, non-counted references, including held
+  prerequisites, without retrying settled work. Interrupted copies and mixed-family
+  source attempts remain in the same immutable lineage. Capacity, cursor, lease,
+  replay and rollback guards cover bounded copy and resealing.
+- Confirm/Cancel/Resume, durable revocation pauses and HTTP/Web Remainder. Confirm
+  takes the exclusive compatibility barrier before membership/storage locks.
+  Web permits an exact ready subset with a paused/preparing sibling; uncertain
+  responses replay the same request ID/body and authority changes clear state.
+- Preparation/execution alternate within the existing scheduler's bounded turns.
+  Release admission verifies full family schema, functions, grants, triggers,
+  indexes and native revision guards; preflight includes retained requirements.
 
-## Current verified milestone
+## Current verification
 
-Bounded field inventory and UTF-8 fragment routes now review frozen source,
-before/after values, changes and mapping choices without exposing proof envelopes.
-Source numeric values retain lossless canonical JSON (including integers beyond
-JavaScript's safe range). Fragments are at most 16 KiB, summaries at most 4 KiB;
-cursors bind the actor, workspace, bundle, plan, revision, item, endpoint and size.
-Current scoped mapping-target suggestions remain subject to typed Plan validation.
-Family summaries now include settled counts and retained/reserved/limit bytes.
+- 40 focused family DB tests pass, including legacy paths, exact Remainder,
+  mixed attempts, inherited held catalog dependencies, capacity/rollback/replay,
+  barrier concurrency, tenant authority and release tamper checks:
+  `/private/tmp/010g1-legacy-remainder-final-db.log` (332.48 s).
+- Earlier full family run: 54 passed
+  (`/private/tmp/010g1-remainder-verified-family.log`).
+- Five common Web workflow tests pass, including ready-subset confirmation:
+  `/private/tmp/010g1-review-fixes-web.log`.
+- Release preflight tests: 56 passed. Earlier Remainder Clippy/typecheck/lint and
+  seven-viewport inspection passed. Final-tree checks are running; no final pass
+  is claimed yet. Full earlier evidence is in Project history.
 
-Native activity review exposes separate refresh provenance for first refresh
-owners and later updates. Its page revision includes refresh execution positions,
-so new committed work invalidates old page series. Source-only coverage survives
-late native holds. The bounded field Web viewer opens from native activity review
-and clears private state on authority/revision changes.
+## Remaining acceptance work
 
-Verified: all 49 family-refresh database tests pass
-(`/private/tmp/010g1-review-apis-final-db.log`), including field/API/tenant/cursor
-checks, exact long Unicode reconstruction, large canonical numbers, mapping
-suggestions, activity provenance and source-only reporting. Family unit tests pass
-42/42 (`/private/tmp/010g1-fields-unit-final.log`); an existing test-only readiness
-initializer missing the family flag was fixed. Clippy with warnings denied passes
-(`/private/tmp/010g1-review-apis-clippy.log`). Field/native activity Web tests pass
-20/20; focused lint/typecheck pass. Six viewport checks and mobile/desktop visual
-inspection pass (`/private/tmp/010g1-fields-browser/checks.json`). The common Web
-panel now selects retained sources and families, edits scoped mappings, reviews
-exact counts and fields, confirms a frozen request, tracks results, cancels and
-resumes individual families. Uncertain responses replay the same request ID/body;
-authority changes clear private state. Remainder, scheduler admission and final
-gates remain.
+1. Close independent review after the two round-1 fixes.
+2. Complete real synthetic production-Web desktop/390px workflow: combined
+   mappings/holds/destructive counts, lost-response confirmation, partial cancel,
+   exact successor, reload, history versions and private-state clearing.
+3. Complete repository gate, SQLx schema/offline checks and serial DB/API/
+   compatibility suite. Finish the single realistic 25k EXPLAIN and correctly
+   configured paired Person/Today gate. Record any gaps honestly.
 
-Web verification: all 1,325 tests pass across 103 files
-(`/private/tmp/010g1-workflow-all-web.log`); the final mapping/progress adjustment
-passes all five focused workflow tests. Typecheck, focused lint and isolated
-production build pass (`/private/tmp/010g1-workflow-{final-typecheck,final-lint,build}.log`).
-The build reports the existing large-chunk warning (MigrationView is now 505 kB).
-Combined preview and scrollable confirmation pass six viewport checks with no
-page errors (`/private/tmp/010g1-workflow-browser/checks.json`); mobile confirmation
-and desktop preview were visually inspected. Synthetic fixture files removed.
+## Isolation
 
-## Remaining implementation
-
-1. Bootstrap legacy baselines only where independently provable; preserve all
-   current first-owner and corrected-version reader compatibility.
-2. Implement exact Remainder. Preserve frozen unfinished
-   units, sources/mappings/targets and baseline heads; settled holds are not
-   unfinished work. Complete cancellation/resume crash and capacity coverage.
-3. Complete activity and metadata execution edge coverage,
-   including source/native/head/member/catalog revalidation, atomic results/
-   accounting/heads and after-state production. Preserve compatible reader capability inventories.
-4. Add exact Remainder to the common Web workflow and complete scheduler/readiness
-   admission. Preserve
-   existing mobile/Operator/read-path compatibility and review-workspace gates.
-5. Run the authorized independent implementation review, required database/API/
-   browser/final-tree checks and the single realistic paired-relative + EXPLAIN
-   performance gate. Review source-only reporting and all-held/no-useful-work
-   confirmation semantics across Person and catalog prerequisites.
-
-## Evidence and isolation
-
-Earlier detailed preparation and verification records are archived in
-[Project history](../plans/PROJECT_HISTORY.md#010g1-preparation-checkpoint-details-through-fad4761--2026-09-16),
-with links there to the foundation, source-walk and mapping checkpoints.
-
-- Rust target `/private/tmp/crm-010g1-target-20260915`; intended Web output
-  `/private/tmp/crm-010g1-web-dist-20260915`; synthetic DB
-  `crm_010g1_schema_20260915`. Database tests run serially.
-- No live FUB/customer processing. The linker emits the known large `__eh_frame`
-  warning. Required final gates have not yet been completed; do not report 010g1 done.
+Rust target `/private/tmp/crm-010g1-target-20260915`; Web output
+`/private/tmp/crm-010g1-web-dist-20260915`; synthetic schema database
+`crm_010g1_schema_20260915`. DB tests run serially. No live source/customer work.
+The linker reports its existing large `__eh_frame` warning; Web reports its
+existing large-chunk warning. 010g1 is not yet complete.

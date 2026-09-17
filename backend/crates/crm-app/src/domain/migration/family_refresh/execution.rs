@@ -156,7 +156,10 @@ pub async fn apply_once(
         };
         if !totals.reconciles()
             || totals.units
-                != u64::try_from(p.get::<i64, _>("position")).map_err(|_| MigrationError::Crypto)?
+                != u64::try_from(
+                    p.get::<i64, _>("position") - p.get::<i64, _>("inherited_position"),
+                )
+                .map_err(|_| MigrationError::Crypto)?
         {
             return Err(MigrationError::Crypto);
         }

@@ -1,5 +1,5 @@
-//! Explicit after-state evidence for new first-family activity results. Legacy
-//! results without this proof remain unproven; mutable rows never supply B.
+//! First-family activity baselines. New results carry exact after-state; legacy
+//! results require independently reconstructed immutable proof. C never supplies B.
 use super::model::{compare_native, Baseline, Current, Hold, Outcome};
 use crate::{domain::migration::MigrationError, ids::OrganizationId};
 use serde::{Deserialize, Serialize};
@@ -9,8 +9,8 @@ use uuid::Uuid;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct AfterState {
-    version: u8,
-    native: Value,
+    pub(super) version: u8,
+    pub(super) native: Value,
 }
 /// Called by the first-import executor only after its INSERT succeeded, while
 /// the native row/Person locks and original import permit are still held.
@@ -114,7 +114,8 @@ pub enum Discovery {
 }
 /// Find positive first-import ownership for a frozen Person. The same worker
 /// transaction admission as preparation enforces the current admin and lease.
-/// Missing legacy after-state is held; it is never backfilled from current data.
+/// Legacy after-state is reconstructed only from immutable writes with revision
+/// installation proof; it is never backfilled from current data.
 pub async fn discover(
     pool: &sqlx::PgPool,
     key: &crate::config::RawPayloadKey,
@@ -231,7 +232,7 @@ pub async fn discover(
     } else {
         "parent_result_id"
     };
-    let query=format!("SELECT r.*,a.snapshot_id,a.state AS owner_state,CASE WHEN a.state='completed' THEN a.completed_at ELSE a.updated_at END AS terminal_at,m.native_source_key FROM {prefix}_result r JOIN {prefix}_import a ON a.id=r.import_id AND a.organization_id=r.organization_id AND a.confirmed_plan_id=r.plan_id JOIN {prefix}_manifest m ON m.id=r.manifest_id AND m.plan_id=r.plan_id AND m.import_id=r.import_id AND m.organization_id=r.organization_id WHERE r.organization_id=$1 AND r.import_id=$2 AND r.plan_id=$3 AND r.manifest_id=$4 AND a.parent_import_id=$5 AND a.parent_plan_id=$6 AND a.source_account_id=$7 AND m.{parent_column}=$8 AND m.source_person_id=$9 AND m.person_id=$10 AND r.person_id=$10 AND m.kind=$11 AND r.kind=$11 AND m.source_id=$12 AND r.source_id=$12 AND r.target_id=$13");
+    let query=format!("SELECT r.*,a.snapshot_id,a.state AS owner_state,CASE WHEN a.state='completed' THEN a.completed_at ELSE a.updated_at END AS terminal_at,m.native_source_key,m.author_user_id,m.creator_user_id,m.assignee_user_id,m.nonce AS manifest_nonce,m.ciphertext AS manifest_ciphertext FROM {prefix}_result r JOIN {prefix}_import a ON a.id=r.import_id AND a.organization_id=r.organization_id AND a.confirmed_plan_id=r.plan_id JOIN {prefix}_manifest m ON m.id=r.manifest_id AND m.plan_id=r.plan_id AND m.import_id=r.import_id AND m.organization_id=r.organization_id WHERE r.organization_id=$1 AND r.import_id=$2 AND r.plan_id=$3 AND r.manifest_id=$4 AND a.parent_import_id=$5 AND a.parent_plan_id=$6 AND a.source_account_id=$7 AND m.{parent_column}=$8 AND m.source_person_id=$9 AND m.person_id=$10 AND r.person_id=$10 AND m.kind=$11 AND r.kind=$11 AND m.source_id=$12 AND r.source_id=$12 AND r.target_id=$13");
     let r = sqlx::query(&query)
         .bind(claim.organization.0)
         .bind(root)
@@ -275,7 +276,7 @@ pub async fn discover(
     {
         return Ok(Discovery::Held(hold));
     }
-    let proof = if admitted {
+    let (mut proof, result_native) = if admitted {
         let payload: admitted_activity_model::ResultData = admitted_activity_store::open(
             key,
             claim.organization,
@@ -286,7 +287,7 @@ pub async fn discover(
             r.get("nonce"),
             r.get("ciphertext"),
         )?;
-        payload.after_state
+        (payload.after_state, payload.native)
     } else {
         let payload: activity_model::ResultData = activity_store::open(
             key,
@@ -298,8 +299,19 @@ pub async fn discover(
             r.get("nonce"),
             r.get("ciphertext"),
         )?;
-        payload.after_state
+        (payload.after_state, payload.native)
     };
+    if proof.is_none() {
+        proof = super::activity_legacy::reconstruct(
+            &mut tx,
+            key,
+            claim.organization,
+            &r,
+            admitted,
+            &result_native,
+        )
+        .await?;
+    }
     let sql = if kind == "note" {
         "SELECT to_jsonb(n) FROM note n WHERE id=$1 AND organization_id=$2"
     } else {

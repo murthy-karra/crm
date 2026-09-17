@@ -207,7 +207,7 @@ async fn family_refresh_prepare_combined_is_atomic_metered_and_replay_safe(pool:
             assert_eq!(response.headers()["cache-control"], "no-store");
         }
     }
-    for endpoint in ["plans", "confirm", "resume", "cancel"] {
+    for endpoint in ["plans", "confirm", "resume", "cancel", "remainder"] {
         let route = format!("{root}/{id}/{endpoint}");
         let response = crate::common::post_json_with_cookie(
             &f.app,
@@ -1824,6 +1824,11 @@ async fn family_refresh_activity_execution_is_atomic_and_metered(pool: PgPool) {
 async fn family_refresh_activity_execution_holds_local_changes(pool: PgPool) {
     activity_execution_scenario(pool, 2).await;
 }
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn family_refresh_remainder_preserves_only_unfinished_activity(pool: PgPool) {
+    activity_execution_scenario(pool, 3).await;
+}
 async fn activity_execution_scenario(pool: PgPool, mode: u8) {
     use crm_api::domain::migration::{
         family_refresh::{
@@ -2275,6 +2280,10 @@ async fn activity_execution_scenario(pool: PgPool, mode: u8) {
     )
     .await
     .unwrap();
+    if mode == 3 {
+        assert_exact_remainder(&pool, &f, claim.bundle, plan, Family::Activity, true, false).await;
+        return;
+    }
     if mode == 2 {
         sqlx::query("UPDATE task SET title='Local task title' WHERE organization_id=$1 AND source_external_id LIKE '%:21'").bind(f.org).execute(&pool).await.unwrap();
     }
@@ -3825,6 +3834,14 @@ async fn family_refresh_partial_cancel_keeps_shared_payer_work(pool: PgPool) {
 #[sqlx::test]
 #[ignore = "requires PostgreSQL migrator"]
 async fn family_refresh_history_execution_is_atomic_versioned_and_refresh_owned(pool: PgPool) {
+    history_execution_scenario(pool, false).await;
+}
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn family_refresh_remainder_preserves_unfinished_history(pool: PgPool) {
+    history_execution_scenario(pool, true).await;
+}
+async fn history_execution_scenario(pool: PgPool, remainder: bool) {
     use crm_api::{
         auth::workspace::ReleaseReadiness,
         domain::migration::{
@@ -3909,10 +3926,22 @@ async fn family_refresh_history_execution_is_atomic_versioned_and_refresh_owned(
             }],
             acknowledged_exclusions: true,
         };
-        let confirmed =
-            confirmation::confirm(&f.pool, &f.key, &release, &f.ctx, bundle.bundle_id, input())
+        // A pre-confirmation reader/writer holding shared admission must finish
+        // before confirmation installs the durable compatibility requirement.
+        let mut older = pool.begin().await.unwrap();
+        crm_api::auth::workspace::shared(&mut older, f.ctx.organization_id)
+            .await
+            .unwrap();
+        let pending =
+            confirmation::confirm(&f.pool, &f.key, &release, &f.ctx, bundle.bundle_id, input());
+        tokio::pin!(pending);
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(150), &mut pending)
                 .await
-                .unwrap();
+                .is_err()
+        );
+        older.commit().await.unwrap();
+        let confirmed = pending.await.unwrap();
         let replay = confirmation::confirm_with_readiness(
             &f.pool,
             &f.key,
@@ -3927,6 +3956,19 @@ async fn family_refresh_history_execution_is_atomic_versioned_and_refresh_owned(
             serde_json::to_value(confirmed).unwrap(),
             serde_json::to_value(replay).unwrap()
         );
+        if remainder {
+            assert_exact_remainder(
+                &pool,
+                &f,
+                bundle.bundle_id,
+                plan,
+                Family::History,
+                true,
+                false,
+            )
+            .await;
+            return;
+        }
         let claim = execution::claim_next(&f.pool).await.unwrap().unwrap();
         let checkpoint="SELECT jsonb_build_object('identities',(SELECT jsonb_agg(to_jsonb(i) ORDER BY id) FROM migration_history_import_identity i WHERE organization_id=p.organization_id),'heads',(SELECT jsonb_agg(to_jsonb(h) ORDER BY identity_id) FROM migration_family_refresh_history_head h WHERE organization_id=p.organization_id),'results',(SELECT count(*) FROM migration_family_refresh_result WHERE plan_id=p.id),'initial_displays',(SELECT count(*) FROM migration_history_import_display WHERE organization_id=p.organization_id),'correction_displays',(SELECT count(*) FROM migration_family_refresh_history_display WHERE organization_id=p.organization_id),'read_state',(SELECT jsonb_agg(to_jsonb(s) ORDER BY person_id) FROM migration_history_review_state s WHERE organization_id=p.organization_id),'position',apply_position,'measured',measured_bytes,'retained',retained_bytes,'reserved',reserved_bytes,'org',(SELECT retained_bytes FROM migration_snapshot_storage WHERE organization_id=p.organization_id)) FROM migration_family_refresh_plan p WHERE id=$1";
         for position in 1..=4 {
@@ -4226,4 +4268,294 @@ async fn assert_review_fields(
     )
     .await
     .is_err());
+}
+
+pub(crate) async fn assert_exact_remainder(
+    pool: &PgPool,
+    f: &import_support::Fixture,
+    bundle: Uuid,
+    plan: Uuid,
+    family: Family,
+    apply_first: bool,
+    expected_hold: bool,
+) {
+    use crm_api::{
+        auth::workspace::ReleaseReadiness,
+        domain::migration::family_refresh::{
+            confirmation::{self, ConfirmFamilyRefresh, SelectedPlan},
+            execution,
+            lifecycle::{self, FamilyControl},
+            remainder,
+        },
+    };
+    let release = ReleaseReadiness::for_tests();
+    if apply_first {
+        let claim = execution::claim_next(&f.pool).await.unwrap().unwrap();
+        execution::apply_once(&f.pool, &f.key, &f.policy, &release, &claim)
+            .await
+            .unwrap();
+        worker::release(&f.pool, &claim).await.unwrap();
+    }
+    let revision: i64 =
+        sqlx::query_scalar("SELECT revision FROM migration_family_refresh_bundle WHERE id=$1")
+            .bind(bundle)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    lifecycle::cancel(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        bundle,
+        FamilyControl {
+            request_id: Uuid::new_v4(),
+            expected_revision: revision.to_string(),
+            families: vec![family],
+        },
+    )
+    .await
+    .unwrap();
+    while lifecycle::finish_cancel(&f.pool).await.unwrap() {}
+    let expected:i64=sqlx::query_scalar("SELECT count(*) FROM migration_family_refresh_manifest u JOIN migration_family_refresh_plan p ON p.id=u.plan_id WHERE p.id=$1 AND u.position>p.apply_position AND u.disposition IN ('insert','update','already_current','correction') AND NOT EXISTS(SELECT 1 FROM migration_family_refresh_result r WHERE r.manifest_id=u.id)").bind(plan).fetch_one(pool).await.unwrap();
+    assert!(expected > 0);
+    let revision: i64 =
+        sqlx::query_scalar("SELECT revision FROM migration_family_refresh_bundle WHERE id=$1")
+            .bind(bundle)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    let request = Uuid::new_v4();
+    let command = || FamilyControl {
+        request_id: request,
+        expected_revision: revision.to_string(),
+        families: vec![family],
+    };
+    let next = remainder::create(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        Some(&release),
+        &f.ctx,
+        bundle,
+        command(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        next.bundle_id,
+        remainder::create(&f.pool, &f.key, &f.policy, None, &f.ctx, bundle, command())
+            .await
+            .unwrap()
+            .bundle_id
+    );
+    let route = format!("/api/migrations/fub/family-refreshes/{bundle}/remainder");
+    let response = crate::common::post_json_with_cookie(
+        &f.app,
+        &route,
+        &f.cookie,
+        serde_json::to_value(command()).unwrap(),
+    )
+    .await;
+    assert_eq!(response.status(), axum::http::StatusCode::CREATED);
+    assert_eq!(response.headers()["cache-control"], "no-store");
+    let response = crate::common::post_json_with_cookie(
+        &f.app,
+        &route,
+        &f.member_cookie,
+        serde_json::to_value(command()).unwrap(),
+    )
+    .await;
+    assert_eq!(response.status(), axum::http::StatusCode::FORBIDDEN);
+    let mut next = next;
+    if family == Family::Activity {
+        let cancelled = lifecycle::cancel(
+            &f.pool,
+            &f.key,
+            &f.ctx,
+            next.bundle_id,
+            FamilyControl {
+                request_id: Uuid::new_v4(),
+                expected_revision: next.revision.clone(),
+                families: vec![family],
+            },
+        )
+        .await
+        .unwrap();
+        let previous = next.bundle_id;
+        next = remainder::create(
+            &f.pool,
+            &f.key,
+            &f.policy,
+            Some(&release),
+            &f.ctx,
+            previous,
+            FamilyControl {
+                request_id: Uuid::new_v4(),
+                expected_revision: cancelled.revision,
+                families: vec![family],
+            },
+        )
+        .await
+        .unwrap();
+        assert_ne!(
+            next.bundle_id, previous,
+            "an interrupted copy keeps the original frozen tail"
+        );
+    }
+    let claim = worker::claim_next(&f.pool).await.unwrap().unwrap();
+    let mut tx = f.pool.begin().await.unwrap();
+    sqlx::query("SELECT set_config('crm.family_refresh_reader','fub-family-refresh-v1',true),set_config('crm.family_refresh_lease',$1,true)").bind(claim.token.to_string()).execute(&mut *tx).await.unwrap();
+    assert!(sqlx::query("UPDATE migration_family_refresh_plan SET remainder_stage=8,remainder_complete=true,source_walk_complete=true,owned_walk_complete=true,mappings_complete=true,catalog_walk_complete=true WHERE id=$1").bind(claim.plan).execute(&mut *tx).await.is_err(),"live lease cannot skip the frozen copy");
+    tx.rollback().await.unwrap();
+    worker::release(&f.pool, &claim).await.unwrap();
+    let mut tiny = f.policy.clone();
+    tiny.org_ceiling_bytes = 1;
+    assert_eq!(
+        worker::run_once(&f.pool, &f.key, &tiny).await.unwrap(),
+        Progress::Paused
+    );
+    crm_api::domain::migration::family_refresh::resume::resume_with_readiness(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        Some(&release),
+        &f.ctx,
+        next.bundle_id,
+        FamilyControl {
+            request_id: Uuid::new_v4(),
+            expected_revision: next.revision.clone(),
+            families: vec![family],
+        },
+    )
+    .await
+    .unwrap();
+    sqlx::raw_sql("CREATE FUNCTION test_remainder_copy_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic remainder copy fault'; END $$; CREATE TRIGGER test_remainder_copy_fault BEFORE INSERT ON migration_family_refresh_source FOR EACH ROW WHEN (NEW.remainder_source_id IS NOT NULL) EXECUTE FUNCTION test_remainder_copy_fault()").execute(pool).await.unwrap();
+    let checkpoint="SELECT jsonb_build_object('stage',remainder_stage,'after',remainder_after,'position',position,'measured',measured_bytes,'retained',retained_bytes,'reserved',reserved_bytes,'shared',(SELECT shared_retained_bytes FROM migration_family_refresh_bundle WHERE id=p.bundle_id)) FROM migration_family_refresh_plan p WHERE id=$1";
+    let mut faulted = false;
+    for turn in 0..150 {
+        let before: serde_json::Value = sqlx::query_scalar(checkpoint)
+            .bind(next.families[0].plan_id)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+        if worker::run_once(&f.pool, &f.key, &f.policy).await.is_err() {
+            assert_eq!(
+                before,
+                sqlx::query_scalar::<_, serde_json::Value>(checkpoint)
+                    .bind(next.families[0].plan_id)
+                    .fetch_one(pool)
+                    .await
+                    .unwrap()
+            );
+            faulted = true;
+            break;
+        }
+        assert!(turn < 149);
+    }
+    assert!(faulted);
+    sqlx::raw_sql("DROP TRIGGER test_remainder_copy_fault ON migration_family_refresh_source; DROP FUNCTION test_remainder_copy_fault()").execute(pool).await.unwrap();
+    for turn in 0..250 {
+        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+            break;
+        }
+        assert!(turn < 249);
+    }
+    let next_plan = next.families[0].plan_id;
+    let sealed=sqlx::query("SELECT b.revision AS bundle_revision,encode(b.digest,'hex') AS bundle_digest,p.revision,encode(p.digest,'hex') AS digest,p.counts,p.state,p.position,p.inherited_position FROM migration_family_refresh_bundle b JOIN migration_family_refresh_plan p ON p.bundle_id=b.id WHERE p.id=$1").bind(next_plan).fetch_one(pool).await.unwrap();
+    assert_eq!(sealed.get::<String, _>("state"), "ready");
+    let preview = crm_api::domain::migration::family_refresh::item_queries::items(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        next.bundle_id,
+        crm_api::domain::migration::family_refresh::item_queries::ItemPage {
+            family,
+            plan_id: next_plan,
+            cohort_id: None,
+            outcome: None,
+            limit: Some(50),
+            cursor: None,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        preview.items.len() as i64,
+        expected,
+        "settled catalog prerequisites are not previewed as new actions"
+    );
+    assert_eq!(
+        sealed.get::<i64, _>("position") - sealed.get::<i64, _>("inherited_position"),
+        expected
+    );
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_family_refresh_manifest u JOIN migration_family_refresh_manifest old ON old.id=u.remainder_source_id WHERE u.plan_id=$1 AND (u.target_id IS DISTINCT FROM old.target_id OR u.baseline_result_id IS DISTINCT FROM old.baseline_result_id OR u.expected_head_id IS DISTINCT FROM old.expected_head_id OR u.disposition IN ('held','excluded'))").bind(next_plan).fetch_one(pool).await.unwrap(),0);
+    confirmation::confirm(
+        &f.pool,
+        &f.key,
+        &release,
+        &f.ctx,
+        next.bundle_id,
+        ConfirmFamilyRefresh {
+            request_id: Uuid::new_v4(),
+            expected_revision: sealed.get::<i64, _>("bundle_revision").to_string(),
+            bundle_digest: sealed.get("bundle_digest"),
+            families: vec![SelectedPlan {
+                family,
+                plan_id: next_plan,
+                plan_revision: sealed.get::<i64, _>("revision").to_string(),
+                plan_digest: sealed.get("digest"),
+                expected_counts: serde_json::from_value(sealed.get("counts")).unwrap(),
+            }],
+            acknowledged_exclusions: true,
+        },
+    )
+    .await
+    .unwrap();
+    for turn in 0..20 {
+        let Some(claim) = execution::claim_next(&f.pool).await.unwrap() else {
+            break;
+        };
+        execution::apply_once(&f.pool, &f.key, &f.policy, &release, &claim)
+            .await
+            .unwrap();
+        worker::release(&f.pool, &claim).await.unwrap();
+        assert!(turn < 19);
+    }
+    let results: Vec<String> = sqlx::query_scalar(
+        "SELECT disposition FROM migration_family_refresh_result WHERE plan_id=$1",
+    )
+    .bind(next_plan)
+    .fetch_all(pool)
+    .await
+    .unwrap();
+    assert_eq!(results.len() as i64, expected);
+    assert!(
+        results.iter().all(|v| if expected_hold {
+            v == "held"
+        } else {
+            v == "applied" || v == "already_current"
+        }),
+        "{results:?}"
+    );
+    sqlx::raw_sql(include_str!("fixtures/family_refresh_byte_inventory.sql"))
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn family_refresh_release_rejects_disabled_copy_guard_and_changed_native_fence(pool: PgPool) {
+    let release = crm_api::auth::workspace::ReleaseReadiness::for_tests();
+    let mut conn = pool.acquire().await.unwrap();
+    release.require_family_refresh(&mut conn).await.unwrap();
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("ALTER TABLE migration_family_refresh_manifest DISABLE TRIGGER family_refresh_remainder_copy_guard").execute(&mut *tx).await.unwrap();
+    assert!(release.require_family_refresh(&mut tx).await.is_err());
+    tx.rollback().await.unwrap();
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("CREATE OR REPLACE FUNCTION crm_family_refresh_mutation_allowed(org UUID, table_name TEXT, operation TEXT, old_row JSONB, new_row JSONB) RETURNS boolean LANGUAGE plpgsql AS $$ BEGIN RETURN true; END $$").execute(&mut *tx).await.unwrap();
+    assert!(release.require_family_refresh(&mut tx).await.is_err());
+    tx.rollback().await.unwrap();
+    release.require_family_refresh(&mut conn).await.unwrap();
 }

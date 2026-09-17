@@ -1178,10 +1178,16 @@ pub(super) async fn assert_activity_after_states(
 #[sqlx::test]
 #[ignore = "requires PostgreSQL migrator"]
 async fn admitted_activity_retains_exact_initial_after_state(pool: PgPool) {
+    admitted_activity_discovery_scenario(pool, false).await;
+}
+async fn admitted_activity_discovery_scenario(pool: PgPool, legacy: bool) {
     let (f, _, root, ready) = crate::db_admitted_activity::prepared(&pool, 1).await;
     crate::db_admitted_activity::confirm_ready(&f, root, &ready).await;
     crate::db_admitted_activity::drain(&f).await;
     assert_activity_after_states(&f, root, true).await;
+    if legacy {
+        legacy_results(&pool, &f, root, "activity", true).await;
+    }
     use crm_api::domain::migration::family_refresh::{
         activity_baseline::{self, Discovery},
         model::{Hold, Kind},
@@ -1311,6 +1317,9 @@ pub(super) async fn prepared_family_refresh(
 #[sqlx::test]
 #[ignore = "requires PostgreSQL migrator"]
 async fn original_activity_discovers_only_its_proven_baseline(pool: PgPool) {
+    original_activity_discovery_scenario(pool, false).await;
+}
+async fn original_activity_discovery_scenario(pool: PgPool, legacy: bool) {
     use crm_api::domain::migration::{
         family_refresh::{
             activity_baseline::{self, Discovery},
@@ -1327,6 +1336,9 @@ async fn original_activity_discovers_only_its_proven_baseline(pool: PgPool) {
     let ready = db_activity_source::replan(&f, child, &ready, choices, None).await;
     db_activity_source::confirm(&f, child, &ready).await;
     assert_activity_after_states(&f, child, false).await;
+    if legacy {
+        legacy_results(&pool, &f, child, "activity", false).await;
+    }
     let claim = prepared_indexed_refresh(&pool, &f, parent).await;
     let cohort:Uuid=sqlx::query_scalar("SELECT id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND source_person_id='101'").bind(claim.bundle).fetch_one(&pool).await.unwrap();
     assert!(matches!(
@@ -1341,6 +1353,52 @@ async fn original_activity_discovers_only_its_proven_baseline(pool: PgPool) {
             .unwrap(),
         Discovery::Held(Hold::BaselineUnproven)
     ));
+    if legacy {
+        let elapsed: i64 = sqlx::query_scalar(
+            "SELECT execution_time FROM _sqlx_migrations WHERE version=20260923000001",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        sqlx::query("UPDATE _sqlx_migrations SET execution_time=-1 WHERE version=20260923000001")
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert!(matches!(
+            activity_baseline::discover(&f.pool, &f.key, &claim, cohort, Kind::Task, "21")
+                .await
+                .unwrap(),
+            Discovery::Held(Hold::BaselineUnproven)
+        ));
+        sqlx::query("UPDATE _sqlx_migrations SET execution_time=$1 WHERE version=20260923000001")
+            .bind(elapsed)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let task:Uuid=sqlx::query_scalar("SELECT target_id FROM migration_activity_identity WHERE organization_id=$1 AND kind='task' AND source_id='21'").bind(f.org).fetch_one(&pool).await.unwrap();
+        let title: String = sqlx::query_scalar("SELECT title FROM task WHERE id=$1")
+            .bind(task)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE task SET title='Local edit' WHERE id=$1")
+            .bind(task)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE task SET title=$2 WHERE id=$1")
+            .bind(task)
+            .bind(title)
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert!(matches!(
+            activity_baseline::discover(&f.pool, &f.key, &claim, cohort, Kind::Task, "21")
+                .await
+                .unwrap(),
+            Discovery::Held(Hold::LocalChange)
+        ));
+    }
     let interval=sqlx::query("SELECT newer.id,newer.started_at,older.completed_at FROM migration_snapshot newer JOIN migration_family_refresh_plan p ON p.source_snapshot_id=newer.id JOIN migration_activity_import i ON i.id=$2 JOIN migration_snapshot older ON older.id=i.snapshot_id WHERE p.id=$1").bind(claim.plan).bind(child).fetch_one(&pool).await.unwrap();
     let snapshot: Uuid = interval.get("id");
     sqlx::query("UPDATE migration_snapshot SET started_at=$2 WHERE id=$1")
@@ -3882,4 +3940,95 @@ async fn history_missing_walk_holds_absence_without_deleting_or_advancing_baseli
     preparation_worker::release(&f.pool, &seal_claim)
         .await
         .unwrap();
+}
+
+/// Migrator-only fixture: model pre-after-state result envelopes while retaining
+/// authenticated frozen writes and exact byte accounting. Never a product path.
+pub(super) async fn legacy_results(
+    pool: &PgPool,
+    f: &import_support::Fixture,
+    root: Uuid,
+    family: &str,
+    admitted: bool,
+) {
+    use crm_api::domain::migration::crypto;
+    assert!(matches!(family, "activity" | "metadata"));
+    let prefix = format!(
+        "migration_{}{family}",
+        if admitted { "admitted_" } else { "" }
+    );
+    let namespace = if family == "activity" {
+        "activity-v1"
+    } else if admitted {
+        "admitted-metadata-v1"
+    } else {
+        "metadata-v1"
+    };
+    let rows=sqlx::query(&format!("SELECT r.*,i.snapshot_id FROM {prefix}_result r JOIN {prefix}_import i ON i.id=r.import_id AND i.organization_id=r.organization_id WHERE r.import_id=$1"))
+        .bind(root).fetch_all(pool).await.unwrap();
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query(&format!("ALTER TABLE {prefix}_result DISABLE TRIGGER USER"))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    for r in rows {
+        let plan: Uuid = r.get("plan_id");
+        let purpose = format!("{namespace}:{plan}:result");
+        let bytes = crypto::open_snapshot(
+            &f.key,
+            f.ctx.organization_id,
+            r.get("snapshot_id"),
+            r.get("id"),
+            &purpose,
+            r.get("nonce"),
+            r.get("ciphertext"),
+        )
+        .unwrap();
+        let mut data: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        if data
+            .as_object_mut()
+            .unwrap()
+            .remove("after_state")
+            .is_none()
+        {
+            continue;
+        }
+        let mut legacy = serde_json::to_vec(&data).unwrap();
+        assert!(legacy.len() < bytes.len());
+        legacy.resize(bytes.len(), b' ');
+        let encrypted = crypto::seal_snapshot(
+            &f.key,
+            f.ctx.organization_id,
+            r.get("snapshot_id"),
+            r.get("id"),
+            &purpose,
+            &legacy,
+        )
+        .unwrap();
+        sqlx::query(&format!(
+            "UPDATE {prefix}_result SET nonce=$2,ciphertext=$3 WHERE id=$1"
+        ))
+        .bind(r.get::<Uuid, _>("id"))
+        .bind(encrypted.nonce.as_slice())
+        .bind(encrypted.ciphertext)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    }
+    sqlx::query(&format!("ALTER TABLE {prefix}_result ENABLE TRIGGER USER"))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+}
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn family_refresh_legacy_original_activity_bootstrap(pool: PgPool) {
+    original_activity_discovery_scenario(pool, true).await;
+}
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn family_refresh_legacy_admitted_activity_bootstrap(pool: PgPool) {
+    admitted_activity_discovery_scenario(pool, true).await;
 }

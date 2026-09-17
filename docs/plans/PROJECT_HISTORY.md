@@ -2692,3 +2692,45 @@ Browser checks at 320, 640, 768, 1024, 1280 and 1536 pixels pass without overflo
 page errors (`/private/tmp/010g1-history-browser/checks.json`); mobile and desktop
 screenshots were visually inspected. Temporary synthetic browser fixtures removed.
 
+
+## 010g1 field and common Web checkpoints through af19664 — 2026-09-16
+
+
+Bounded field inventory and UTF-8 fragment routes now review frozen source,
+before/after values, changes and mapping choices without exposing proof envelopes.
+Source numeric values retain lossless canonical JSON (including integers beyond
+JavaScript's safe range). Fragments are at most 16 KiB, summaries at most 4 KiB;
+cursors bind the actor, workspace, bundle, plan, revision, item, endpoint and size.
+Current scoped mapping-target suggestions remain subject to typed Plan validation.
+Family summaries now include settled counts and retained/reserved/limit bytes.
+
+Native activity review exposes separate refresh provenance for first refresh
+owners and later updates. Its page revision includes refresh execution positions,
+so new committed work invalidates old page series. Source-only coverage survives
+late native holds. The bounded field Web viewer opens from native activity review
+and clears private state on authority/revision changes.
+
+Verified: all 49 family-refresh database tests pass
+(`/private/tmp/010g1-review-apis-final-db.log`), including field/API/tenant/cursor
+checks, exact long Unicode reconstruction, large canonical numbers, mapping
+suggestions, activity provenance and source-only reporting. Family unit tests pass
+42/42 (`/private/tmp/010g1-fields-unit-final.log`); an existing test-only readiness
+initializer missing the family flag was fixed. Clippy with warnings denied passes
+(`/private/tmp/010g1-review-apis-clippy.log`). Field/native activity Web tests pass
+20/20; focused lint/typecheck pass. Six viewport checks and mobile/desktop visual
+inspection pass (`/private/tmp/010g1-fields-browser/checks.json`). The common Web
+panel now selects retained sources and families, edits scoped mappings, reviews
+exact counts and fields, confirms a frozen request, tracks results, cancels and
+resumes individual families. Uncertain responses replay the same request ID/body;
+authority changes clear private state. Remainder, scheduler admission and final
+gates remain.
+
+Web verification: all 1,325 tests pass across 103 files
+(`/private/tmp/010g1-workflow-all-web.log`); the final mapping/progress adjustment
+passes all five focused workflow tests. Typecheck, focused lint and isolated
+production build pass (`/private/tmp/010g1-workflow-{final-typecheck,final-lint,build}.log`).
+The build reports the existing large-chunk warning (MigrationView is now 505 kB).
+Combined preview and scrollable confirmation pass six viewport checks with no
+page errors (`/private/tmp/010g1-workflow-browser/checks.json`); mobile confirmation
+and desktop preview were visually inspected. Synthetic fixture files removed.
+

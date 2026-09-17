@@ -131,7 +131,11 @@ pub async fn run_once(
             tx.commit().await?;
             return Ok(Progress::Advanced);
         };
-        let recipes = native_proof::draft(&mut tx, key, claim, &b, &p, &row).await?;
+        let recipes = if row.get::<Option<Uuid>, _>("inherited_result_id").is_some() {
+            Vec::new()
+        } else {
+            native_proof::draft(&mut tx, key, claim, &b, &p, &row).await?
+        };
         let mut sealed = Vec::new();
         let mut bound = 8192_i64;
         for recipe in recipes {

@@ -89,6 +89,10 @@ pub fn router() -> Router<AppState> {
             "/api/migrations/fub/family-refreshes/{id}/cancel",
             post(cancel),
         )
+        .route(
+            "/api/migrations/fub/family-refreshes/{id}/remainder",
+            post(remainder),
+        )
         .layer(DefaultBodyLimit::max(8192))
         .layer(middleware::map_response(no_store))
 }
@@ -268,6 +272,33 @@ async fn resume(
         StatusCode::OK,
         Json(
             f::resume::resume_with_readiness(
+                pool,
+                &s.raw_payload_key,
+                &s.snapshot_policy,
+                release.as_deref(),
+                &ctx,
+                path(p)?,
+                body(b)?,
+            )
+            .await
+            .map_err(error)?,
+        ),
+    )
+        .into_response())
+}
+async fn remainder(
+    State(s): State<AppState>,
+    a: OrgAdminContext,
+    p: Result<Path<Uuid>, PathRejection>,
+    b: Result<Json<f::lifecycle::FamilyControl>, JsonRejection>,
+) -> Result<Response, ApiError> {
+    let pool = s.db.as_ref().ok_or(ApiError::Unavailable)?;
+    let ctx = CommandContext::from_auth(&a.auth);
+    let release = s.current_import_release().await;
+    Ok((
+        StatusCode::CREATED,
+        Json(
+            f::remainder::create(
                 pool,
                 &s.raw_payload_key,
                 &s.snapshot_policy,

@@ -211,7 +211,9 @@ async fn execute(
     let delta_scope = activity_delta::Scope {
         organization: claim.organization.0,
         source_external_id: &native_key,
-        correlation: claim.bundle,
+        correlation: b
+            .get::<Option<Uuid>, _>("remainder_origin_bundle_id")
+            .unwrap_or(claim.bundle),
     };
     let proposal = if let Some(baseline) = baseline {
         if identity != Some(native.target) {

@@ -3691,3 +3691,57 @@ async fn family_refresh_catalog_authenticates_existing_admitted_claims(migrator:
     );
     worker::release(&f.pool, &claim).await.unwrap();
 }
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn family_refresh_legacy_admitted_metadata_bootstrap(migrator: PgPool) {
+    use crm_api::domain::migration::family_refresh::{
+        metadata_discovery::{self, Discovery},
+        model::Hold,
+    };
+    let (f, root, plan, person) = prepared_typed(&migrator).await;
+    approve_all(&f, root, plan).await;
+    finish(&f, root).await;
+    crate::db_family_refresh::legacy_results(&migrator, &f, root, "metadata", true).await;
+    let parent: Uuid = sqlx::query_scalar(
+        "SELECT parent_import_id FROM migration_admitted_metadata_import WHERE id=$1",
+    )
+    .bind(root)
+    .fetch_one(&migrator)
+    .await
+    .unwrap();
+    let claim =
+        crate::db_family_refresh::prepared_family_refresh(&migrator, &f, parent, "metadata").await;
+    let cohort: Uuid = sqlx::query_scalar(
+        "SELECT id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND person_id=$2",
+    )
+    .bind(claim.bundle)
+    .bind(person)
+    .fetch_one(&migrator)
+    .await
+    .unwrap();
+    let proof = match metadata_discovery::discover(&f.pool, &f.key, &claim, cohort)
+        .await
+        .unwrap()
+    {
+        Discovery::Proven(proof) => proof,
+        Discovery::Held(hold) => panic!("legacy admitted metadata held: {hold:?}"),
+    };
+    assert_eq!(proof.ownership.tags.len(), 1);
+    assert_eq!(proof.ownership.fields.len(), 4);
+    let target: Uuid = sqlx::query_scalar(
+        "SELECT field_id FROM person_custom_field_value WHERE person_id=$1 AND field_type='text'",
+    )
+    .bind(person)
+    .fetch_one(&migrator)
+    .await
+    .unwrap();
+    sqlx::query("UPDATE person_custom_field_value SET text_value='local edit' WHERE person_id=$1 AND field_id=$2").bind(person).bind(target).execute(&migrator).await.unwrap();
+    sqlx::query("UPDATE person_custom_field_value SET text_value='Exact retained text' WHERE person_id=$1 AND field_id=$2").bind(person).bind(target).execute(&migrator).await.unwrap();
+    assert!(matches!(
+        metadata_discovery::discover(&f.pool, &f.key, &claim, cohort)
+            .await
+            .unwrap(),
+        Discovery::Held(Hold::LocalChange)
+    ));
+}

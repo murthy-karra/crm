@@ -90,10 +90,11 @@ ADMITTED_ACTIVITY_CAPABILITY = "fub-admitted-activity-v1"
 ADMITTED_HISTORY_CAPABILITY = "fub-admitted-history-v1"
 MAPPING_REPAIR_CAPABILITY = "fub-people-mapping-repair-v1"
 PEOPLE_RECOVERY_CAPABILITY = "fub-people-recovery-v1"
+FAMILY_REFRESH_CAPABILITY = "fub-family-refresh-v1"
 CAPABILITIES = frozenset({METADATA_CAPABILITY, ACTIVITY_CAPABILITY, HISTORY_CAPABILITY,
                         TIMELINE_CAPABILITY, CORE_CHANGE_CAPABILITY, PEOPLE_REFRESH_CAPABILITY,
                         PEOPLE_ADMISSION_CAPABILITY, ADMITTED_PEOPLE_REFRESH_CAPABILITY,
-                        ADMITTED_METADATA_CAPABILITY, ADMITTED_ACTIVITY_CAPABILITY, ADMITTED_HISTORY_CAPABILITY, MAPPING_REPAIR_CAPABILITY, PEOPLE_RECOVERY_CAPABILITY})
+                        ADMITTED_METADATA_CAPABILITY, ADMITTED_ACTIVITY_CAPABILITY, ADMITTED_HISTORY_CAPABILITY, MAPPING_REPAIR_CAPABILITY, PEOPLE_RECOVERY_CAPABILITY, FAMILY_REFRESH_CAPABILITY})
 MAX_JSON_BYTES = 1024 * 1024
 MAX_ENTRIES = 4096
 MAX_AGE_SECONDS = 300
@@ -225,6 +226,10 @@ def validate_state(state):
                                 "people_recovery_unsupported_count"}
     if people_recovery_fields.intersection(state):
         fields |= people_recovery_fields
+    family_refresh_fields = {"family_refresh_binding_count", "family_refresh_schema_present",
+                                "family_refresh_unsupported_count"}
+    if family_refresh_fields.intersection(state):
+        fields |= family_refresh_fields
     object_fields(state, fields)
     if (type(state.get("activity_schema_present", False)) is not bool
             or not isinstance(state.get("activity_binding_count", "0"), str)
@@ -337,6 +342,16 @@ def validate_state(state):
             or int(people_recovery_unsupported) > int(people_recovery_count)
             or (not state.get("people_recovery_schema_present", False)
                 and int(people_recovery_count) != 0)):
+        fail("database_evidence_invalid")
+    family_refresh_count = state.get("family_refresh_binding_count", "0")
+    family_refresh_unsupported = state.get("family_refresh_unsupported_count", "0")
+    if (type(state.get("family_refresh_schema_present", False)) is not bool
+            or any(not isinstance(value, str)
+                   or re.fullmatch(r"0|[1-9][0-9]{0,19}", value) is None
+                   for value in [family_refresh_count, family_refresh_unsupported])
+            or int(family_refresh_unsupported) > int(family_refresh_count)
+            or (not state.get("family_refresh_schema_present", False)
+                and int(family_refresh_count) != 0)):
         fail("database_evidence_invalid")
     count = state["binding_count"]
     if (type(state["schema_present"]) is not bool
@@ -522,6 +537,13 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
         reasons.add("people_recovery_binding_requires_compatible_artifacts")
     if int(state.get("people_recovery_unsupported_count", "0")) > 0:
         reasons.add("people_recovery_engine_unsupported")
+    family_refresh_missing = any(item["role"] in {"api", "worker"}
+                                 and FAMILY_REFRESH_CAPABILITY not in item["capabilities"]
+                                 for item in selected + processes)
+    if int(state.get("family_refresh_binding_count", "0")) > 0 and family_refresh_missing:
+        reasons.add("family_refresh_binding_requires_compatible_artifacts")
+    if int(state.get("family_refresh_unsupported_count", "0")) > 0:
+        reasons.add("family_refresh_engine_unsupported")
     launch_allowed = not reasons
     confirmation_reasons = set(reasons)
     if not state["schema_present"]:
@@ -619,6 +641,13 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
         people_recovery_reasons.add("people_recovery_candidate_missing")
     if not state.get("people_recovery_schema_present", False):
         people_recovery_reasons.add("people_recovery_schema_missing")
+    family_refresh_reasons = set(confirmation_reasons)
+    if family_refresh_missing:
+        family_refresh_reasons.add("family_refresh_capability_missing")
+    if not any(item["role"] in {"api", "worker"} for item in selected):
+        family_refresh_reasons.add("family_refresh_candidate_missing")
+    if not state.get("family_refresh_schema_present", False):
+        family_refresh_reasons.add("family_refresh_schema_missing")
     return {
         "version": 1,
         "gate_version": GATE,
@@ -672,15 +701,19 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
         "admitted_history_confirmation_ready": not admitted_history_reasons,
         "mapping_repair_confirmation_ready": not mapping_repair_reasons,
         "people_recovery_confirmation_ready": not people_recovery_reasons,
+        "family_refresh_confirmation_ready": not family_refresh_reasons,
         "admitted_history_schema_present": state.get("admitted_history_schema_present", False),
         "mapping_repair_schema_present": state.get("mapping_repair_schema_present", False),
         "people_recovery_schema_present": state.get("people_recovery_schema_present", False),
+        "family_refresh_schema_present": state.get("family_refresh_schema_present", False),
         "admitted_history_binding_count": state.get("admitted_history_binding_count", "0"),
         "mapping_repair_binding_count": state.get("mapping_repair_binding_count", "0"),
         "people_recovery_binding_count": state.get("people_recovery_binding_count", "0"),
+        "family_refresh_binding_count": state.get("family_refresh_binding_count", "0"),
         "admitted_history_unsupported_count": state.get("admitted_history_unsupported_count", "0"),
         "mapping_repair_unsupported_count": state.get("mapping_repair_unsupported_count", "0"),
         "people_recovery_unsupported_count": state.get("people_recovery_unsupported_count", "0"),
+        "family_refresh_unsupported_count": state.get("family_refresh_unsupported_count", "0"),
         "launch_reasons": sorted(reasons),
         "confirmation_reasons": sorted(confirmation_reasons),
         "metadata_confirmation_reasons": sorted(metadata_reasons),
@@ -695,6 +728,7 @@ def evaluate(artifacts, candidates, inventory, state, target, now):
         "admitted_history_confirmation_reasons": sorted(admitted_history_reasons),
         "mapping_repair_confirmation_reasons": sorted(mapping_repair_reasons),
         "people_recovery_confirmation_reasons": sorted(people_recovery_reasons),
+        "family_refresh_confirmation_reasons": sorted(family_refresh_reasons),
         "admitted_people_refresh_confirmation_reasons": sorted(admitted_people_refresh_reasons),
     }
 
@@ -967,6 +1001,23 @@ def database_state():
         object_fields(observed, {"count", "unsupported_count"})
         state["people_recovery_binding_count"] = observed["count"]
         state["people_recovery_unsupported_count"] = observed["unsupported_count"]
+    family_refresh_schema_path = Path(__file__).resolve().parents[1] / "backend/crates/crm-app/src/auth/family_refresh_schema.sql"
+    try:
+        family_refresh_schema = family_refresh_schema_path.read_text(encoding="utf-8").strip()
+    except OSError:
+        fail("family_refresh_schema_inventory_unavailable")
+    family_refresh = sql_json("SELECT json_build_object('present',(to_regclass('public.migration_family_refresh_requirement') IS NOT NULL OR to_regprocedure('public.crm_family_refresh_mutation_allowed(uuid,text,text,jsonb,jsonb)') IS NOT NULL),'compatible',(" + family_refresh_schema + "))")
+    object_fields(family_refresh, {"present", "compatible"})
+    if any(type(family_refresh[k]) is not bool for k in ["present", "compatible"]) or family_refresh["present"] != family_refresh["compatible"]:
+        fail("family_refresh_schema_incomplete")
+    state["family_refresh_schema_present"] = family_refresh["present"]
+    state["family_refresh_binding_count"] = "0"
+    state["family_refresh_unsupported_count"] = "0"
+    if family_refresh["present"]:
+        observed = sql_json("SELECT json_build_object('count',count(*)::text,'unsupported_count',count(*) FILTER (WHERE capability<>'fub-family-refresh-v1')::text) FROM public.migration_family_refresh_requirement")
+        object_fields(observed, {"count", "unsupported_count"})
+        state["family_refresh_binding_count"] = observed["count"]
+        state["family_refresh_unsupported_count"] = observed["unsupported_count"]
     return state
 
 
@@ -1003,6 +1054,7 @@ def main(argv=None):
                           "admitted_history_confirmation_ready": False,
                           "mapping_repair_confirmation_ready": False,
                           "people_recovery_confirmation_ready": False,
+                          "family_refresh_confirmation_ready": False,
                           "error": str(error)}, sort_keys=True))
         return 2
 

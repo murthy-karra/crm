@@ -27,5 +27,9 @@ WHERE b.organization_id=$1 AND b.parent_import_id=$2 AND b.id<>$3
     OR b.confirmed_at>$10 OR p.confirmed_at>$10 OR b.updated_at>$10
     OR s.id IS NULL OR s.started_at IS NULL OR s.completed_at IS NULL
     OR s.state NOT IN ('completed','completed_with_gaps') OR s.completed_at<s.started_at
-    OR s.id=$11 OR s.completed_at>=$12)
+    OR ((s.id=$11 OR s.completed_at>=$12) AND NOT (
+      s.id=$11 AND EXISTS(SELECT 1 FROM migration_family_refresh_bundle current
+        WHERE current.id=$3 AND current.organization_id=$1
+          AND current.remainder_origin_bundle_id IS NOT NULL
+          AND COALESCE(b.remainder_origin_bundle_id,b.id)=current.remainder_origin_bundle_id))))
 LIMIT 1

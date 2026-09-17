@@ -99,6 +99,84 @@ pub(crate) async fn capture(
         ownership,
     })
 }
+/// Every successful insertion increments the aggregate revision exactly once.
+/// Any other historical mutation makes C's revision/state differ. Observed
+/// already-present values never initialize ownership or fill holes in B.
+pub(super) fn reconstruct(
+    binding: &Binding,
+    operations: &[crate::domain::migration::metadata_model::Operation],
+) -> Result<Option<AfterState>, MigrationError> {
+    use crate::domain::{custom_field::CustomFieldValue, migration::metadata_source::NativeValue};
+    let mut state = State::default();
+    let mut revision = 1i64;
+    let mut ids = BTreeSet::new();
+    for op in operations {
+        if !ids.insert(op.id) {
+            return Ok(None);
+        }
+        if op.disposition != "applied" {
+            continue;
+        }
+        let Some(target) = op.target_id else {
+            return Ok(None);
+        };
+        match op.kind.as_str() {
+            "tag_link" if op.value.is_none() => {
+                if !state.tags.insert(target) {
+                    return Ok(None);
+                }
+            }
+            "value" => {
+                let value = match op.value.as_ref() {
+                    Some(NativeValue::Text(v)) => CustomFieldValue::Text(v.clone()),
+                    Some(NativeValue::Number(v)) => CustomFieldValue::Number(v.clone()),
+                    Some(NativeValue::Date(v)) => {
+                        let Ok(date) = v.parse() else { return Ok(None) };
+                        CustomFieldValue::Date(date)
+                    }
+                    Some(NativeValue::Choice(v)) => {
+                        let Ok(id) = v.parse() else { return Ok(None) };
+                        CustomFieldValue::Choice(crate::ids::CustomFieldOptionId::new(id))
+                    }
+                    None => return Ok(None),
+                };
+                if state.fields.insert(target, value).is_some() {
+                    return Ok(None);
+                }
+            }
+            _ => return Ok(None),
+        }
+        revision += 1;
+    }
+    let receipts: Vec<_> = operations
+        .iter()
+        .map(|op| Receipt {
+            kind: &op.kind,
+            source_key: &op.source_key,
+            target: op.target_id,
+            outcome: &op.disposition,
+        })
+        .collect();
+    // An already-present target absent from the applied writes makes complete
+    // historical state unprovable; it is a hold, not damaged ciphertext.
+    let Ok(ownership) = ownership(&state, &receipts) else {
+        return Ok(None);
+    };
+    Ok(Some(AfterState {
+        version: 1,
+        organization: binding.organization.0,
+        import: binding.import,
+        manifest: binding.manifest,
+        snapshot: Snapshot {
+            person: binding.person,
+            revision,
+            head: None,
+            state,
+        },
+        ownership,
+    }))
+}
+
 /// Relational identifiers come from the scoped successful result and manifest,
 /// after the encrypted result has been authenticated. No request may supply them.
 pub struct Binding {

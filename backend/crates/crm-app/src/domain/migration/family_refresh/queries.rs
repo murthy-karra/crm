@@ -52,6 +52,7 @@ pub struct FamilySummary {
     pub counts: Counts,
     pub results: Counts,
     pub completed_units: String,
+    pub remainder_eligible: bool,
     pub retained_bytes: String,
     pub reserved_bytes: String,
     pub run_byte_limit: String,
@@ -211,7 +212,7 @@ pub async fn detail(
     let bundle = bundle(&row)?;
     // The partial unique index permits at most one non-superseded plan per
     // selected family. Lock in UUID order after the bundle, as preparation does.
-    let rows=sqlx::query("SELECT id,family,revision,state,phase,pause_reason,digest,expires_at,apply_position,retained_bytes,reserved_bytes,run_byte_limit,CASE WHEN octet_length(results::text)<=4096 THEN results END AS results,CASE WHEN octet_length(counts::text)<=4096 THEN counts END AS counts FROM migration_family_refresh_plan WHERE bundle_id=$1 AND organization_id=$2 AND state<>'superseded' ORDER BY id LIMIT 4 FOR SHARE")
+    let rows=sqlx::query("SELECT id,family,revision,state,phase,pause_reason,digest,expires_at,apply_position,EXISTS(SELECT 1 FROM migration_family_refresh_plan original JOIN migration_family_refresh_manifest u ON u.plan_id=original.id AND u.organization_id=original.organization_id WHERE original.id=CASE WHEN p.confirmed_at IS NOT NULL THEN p.id ELSE p.remainder_source_plan_id END AND original.organization_id=p.organization_id AND original.confirmed_at IS NOT NULL AND u.position>original.apply_position AND u.kind<>'catalog' AND u.disposition IN ('insert','update','already_current','correction')) AND NOT EXISTS(SELECT 1 FROM migration_family_refresh_bundle successor WHERE successor.predecessor_id=p.bundle_id AND successor.organization_id=p.organization_id) AS remainder_eligible,retained_bytes,reserved_bytes,run_byte_limit,CASE WHEN octet_length(results::text)<=4096 THEN results END AS results,CASE WHEN octet_length(counts::text)<=4096 THEN counts END AS counts FROM migration_family_refresh_plan p WHERE bundle_id=$1 AND organization_id=$2 AND state<>'superseded' ORDER BY id LIMIT 4 FOR SHARE")
         .bind(id).bind(ctx.organization_id.0).fetch_all(&mut *tx).await?;
     if rows.is_empty() || rows.len() > 3 {
         return Err(MigrationError::Crypto);
@@ -253,8 +254,9 @@ pub async fn detail(
                 .map(|bytes| crate::domain::migration::imports::hex(&bytes)),
             expires_at: row.get("expires_at"),
             counts,
+            completed_units: results.units.to_string(),
+            remainder_eligible: row.get("remainder_eligible"),
             results,
-            completed_units: row.get::<i64, _>("apply_position").to_string(),
             retained_bytes: row.get::<i64, _>("retained_bytes").to_string(),
             reserved_bytes: row.get::<i64, _>("reserved_bytes").to_string(),
             run_byte_limit: row.get::<i64, _>("run_byte_limit").to_string(),

@@ -92,6 +92,7 @@ pub async fn plan(
         return scope.open(key,cmd.request_id,Purpose::Receipt,r.get("nonce"),r.get("ciphertext"));
     }
     if executor != Some(b.get::<Uuid, _>("executor_user_id"))
+        || b.get::<Option<Uuid>, _>("predecessor_id").is_some()
         || b.get::<i64, _>("revision") != expected
         || b.get::<Option<chrono::DateTime<chrono::Utc>>, _>("confirmed_at")
             .is_some()

@@ -12,7 +12,7 @@ const api = vi.mocked(apiFetch)
 const root = '/migrations/fub/family-refreshes'
 const me = (role = 'admin') => ({ user: { id: 'actor' }, organization: { id: 'org', role, workspace_mode: 'migration_review', workspace_revision: '2' } })
 const counts: RefreshCounts = { units: '9007199254740993123', inserts: '2', updates: '0', already_current: '0', held: '1', excluded: '0', tag_removals: '0', field_clears: '0', task_completions: '0', task_reopens: '0', history_corrections: '7', source_only: '5' }
-const initial: RefreshDetail = { bundle: { id: 'bundle', parent_import_id: 'parent', revision: '9007199254740993', state: 'ready', core_report_id: null, history_capture_id: 'capture', predecessor_id: null, digest: 'a'.repeat(64), created_at: '2026-09-16T00:00:00Z', confirmed_at: null }, families: [{ family: 'history', plan_id: 'plan', revision: '7', state: 'ready', phase: 'classify', digest: 'b'.repeat(64), pause_reason: null, expires_at: '2099-01-01T00:00:00Z', counts, results: { ...counts, units: '0' }, completed_units: '0', retained_bytes: '123', reserved_bytes: '456', run_byte_limit: '9999' }] }
+const initial: RefreshDetail = { bundle: { id: 'bundle', parent_import_id: 'parent', revision: '9007199254740993', state: 'ready', core_report_id: null, history_capture_id: 'capture', predecessor_id: null, digest: 'a'.repeat(64), created_at: '2026-09-16T00:00:00Z', confirmed_at: null }, families: [{ family: 'history', plan_id: 'plan', revision: '7', state: 'ready', phase: 'classify', digest: 'b'.repeat(64), pause_reason: null, expires_at: '2099-01-01T00:00:00Z', counts, results: { ...counts, units: '0' }, completed_units: '0', remainder_eligible: false, retained_bytes: '123', reserved_bytes: '456', run_byte_limit: '9999' }] }
 const cleanup: (() => void)[] = []
 async function setup(command?: (url: string, body: unknown) => unknown) {
   const detail = structuredClone(initial)
@@ -74,4 +74,26 @@ it('prepares history-only evidence without sending an unrelated core report', as
   await click('Prepare family refresh')
   expect(bodies).toHaveLength(1)
   expect(bodies[0]).toMatchObject({ parent_import_id: 'parent', families: ['history'], core_report_id: null, history_capture_id: 'capture' })
+})
+
+it('prepares one exact remainder for all eligible cancelled families', async () => {
+  const bodies: unknown[] = []
+  const { wrapper, detail } = await setup((url, body) => { expect(url).toBe(`${root}/bundle/remainder`); bodies.push(body); return { bundle_id: 'bundle', revision: '1', state: 'preparing', families: [] } })
+  detail.bundle.state = 'cancelled'; detail.bundle.confirmed_at = '2026-09-16T01:00:00Z'; detail.families[0]!.state = 'cancelled'; detail.families[0]!.remainder_eligible = true
+  await wrapper.findAll('select').find(s => s.text().includes('Choose a refresh'))!.setValue('bundle'); await flushPromises()
+  await click('Prepare exact remainder')
+  expect(bodies).toHaveLength(1); expect(bodies[0]).toMatchObject({ expected_revision: initial.bundle.revision, families: ['history'] })
+})
+
+it('confirms a ready family while a paused sibling remains unselected', async () => {
+  const bodies: unknown[] = []
+  const { wrapper, detail } = await setup((url, body) => { expect(url).toBe(`${root}/bundle/confirm`); bodies.push(body); return { bundle_id: 'bundle', revision: '8', state: 'queued', families: [] } })
+  detail.bundle.state = 'preparing'
+  detail.families.push({ ...structuredClone(detail.families[0]!), family: 'activity', plan_id: 'paused-plan', state: 'paused', digest: null, pause_reason: 'storage_limit' })
+  await wrapper.findAll('select').find(s => s.text().includes('Choose a refresh'))!.setValue('bundle'); await flushPromises()
+  await wrapper.findAll('label').find(l => l.text().startsWith('I reviewed every selected family'))!.find('input').setValue(true)
+  await click('Review confirmation'); await click('Apply reviewed refresh')
+  expect(bodies).toHaveLength(1)
+  expect(bodies[0]).toMatchObject({ families: [{ family: 'history', plan_id: 'plan' }] })
+  expect((bodies[0] as { families: unknown[] }).families).toHaveLength(1)
 })

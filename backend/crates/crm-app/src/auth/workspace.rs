@@ -497,8 +497,9 @@ impl ReleaseReadiness {
                 "family refresh release not ready".into(),
             ));
         }
-        let schema: bool = sqlx::query_scalar("SELECT to_regprocedure('crm_family_refresh_sealing_fence()') IS NOT NULL AND to_regprocedure('crm_family_refresh_recipe_fence()') IS NOT NULL AND EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='migration_family_refresh_plan' AND column_name='seal_counts')")
-            .fetch_one(conn).await?;
+        let schema: bool = sqlx::query_scalar(include_str!("family_refresh_schema.sql"))
+            .fetch_one(conn)
+            .await?;
         if !schema {
             return Err(sqlx::Error::Protocol(
                 "family refresh schema incomplete".into(),

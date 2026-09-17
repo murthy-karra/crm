@@ -148,11 +148,19 @@ pub async fn discover(
     {
         return Ok(Discovery::Held(hold));
     }
+    let binding = Binding {
+        organization: claim.organization,
+        import: r.get("import_id"),
+        manifest: r.get("manifest_id"),
+        person,
+    };
     let proof = if admitted {
         #[derive(serde::Deserialize)]
         struct Payload {
             #[serde(default)]
             after_state: Option<AfterState>,
+            #[serde(default)]
+            operations: serde_json::Value,
         }
         let data: Payload = admitted_metadata_worker::open(
             key,
@@ -164,7 +172,13 @@ pub async fn discover(
             &r.get::<Vec<u8>, _>("nonce"),
             &r.get::<Vec<u8>, _>("ciphertext"),
         )?;
-        data.after_state
+        match data.after_state {
+            Some(proof) => Some(proof),
+            None => {
+                super::metadata_legacy::admitted(&mut tx, key, &r, data.operations, &binding)
+                    .await?
+            }
+        }
     } else {
         let data: metadata_model::ResultData = metadata_store::open(
             key,
@@ -176,15 +190,14 @@ pub async fn discover(
             &r.get::<Vec<u8>, _>("nonce"),
             &r.get::<Vec<u8>, _>("ciphertext"),
         )?;
-        data.after_state
+        match data.after_state {
+            Some(proof) => Some(proof),
+            None => {
+                super::metadata_legacy::original(&mut tx, &r, data.operations, &binding).await?
+            }
+        }
     };
     let current = metadata_baseline::observe(&mut tx, claim.organization, person).await?;
-    let binding = Binding {
-        organization: claim.organization,
-        import: r.get("import_id"),
-        manifest: r.get("manifest_id"),
-        person,
-    };
     Ok(
         match metadata_baseline::verify(proof.as_ref(), &binding, Some(&current)) {
             Ok((baseline, ownership)) => Discovery::Proven(Proven {

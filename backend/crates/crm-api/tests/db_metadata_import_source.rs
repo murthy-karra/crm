@@ -107,11 +107,11 @@ async fn detail(f: &Fixture, id: Uuid) -> Value {
         .unwrap()
 }
 
-fn plan_id(detail: &Value) -> Uuid {
+pub(super) fn plan_id(detail: &Value) -> Uuid {
     Uuid::parse_str(detail["latest_plan"]["id"].as_str().unwrap()).unwrap()
 }
 
-async fn propose(f: &Fixture, parent: Uuid) -> (Uuid, Value) {
+pub(super) async fn propose(f: &Fixture, parent: Uuid) -> (Uuid, Value) {
     let calls = f.reader.calls();
     let value = metadata::propose(
         &f.pool,
@@ -151,7 +151,7 @@ async fn patch(
     .await
 }
 
-async fn replan(f: &Fixture, id: Uuid, ready: &Value, mappings: Vec<Value>) -> Value {
+pub(super) async fn replan(f: &Fixture, id: Uuid, ready: &Value, mappings: Vec<Value>) -> Value {
     patch(f, id, ready, mappings).await.unwrap();
     drain(f).await;
     let value = detail(f, id).await;
@@ -185,7 +185,7 @@ fn choice_patch(row: &PgRow, choice: Value) -> Value {
 
 /// A suggestion never grants permission: enumerate and explicitly approve only
 /// source-qualified, representable catalog items in these synthetic books.
-async fn matching_choices(f: &Fixture, plan: Uuid) -> Vec<Value> {
+pub(super) async fn matching_choices(f: &Fixture, plan: Uuid) -> Vec<Value> {
     mappings(f, plan)
         .await
         .iter()
@@ -233,7 +233,7 @@ async fn parent_state(f: &Fixture, parent: Uuid) -> Value {
         .bind(parent).bind(f.org).fetch_one(&f.pool).await.unwrap()
 }
 
-async fn execute(f: &Fixture, id: Uuid, ready: &Value, parent: Uuid) -> Value {
+pub(super) async fn execute(f: &Fixture, id: Uuid, ready: &Value, parent: Uuid) -> Value {
     let calls = f.reader.calls();
     let before = parent_state(f, parent).await;
     let command = json!({"request_id":Uuid::new_v4(),"plan_id":ready["latest_plan"]["id"],
@@ -854,6 +854,14 @@ async fn metadata_source_full_multimegabyte_evidence_survives_execution_without_
 #[sqlx::test(migrations = "./migrations")]
 #[ignore]
 async fn family_refresh_metadata_original_discovery_is_bound_and_conservative(migrator: PgPool) {
+    metadata_original_discovery_scenario(migrator, false).await;
+}
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn family_refresh_legacy_metadata_original_bootstrap(migrator: PgPool) {
+    metadata_original_discovery_scenario(migrator, true).await;
+}
+async fn metadata_original_discovery_scenario(migrator: PgPool, legacy: bool) {
     use crm_api::domain::migration::family_refresh::{
         metadata_discovery::{self, Discovery},
         model::Hold,
@@ -876,6 +884,9 @@ async fn family_refresh_metadata_original_discovery_is_bound_and_conservative(mi
     )
     .await;
     execute(&f, child, &ready, parent).await;
+    if legacy {
+        crate::db_family_refresh::legacy_results(&migrator, &f, child, "metadata", false).await;
+    }
     let claim =
         crate::db_family_refresh::prepared_family_refresh(&migrator, &f, parent, "metadata").await;
     let cohort:Uuid=sqlx::query_scalar("SELECT id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND source_person_id='101'").bind(claim.bundle).fetch_one(&f.pool).await.unwrap();
@@ -888,6 +899,30 @@ async fn family_refresh_metadata_original_discovery_is_bound_and_conservative(mi
     };
     assert_eq!(proven.ownership.tags.len(), 1);
     assert_eq!(proven.ownership.fields.len(), 1);
+    if legacy {
+        let elapsed: i64 = sqlx::query_scalar(
+            "SELECT execution_time FROM _sqlx_migrations WHERE version=20261003000001",
+        )
+        .fetch_one(&migrator)
+        .await
+        .unwrap();
+        sqlx::query("UPDATE _sqlx_migrations SET execution_time=-1 WHERE version=20261003000001")
+            .execute(&migrator)
+            .await
+            .unwrap();
+        assert!(matches!(
+            metadata_discovery::discover(&f.pool, &f.key, &claim, cohort)
+                .await
+                .unwrap(),
+            Discovery::Held(Hold::BaselineUnproven)
+        ));
+        sqlx::query("UPDATE _sqlx_migrations SET execution_time=$1 WHERE version=20261003000001")
+            .bind(elapsed)
+            .execute(&migrator)
+            .await
+            .unwrap();
+    }
+
     assert!(
         metadata_discovery::discover(&f.pool, &f.key, &claim, Uuid::new_v4())
             .await
@@ -1182,6 +1217,16 @@ async fn family_refresh_metadata_execution_holds_changed_catalog(migrator: PgPoo
     metadata_execution_scenario(migrator, 2).await;
 }
 
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn family_refresh_remainder_inherits_settled_catalog(migrator: PgPool) {
+    metadata_execution_scenario(migrator, 3).await;
+}
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn family_refresh_remainder_does_not_retry_settled_catalog_holds(migrator: PgPool) {
+    metadata_execution_scenario(migrator, 4).await;
+}
 async fn metadata_execution_scenario(migrator: PgPool, mode: u8) {
     use crm_api::{
         auth::workspace::ReleaseReadiness,
@@ -1663,6 +1708,10 @@ async fn metadata_execution_scenario(migrator: PgPool, mode: u8) {
     };
     let executing = execution::claim_next(&f.pool).await.unwrap().unwrap();
     assert_eq!(executing.plan, claim.plan);
+    if mode == 4 {
+        let occupied = sqlx::query("INSERT INTO tag(id,organization_id,name,created_by_user_id) SELECT u.target_id,u.organization_id,'Locally occupied prerequisite',$2 FROM migration_family_refresh_manifest u JOIN migration_family_refresh_mapping m ON m.id=u.mapping_id WHERE u.plan_id=$1 AND u.kind='catalog' AND u.disposition='insert' AND m.kind='tag' ORDER BY u.position LIMIT 1").bind(claim.plan).bind(f.ctx.actor_user_id.0).execute(&migrator).await.unwrap();
+        assert_eq!(occupied.rows_affected(), 1);
+    }
     for turn in 0..30 {
         let next=sqlx::query("SELECT u.kind,u.disposition,u.source_id FROM migration_family_refresh_plan p JOIN migration_family_refresh_manifest u ON u.plan_id=p.id AND u.organization_id=p.organization_id AND u.position=p.apply_position+1 WHERE p.id=$1").bind(claim.plan).fetch_one(&migrator).await.unwrap();
         if next.get::<String, _>("kind") == "metadata"
@@ -1677,6 +1726,24 @@ async fn metadata_execution_scenario(migrator: PgPool, mode: u8) {
             execution::Progress::Advanced
         );
         assert!(turn < 29);
+    }
+    if mode == 3 || mode == 4 {
+        crm_api::domain::migration::family_refresh::preparation_worker::release(
+            &f.pool, &executing,
+        )
+        .await
+        .unwrap();
+        crate::db_family_refresh_commands::assert_exact_remainder(
+            &migrator,
+            &f,
+            claim.bundle,
+            claim.plan,
+            crm_api::domain::migration::family_refresh::model::Family::Metadata,
+            false,
+            mode == 4,
+        )
+        .await;
+        return;
     }
     let execution_checkpoint="SELECT jsonb_build_object('position',apply_position,'results',results,'measured',measured_bytes,'retained',retained_bytes,'reserved',reserved_bytes,'heads',(SELECT count(*) FROM migration_family_refresh_head WHERE organization_id=p.organization_id),'receipts',(SELECT count(*) FROM migration_family_refresh_result WHERE plan_id=p.id)) FROM migration_family_refresh_plan p WHERE id=$1";
     let before_execution: Value = sqlx::query_scalar(execution_checkpoint)
@@ -1914,4 +1981,238 @@ async fn metadata_execution_scenario(migrator: PgPool, mode: u8) {
             .unwrap(),
         native_after
     );
+}
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn family_refresh_remainder_keeps_families_from_different_confirmed_attempts(pool: PgPool) {
+    use crm_api::{
+        auth::workspace::ReleaseReadiness,
+        domain::migration::family_refresh::{
+            commands,
+            confirmation::{self, ConfirmFamilyRefresh, SelectedPlan},
+            execution,
+            lifecycle::{self, FamilyControl},
+            mapping_selection::{MappingPatch, Selection},
+            model::Family,
+            plan_commands::{self, PlanFamilyRefresh},
+            preparation_worker::{self, Progress},
+            queries, remainder,
+        },
+    };
+    async fn drain(f: &Fixture) {
+        for turn in 0..400 {
+            if preparation_worker::run_once(&f.pool, &f.key, &f.policy)
+                .await
+                .unwrap()
+                == Progress::Idle
+            {
+                return;
+            }
+            assert!(turn < 399);
+        }
+    }
+    async fn confirm(f: &Fixture, bundle: Uuid, families: Vec<Family>) {
+        let d = queries::detail(&f.pool, &f.ctx, bundle).await.unwrap();
+        confirmation::confirm(
+            &f.pool,
+            &f.key,
+            &ReleaseReadiness::for_tests(),
+            &f.ctx,
+            bundle,
+            ConfirmFamilyRefresh {
+                request_id: Uuid::new_v4(),
+                expected_revision: d.bundle.revision,
+                bundle_digest: d.bundle.digest.unwrap(),
+                families: d
+                    .families
+                    .into_iter()
+                    .filter(|p| families.contains(&p.family))
+                    .map(|p| SelectedPlan {
+                        family: p.family,
+                        plan_id: p.plan_id,
+                        plan_revision: p.revision,
+                        plan_digest: p.digest.unwrap(),
+                        expected_counts: p.counts,
+                    })
+                    .collect(),
+                acknowledged_exclusions: true,
+            },
+        )
+        .await
+        .unwrap();
+    }
+    async fn cancel(f: &Fixture, bundle: Uuid, families: Vec<Family>) {
+        let d = queries::detail(&f.pool, &f.ctx, bundle).await.unwrap();
+        lifecycle::cancel(
+            &f.pool,
+            &f.key,
+            &f.ctx,
+            bundle,
+            FamilyControl {
+                request_id: Uuid::new_v4(),
+                expected_revision: d.bundle.revision,
+                families,
+            },
+        )
+        .await
+        .unwrap();
+    }
+    async fn successor(f: &Fixture, bundle: Uuid) -> Uuid {
+        let d = queries::detail(&f.pool, &f.ctx, bundle).await.unwrap();
+        remainder::create(
+            &f.pool,
+            &f.key,
+            &f.policy,
+            Some(&ReleaseReadiness::for_tests()),
+            &f.ctx,
+            bundle,
+            FamilyControl {
+                request_id: Uuid::new_v4(),
+                expected_revision: d.bundle.revision,
+                families: vec![Family::Metadata, Family::Activity],
+            },
+        )
+        .await
+        .unwrap()
+        .bundle_id
+    }
+    let mut p = person(101);
+    p["tags"] = json!(["Owned"]);
+    let reader = book(vec![p.clone()], vec![]);
+    reader.set_records(
+        Stream::Users,
+        vec![json!({"id":3,"name":"Synthetic author","timezone":"America/Los_Angeles"})],
+    );
+    reader.set_records(Stream::TasksOpen, vec![crate::db_activity_source::task(21)]);
+    let f = support::fixture_with_book(&pool, reader).await;
+    let parent = complete_parent(&f).await;
+    let (child, first) = propose(&f, parent).await;
+    let ready = replan(
+        &f,
+        child,
+        &first,
+        matching_choices(&f, plan_id(&first)).await,
+    )
+    .await;
+    execute(&f, child, &ready, parent).await;
+    let (activity, ready) = crate::db_activity_source::prepare(&f, parent).await;
+    let choices = crate::db_activity_source::choices(&f, activity).await;
+    let ready = crate::db_activity_source::replan(&f, activity, &ready, choices, None).await;
+    crate::db_activity_source::confirm(&f, activity, &ready).await;
+    p["tags"] = json!(["Owned", "New"]);
+    let mut task = crate::db_activity_source::task(21);
+    task["name"] = json!("Changed retained task");
+    f.reader.set_records(
+        Stream::TasksOpen,
+        vec![task, crate::db_activity_source::task(22)],
+    );
+    let report = crate::db_people_admission_execution::report(&f, parent, vec![p]).await;
+    let prepared = commands::prepare(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &ReleaseReadiness::for_tests(),
+        &f.ctx,
+        commands::PrepareFamilyRefresh {
+            request_id: Uuid::new_v4(),
+            parent_import_id: parent,
+            core_report_id: Some(report),
+            history_capture_id: None,
+            families: vec![Family::Metadata, Family::Activity],
+        },
+    )
+    .await
+    .unwrap();
+    drain(&f).await;
+    for family in [Family::Metadata, Family::Activity] {
+        let d = queries::detail(&f.pool, &f.ctx, prepared.bundle_id)
+            .await
+            .unwrap();
+        let plan = d.families.iter().find(|p| p.family == family).unwrap();
+        let mappings=sqlx::query("SELECT m.id,m.kind,c.target_id FROM migration_family_refresh_mapping m LEFT JOIN migration_metadata_catalog_claim c ON c.organization_id=m.organization_id AND c.source_key=m.source_key_hmac AND c.kind=m.kind WHERE m.plan_id=$1 ORDER BY m.id").bind(plan.plan_id).fetch_all(&pool).await.unwrap();
+        let patches = mappings
+            .into_iter()
+            .map(|m| MappingPatch {
+                mapping_id: m.get("id"),
+                choice: if family == Family::Metadata {
+                    m.get::<Option<Uuid>, _>("target_id")
+                        .map(|target_id| Selection::Existing { target_id })
+                        .unwrap_or(Selection::CreateMatching)
+                } else {
+                    match m.get::<String, _>("kind").as_str() {
+                        "task_kind" => Selection::Kind {
+                            kind: crm_api::domain::task::TaskKind::Call,
+                        },
+                        "task_assignee" => Selection::Existing {
+                            target_id: f.member,
+                        },
+                        _ => Selection::Existing { target_id: f.actor },
+                    }
+                },
+            })
+            .collect();
+        plan_commands::plan(
+            &f.pool,
+            &f.key,
+            &f.policy,
+            &f.ctx,
+            prepared.bundle_id,
+            PlanFamilyRefresh {
+                request_id: Uuid::new_v4(),
+                expected_revision: d.bundle.revision,
+                family,
+                patches,
+                source_timezone: None,
+            },
+        )
+        .await
+        .unwrap();
+        drain(&f).await;
+    }
+    confirm(
+        &f,
+        prepared.bundle_id,
+        vec![Family::Metadata, Family::Activity],
+    )
+    .await;
+    cancel(
+        &f,
+        prepared.bundle_id,
+        vec![Family::Metadata, Family::Activity],
+    )
+    .await;
+    let first = successor(&f, prepared.bundle_id).await;
+    drain(&f).await;
+    confirm(&f, first, vec![Family::Activity]).await;
+    cancel(&f, first, vec![Family::Activity]).await;
+    let second = successor(&f, first).await;
+    drain(&f).await;
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(DISTINCT original.bundle_id) FROM migration_family_refresh_plan p JOIN migration_family_refresh_plan original ON original.id=p.remainder_source_plan_id WHERE p.bundle_id=$1").bind(second).fetch_one(&pool).await.unwrap(),2);
+    confirm(&f, second, vec![Family::Metadata, Family::Activity]).await;
+    for turn in 0..40 {
+        if execution::run_once(
+            &f.pool,
+            &f.key,
+            &f.policy,
+            Some(&ReleaseReadiness::for_tests()),
+        )
+        .await
+        .unwrap()
+            == Progress::Idle
+        {
+            break;
+        }
+        assert!(turn < 39);
+    }
+    let d = queries::detail(&f.pool, &f.ctx, second).await.unwrap();
+    assert_eq!(d.bundle.state, "completed");
+    assert!(
+        d.families.iter().all(|p| p.results.held == 0),
+        "unexpected held mixed remainder"
+    );
+    sqlx::raw_sql(include_str!("fixtures/family_refresh_byte_inventory.sql"))
+        .execute(&pool)
+        .await
+        .unwrap();
 }

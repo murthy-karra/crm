@@ -96,7 +96,19 @@ pub async fn confirm_with_readiness(
         ))
         .map_err(|_| MigrationError::Crypto)?,
     );
-    let mut tx = super::queries::begin(pool, ctx).await?;
+    let mut tx = pool.begin().await?;
+    crate::auth::workspace::bounded_lock_wait(&mut tx).await?;
+    sqlx::query("SET LOCAL statement_timeout='10s'")
+        .execute(&mut *tx)
+        .await?;
+    // Drain previously admitted shared readers/writers before installing the
+    // permanent capability requirement. Acquire before membership/storage locks.
+    crate::auth::workspace::exclusive(&mut tx, ctx.organization_id).await?;
+    sqlx::query("SELECT set_config('crm.family_refresh_reader',$1,true)")
+        .bind(ENGINE)
+        .execute(&mut *tx)
+        .await?;
+    crate::domain::migration::store::require_admin(&mut tx, ctx).await?;
     let executor:Option<Uuid>=sqlx::query_scalar("SELECT m.user_id FROM organization_membership m JOIN migration_family_refresh_bundle b ON b.organization_id=m.organization_id AND b.executor_user_id=m.user_id WHERE b.id=$1 AND b.organization_id=$2 AND m.role='admin' AND m.status='active' FOR SHARE OF m").bind(id).bind(ctx.organization_id.0).fetch_optional(&mut *tx).await?;
     sqlx::query("SELECT organization_id FROM migration_snapshot_storage WHERE organization_id=$1 FOR UPDATE").bind(ctx.organization_id.0).fetch_optional(&mut *tx).await?.ok_or(MigrationError::NotFound)?;
     let b=sqlx::query("SELECT b.* FROM migration_family_refresh_bundle b JOIN migration_workspace w ON w.organization_id=b.organization_id AND w.import_id=b.parent_import_id AND w.plan_id=b.parent_plan_id WHERE b.id=$1 AND b.organization_id=$2 FOR UPDATE OF b").bind(id).bind(ctx.organization_id.0).fetch_optional(&mut *tx).await?.ok_or(MigrationError::NotFound)?;

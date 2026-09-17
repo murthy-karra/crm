@@ -149,7 +149,7 @@ pub async fn items(
     {
         return Err(MigrationError::InvalidInput);
     }
-    let raw=sqlx::query("SELECT id,position,kind,cohort_id,person_id,target_id,disposition,reason,CASE WHEN octet_length(counts::text)<=4096 THEN counts END AS counts FROM migration_family_refresh_manifest WHERE bundle_id=$1 AND plan_id=$2 AND organization_id=$3 AND position>$4 AND position<=$5 AND ($6::uuid IS NULL OR cohort_id=$6) AND ($7::text IS NULL OR disposition=$7) ORDER BY position LIMIT $8")
+    let raw=sqlx::query("SELECT id,position,kind,cohort_id,person_id,target_id,disposition,reason,CASE WHEN octet_length(counts::text)<=4096 THEN counts END AS counts FROM migration_family_refresh_manifest WHERE bundle_id=$1 AND plan_id=$2 AND organization_id=$3 AND position>$4 AND position<=$5 AND inherited_result_id IS NULL AND ($6::uuid IS NULL OR cohort_id=$6) AND ($7::text IS NULL OR disposition=$7) ORDER BY position LIMIT $8")
         .bind(bundle).bind(q.plan_id).bind(ctx.organization_id.0).bind(position.after).bind(position.upper)
         .bind(q.cohort_id).bind(q.outcome.map(Outcome::as_str)).bind(i64::from(limit)+1).fetch_all(&mut *tx).await?;
     let mut result = Items {

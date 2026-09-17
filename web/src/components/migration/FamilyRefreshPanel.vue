@@ -8,7 +8,7 @@ import FamilyRefreshFields from './FamilyRefreshFields.vue'
 import { fetchImports, uncertainImportError } from '../../api/imports'
 import { fetchCoreChangeReports } from '../../api/coreChangeReports'
 import { fetchHistoryCaptures } from '../../api/historyCaptures'
-import { cancelFamilyRefresh, confirmFamilyRefresh, fetchFamilyRefresh, fetchFamilyRefreshes, fetchRefreshItems, fetchRefreshResults, prepareFamilyRefresh, replanFamilyRefresh, resumeFamilyRefresh, useFamilyRefreshAccess, type RefreshPage, type RefreshItem, type RefreshResult, type RefreshConfirm, type RefreshControl, type RefreshCounts, type RefreshFamily, type RefreshPatch, type RefreshPrepare, type RefreshPrepared, type RefreshReplan } from '../../api/familyRefreshes'
+import { cancelFamilyRefresh, confirmFamilyRefresh, fetchFamilyRefresh, fetchFamilyRefreshes, fetchRefreshItems, fetchRefreshResults, prepareFamilyRefresh, replanFamilyRefresh, remainderFamilyRefresh, resumeFamilyRefresh, useFamilyRefreshAccess, type RefreshPage, type RefreshItem, type RefreshResult, type RefreshConfirm, type RefreshControl, type RefreshCounts, type RefreshFamily, type RefreshPatch, type RefreshPrepare, type RefreshPrepared, type RefreshReplan } from '../../api/familyRefreshes'
 import { buttonClasses, dialogPt, INPUT_CLASSES } from '../../lib/controls'
 import { describeApiError } from '../../lib/errors'
 const props = defineProps<{ refreshWorkspace: () => Promise<void> }>()
@@ -37,9 +37,9 @@ const rows = reading<RefreshPage<RefreshItem | RefreshResult>>(() => ['rows', se
   ? fetchRefreshItems(selected.value, family.value, plan.value!.plan_id, rowPages.value.at(-1) || undefined, signal, { outcome: outcome.value || undefined })
   : fetchRefreshResults(selected.value, family.value, plan.value!.plan_id, rowPages.value.at(-1) || undefined, signal, { outcome: outcome.value || undefined }))
 const dirty = computed(() => patches.value.length > 0 || timezoneDirty.value)
-const canPlan = computed(() => !!current.value && !current.value.bundle.confirmed_at && !['cancelled', 'completed'].includes(current.value.bundle.state) && !pending.value && !uncertain.value)
-const canConfirm = computed(() => !!current.value && current.value.bundle.state === 'ready' && !!current.value.bundle.digest && confirmFamilies.value.length > 0 && current.value.families.filter(p => confirmFamilies.value.includes(p.family)).every(p => p.state === 'ready' && !!p.digest && !!p.expires_at && Date.parse(p.expires_at) > now.value) && !dirty.value && !pending.value && !uncertain.value)
-type Intent = { action: 'prepare'; body: RefreshPrepare } | { action: 'plan'; id: string; body: RefreshReplan } | { action: 'confirm'; id: string; body: RefreshConfirm } | { action: 'cancel' | 'resume'; id: string; body: RefreshControl }
+const canPlan = computed(() => !!current.value && !current.value.bundle.confirmed_at && !current.value.bundle.predecessor_id && !['cancelled', 'completed'].includes(current.value.bundle.state) && !pending.value && !uncertain.value)
+const canConfirm = computed(() => !!current.value && ['preparing', 'ready'].includes(current.value.bundle.state) && !!current.value.bundle.digest && confirmFamilies.value.length > 0 && current.value.families.filter(p => confirmFamilies.value.includes(p.family)).every(p => p.state === 'ready' && !!p.digest && !!p.expires_at && Date.parse(p.expires_at) > now.value) && !dirty.value && !pending.value && !uncertain.value)
+type Intent = { action: 'prepare'; body: RefreshPrepare } | { action: 'plan'; id: string; body: RefreshReplan } | { action: 'confirm'; id: string; body: RefreshConfirm } | { action: 'cancel' | 'resume' | 'remainder'; id: string; body: RefreshControl }
 const intent = ref<Intent | null>(null)
 function clearReview() { confirmation.value = null; inspected.value = ''; patches.value = []; timezone.value = ''; timezoneDirty.value = false; acknowledged.value = false; rowPages.value = [''] }
 function reset() { parent.value = ''; selected.value = ''; coreReport.value = ''; historyCapture.value = ''; parentPages.value = ['']; corePages.value = ['']; historyPages.value = ['']; bundlePages.value = ['']; clearReview(); intent.value = null; pending.value = false; uncertain.value = false; actionError.value = null }
@@ -67,6 +67,7 @@ async function send(value: Intent) {
       case 'plan': receipt = await replanFamilyRefresh(value.id, value.body); break
       case 'confirm': receipt = await confirmFamilyRefresh(value.id, value.body); break
       case 'cancel': receipt = await cancelFamilyRefresh(value.id, value.body); break
+      case 'remainder': receipt = await remainderFamilyRefresh(value.id, value.body); break
       case 'resume': receipt = await resumeFamilyRefresh(value.id, value.body); break
     }
     if (disposed || authority !== access.scope.value) return
@@ -91,9 +92,9 @@ function previewConfirm() {
   const value = current.value!
   confirmation.value = { request_id: crypto.randomUUID(), expected_revision: value.bundle.revision, bundle_digest: value.bundle.digest!, families: value.families.filter(p => confirmFamilies.value.includes(p.family)).map(p => ({ family: p.family, plan_id: p.plan_id, plan_revision: p.revision, plan_digest: p.digest!, expected_counts: { ...p.counts } })), acknowledged_exclusions: true }
 }
-function control(action: 'cancel' | 'resume') {
+function control(action: 'cancel' | 'resume' | 'remainder') {
   if (!current.value || !plan.value || pending.value || uncertain.value) return
-  void send({ action, id: selected.value, body: { request_id: crypto.randomUUID(), expected_revision: current.value.bundle.revision, families: [family.value] } })
+  void send({ action, id: selected.value, body: { request_id: crypto.randomUUID(), expected_revision: current.value.bundle.revision, families: action === 'remainder' ? current.value.families.filter(p => p.remainder_eligible && p.state === 'cancelled').map(p => p.family) : [family.value] } })
 }
 </script>
 <template>
@@ -477,6 +478,23 @@ function control(action: 'cancel' | 'resume') {
           </button>
         </div>
       </template>
+      <div
+        v-if="current.bundle.state === 'cancelled' && current.families.some(p => p.state === 'cancelled' && p.remainder_eligible)"
+        class="space-y-2"
+      >
+        <p>Prepare the eligible unfinished work from all cancelled families for another review. This keeps the original sources, choices and targets. Completed work and settled holds are excluded.</p>
+        <button
+          type="button"
+          :class="buttonClasses('secondary')"
+          :disabled="pending || uncertain"
+          @click="control('remainder')"
+        >
+          Prepare exact remainder
+        </button>
+      </div>
+      <p v-if="current.bundle.predecessor_id">
+        This remainder preserves the original choices. Review and confirm its unfinished work below.
+      </p>
       <template v-if="canConfirm">
         <label class="flex items-start gap-2"><input
           v-model="acknowledged"

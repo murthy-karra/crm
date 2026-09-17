@@ -751,3 +751,24 @@ clear private local state. Preparation progress refreshes mapping inventory;
 committed positions refresh result pages. Remainder is not offered until its typed
 command is implemented and verified. No native scheduler release is enabled by
 this UI checkpoint.
+
+### Remainder, legacy baseline and scheduler checkpoint — 2026-09-16
+
+The exact Remainder HTTP command and common Web action are installed. Successors
+retain frozen lineage/source/targets, copy only eligible unfinished units, and
+reference settled catalog prerequisites without counting or executing them again.
+The source plan may differ by family within that immutable lineage. Interrupted
+copy cancellation, capacity pause/resume and same-request receipt replay are covered.
+
+Legacy baseline adapters now reconstruct independently provable original/admitted
+writes. Revision installation requires the exact SQLx migration checksum and a
+completed ledger duration; its transaction-start timestamp plus rounded-up elapsed
+time provides a conservative installation bound. Immutable Person creation facts
+qualify metadata's initial revision. Missing, pre-revision or incomplete evidence
+stays held. Native NUMERIC(19,4) formatting is reproduced from immutable input.
+
+The existing scheduler alternates bounded preparation and execution turns.
+Release admission covers full schema/guard inventories, including native revision
+tracking, and preflight checks retained family requirements. Confirm explicitly
+drains old shared workspace transactions before installing the permanent barrier.
+Final acceptance gates remain pending in the implementation status record.

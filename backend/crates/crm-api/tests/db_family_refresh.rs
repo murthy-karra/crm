@@ -3648,8 +3648,11 @@ async fn history_missing_walk_holds_absence_without_deleting_or_advancing_baseli
         0
     );
     preparation_worker::release(&f.pool, &claim).await.unwrap();
-    assert!(preparation_worker::claim_next(&f.pool)
+    let seal_claim = preparation_worker::claim_next(&f.pool)
         .await
         .unwrap()
-        .is_none());
+        .expect("finished walks schedule sealing");
+    preparation_worker::release(&f.pool, &seal_claim)
+        .await
+        .unwrap();
 }

@@ -583,3 +583,39 @@ occurrence, then every frozen cohort Person. Source conflicts are resolved befor
 cohort filtering; outside-cohort observations remain explicit exclusions, and
 missing Persons receive held outcomes without removals or clears. Exact-next
 cursors and outcomes commit together; exhaustion does not seal or confirm work.
+
+### Bounded sealing and lifecycle admission
+
+Migration 024 stores encrypted exact native recipes beside immutable write-proof
+hashes. PostgreSQL canonicalizes typed timestamps and decimal values before
+hashing; encrypted Person numeric values retain decimal text. Proof generation
+walks one manifest at a time, followed by a keyed ordered seal over immutable
+unit/proof headers and encrypted payload hashes. The plan becomes ready only
+after both source/ownership walks, all proof checkpoints, and exact count
+reconciliation finish. Ready digests/counts/expiry are immutable; expiry is ten
+minutes. Sealing performs no native writes and charges shared bytes to the fixed
+payer even when its original plan was superseded.
+
+Typed Confirm checks the combined digest, selected plan identities/revisions/
+digests, all action counts, expiry, active executor, workspace and server-owned
+release readiness. A selected family needs a useful non-catalog unit. Boolean
+`acknowledged_exclusions` is required for held/excluded units or omitted families;
+omitted families are cancelled atomically. Confirmation installs the permanent
+capability with its first owning bundle, queues selected plans, and saves an
+encrypted receipt. Authorized exact receipt replay precedes fresh readiness,
+revision, expiry and capacity checks. No HTTP route exposes these commands yet.
+
+Migrations 025/026 add durable revoked-executor pauses, explicit administrator
+adoption, and deferred cancellation of shared payer preparation. A cancelled
+payer may finish only shared cohort/source work needed by surviving families;
+its mappings/classification/native work cannot run. Cancel does not adopt the
+requesting admin. Resume replenishes reserved control capacity atomically before
+retaining another receipt; failure preserves the previous executor and reserve.
+When another admin adopts selected families, omitted active families are paused
+rather than implicitly resumed. Revocation/cancel accounting exceptions authorize
+only reserved control settlement and never native mutation or a unit lease.
+
+The family release flag is server-owned and requires the matching artifact hash,
+gate version, capability and current release report. Its schema check is being
+extended with execution/read inventories before HTTP exposure; the slice is not
+release-ready while those components and final gates remain incomplete.

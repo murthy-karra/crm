@@ -3564,7 +3564,10 @@ async fn family_refresh_catalog_authenticates_existing_admitted_claims(migrator:
     .await
     .unwrap();
     for step in 0..40 {
-        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+        if crate::db_family_refresh_commands::advance_to_review_phase(&f, "catalog_walk_complete")
+            .await
+            == Progress::Idle
+        {
             break;
         }
         assert!(step < 39);
@@ -3596,7 +3599,10 @@ async fn family_refresh_catalog_authenticates_existing_admitted_claims(migrator:
     .await
     .unwrap();
     for step in 0..40 {
-        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+        if crate::db_family_refresh_commands::advance_to_review_phase(&f, "catalog_walk_complete")
+            .await
+            == Progress::Idle
+        {
             break;
         }
         assert!(step < 39);
@@ -3648,7 +3654,10 @@ async fn family_refresh_catalog_authenticates_existing_admitted_claims(migrator:
     .await
     .unwrap();
     for step in 0..40 {
-        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+        if crate::db_family_refresh_commands::advance_to_review_phase(&f, "catalog_walk_complete")
+            .await
+            == Progress::Idle
+        {
             break;
         }
         assert!(step < 39);

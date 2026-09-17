@@ -2550,3 +2550,24 @@ and two admitted metadata regressions passed in
 `/private/tmp/010g1-catalog-admission-focused-db.log`. Library Clippy passed in
 `/private/tmp/010g1-catalog-admission-clippy.log`. No HTTP or native refresh
 execution was exposed.
+
+## 010g1 Person metadata preparation — c217df7 — 2026-09-16
+
+Person metadata conversion, atomic proposals and bounded source/cohort traversal
+are wired into the existing worker. Supplied values require explicit catalog
+outcomes; missing/null values retain gap semantics and cannot invent clears.
+Owned tag removals preserve alias ownership, numeric comparison uses exact native
+scale, and changed native state/revisions hold the Person. Missing-source Persons
+receive holds and outside-cohort records receive explicit outcomes. Migrations
+022/023 fence typed Person units and exact-next traversal. No native refresh
+writes, sealing or confirmation are enabled by this stage.
+
+The family suite ran **41 tests**: 40 passed; one old shared-source fixture was
+correctly rejected for inventing an already-current Person without a baseline
+(`/private/tmp/010g1-person-metadata-family-db.log`). Correcting it to a held
+review unit passed (`/private/tmp/010g1-person-metadata-shared-db.log`). The new
+Person scenario passed with rollback, replay, tag removal/addition, a field
+update, null/missing gaps, outside/missing Persons and unchanged numeric values
+(`/private/tmp/010g1-person-metadata-number-db.log`). Library Clippy passed with
+warnings denied (`/private/tmp/010g1-person-metadata-final-clippy.log`); formatting
+and diff checks passed. Final slice-wide gates remain outstanding.

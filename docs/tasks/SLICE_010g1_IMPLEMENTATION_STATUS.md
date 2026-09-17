@@ -5,8 +5,8 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 ## Working constraints
 
-- Branch `codex/010g1-family-refresh`, base `dd140b0`; the Person metadata preparation checkpoint
-  follows **`a554871`**. One primary writer; the previously authorized single
+- Branch `codex/010g1-family-refresh`, base `dd140b0`; latest committed Person metadata preparation
+  is **`c217df7`**. One primary writer; the previously authorized single
   implementation reviewer remains reserved for the final review. Planning review
   READY, round 1. Preserve D-050's two review/fix rounds and final performance gate.
 - Do not merge, push or deploy. Preserve unrelated `docs/prompts/MODEL_ROUTING.md`
@@ -51,34 +51,30 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 ## Current verified milestone
 
-Person metadata conversion, atomic proposals and bounded source/cohort traversal
-are wired into the existing worker. Supplied values require explicit catalog
-outcomes; missing/null values retain gap semantics and cannot invent clears.
-Owned tag removals preserve alias ownership, numeric comparison uses exact native
-scale, and changed native state/revisions hold the Person. Missing-source Persons
-receive holds and outside-cohort records receive explicit outcomes. Migrations
-022/023 fence typed Person units and exact-next traversal. No native refresh
-writes, sealing or confirmation are enabled by this stage.
+Person metadata preparation is committed at `c217df7`. The next checkpoint adds
+encrypted exact-row write recipes, bounded keyed sealing, ten-minute readiness,
+exact typed Confirm, scoped Cancel, explicit-admin Resume, and durable revoked-
+executor pause. Fixed-payer accounting and shared preparation survive partial
+cancellation. No native refresh execution or HTTP/Web workflow is exposed yet.
 
-The family suite ran **41 tests**: 40 passed; one old shared-source fixture was
-correctly rejected for inventing an already-current Person without a baseline
-(`/private/tmp/010g1-person-metadata-family-db.log`). Correcting it to a held
-review unit passed (`/private/tmp/010g1-person-metadata-shared-db.log`). The new
-Person scenario passed with rollback, replay, tag removal/addition, a field
-update, null/missing gaps, outside/missing Persons and unchanged numeric values
-(`/private/tmp/010g1-person-metadata-number-db.log`). Library Clippy passed with
-warnings denied (`/private/tmp/010g1-person-metadata-final-clippy.log`); formatting
-and diff checks passed. Final slice-wide gates remain outstanding.
+The integrated family run passed 41 of 42 tests, including exact Confirm,
+rollback/replay and queued cancellation. Correcting the new revocation fixture
+and its shared-byte settlement then passed focused revocation/Resume coverage;
+the new partial-payer cancellation scenario passed too. Logs:
+`/private/tmp/010g1-lifecycle-family-db.log`,
+`/private/tmp/010g1-family_refresh_revoked_executor-db.log`, and
+`/private/tmp/010g1-family_refresh_partial_cancel-db.log`.
+Final library Clippy evidence is `/private/tmp/010g1-lifecycle-final-clippy.log`.
+Formatting/diff checks pass. The complete final slice-wide gates remain pending.
 
 ## Remaining implementation
 
 1. Bootstrap legacy baselines only where independently provable. Add refresh-owned
    initial activity/history identities and catalog claims with exclusive typed
    owner shapes; extend existing ownership/baseline/reader adapters accordingly.
-2. Seal complete plan counts/digests; implement exact Confirm, scoped Cancel,
-   explicit-admin Resume and exact Remainder. Persist revoked-executor pauses.
-   Partial cancellation must not strand shared cohort/index work under the fixed
-   payer. Do not mark exhausted preparation as confirmed or ready prematurely.
+2. Implement exact Remainder. Preserve frozen unfinished
+   units, sources/mappings/targets and baseline heads; settled holds are not
+   unfinished work. Complete cancellation/resume crash and capacity coverage.
 3. Implement metadata/activity/history execution, typed write proofs, exact source/
    native/head/member/catalog revalidation, atomic results/accounting/heads and
    after-state production. Preserve compatible reader capability inventories.

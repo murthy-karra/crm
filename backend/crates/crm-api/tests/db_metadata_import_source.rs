@@ -1464,4 +1464,207 @@ async fn family_refresh_person_metadata_proposal_is_atomic_and_preserves_null_ga
             .unwrap(),
         native_before
     );
+    use crm_api::domain::migration::family_refresh::sealing::{self, Progress as Seal};
+    // Advance fixed-width held/current checkpoints until the first real recipe.
+    for turn in 0..20 {
+        let writes:Option<bool>=sqlx::query_scalar("SELECT u.disposition IN ('insert','update') FROM migration_family_refresh_plan p JOIN migration_family_refresh_manifest u ON u.plan_id=p.id AND u.organization_id=p.organization_id AND u.position=p.proof_after+1 WHERE p.id=$1").bind(claim.plan).fetch_optional(&migrator).await.unwrap();
+        if writes == Some(true) {
+            break;
+        }
+        assert_eq!(
+            sealing::run_once(&f.pool, &f.key, &tiny, &claim)
+                .await
+                .unwrap(),
+            Seal::Advanced
+        );
+        assert!(turn < 19);
+    }
+    let proof_checkpoint="SELECT jsonb_build_object('cursor',proof_after,'measured',measured_bytes,'retained',retained_bytes,'reserved',reserved_bytes,'proofs',(SELECT count(*) FROM migration_family_refresh_write_proof WHERE plan_id=p.id)) FROM migration_family_refresh_plan p WHERE id=$1";
+    let proof_before: Value = sqlx::query_scalar(proof_checkpoint)
+        .bind(claim.plan)
+        .fetch_one(&migrator)
+        .await
+        .unwrap();
+    assert_eq!(
+        sealing::run_once(&f.pool, &f.key, &tiny, &claim)
+            .await
+            .unwrap(),
+        Seal::Capacity
+    );
+    sqlx::raw_sql("CREATE FUNCTION test_family_proof_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.proof_after IS DISTINCT FROM OLD.proof_after THEN RAISE EXCEPTION 'synthetic proof fault'; END IF; RETURN NEW; END $$; CREATE TRIGGER test_family_proof_fault BEFORE UPDATE ON migration_family_refresh_plan FOR EACH ROW EXECUTE FUNCTION test_family_proof_fault()").execute(&migrator).await.unwrap();
+    assert!(sealing::run_once(&f.pool, &f.key, &f.policy, &claim)
+        .await
+        .is_err());
+    sqlx::raw_sql("DROP TRIGGER test_family_proof_fault ON migration_family_refresh_plan; DROP FUNCTION test_family_proof_fault()").execute(&migrator).await.unwrap();
+    assert_eq!(
+        sqlx::query_scalar::<_, Value>(proof_checkpoint)
+            .bind(claim.plan)
+            .fetch_one(&migrator)
+            .await
+            .unwrap(),
+        proof_before
+    );
+    for turn in 0..40 {
+        if sealing::run_once(&f.pool, &f.key, &f.policy, &claim)
+            .await
+            .unwrap()
+            == Seal::Finished
+        {
+            break;
+        }
+        assert!(turn < 39);
+    }
+    let sealed=sqlx::query("SELECT p.*,b.digest AS bundle_digest,b.state AS bundle_state FROM migration_family_refresh_plan p JOIN migration_family_refresh_bundle b ON b.id=p.bundle_id WHERE p.id=$1").bind(claim.plan).fetch_one(&migrator).await.unwrap();
+    assert_eq!(sealed.get::<String, _>("state"), "ready");
+    assert_eq!(sealed.get::<String, _>("bundle_state"), "ready");
+    assert_eq!(sealed.get::<Vec<u8>, _>("digest").len(), 32);
+    assert_eq!(sealed.get::<Vec<u8>, _>("bundle_digest").len(), 32);
+    assert_eq!(
+        sealed.get::<i64, _>("seal_after"),
+        sealed.get::<i64, _>("position")
+    );
+    assert_eq!(
+        sealed.get::<Value, _>("seal_counts"),
+        sealed.get::<Value, _>("counts")
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_family_refresh_write_proof WHERE plan_id=$1"
+        )
+        .bind(claim.plan)
+        .fetch_one(&migrator)
+        .await
+        .unwrap(),
+        4,
+        "new catalog tag plus three exact Person mutations"
+    );
+    assert!(sqlx::query_scalar::<_,bool>("SELECT bool_and(nonce IS NOT NULL AND ciphertext IS NOT NULL) FROM migration_family_refresh_write_proof WHERE plan_id=$1").bind(claim.plan).fetch_one(&migrator).await.unwrap());
+    assert_eq!(
+        sqlx::query_scalar::<_, Value>(native_sql)
+            .bind(f.org)
+            .fetch_one(&migrator)
+            .await
+            .unwrap(),
+        native_before,
+        "proof preparation and sealing cannot perform native writes"
+    );
+    preparation_worker::release(&f.pool, &claim).await.unwrap();
+    use crm_api::domain::migration::family_refresh::confirmation::{
+        self, ConfirmFamilyRefresh, SelectedPlan,
+    };
+    let request_id = Uuid::new_v4();
+    let make_command = || ConfirmFamilyRefresh {
+        request_id,
+        expected_revision: next.revision.clone(),
+        bundle_digest: sealed
+            .get::<Vec<u8>, _>("bundle_digest")
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect(),
+        families: vec![SelectedPlan {
+            family: Family::Metadata,
+            plan_id: claim.plan,
+            plan_revision: sealed.get::<i64, _>("revision").to_string(),
+            plan_digest: sealed
+                .get::<Vec<u8>, _>("digest")
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect(),
+            expected_counts: serde_json::from_value(sealed.get("counts")).unwrap(),
+        }],
+        acknowledged_exclusions: true,
+    };
+    let release = crm_api::auth::workspace::ReleaseReadiness::for_tests();
+    let mut wrong = make_command();
+    wrong.families[0].expected_counts.tag_removals += 1;
+    assert!(
+        confirmation::confirm(&f.pool, &f.key, &release, &f.ctx, claim.bundle, wrong)
+            .await
+            .is_err()
+    );
+    let mut unacknowledged = make_command();
+    unacknowledged.acknowledged_exclusions = false;
+    assert!(confirmation::confirm(
+        &f.pool,
+        &f.key,
+        &release,
+        &f.ctx,
+        claim.bundle,
+        unacknowledged
+    )
+    .await
+    .is_err());
+    sqlx::raw_sql("CREATE FUNCTION test_confirm_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='confirm' THEN RAISE EXCEPTION 'synthetic confirm fault'; END IF; RETURN NEW; END $$; CREATE TRIGGER test_confirm_fault BEFORE INSERT ON migration_family_refresh_receipt FOR EACH ROW EXECUTE FUNCTION test_confirm_fault()").execute(&migrator).await.unwrap();
+    assert!(confirmation::confirm(
+        &f.pool,
+        &f.key,
+        &release,
+        &f.ctx,
+        claim.bundle,
+        make_command()
+    )
+    .await
+    .is_err());
+    sqlx::raw_sql("DROP TRIGGER test_confirm_fault ON migration_family_refresh_receipt; DROP FUNCTION test_confirm_fault()").execute(&migrator).await.unwrap();
+    assert!(!sqlx::query_scalar::<_,bool>("SELECT EXISTS(SELECT 1 FROM migration_family_refresh_requirement WHERE organization_id=$1)").bind(f.org).fetch_one(&migrator).await.unwrap());
+    let admitted = confirmation::confirm(
+        &f.pool,
+        &f.key,
+        &release,
+        &f.ctx,
+        claim.bundle,
+        make_command(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(admitted.state, "queued");
+    let replay = confirmation::confirm(
+        &f.pool,
+        &f.key,
+        &release,
+        &f.ctx,
+        claim.bundle,
+        make_command(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(&admitted).unwrap(),
+        serde_json::to_value(&replay).unwrap()
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, Value>(native_sql)
+            .bind(f.org)
+            .fetch_one(&migrator)
+            .await
+            .unwrap(),
+        native_before,
+        "confirmation queues work without mutating native rows"
+    );
+    use crm_api::domain::migration::family_refresh::lifecycle::{self, FamilyControl};
+    let cancel_id = Uuid::new_v4();
+    let cancel_command = || FamilyControl {
+        request_id: cancel_id,
+        expected_revision: admitted.revision.clone(),
+        families: vec![Family::Metadata],
+    };
+    let cancelled = lifecycle::cancel(&f.pool, &f.key, &f.ctx, claim.bundle, cancel_command())
+        .await
+        .unwrap();
+    assert_eq!(cancelled.state, "cancelled");
+    let replay = lifecycle::cancel(&f.pool, &f.key, &f.ctx, claim.bundle, cancel_command())
+        .await
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(&cancelled).unwrap(),
+        serde_json::to_value(&replay).unwrap()
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, Value>(native_sql)
+            .bind(f.org)
+            .fetch_one(&migrator)
+            .await
+            .unwrap(),
+        native_before
+    );
 }

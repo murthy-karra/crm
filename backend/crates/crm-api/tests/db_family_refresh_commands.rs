@@ -966,11 +966,11 @@ async fn family_refresh_mapping_inventory_is_bounded_atomic_and_reuses_shared_so
     );
     worker::release(&f.pool, &claim).await.unwrap();
     // Admission now enables the 72 bounded catalog outcomes as well as activity.
-    for step in 0..120 {
+    for step in 0..300 {
         if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
             break;
         }
-        assert!(step < 119);
+        assert!(step < 299);
     }
     let activity = prepared.families[1].plan_id;
     assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_family_refresh_mapping WHERE plan_id=$1 AND NOT qualified").bind(activity).fetch_one(&pool).await.unwrap(),0,"an invalid record does not poison intrinsic validity of a shared role value");
@@ -1305,7 +1305,7 @@ async fn family_refresh_plan_choices_are_versioned_atomic_and_inherited(pool: Pg
         Err(MigrationError::ImportBusy)
     ));
     for step in 0..60 {
-        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+        if advance_to_review_phase(&f, "mappings_complete").await == Progress::Idle {
             break;
         }
         assert!(step < 59);
@@ -1481,7 +1481,7 @@ async fn family_refresh_plan_choices_are_versioned_atomic_and_inherited(pool: Pg
         "superseded"
     );
     for step in 0..30 {
-        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+        if advance_to_review_phase(&f, "mappings_complete").await == Progress::Idle {
             break;
         }
         assert!(step < 29);
@@ -1506,7 +1506,7 @@ async fn family_refresh_plan_choices_are_versioned_atomic_and_inherited(pool: Pg
     .await
     .unwrap();
     for step in 0..30 {
-        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+        if advance_to_review_phase(&f, "mappings_complete").await == Progress::Idle {
             break;
         }
         assert!(step < 29);
@@ -1578,7 +1578,7 @@ async fn family_refresh_plan_choices_are_versioned_atomic_and_inherited(pool: Pg
         .await
         .unwrap();
     for step in 0..30 {
-        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+        if advance_to_review_phase(&f, "mappings_complete").await == Progress::Idle {
             break;
         }
         assert!(step < 29);
@@ -1595,7 +1595,7 @@ async fn family_refresh_plan_choices_are_versioned_atomic_and_inherited(pool: Pg
         .unwrap();
     assert_eq!(sqlx::query_scalar::<_,String>("SELECT disposition FROM migration_family_refresh_mapping WHERE plan_id=$1 AND kind='timezone'").bind(fifth.families[1].plan_id).fetch_one(&pool).await.unwrap(),"timezone");
     for step in 0..30 {
-        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+        if advance_to_review_phase(&f, "mappings_complete").await == Progress::Idle {
             break;
         }
         assert!(step < 29);
@@ -1606,7 +1606,7 @@ async fn family_refresh_plan_choices_are_versioned_atomic_and_inherited(pool: Pg
         .unwrap();
     assert_eq!(sqlx::query_scalar::<_,String>("SELECT disposition FROM migration_family_refresh_mapping WHERE plan_id=$1 AND kind='timezone'").bind(sixth.families[1].plan_id).fetch_one(&pool).await.unwrap(),"hold");
     for step in 0..30 {
-        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+        if advance_to_review_phase(&f, "mappings_complete").await == Progress::Idle {
             break;
         }
         assert!(step < 29);
@@ -1628,7 +1628,7 @@ async fn family_refresh_plan_choices_are_versioned_atomic_and_inherited(pool: Pg
         .await
         .unwrap();
     for step in 0..30 {
-        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+        if advance_to_review_phase(&f, "mappings_complete").await == Progress::Idle {
             break;
         }
         assert!(step < 29);
@@ -2092,8 +2092,8 @@ async fn family_refresh_activity_proposals_are_atomic_stable_and_do_not_write_na
         .fetch_one(&pool)
         .await
         .unwrap(),
-        "preparing",
-        "source exhaustion alone does not seal a ready plan"
+        "ready",
+        "worker seals only after source, ownership, proof and count walks complete"
     );
 }
 
@@ -2894,7 +2894,7 @@ async fn family_refresh_catalog_creation_requires_all_options_and_distinct_targe
     .await
     .unwrap();
     for step in 0..40 {
-        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+        if advance_to_review_phase(&f, "owned_walk_complete").await == Progress::Idle {
             break;
         }
         assert!(step < 39);
@@ -2932,7 +2932,7 @@ async fn family_refresh_catalog_creation_requires_all_options_and_distinct_targe
         .await
         .unwrap();
         for step in 0..40 {
-            if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+            if advance_to_review_phase(&f, "owned_walk_complete").await == Progress::Idle {
                 break;
             }
             assert!(step < 39);
@@ -3032,7 +3032,7 @@ async fn family_refresh_catalog_creation_requires_all_options_and_distinct_targe
     .await
     .unwrap();
     for step in 0..40 {
-        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+        if advance_to_review_phase(&f, "owned_walk_complete").await == Progress::Idle {
             break;
         }
         assert!(step < 39);
@@ -3123,4 +3123,266 @@ async fn assert_mapping_capture_order(
             .is_none());
         }
     }
+}
+
+// Stop at the exact preparation boundary a test intends to inspect. The real
+// worker now continues beyond those boundaries to seal a ready plan.
+pub(crate) async fn advance_to_review_phase(
+    f: &import_support::Fixture,
+    boundary: &str,
+) -> Progress {
+    assert!(matches!(
+        boundary,
+        "mappings_complete" | "catalog_walk_complete" | "owned_walk_complete"
+    ));
+    let query=format!("SELECT NOT EXISTS(SELECT 1 FROM migration_family_refresh_plan WHERE organization_id=$1 AND state='preparing' AND NOT {boundary})");
+    if sqlx::query_scalar::<_, bool>(&query)
+        .bind(f.org)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap()
+    {
+        return Progress::Idle;
+    }
+    worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap()
+}
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn family_refresh_revoked_executor_is_durably_paused(pool: PgPool) {
+    let (f, parent, history, _) = history::fixture(&pool).await;
+    let prepared = commands::prepare(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
+        &f.ctx,
+        PrepareFamilyRefresh {
+            request_id: Uuid::new_v4(),
+            parent_import_id: parent,
+            core_report_id: None,
+            history_capture_id: Some(history),
+            families: vec![Family::History],
+        },
+    )
+    .await
+    .unwrap();
+    let claim = worker::claim_next(&f.pool).await.unwrap().unwrap();
+    sqlx::query(
+        "UPDATE organization_membership SET role='member' WHERE organization_id=$1 AND user_id=$2",
+    )
+    .bind(f.org)
+    .bind(f.actor)
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap(),
+        Progress::Paused
+    );
+    let p=sqlx::query("SELECT state,pause_reason,lease_token,measured_bytes,retained_bytes FROM migration_family_refresh_plan WHERE id=$1").bind(prepared.families[0].plan_id).fetch_one(&pool).await.unwrap();
+    assert_eq!(p.get::<String, _>("state"), "paused");
+    assert_eq!(p.get::<String, _>("pause_reason"), "executor_revoked");
+    assert!(p.get::<Option<Uuid>, _>("lease_token").is_none());
+    assert_eq!(
+        p.get::<i64, _>("measured_bytes"),
+        p.get::<i64, _>("retained_bytes")
+    );
+    assert!(!worker::release(&f.pool, &claim).await.unwrap());
+    assert_eq!(
+        worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap(),
+        Progress::Idle
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_family_refresh_result WHERE bundle_id=$1"
+        )
+        .bind(prepared.bundle_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        0
+    );
+    use crm_api::domain::migration::family_refresh::{
+        lifecycle::{self, FamilyControl},
+        resume,
+    };
+    sqlx::query(
+        "UPDATE organization_membership SET role='admin' WHERE organization_id=$1 AND user_id=$2",
+    )
+    .bind(f.org)
+    .bind(f.member)
+    .execute(&pool)
+    .await
+    .unwrap();
+    let mut admin = f.ctx.clone();
+    admin.actor_user_id = UserId::new(f.member);
+    let request = Uuid::new_v4();
+    let command = || FamilyControl {
+        request_id: request,
+        expected_revision: prepared.revision.clone(),
+        families: vec![Family::History],
+    };
+    let release = crm_api::auth::workspace::ReleaseReadiness::for_tests();
+    let mut tiny = f.policy.clone();
+    tiny.org_ceiling_bytes = 1;
+    assert!(matches!(
+        resume::resume(
+            &f.pool,
+            &f.key,
+            &tiny,
+            &release,
+            &admin,
+            prepared.bundle_id,
+            command()
+        )
+        .await,
+        Err(MigrationError::StorageLimit)
+    ));
+    assert_eq!(
+        sqlx::query_scalar::<_, Uuid>(
+            "SELECT executor_user_id FROM migration_family_refresh_bundle WHERE id=$1"
+        )
+        .bind(prepared.bundle_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        f.actor
+    );
+    let resumed = resume::resume(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &release,
+        &admin,
+        prepared.bundle_id,
+        command(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(resumed.state, "preparing");
+    let replay = resume::resume(
+        &f.pool,
+        &f.key,
+        &tiny,
+        &release,
+        &admin,
+        prepared.bundle_id,
+        command(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(&resumed).unwrap(),
+        serde_json::to_value(&replay).unwrap()
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, Uuid>(
+            "SELECT executor_user_id FROM migration_family_refresh_bundle WHERE id=$1"
+        )
+        .bind(prepared.bundle_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        f.member
+    );
+    let cancelled = lifecycle::cancel(
+        &f.pool,
+        &f.key,
+        &admin,
+        prepared.bundle_id,
+        FamilyControl {
+            request_id: Uuid::new_v4(),
+            expected_revision: resumed.revision,
+            families: vec![Family::History],
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(cancelled.state, "cancelled");
+}
+
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn family_refresh_partial_cancel_keeps_shared_payer_work(pool: PgPool) {
+    use crm_api::domain::migration::family_refresh::lifecycle::{self, FamilyControl};
+    let (f, parent, _, _) = history::fixture(&pool).await;
+    let report = admission::report(
+        &f,
+        parent,
+        vec![json!({"id":101,"firstName":"Synthetic","stage":"Lead","assignedUserId":3})],
+    )
+    .await;
+    let prepared = commands::prepare(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
+        &f.ctx,
+        PrepareFamilyRefresh {
+            request_id: Uuid::new_v4(),
+            parent_import_id: parent,
+            core_report_id: Some(report),
+            history_capture_id: None,
+            families: vec![Family::Metadata, Family::Activity],
+        },
+    )
+    .await
+    .unwrap();
+    let cancelled = lifecycle::cancel(
+        &f.pool,
+        &f.key,
+        &f.ctx,
+        prepared.bundle_id,
+        FamilyControl {
+            request_id: Uuid::new_v4(),
+            expected_revision: prepared.revision,
+            families: vec![Family::Metadata],
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(cancelled.state, "preparing");
+    assert!(sqlx::query_scalar::<_,bool>("SELECT cancel_requested AND state='preparing' FROM migration_family_refresh_plan WHERE id=$1").bind(prepared.families[0].plan_id).fetch_one(&pool).await.unwrap());
+    for turn in 0..100 {
+        if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
+            break;
+        }
+        assert!(turn < 99);
+    }
+    assert_eq!(
+        sqlx::query_scalar::<_, String>(
+            "SELECT state FROM migration_family_refresh_plan WHERE id=$1"
+        )
+        .bind(prepared.families[0].plan_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        "cancelled"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, String>(
+            "SELECT state FROM migration_family_refresh_plan WHERE id=$1"
+        )
+        .bind(prepared.families[1].plan_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        "ready"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_family_refresh_manifest WHERE plan_id=$1"
+        )
+        .bind(prepared.families[0].plan_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        0,
+        "cancelled payer never classifies its native units"
+    );
+    sqlx::raw_sql(include_str!("fixtures/family_refresh_byte_inventory.sql"))
+        .execute(&pool)
+        .await
+        .unwrap();
 }

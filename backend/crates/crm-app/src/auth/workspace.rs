@@ -284,6 +284,7 @@ pub struct ReleaseReadiness {
     admitted_history: bool,
     mapping_repair: bool,
     people_recovery: bool,
+    family_refresh: bool,
 }
 impl ReleaseReadiness {
     pub async fn load_report(pool: &PgPool, path: &std::path::Path) -> Result<Self, sqlx::Error> {
@@ -328,6 +329,7 @@ impl ReleaseReadiness {
             admitted_history: admitted_history_report_ready(&report, &hash),
             mapping_repair: mapping_repair_report_ready(&report, &hash),
             people_recovery: people_recovery_report_ready(&report, &hash),
+            family_refresh: family_refresh_report_ready(&report, &hash),
             admitted_activity: report["admitted_activity_confirmation_ready"] == true
                 && report["candidates"].as_array().is_some_and(|items| {
                     items.iter().any(|v| {
@@ -413,6 +415,7 @@ impl ReleaseReadiness {
             admitted_history: true,
             mapping_repair: true,
             people_recovery: true,
+            family_refresh: true,
         }
     }
 
@@ -479,6 +482,29 @@ impl ReleaseReadiness {
                 || (self.expires_at > Utc::now()
                     && self.checked_at <= Utc::now()
                     && Utc::now() - self.checked_at <= chrono::Duration::minutes(5)))
+    }
+    pub fn family_refresh_ready(&self) -> bool {
+        self.family_refresh
+            && (self.synthetic
+                || (self.expires_at > Utc::now()
+                    && self.checked_at <= Utc::now()
+                    && Utc::now() - self.checked_at <= chrono::Duration::minutes(5)))
+    }
+    pub async fn require_family_refresh(&self, conn: &mut PgConnection) -> Result<(), sqlx::Error> {
+        self.require_current(conn).await?;
+        if !self.family_refresh_ready() {
+            return Err(sqlx::Error::Protocol(
+                "family refresh release not ready".into(),
+            ));
+        }
+        let schema: bool = sqlx::query_scalar("SELECT to_regprocedure('crm_family_refresh_sealing_fence()') IS NOT NULL AND to_regprocedure('crm_family_refresh_recipe_fence()') IS NOT NULL AND EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='migration_family_refresh_plan' AND column_name='seal_counts')")
+            .fetch_one(conn).await?;
+        if !schema {
+            return Err(sqlx::Error::Protocol(
+                "family refresh schema incomplete".into(),
+            ));
+        }
+        Ok(())
     }
     pub fn people_recovery_ready(&self) -> bool {
         self.people_recovery
@@ -762,6 +788,20 @@ impl ReleaseReadiness {
         }
         Ok(())
     }
+}
+
+fn family_refresh_report_ready(report: &serde_json::Value, hash: &str) -> bool {
+    report["family_refresh_confirmation_ready"] == true
+        && report["candidates"].as_array().is_some_and(|items| {
+            items.iter().any(|item| {
+                item["sha256"] == hash
+                    && item["gate_version"] == GATE_VERSION
+                    && matches!(item["role"].as_str(), Some("api" | "worker"))
+                    && item["capabilities"]
+                        .as_array()
+                        .is_some_and(|caps| caps.iter().any(|cap| cap == "fub-family-refresh-v1"))
+            })
+        })
 }
 
 fn people_recovery_report_ready(report: &serde_json::Value, hash: &str) -> bool {

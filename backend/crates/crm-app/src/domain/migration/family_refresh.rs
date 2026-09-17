@@ -64,3 +64,14 @@ pub mod metadata_mapping;
 pub mod metadata_plan;
 
 pub mod metadata_walk;
+
+pub mod native_proof;
+pub mod sealing;
+
+pub mod confirmation;
+
+pub mod revocation;
+
+pub mod lifecycle;
+
+pub mod resume;

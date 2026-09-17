@@ -5,8 +5,8 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 ## Working constraints
 
-- Branch `codex/010g1-family-refresh`, base `dd140b0`; the typed catalog-admission checkpoint
-  follows **`a2cf04f`**. One primary writer; the previously authorized single
+- Branch `codex/010g1-family-refresh`, base `dd140b0`; the Person metadata preparation checkpoint
+  follows **`a554871`**. One primary writer; the previously authorized single
   implementation reviewer remains reserved for the final review. Planning review
   READY, round 1. Preserve D-050's two review/fix rounds and final performance gate.
 - Do not merge, push or deploy. Preserve unrelated `docs/prompts/MODEL_ROUTING.md`
@@ -51,43 +51,41 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 ## Current verified milestone
 
-Typed refresh Prepare now reuses the shared catalog handover after validating
-selected sources. It requires existing catalog release readiness and takes the
-workspace-exclusive barrier before Organization/retention locks. Original claim
-owners and exact original-payer charges are preserved. Handover, bundle and
-receipt commit together; failure rolls all three back. Authorized replay neither
-repeats the handover nor charges again. Existing admitted metadata preserves its
-previous transaction boundary. No native refresh writes or HTTP exposure follow
-from this admission.
+Person metadata conversion, atomic proposals and bounded source/cohort traversal
+are wired into the existing worker. Supplied values require explicit catalog
+outcomes; missing/null values retain gap semantics and cannot invent clears.
+Owned tag removals preserve alias ownership, numeric comparison uses exact native
+scale, and changed native state/revisions hold the Person. Missing-source Persons
+receive holds and outside-cohort records receive explicit outcomes. Migrations
+022/023 fence typed Person units and exact-next traversal. No native refresh
+writes, sealing or confirmation are enabled by this stage.
 
-The production-code family suite ran **39 tests**: 38 passed and one inventory
-fixture hit its obsolete 30-turn drain bound now that admission enables 72
-catalog units (`/private/tmp/010g1-catalog-admission-family-db.log`). After a
-test-only correction, that scenario passed, along with a new original-owner/
-exact-charge/fault-rollback/replay scenario and two existing admitted-metadata
-regressions (`/private/tmp/010g1-catalog-admission-focused-db.log`). No failing
-check remains in this milestone. Library Clippy passed with warnings denied
-(`/private/tmp/010g1-catalog-admission-clippy.log`); formatting and diff checks
-also passed. Final slice-wide gates remain outstanding.
+The family suite ran **41 tests**: 40 passed; one old shared-source fixture was
+correctly rejected for inventing an already-current Person without a baseline
+(`/private/tmp/010g1-person-metadata-family-db.log`). Correcting it to a held
+review unit passed (`/private/tmp/010g1-person-metadata-shared-db.log`). The new
+Person scenario passed with rollback, replay, tag removal/addition, a field
+update, null/missing gaps, outside/missing Persons and unchanged numeric values
+(`/private/tmp/010g1-person-metadata-number-db.log`). Library Clippy passed with
+warnings denied (`/private/tmp/010g1-person-metadata-final-clippy.log`); formatting
+and diff checks passed. Final slice-wide gates remain outstanding.
 
 ## Remaining implementation
 
-1. Convert and persist atomic Person metadata proposals, source gaps and
-   missing-source outcomes.
-2. Bootstrap legacy baselines only where independently provable. Add refresh-owned
+1. Bootstrap legacy baselines only where independently provable. Add refresh-owned
    initial activity/history identities and catalog claims with exclusive typed
    owner shapes; extend existing ownership/baseline/reader adapters accordingly.
-3. Seal complete plan counts/digests; implement exact Confirm, scoped Cancel,
+2. Seal complete plan counts/digests; implement exact Confirm, scoped Cancel,
    explicit-admin Resume and exact Remainder. Persist revoked-executor pauses.
    Partial cancellation must not strand shared cohort/index work under the fixed
    payer. Do not mark exhausted preparation as confirmed or ready prematurely.
-4. Implement metadata/activity/history execution, typed write proofs, exact source/
+3. Implement metadata/activity/history execution, typed write proofs, exact source/
    native/head/member/catalog revalidation, atomic results/accounting/heads and
    after-state production. Preserve compatible reader capability inventories.
-5. Finish bounded results, field fragments, proof and history-version readers;
+4. Finish bounded results, field fragments, proof and history-version readers;
    wire HTTP routes and the common Web review/confirm/progress workflow. Preserve
    existing mobile/Operator/read-path compatibility and review-workspace gates.
-6. Run the authorized independent implementation review, required database/API/
+5. Run the authorized independent implementation review, required database/API/
    browser/final-tree checks and the single realistic paired-relative + EXPLAIN
    performance gate. Review source-only reporting and all-held/no-useful-work
    confirmation semantics across Person and catalog prerequisites.

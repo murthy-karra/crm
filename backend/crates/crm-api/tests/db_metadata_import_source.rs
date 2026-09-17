@@ -1161,3 +1161,307 @@ async fn family_refresh_catalog_handover_preserves_original_owners_and_charges(m
         "receipt replay cannot backfill or charge again"
     );
 }
+
+#[sqlx::test(migrations = "./migrations")]
+#[ignore = "requires PostgreSQL migrator"]
+async fn family_refresh_person_metadata_proposal_is_atomic_and_preserves_null_gaps(
+    migrator: PgPool,
+) {
+    use crm_api::{
+        auth::workspace::ReleaseReadiness,
+        domain::migration::family_refresh::{
+            commands,
+            evidence::{Purpose, Scope},
+            mapping_selection::{MappingPatch, Selection},
+            metadata_delta::{Change, Gap},
+            metadata_plan::{self, Decision, Prepared},
+            model::Family,
+            plan_commands::{self, PlanFamilyRefresh},
+            preparation_worker::{self, Progress},
+        },
+    };
+    let mut p = person(101);
+    p["tags"] = json!(["Owned", "Keep"]);
+    p["customText"] = json!("Before");
+    p["customNull"] = json!("Keep null");
+    p["customMissing"] = json!("Keep missing");
+    p["customNumber"] = json!(1.25);
+    let mut missing = p.clone();
+    missing["id"] = json!(102);
+    let f = support::fixture_with_book(
+        &migrator,
+        book(
+            vec![p.clone(), missing],
+            vec![
+                field(10, "customText", "Text", "text"),
+                field(11, "customNull", "Null", "text"),
+                field(12, "customMissing", "Missing", "text"),
+                field(13, "customNumber", "Number", "number"),
+            ],
+        ),
+    )
+    .await;
+    let parent = complete_parent(&f).await;
+    let (child, first) = propose(&f, parent).await;
+    let ready = replan(
+        &f,
+        child,
+        &first,
+        matching_choices(&f, plan_id(&first)).await,
+    )
+    .await;
+    execute(&f, child, &ready, parent).await;
+    p["tags"] = json!(["Keep", "New"]);
+    p["customText"] = json!("After");
+    p["customNull"] = Value::Null;
+    p.as_object_mut().unwrap().remove("customMissing");
+    let report =
+        crate::db_people_admission_execution::report(&f, parent, vec![p, person(999)]).await;
+    let prepared = commands::prepare(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &ReleaseReadiness::for_tests(),
+        &f.ctx,
+        commands::PrepareFamilyRefresh {
+            request_id: Uuid::new_v4(),
+            parent_import_id: parent,
+            core_report_id: Some(report),
+            history_capture_id: None,
+            families: vec![Family::Metadata],
+        },
+    )
+    .await
+    .unwrap();
+    for step in 0..60 {
+        if preparation_worker::run_once(&f.pool, &f.key, &f.policy)
+            .await
+            .unwrap()
+            == Progress::Idle
+        {
+            break;
+        }
+        assert!(step < 59);
+    }
+    let rows=sqlx::query("SELECT m.id,c.target_id FROM migration_family_refresh_mapping m LEFT JOIN migration_metadata_catalog_claim c ON c.organization_id=m.organization_id AND c.source_key=m.source_key_hmac AND c.kind=CASE m.kind WHEN 'tag' THEN 'tag' ELSE m.kind END WHERE m.plan_id=$1 ORDER BY m.id").bind(prepared.families[0].plan_id).fetch_all(&migrator).await.unwrap();
+    let patches = rows
+        .iter()
+        .map(|r| MappingPatch {
+            mapping_id: r.get("id"),
+            choice: match r.get::<Option<Uuid>, _>("target_id") {
+                Some(target_id) => Selection::Existing { target_id },
+                None => Selection::CreateMatching,
+            },
+        })
+        .collect();
+    let next = plan_commands::plan(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &f.ctx,
+        prepared.bundle_id,
+        PlanFamilyRefresh {
+            request_id: Uuid::new_v4(),
+            expected_revision: prepared.revision,
+            family: Family::Metadata,
+            patches,
+            source_timezone: None,
+        },
+    )
+    .await
+    .unwrap();
+    for step in 0..60 {
+        preparation_worker::run_once(&f.pool, &f.key, &f.policy)
+            .await
+            .unwrap();
+        if sqlx::query_scalar::<_, bool>(
+            "SELECT catalog_walk_complete FROM migration_family_refresh_plan WHERE id=$1",
+        )
+        .bind(next.families[0].plan_id)
+        .fetch_one(&migrator)
+        .await
+        .unwrap()
+        {
+            break;
+        }
+        assert!(step < 59);
+    }
+    let claim = crate::db_family_refresh_commands::claim_metadata_inspection(
+        &f,
+        next.bundle_id,
+        next.families[0].plan_id,
+    )
+    .await;
+    let cohort:Uuid=sqlx::query_scalar("SELECT id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND source_person_id='101'").bind(next.bundle_id).fetch_one(&migrator).await.unwrap();
+    let checkpoint="SELECT jsonb_build_object('counts',counts,'position',position,'retained',retained_bytes,'measured',measured_bytes,'reserved',reserved_bytes,'cursor',checkpoint_id,'source_complete',source_walk_complete,'owned_cursor',owned_after,'owned_complete',owned_walk_complete) FROM migration_family_refresh_plan WHERE id=$1";
+    let before: Value = sqlx::query_scalar(checkpoint)
+        .bind(claim.plan)
+        .fetch_one(&migrator)
+        .await
+        .unwrap();
+    let native_sql="SELECT jsonb_build_object('tags',(SELECT jsonb_agg(to_jsonb(x) ORDER BY tag_id) FROM person_tag x WHERE organization_id=$1),'values',(SELECT jsonb_agg(to_jsonb(x) ORDER BY field_id) FROM person_custom_field_value x WHERE organization_id=$1))";
+    let native_before: Value = sqlx::query_scalar(native_sql)
+        .bind(f.org)
+        .fetch_one(&migrator)
+        .await
+        .unwrap();
+    let mut tiny = f.policy.clone();
+    tiny.org_ceiling_bytes = 1;
+    assert!(matches!(
+        metadata_plan::prepare_unit(&f.pool, &f.key, &tiny, &claim, cohort)
+            .await
+            .unwrap(),
+        Prepared::Capacity
+    ));
+    sqlx::raw_sql("CREATE FUNCTION test_person_metadata_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.position<>OLD.position THEN RAISE EXCEPTION 'synthetic Person metadata fault'; END IF; RETURN NEW; END $$; CREATE TRIGGER test_person_metadata_fault BEFORE UPDATE ON migration_family_refresh_plan FOR EACH ROW EXECUTE FUNCTION test_person_metadata_fault()").execute(&migrator).await.unwrap();
+    assert!(
+        metadata_plan::prepare_unit(&f.pool, &f.key, &f.policy, &claim, cohort)
+            .await
+            .is_err()
+    );
+    sqlx::raw_sql("DROP TRIGGER test_person_metadata_fault ON migration_family_refresh_plan; DROP FUNCTION test_person_metadata_fault()").execute(&migrator).await.unwrap();
+    assert_eq!(
+        sqlx::query_scalar::<_, Value>(checkpoint)
+            .bind(claim.plan)
+            .fetch_one(&migrator)
+            .await
+            .unwrap(),
+        before
+    );
+    let id = match metadata_plan::prepare_unit(&f.pool, &f.key, &f.policy, &claim, cohort)
+        .await
+        .unwrap()
+    {
+        Prepared::Unit(id) => id,
+        Prepared::Capacity => panic!("unexpected capacity"),
+    };
+    let row = sqlx::query("SELECT * FROM migration_family_refresh_manifest WHERE id=$1")
+        .bind(id)
+        .fetch_one(&migrator)
+        .await
+        .unwrap();
+    let revision: i64 =
+        sqlx::query_scalar("SELECT revision FROM migration_family_refresh_plan WHERE id=$1")
+            .bind(claim.plan)
+            .fetch_one(&migrator)
+            .await
+            .unwrap();
+    let evidence: metadata_plan::Evidence = Scope {
+        organization: f.ctx.organization_id,
+        bundle: claim.bundle,
+        plan: claim.plan,
+        family: Family::Metadata,
+        revision,
+    }
+    .open(
+        &f.key,
+        id,
+        Purpose::Manifest,
+        row.get("nonce"),
+        row.get("ciphertext"),
+    )
+    .unwrap();
+    let Decision::Ready { native, .. } = evidence.decision else {
+        panic!(
+            "unexpected held proposal: {:?}",
+            row.get::<Option<String>, _>("reason")
+        );
+    };
+    assert_eq!(native.counts.updates, 1);
+    assert_eq!(native.counts.tag_removals, 1);
+    assert_eq!(native.counts.field_clears, 0);
+    assert_eq!(
+        native
+            .changes
+            .iter()
+            .filter(|c| matches!(c, Change::SetField(..)))
+            .count(),
+        1
+    );
+    assert_eq!(
+        native
+            .changes
+            .iter()
+            .filter(|c| matches!(c, Change::AddTag(..)))
+            .count(),
+        1
+    );
+    assert!(native
+        .gaps
+        .iter()
+        .any(|g| matches!(g, Gap::UnqualifiedNull(_))));
+    assert!(native
+        .gaps
+        .iter()
+        .any(|g| matches!(g, Gap::MissingField(_))));
+    assert_eq!(
+        sqlx::query_scalar::<_, Value>(native_sql)
+            .bind(f.org)
+            .fetch_one(&migrator)
+            .await
+            .unwrap(),
+        native_before,
+        "preparation cannot change native state"
+    );
+    let after: Value = sqlx::query_scalar(checkpoint)
+        .bind(claim.plan)
+        .fetch_one(&migrator)
+        .await
+        .unwrap();
+    assert!(
+        matches!(metadata_plan::prepare_unit(&f.pool,&f.key,&tiny,&claim,cohort).await.unwrap(),Prepared::Unit(replayed) if replayed==id)
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, Value>(checkpoint)
+            .bind(claim.plan)
+            .fetch_one(&migrator)
+            .await
+            .unwrap(),
+        after
+    );
+    use crm_api::domain::migration::family_refresh::metadata_walk::{self, Progress as Walk};
+    sqlx::raw_sql("CREATE FUNCTION test_person_walk_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.checkpoint_id IS DISTINCT FROM OLD.checkpoint_id THEN RAISE EXCEPTION 'synthetic Person walk fault'; END IF; RETURN NEW; END $$; CREATE TRIGGER test_person_walk_fault BEFORE UPDATE ON migration_family_refresh_plan FOR EACH ROW EXECUTE FUNCTION test_person_walk_fault()").execute(&migrator).await.unwrap();
+    assert!(metadata_walk::run_once(&f.pool, &f.key, &f.policy, &claim)
+        .await
+        .is_err());
+    sqlx::raw_sql("DROP TRIGGER test_person_walk_fault ON migration_family_refresh_plan; DROP FUNCTION test_person_walk_fault()").execute(&migrator).await.unwrap();
+    assert_eq!(
+        sqlx::query_scalar::<_, Value>(checkpoint)
+            .bind(claim.plan)
+            .fetch_one(&migrator)
+            .await
+            .unwrap(),
+        after
+    );
+    for turn in 0..8 {
+        if metadata_walk::run_once(&f.pool, &f.key, &f.policy, &claim)
+            .await
+            .unwrap()
+            == Walk::Finished
+        {
+            break;
+        }
+        assert!(turn < 7);
+    }
+    for turn in 0..8 {
+        if metadata_walk::missing_once(&f.pool, &f.key, &f.policy, &claim)
+            .await
+            .unwrap()
+            == Walk::Finished
+        {
+            break;
+        }
+        assert!(turn < 7);
+    }
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_family_refresh_manifest WHERE plan_id=$1 AND kind='metadata'").bind(claim.plan).fetch_one(&migrator).await.unwrap(),3,"changed, missing, and outside-cohort Persons all receive outcomes");
+    assert_eq!(sqlx::query_scalar::<_,String>("SELECT reason FROM migration_family_refresh_manifest WHERE plan_id=$1 AND kind='metadata' AND source_id='102'").bind(claim.plan).fetch_one(&migrator).await.unwrap(),"source_not_observed");
+    assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_family_refresh_manifest WHERE plan_id=$1 AND kind='metadata' AND disposition='excluded'").bind(claim.plan).fetch_one(&migrator).await.unwrap(),1);
+    assert_eq!(
+        sqlx::query_scalar::<_, Value>(native_sql)
+            .bind(f.org)
+            .fetch_one(&migrator)
+            .await
+            .unwrap(),
+        native_before
+    );
+}

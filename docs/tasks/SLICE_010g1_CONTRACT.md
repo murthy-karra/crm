@@ -562,3 +562,24 @@ mutable requalification and does not repeat the handover. Existing admitted
 metadata keeps its previously established two-transaction handover behavior.
 This is catalog admission only; complete family release inventories, HTTP
 exposure, confirmation and native execution remain separate work.
+
+### Atomic Person metadata preparation and traversal
+
+The Person converter uses authenticated catalog outcomes and retained Person
+records. An indexed field-name batch finds supplied definitions; bounded ready
+field choices supply missing/null gaps. Supplied non-null fields and tag aliases
+require qualified explicit mappings. Prospective IDs stay frozen. Under the
+current profile, null is unknown and cannot become a field clear.
+
+One encrypted Person unit retains the positive baseline, ownership, source and
+atomic proposed after-state, or a conservative hold. Counts, position, native
+revision/head expectations and retained-byte settlement commit together. Replay
+precedes mutable requalification and capacity reservation. Migration 022 binds
+the unit to its exact cohort and distinguishes Person source IDs from activity
+missing-identity IDs.
+
+Migration 023 and the bounded metadata walker visit every retained Person
+occurrence, then every frozen cohort Person. Source conflicts are resolved before
+cohort filtering; outside-cohort observations remain explicit exclusions, and
+missing Persons receive held outcomes without removals or clears. Exact-next
+cursors and outcomes commit together; exhaustion does not seal or confirm work.

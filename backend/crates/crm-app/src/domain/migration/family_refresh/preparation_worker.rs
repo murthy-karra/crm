@@ -25,7 +25,7 @@ pub enum Progress {
 
 // Core index ownership stays with the fixed payer. Other core plans wait for
 // that one index; history can advance once the shared cohort is frozen.
-const RUNNABLE: &str = "b.state='preparing' AND b.confirmed_at IS NULL AND p.state='preparing' AND p.confirmed_at IS NULL AND EXISTS(SELECT 1 FROM migration_workspace w WHERE w.organization_id=b.organization_id AND w.import_id=b.parent_import_id AND w.plan_id=b.parent_plan_id) AND (p.lease_token IS NULL OR p.lease_expires_at<=clock_timestamp()) AND ((p.family IN ('metadata','activity') AND p.phase='mappings' AND NOT p.mappings_complete) OR (p.family='activity' AND p.phase IN ('mappings','classify') AND p.mappings_complete AND (NOT p.source_walk_complete OR NOT p.owned_walk_complete)) OR (p.family='metadata' AND p.phase IN ('mappings','classify') AND p.mappings_complete AND NOT p.catalog_walk_complete AND EXISTS(SELECT 1 FROM migration_metadata_catalog_readiness WHERE organization_id=p.organization_id AND state='ready' AND engine_version='fub-admitted-metadata-v1')) OR (p.family='history' AND p.phase IN ('mappings','classify') AND (NOT p.source_walk_complete OR NOT p.owned_walk_complete)) OR (p.phase='capture' AND (p.id=b.payer_plan_id OR p.family='history')) OR (p.phase='cohort' AND (p.id=b.payer_plan_id OR (owner.phase<>'cohort' AND (p.family='history' OR owner.phase NOT IN ('cohort','capture'))))))";
+const RUNNABLE: &str = "b.state='preparing' AND b.confirmed_at IS NULL AND p.state='preparing' AND p.confirmed_at IS NULL AND EXISTS(SELECT 1 FROM migration_workspace w WHERE w.organization_id=b.organization_id AND w.import_id=b.parent_import_id AND w.plan_id=b.parent_plan_id) AND (p.lease_token IS NULL OR p.lease_expires_at<=clock_timestamp()) AND ((p.family IN ('metadata','activity') AND p.phase='mappings' AND NOT p.mappings_complete) OR (p.family='activity' AND p.phase IN ('mappings','classify') AND p.mappings_complete AND (NOT p.source_walk_complete OR NOT p.owned_walk_complete)) OR (p.family='metadata' AND p.phase IN ('mappings','classify') AND p.mappings_complete AND (NOT p.catalog_walk_complete OR NOT p.source_walk_complete OR NOT p.owned_walk_complete) AND EXISTS(SELECT 1 FROM migration_metadata_catalog_readiness WHERE organization_id=p.organization_id AND state='ready' AND engine_version='fub-admitted-metadata-v1')) OR (p.family='history' AND p.phase IN ('mappings','classify') AND (NOT p.source_walk_complete OR NOT p.owned_walk_complete)) OR (p.phase='capture' AND (p.id=b.payer_plan_id OR p.family='history')) OR (p.phase='cohort' AND (p.id=b.payer_plan_id OR (owner.phase<>'cohort' AND (p.family='history' OR owner.phase NOT IN ('cohort','capture'))))))";
 
 /// Server-owned 60-second lease; an active owner is never displaced. Epochs
 /// balance bounded steps among eligible families without trusting client input.
@@ -265,11 +265,20 @@ async fn step(
         && p.get::<bool, _>("mappings_complete")
         && matches!(phase.as_str(), "mappings" | "classify")
     {
-        return Ok(
-            super::catalog_walk::run_once(pool, key, policy, claim).await?
-                != super::catalog_walk::Progress::Capacity,
-        );
+        if !p.get::<bool, _>("catalog_walk_complete") {
+            return Ok(
+                super::catalog_walk::run_once(pool, key, policy, claim).await?
+                    != super::catalog_walk::Progress::Capacity,
+            );
+        }
+        let progress = if !p.get::<bool, _>("source_walk_complete") {
+            super::metadata_walk::run_once(pool, key, policy, claim).await?
+        } else {
+            super::metadata_walk::missing_once(pool, key, policy, claim).await?
+        };
+        return Ok(progress != super::metadata_walk::Progress::Capacity);
     }
+
     if phase == "mappings" && family != "history" {
         return Ok(
             super::mapping_inventory::run_once(pool, key, policy, claim).await?

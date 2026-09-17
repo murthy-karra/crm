@@ -2537,3 +2537,16 @@ traversal evidence through `aaccd81` is archived in
 Both used the isolated `crm_010g1_schema_20260915` database and
 `/private/tmp/crm-010g1-target-20260915` Cargo target. Neither checkpoint exposed
 HTTP/Web routes, performed native refresh execution, or completed the slice.
+
+## 010g1 typed catalog admission checkpoint — 2026-09-16
+
+`a554871` reused the existing shared catalog handover inside typed refresh
+admission, preserving original claim owners and original-payer byte charges.
+Failed admission rolls back handover/bundle/receipt together; authorized replay
+does not repeat work. Existing admitted metadata preserves its prior transaction
+boundary. The family run passed 38/39 before correcting an obsolete inventory
+drain bound; the corrected scenario, exact-owner/charge/fault/replay scenario
+and two admitted metadata regressions passed in
+`/private/tmp/010g1-catalog-admission-focused-db.log`. Library Clippy passed in
+`/private/tmp/010g1-catalog-admission-clippy.log`. No HTTP or native refresh
+execution was exposed.

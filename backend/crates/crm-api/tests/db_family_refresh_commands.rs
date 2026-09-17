@@ -274,11 +274,8 @@ async fn family_refresh_prepare_combined_is_atomic_metered_and_replay_safe(pool:
         .bind(prepared.bundle_id).fetch_all(&pool).await.unwrap();
     for plan in plans {
         let history = plan.get::<String, _>("family") == "history";
-        let walked = plan.get::<String, _>("family") != "metadata";
-        assert_eq!(
-            plan.get::<String, _>("phase"),
-            if walked { "classify" } else { "mappings" }
-        );
+        let walked = true;
+        assert_eq!(plan.get::<String, _>("phase"), "classify");
         assert_eq!(plan.get::<bool, _>("source_walk_complete"), walked);
         assert_eq!(plan.get::<bool, _>("owned_walk_complete"), walked);
         assert_eq!(plan.get::<bool, _>("mappings_complete"), !history);
@@ -2994,9 +2991,10 @@ async fn family_refresh_catalog_creation_requires_all_options_and_distinct_targe
                 .unwrap();
         let counts: crm_api::domain::migration::family_refresh::model::Counts =
             serde_json::from_value(counts).unwrap();
-        assert_eq!(counts.units, 5);
+        assert_eq!(counts.units, 6);
         assert_eq!(counts.inserts, if round == 1 { 3 } else { 0 });
-        assert_eq!(counts.held, if round == 1 { 2 } else { 5 });
+        assert_eq!(counts.held, if round == 1 { 3 } else { 6 });
+        assert_eq!(sqlx::query_scalar::<_,i64>("SELECT count(*) FROM migration_family_refresh_manifest WHERE plan_id=$1 AND kind='metadata' AND disposition='held'").bind(claim.plan).fetch_one(&pool).await.unwrap(),1,"catalog prerequisites cannot supply missing Person first coverage");
         assert!(counts.reconciles());
         worker::release(&f.pool, &claim).await.unwrap();
     }

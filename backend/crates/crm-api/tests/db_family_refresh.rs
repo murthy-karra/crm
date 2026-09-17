@@ -1331,12 +1331,13 @@ async fn shared_source_resolves_across_families_without_copying_or_reencrypting(
         original.plan
     );
     let c=sqlx::query("SELECT id,person_id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND source_person_id='101'").bind(claim.bundle).fetch_one(&pool).await.unwrap();
-    // A review-only manifest may reference the original shared source from a
-    // sibling family. The rollback keeps this synthetic manifest out of billing.
+    // This fixture isolates shared source references after catalog preparation.
+    // A held Person unit needs no native baseline or write permission.
+    sqlx::query("UPDATE migration_family_refresh_plan SET mappings_complete=true,catalog_walk_complete=true WHERE id=$1").bind(plan).execute(&pool).await.unwrap();
     let mut tx = f.pool.begin().await.unwrap();
     sqlx::query("SELECT set_config('crm.family_refresh_reader','fub-family-refresh-v1',true),set_config('crm.family_refresh_lease',$1,true)").bind(token.to_string()).execute(&mut *tx).await.unwrap();
     let manifest = Uuid::new_v4();
-    sqlx::query("INSERT INTO migration_family_refresh_manifest(id,bundle_id,plan_id,organization_id,cohort_id,source_row_id,position,kind,source_key_hmac,person_id,target_id,disposition,counts,nonce,ciphertext,added_byte_bound) VALUES($1,$2,$3,$4,$5,$6,1,'metadata',decode(repeat('01',32),'hex'),$7,$7,'already_current','{}',decode(repeat('00',24),'hex'),decode(repeat('00',16),'hex'),4096)")
+    sqlx::query("INSERT INTO migration_family_refresh_manifest(id,bundle_id,plan_id,organization_id,cohort_id,source_row_id,position,kind,source_key_hmac,person_id,source_id,disposition,reason,counts,nonce,ciphertext,added_byte_bound) VALUES($1,$2,$3,$4,$5,$6,1,'metadata',decode(repeat('01',32),'hex'),$7,'101','held','baseline_unproven','{}',decode(repeat('00',24),'hex'),decode(repeat('00',16),'hex'),4096)")
         .bind(manifest).bind(claim.bundle).bind(plan).bind(f.org).bind(c.get::<Uuid,_>("id")).bind(source.row).bind(c.get::<Uuid,_>("person_id")).execute(&mut *tx).await.unwrap();
     tx.rollback().await.unwrap();
     assert_eq!(

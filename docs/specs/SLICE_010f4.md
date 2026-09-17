@@ -310,3 +310,13 @@ first activity coverage, later history/delta gaps and continuing review hold.
 Run the brief and paired final gates. At most two review/fix rounds under D-050;
 blocking gaps never count as a pass. O-012/O-013 customer readiness and live-source,
 activation, distribution and deployment boundaries remain unchanged.
+
+## D-090 recovery amendment
+
+The accepted [010e6 recovery specification](../plans/SLICE_010e6_NEVER_IMPORTED_RECOVERY.md)
+extends admission and follow-on qualification for explicitly anchored, successfully
+created recovery People. Normal modes retain this specification's rules. Original
+holds are immutable; recovery is a distinct admission mode with its own initial
+approvals/provenance. Initial approval readers recognize recovery-owned evidence
+before original fallback, with subsequent exact-key 010e5 repair precedence.
+No fabricated original results or automatic family cascade is permitted.

@@ -371,6 +371,10 @@ pub(crate) async fn measured_bytes(
 #[serde(deny_unknown_fields)]
 pub(crate) struct Selected {
     source: SourceKey,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    recovery_choice_id: Option<Uuid>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    recovery_admission_id: Option<Uuid>,
     original_id: Option<Uuid>,
     choice_id: Option<Uuid>,
     choice_refresh_id: Option<Uuid>,
@@ -392,6 +396,8 @@ pub(crate) async fn select(
     if let Some(resolved) = resolve(conn, key, owner, org, root, person, source).await? {
         return Ok(Selected {
             source: source.clone(),
+            recovery_choice_id: None,
+            recovery_admission_id: None,
             original_id: None,
             choice_id: Some(resolved.choice_id),
             choice_refresh_id: Some(resolved.choice_refresh_id),
@@ -399,6 +405,25 @@ pub(crate) async fn select(
             head_version: resolved.head_version,
             target_id: resolved.target_id,
         });
+    }
+    if owner == Owner::Admitted {
+        let admission: Uuid = root.get("admission_id");
+        if let Some((choice, target)) =
+            super::people_recovery::initial_approval(conn, key, org, admission, person, source)
+                .await?
+        {
+            return Ok(Selected {
+                source: source.clone(),
+                recovery_choice_id: Some(choice),
+                recovery_admission_id: Some(admission),
+                original_id: None,
+                choice_id: None,
+                choice_refresh_id: None,
+                head_id: None,
+                head_version: 0,
+                target_id: target,
+            });
+        }
     }
     let (source_key, label_hmac) = match source {
         SourceKey::StageLabel(label) => (
@@ -454,6 +479,8 @@ pub(crate) async fn select(
     }
     Ok(Selected {
         source: source.clone(),
+        recovery_choice_id: None,
+        recovery_admission_id: None,
         original_id: Some(row.get("id")),
         choice_id: None,
         choice_refresh_id: None,
@@ -537,6 +564,10 @@ pub(crate) async fn freeze_item(
         .into_iter()
         .flatten()
         .any(|s| s.choice_refresh_id == Some(id));
+    if owner == Owner::Admitted {
+        sqlx::query("UPDATE migration_admitted_people_refresh_item SET recovery_stage_choice_id=$4,recovery_assignee_choice_id=$5 WHERE id=$1 AND refresh_id=$2 AND organization_id=$3 AND settled_at IS NULL")
+            .bind(item).bind(id).bind(org.0).bind(stage.and_then(|v|v.recovery_choice_id)).bind(assignee.and_then(|v|v.recovery_choice_id)).execute(&mut *conn).await?;
+    }
     let changed=sqlx::query(&format!("UPDATE {p}_item SET stage_mapping_id=$4,assignee_mapping_id=$5,repair_stage_choice_id=$6,repair_stage_choice_refresh_id=$7,repair_assignee_choice_id=$8,repair_assignee_choice_refresh_id=$9,repair_stage_source_hmac=$10,repair_assignee_source_hmac=$11,repair_stage_head_id=$12,repair_assignee_head_id=$13,repair_stage_head_version=$14,repair_assignee_head_version=$15,mapping_evidence_nonce=$16,mapping_evidence_ciphertext=$17,native_fingerprint=crm_mapping_repair_native_fingerprint(organization_id,person_id),repair_approval_only=(disposition='already_current' AND $18) WHERE id=$1 AND refresh_id=$2 AND organization_id=$3 AND settled_at IS NULL"))
         .bind(item).bind(id).bind(org.0).bind(stage.and_then(|s|s.original_id)).bind(assignee.and_then(|s|s.original_id))
         .bind(stage.and_then(|s|s.choice_id)).bind(stage.and_then(|s|s.choice_refresh_id)).bind(assignee.and_then(|s|s.choice_id)).bind(assignee.and_then(|s|s.choice_refresh_id))
@@ -662,13 +693,24 @@ pub(crate) async fn validate_item(
                 Err(MigrationError::SourceNotEligible) => return Ok(false),
                 Err(error) => return Err(error),
             };
-            if current.original_id != frozen.original_id
+            if current.recovery_choice_id != frozen.recovery_choice_id
+                || current.recovery_admission_id != frozen.recovery_admission_id
+                || current.original_id != frozen.original_id
                 || current.choice_id != frozen.choice_id
                 || current.choice_refresh_id != frozen.choice_refresh_id
                 || current.head_id != frozen.head_id
                 || current.head_version != frozen.head_version
                 || current.target_id != frozen.target_id
                 || json!(current.target_id) != proposed[field]
+            {
+                return Ok(false);
+            }
+            if owner == Owner::Admitted
+                && item.get::<Option<Uuid>, _>(if kind == "stage" {
+                    "recovery_stage_choice_id"
+                } else {
+                    "recovery_assignee_choice_id"
+                }) != frozen.recovery_choice_id
             {
                 return Ok(false);
             }

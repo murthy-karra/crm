@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import Card from '../Card.vue'
 import PeopleMappingRepair from './PeopleMappingRepair.vue'
@@ -12,7 +12,7 @@ import { describeApiError } from '../../lib/errors'
 import { fetchImport, fetchImports, importAccessError, uncertainImportError } from '../../api/imports'
 import { coreChangeLabel, fetchCoreChangeReport, fetchCoreChangeReports } from '../../api/coreChangeReports'
 import { ApiError } from '../../api/client'
-import { fetchPeopleAdmissions } from '../../api/peopleAdmissions'
+import { fetchPeopleAdmission, fetchPeopleAdmissions } from '../../api/peopleAdmissions'
 import { cancelAdmittedPeopleRefresh, confirmAdmittedPeopleRefresh, fetchAdmittedPeopleRefresh, fetchAdmittedPeopleRefreshAvailability, fetchAdmittedPeopleRefreshes, prepareAdmittedPeopleRefresh, refreshActive, refreshInteger, refreshLabel, repreviewAdmittedPeopleRefresh, retryAdmittedPeopleRefresh, useAdmittedPeopleRefreshAccess, type RefreshConfirm } from '../../api/admittedPeopleRefreshes'
 import { snapshotTime } from './format'
 
@@ -46,6 +46,10 @@ const availabilityKey = computed(() => [...access.prefix.value, 'availability', 
 const parents = useQuery({ queryKey: parentsKey, enabled: access.enabled, retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(parentsKey.value, () => parentsKey.value, () => fetchImports(parentPages.value.at(-1) || undefined, signal)) })
 const parent = useQuery({ queryKey: parentKey, enabled: computed(() => access.enabled.value && !!parentId.value), retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(parentKey.value, () => parentKey.value, () => fetchImport(parentId.value, signal)) })
 const admissions = useQuery({ queryKey: admissionsKey, enabled: computed(() => access.enabled.value && !!parentId.value), retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(admissionsKey.value, () => admissionsKey.value, () => fetchPeopleAdmissions(parentId.value, admissionPages.value.at(-1) || undefined, signal)) })
+const handedCohort=ref<import('../../api/peopleAdmissions').PeopleAdmission>()
+const cohortOptions=computed(()=>{const rows=admissions.data.value?.items??[];const selected=handedCohort.value;return selected&&selected.parent_import_id===parentId.value&&!rows.some(r=>r.id===selected.id)?[selected,...rows]:rows})
+watch(access.scope,()=>{handedCohort.value=undefined},{flush:'sync'})
+
 const reports = useQuery({ queryKey: reportsKey, enabled: computed(() => access.enabled.value && !!parentId.value), retry: false, gcTime: 0, queryFn: ({ signal }) => access.read(reportsKey.value, () => reportsKey.value, () => fetchCoreChangeReports(parentId.value, reportPages.value.at(-1) || undefined, signal)) })
 const firstRefreshPage = ref<Awaited<ReturnType<typeof fetchAdmittedPeopleRefreshes>> | null>(null)
 const listing = useQuery({ queryKey: listKey, enabled: computed(() => access.enabled.value && !!admissionId.value), retry: false, gcTime: 0, staleTime: Infinity, refetchOnWindowFocus: false, refetchOnReconnect: false, queryFn: ({ signal }) => access.read(listKey.value, () => listKey.value, async () => {
@@ -66,7 +70,7 @@ const selectedAvailability = computed(() => {
 })
 const plan = computed(() => current.value?.plan)
 const expired = computed(() => !!plan.value && (!plan.value.expires_at || Date.parse(plan.value.expires_at) <= now.value || !Number.isFinite(Date.parse(plan.value.expires_at))))
-const selectedAdmission = computed(() => admissions.data.value?.items.find(value => value.id === admissionId.value))
+const selectedAdmission = computed(() => cohortOptions.value.find(value => value.id === admissionId.value))
 const canPrepare = computed(() => access.enabled.value && access.org.value?.workspace_mode === 'migration_review' && parent.data.value?.state === 'completed' && !!parent.data.value.confirmed_plan_id && !!selectedAdmission.value && ['completed', 'cancelled'].includes(selectedAdmission.value.state) && selectedAdmission.value.progress.settled_items !== '0' && !!source.value && source.value.id === reportId.value && selectedAvailability.value?.available === true && !busy.value && !refreshId.value)
 const canConfirm = computed(() => !!current.value?.actions.confirm && !!plan.value && (plan.value.counts.eligible !== '0' || !!plan.value.mapping_repair && plan.value.mapping_repair.approval_only_count !== '0') && (!plan.value.mapping_repair || mappingAck.value) && !expired.value && !!source.value && coverageAck.value && exclusionsAck.value && removalsAck.value && !busy.value)
 const errors = computed(() => [parents.error.value, parent.error.value, reports.error.value, listing.error.value, detail.error.value, report.error.value, availability.error.value].filter(Boolean))
@@ -133,6 +137,21 @@ function confirm() {
     acknowledged_name_clears: refreshInteger(preview.counts.name_clears), acknowledged_assignment_clears: refreshInteger(preview.counts.assignment_clears), acknowledged_contact_removals: refreshInteger(preview.counts.contact_removals),
   } }) } catch { actionError.value = 'The plan counts cannot be submitted safely. Reload the preview.' }
 }
+async function openRecovery(step:import('../../api/peopleAdmissions').RecoveryFollowOn){
+ if(!access.enabled.value||busy.value)return false
+ const scope=access.scope.value
+ const selection=[parentId.value,admissionId.value,refreshId.value].join(':')
+ const cohort=await fetchPeopleAdmission(step.admission_id)
+ if(scope!==access.scope.value||cohort.parent_import_id!==step.parent_import_id||busy.value||selection!==[parentId.value,admissionId.value,refreshId.value].join(':'))return false
+ handedCohort.value=cohort
+ parentId.value=step.parent_import_id;await nextTick()
+ if(scope!==access.scope.value)return false
+ admissionId.value=step.admission_id;await nextTick()
+ if(scope!==access.scope.value)return false
+ refreshId.value=step.root_id??''
+ return true
+}
+defineExpose({openRecovery})
 </script>
 
 <template>
@@ -220,11 +239,11 @@ function confirm() {
               <option value="">
                 Choose an admission with committed People
               </option><option
-                v-for="value in admissions.data.value?.items.filter(item => ['completed', 'cancelled'].includes(item.state) && item.progress.settled_items !== '0') ?? []"
+                v-for="value in cohortOptions.filter(item => ['completed', 'cancelled'].includes(item.state) && item.progress.settled_items !== '0') ?? []"
                 :key="value.id"
                 :value="value.id"
               >
-                {{ value.state === 'cancelled' ? 'Cancelled with committed People' : 'Completed' }} · {{ value.progress.settled_items }} committed · {{ value.id }}
+                {{ value.mode==='mapping_recovery'?'Recovery':'Admission' }} · {{ value.state === 'cancelled' ? 'Cancelled with committed People' : 'Completed' }} · {{ value.progress.settled_items }} committed · {{ value.id }}
               </option>
             </select>
           </FormField>

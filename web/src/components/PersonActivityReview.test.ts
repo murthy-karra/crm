@@ -68,6 +68,20 @@ describe('bounded Person activity review', () => {
     expect(document.body.textContent).not.toContain('PRIVATE ADMITTED SOURCE')
     expect(document.body.textContent).not.toContain('Imported activity source')
   })
+  it.each(['note', 'task'] as const)('reviews refresh-owned %s through bounded common fields', async kind => {
+    const refresh_provenance = { bundle_id: 'bundle', item_id: 'item', revision: '4', source_account_id: '101', source_id: '44' }
+    await setup(url => {
+      if (url.endsWith('/migration-review/v2')) return core()
+      if (url.includes('/family-refreshes/')) return { item_id: 'item', items: [], next_cursor: null }
+      if (url.endsWith('/notes/note')) return { ...full(), provenance: null, refresh_provenance }
+      if (url.includes('/notes?')) return page(kind === 'note' ? [{ ...note(), provenance: null, refresh_provenance }] : [])
+      return page(kind === 'task' && url.includes('state=open') ? [{ ...task, provenance: null, refresh_provenance }] : [])
+    })
+    if (kind === 'note') { await click('Read full note'); await click('Inspect refreshed note source') }
+    else await click('Inspect task source')
+    expect(api.mock.calls.filter(([url]) => url.includes('/family-refreshes/')).map(([url]) => url)).toEqual(['/migrations/fub/family-refreshes/bundle/items/item/fields?limit=25'])
+    expect(document.body.textContent).toContain('Retained values and proposed changes')
+  })
   it('does not let an unrelated admitted source URL redirect a native source read', async () => {
     const source = { ...provenance, source_url: '/api/migrations/fub/admitted-activity-imports/foreign/results/foreign/fields/all' }
     await setup(url => {

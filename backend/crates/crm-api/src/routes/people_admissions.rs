@@ -3,7 +3,7 @@ use crate::{
     auth::OrgAdminContext,
     domain::{
         envelope::CommandContext,
-        migration::{people_admission as h, MigrationError},
+        migration::{people_admission as h, people_recovery as recovery, MigrationError},
     },
     error::ApiError,
     state::AppState,
@@ -46,6 +46,18 @@ pub fn router() -> Router<AppState> {
         .route(
             "/api/migrations/fub/people-admissions",
             get(list).post(prepare),
+        )
+        .route(
+            "/api/migrations/fub/people-admissions/recoveries",
+            post(prepare_recovery),
+        )
+        .route(
+            "/api/migrations/fub/people-admissions/{id}/recovery-mappings",
+            get(recovery_mappings).post(edit_recovery_mapping),
+        )
+        .route(
+            "/api/migrations/fub/people-admissions/{id}/recovery-mappings/{key}/field",
+            get(recovery_mapping_field),
         )
         .route("/api/migrations/fub/people-admissions/{id}", get(detail))
         .route(
@@ -217,18 +229,42 @@ async fn repreview(
     p: Result<Path<Uuid>, PathRejection>,
     b: Result<Json<RepreviewWire>, JsonRejection>,
 ) -> Result<Response, ApiError> {
-    Ok(response(
-        StatusCode::ACCEPTED,
-        h::repreview(
-            s.db.as_ref().ok_or(ApiError::Unavailable)?,
-            &s.raw_payload_key,
-            &CommandContext::from_auth(&a.auth),
-            path(p)?,
-            body(b)?.command()?,
-        )
-        .await
-        .map_err(error)?,
-    ))
+    let cmd = body(b)?;
+    let id = path(p)?;
+    let pool = s.db.as_ref().ok_or(ApiError::Unavailable)?;
+    let ctx = CommandContext::from_auth(&a.auth);
+    let value = match (cmd.expected_plan_revision, cmd.expected_draft_revision) {
+        (Some(revision), None) => {
+            h::repreview(
+                pool,
+                &s.raw_payload_key,
+                &ctx,
+                id,
+                h::RepreviewPeopleAdmission {
+                    request_id: cmd.request_id,
+                    expected_plan_revision: decimal(&revision, true)?,
+                },
+            )
+            .await
+        }
+        (None, Some(revision)) => {
+            recovery::seal_choices(
+                pool,
+                &s.raw_payload_key,
+                &s.snapshot_policy,
+                &ctx,
+                id,
+                recovery::SealRecoveryChoices {
+                    request_id: cmd.request_id,
+                    expected_draft_revision: decimal(&revision, false)?,
+                },
+            )
+            .await
+        }
+        _ => return Err(ApiError::MalformedRequest),
+    }
+    .map_err(error)?;
+    Ok(response(StatusCode::ACCEPTED, value))
 }
 async fn confirm(
     State(s): State<AppState>,
@@ -237,19 +273,32 @@ async fn confirm(
     b: Result<Json<ConfirmWire>, JsonRejection>,
 ) -> Result<Response, ApiError> {
     let release = s.current_import_release().await;
-    Ok(response(
-        StatusCode::ACCEPTED,
-        h::confirm(
-            s.db.as_ref().ok_or(ApiError::Unavailable)?,
+    let mut wire = body(b)?;
+    let ack = wire
+        .recovery
+        .take()
+        .map(RecoveryAckWire::command)
+        .transpose()?;
+    let cmd = wire.command()?;
+    let id = path(p)?;
+    let pool = s.db.as_ref().ok_or(ApiError::Unavailable)?;
+    let ctx = CommandContext::from_auth(&a.auth);
+    let value = if let Some(ack) = ack {
+        recovery::confirm(
+            pool,
             &s.raw_payload_key,
-            &CommandContext::from_auth(&a.auth),
-            path(p)?,
-            body(b)?.command()?,
+            &ctx,
+            id,
+            cmd,
+            ack,
             release.as_deref(),
         )
         .await
-        .map_err(error)?,
-    ))
+    } else {
+        h::confirm(pool, &s.raw_payload_key, &ctx, id, cmd, release.as_deref()).await
+    }
+    .map_err(error)?;
+    Ok(response(StatusCode::ACCEPTED, value))
 }
 async fn retry(
     State(s): State<AppState>,
@@ -410,15 +459,8 @@ fn decimal(value: &str, positive: bool) -> Result<i64, ApiError> {
 #[serde(deny_unknown_fields)]
 struct RepreviewWire {
     request_id: Uuid,
-    expected_plan_revision: String,
-}
-impl RepreviewWire {
-    fn command(self) -> Result<h::RepreviewPeopleAdmission, ApiError> {
-        Ok(h::RepreviewPeopleAdmission {
-            request_id: self.request_id,
-            expected_plan_revision: decimal(&self.expected_plan_revision, true)?,
-        })
-    }
+    expected_plan_revision: Option<String>,
+    expected_draft_revision: Option<String>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -437,6 +479,7 @@ impl LifecycleWire {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ConfirmWire {
+    recovery: Option<RecoveryAckWire>,
     request_id: Uuid,
     plan_id: Uuid,
     plan_revision: String,
@@ -483,4 +526,134 @@ mod tests {
         )
         .is_ok());
     }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RecoveryPrepareWire {
+    request_id: Uuid,
+    report_id: Uuid,
+    anchor: recovery::RecoveryAnchor,
+    expected_anchor_revision: String,
+}
+async fn prepare_recovery(
+    State(s): State<AppState>,
+    a: OrgAdminContext,
+    b: Result<Json<RecoveryPrepareWire>, JsonRejection>,
+) -> Result<Response, ApiError> {
+    let wire = body(b)?;
+    let release = s.current_import_release().await;
+    let value = recovery::prepare(
+        s.db.as_ref().ok_or(ApiError::Unavailable)?,
+        &s.raw_payload_key,
+        &s.snapshot_policy,
+        &CommandContext::from_auth(&a.auth),
+        recovery::PrepareRecovery {
+            request_id: wire.request_id,
+            report_id: wire.report_id,
+            anchor: wire.anchor,
+            expected_anchor_revision: decimal(&wire.expected_anchor_revision, true)?,
+        },
+        release.as_deref(),
+    )
+    .await
+    .map_err(error)?;
+    Ok(response(StatusCode::CREATED, value))
+}
+async fn recovery_mappings(
+    State(s): State<AppState>,
+    a: OrgAdminContext,
+    p: Result<Path<Uuid>, PathRejection>,
+    q: Result<Query<recovery::RecoveryMappingPage>, QueryRejection>,
+) -> Result<Response, ApiError> {
+    Ok(response(
+        StatusCode::OK,
+        recovery::mapping_page(
+            s.db.as_ref().ok_or(ApiError::Unavailable)?,
+            &s.raw_payload_key,
+            &CommandContext::from_auth(&a.auth),
+            path(p)?,
+            query(q)?,
+        )
+        .await
+        .map_err(error)?,
+    ))
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RecoveryEditWire {
+    request_id: Uuid,
+    expected_draft_revision: String,
+    key_id: Uuid,
+    disposition: String,
+    target_id: Option<Uuid>,
+}
+async fn edit_recovery_mapping(
+    State(s): State<AppState>,
+    a: OrgAdminContext,
+    p: Result<Path<Uuid>, PathRejection>,
+    b: Result<Json<RecoveryEditWire>, JsonRejection>,
+) -> Result<Response, ApiError> {
+    let wire = body(b)?;
+    Ok(response(
+        StatusCode::OK,
+        recovery::edit_mapping(
+            s.db.as_ref().ok_or(ApiError::Unavailable)?,
+            &s.raw_payload_key,
+            &s.snapshot_policy,
+            &CommandContext::from_auth(&a.auth),
+            path(p)?,
+            recovery::EditRecoveryMapping {
+                request_id: wire.request_id,
+                expected_draft_revision: decimal(&wire.expected_draft_revision, false)?,
+                key_id: wire.key_id,
+                disposition: wire.disposition,
+                target_id: wire.target_id,
+            },
+        )
+        .await
+        .map_err(error)?,
+    ))
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RecoveryAckWire {
+    mapping_digest: Vec<u8>,
+    candidate_count: String,
+    contact_count: String,
+    unassigned_count: String,
+    acknowledged_creation: bool,
+}
+impl RecoveryAckWire {
+    fn command(self) -> Result<recovery::RecoveryAcknowledgement, ApiError> {
+        Ok(recovery::RecoveryAcknowledgement {
+            mapping_digest: self.mapping_digest,
+            candidate_count: decimal(&self.candidate_count, false)?,
+            contact_count: decimal(&self.contact_count, false)?,
+            unassigned_count: decimal(&self.unassigned_count, false)?,
+            acknowledged_creation: self.acknowledged_creation,
+        })
+    }
+}
+
+async fn recovery_mapping_field(
+    State(s): State<AppState>,
+    a: OrgAdminContext,
+    p: Result<Path<(Uuid, Uuid)>, PathRejection>,
+    q: Result<Query<h::Page>, QueryRejection>,
+) -> Result<Response, ApiError> {
+    let (id, key) = path(p)?;
+    Ok(response(
+        StatusCode::OK,
+        recovery::mapping_field(
+            s.db.as_ref().ok_or(ApiError::Unavailable)?,
+            &s.raw_payload_key,
+            &CommandContext::from_auth(&a.auth),
+            id,
+            key,
+            query(q)?,
+        )
+        .await
+        .map_err(error)?,
+    ))
 }

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiFetch } from './client'
-import { fetchHistoryInquiries, fetchHistoryReviewCore, fetchHistoryTimeline, fetchHistoryTimelineDetail, historyReviewCoreKey } from './historyReview'
+import { fetchHistoryVersions, fetchHistoryVersion, fetchHistoryInquiries, fetchHistoryReviewCore, fetchHistoryTimeline, fetchHistoryTimelineDetail, historyReviewCoreKey } from './historyReview'
 import { cancelHistoryImport, confirmHistoryImport, fetchHistoryImportRecords, fetchHistoryImportResults, fetchHistoryImports, increaseHistoryImportBudget, prepareHistoryImport, resumeHistoryImport } from './historyImports'
 vi.mock('./client', async original => ({ ...await original<typeof import('./client')>(), apiFetch: vi.fn() }))
 const api = vi.mocked(apiFetch)
@@ -16,6 +16,13 @@ describe('010d2 transport contracts', () => {
     expect(api.mock.calls.every(([, init]) => init?.signal === signal && init.cache === 'no-store')).toBe(true)
     const prefix = ['org', 'org', 'history-review', 'actor', 3, '9007199254740993', 'admin']
     expect(historyReviewCoreKey(prefix, 'person')).toEqual([...prefix, 'person', 'person', 'core-v2'])
+  })
+  it('uses identity-scoped immutable metadata version routes and decimal versions', async () => {
+    const signal = new AbortController().signal
+    await fetchHistoryVersions('person/id', 'fub_call_record_imported', 'identity/id', 'next+', signal, 2)
+    await fetchHistoryVersion('person/id', 'fub_call_record_imported', 'identity/id', '9007199254740993', signal)
+    expect(api.mock.calls.map(([url]) => url)).toEqual(['/people/person%2Fid/history/fub_call_record_imported/identity%2Fid/versions?limit=2&cursor=next%2B', '/people/person%2Fid/history/fub_call_record_imported/identity%2Fid/versions/9007199254740993'])
+    expect(api.mock.calls.every(([, init]) => init?.signal === signal && init.cache === 'no-store')).toBe(true)
   })
   it('keeps exact decimal mutation revisions and distinct plan/result cursors', async () => {
     const expected_revision = '9007199254740993123'

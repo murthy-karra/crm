@@ -1329,7 +1329,21 @@ async fn execute(
         }
     }
     let result = Uuid::new_v4();
+    let after_state = if outcome == "applied" {
+        Some(
+            super::family_refresh::activity_baseline::capture(
+                conn,
+                j.org,
+                &kind,
+                target.ok_or(MigrationError::SourceNotEligible)?,
+            )
+            .await?,
+        )
+    } else {
+        None
+    };
     let payload = ResultData {
+        after_state,
         source: data.record.provenance.clone(),
         native: json!({"target_id":target,"native_kind":data.native_kind,"preview":data.native}),
         reasons: data.reasons.clone(),

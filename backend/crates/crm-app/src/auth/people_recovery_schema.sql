@@ -1,0 +1,95 @@
+-- D-090 exact runtime/preflight recovery schema inventory.
+SELECT COALESCE(
+ (SELECT bool_and(EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=to_regprocedure('public.'||signature) AND md5(p.prosrc)=body_md5)) FROM (VALUES
+ ('crm_workspace_shared(uuid)','5935cf5ffc9c1d2dfddf67bc62c2b76f'),
+ ('crm_people_admission_mutation_allowed(uuid,text,text,text,jsonb)','3888826ac7d108c5b73db52ed0b5644c'),
+ ('crm_workspace_mutation_guard()','ff5357f7664aa79c6ddee863ce099e34'),
+ ('crm_people_recovery_capability(uuid)','c1b7daa1ef7e5495287707a42adeac4b'),
+ ('crm_people_recovery_item_proof(uuid,uuid)','371fe1a39dcc6336340b54f725d18c49'),
+ ('crm_people_recovery_item_owned()','701a824c7cb6a6e82389e52acb13a533'),
+ ('crm_people_recovery_plan_immutable()','3444e0c02efb88c26884d11c52ed2383'),
+ ('crm_people_recovery_owned_write()','21a4f7138744ebb5b5df70ced976a7f9'),
+ ('crm_people_recovery_write_fence()','ecd61c26388ee3dc3ba97c59c6b7777a'),
+ ('crm_people_recovery_previously_materialized(uuid,bigint,text)','237d3e35c592eacbacb140007aba0db9'),
+ ('crm_person_recovered_prepare_history()','afa60e219a45b47d6a3ebb2a38e147c7'),
+ ('crm_people_recovery_refresh_approval()','00b8beaab383757b086e2100cc91972b'),
+ ('crm_people_recovery_catalog_owned()','1f06d7d9a12561d32883f754c95cd7e1'),
+ ('crm_people_recovery_result_owned()','681fd9af20853896b80cc03507386641')) expected(signature,body_md5))
+ AND (SELECT bool_and(EXISTS(SELECT 1 FROM pg_constraint c WHERE c.conrelid=to_regclass('public.'||name) AND c.convalidated GROUP BY c.conrelid HAVING md5(string_agg(c.conname||':'||pg_get_constraintdef(c.oid),E'\n' ORDER BY c.conname))=expected_hash)) FROM (VALUES
+ ('migration_people_admission','96ed6fbdddc52c4f1940949354e6ed77'),
+ ('migration_people_admission_plan','3bc4e3a41213b43a7363ca67c1763a0c'),
+ ('migration_people_admission_item','148342156bb1af3085bac7a6a80fe4db'),
+ ('migration_people_admission_receipt','04efcf2aa2df175cb5229b93420c07c3'),
+ ('migration_admitted_people_refresh_item','d98048288438cfc04093ef427ffd9a1b'),
+ ('migration_people_recovery_requirement','f277543e717b6d8c62546733755fa531'),
+ ('migration_people_recovery_candidate','7ef1f563217faaf1566736c53d7ddbcc'),
+ ('migration_people_recovery_key','78550c3081311b974717ad7de61c42f6'),
+ ('migration_people_recovery_choice','b6a6a48902b380a5cd461f2d4be5661e'),
+ ('person_recovered','a8ef55b8af256455eac9f54107fbceea'),
+ ('migration_people_recovery_catalog','352b527069a5ba755e7f8ab7c9e11849')) expected(name,expected_hash))
+ AND NOT EXISTS(SELECT 1 FROM pg_constraint WHERE NOT convalidated AND conrelid IN (to_regclass('public.migration_people_admission'),to_regclass('public.migration_people_admission_plan'),to_regclass('public.migration_people_admission_item'),to_regclass('public.migration_people_admission_receipt'),to_regclass('public.person_recovered'),to_regclass('public.migration_people_recovery_requirement'),to_regclass('public.migration_people_recovery_candidate'),to_regclass('public.migration_people_recovery_key'),to_regclass('public.migration_people_recovery_choice'),to_regclass('public.migration_people_recovery_catalog'),to_regclass('public.migration_admitted_people_refresh_item')))
+ AND (SELECT bool_and(EXISTS(SELECT 1 FROM pg_trigger t WHERE t.tgrelid=to_regclass('public.'||name) AND t.tgfoid=to_regprocedure('public.crm_people_recovery_write_fence()') AND t.tgenabled IN ('O','A') AND t.tgtype=31)) FROM (VALUES
+ ('migration_people_admission'),('migration_people_admission_plan'),('migration_people_admission_item'),('migration_people_admission_result'),('migration_people_admission_contact'),('migration_people_admission_receipt')) required(name))
+ AND (SELECT bool_and(EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=to_regprocedure('public.'||signature) AND md5(pg_get_functiondef(p.oid))=expected_hash)) FROM (VALUES
+ ('crm_people_admission_mutation_allowed(uuid,text,text,text,jsonb)','d3c081e69e4cb69cbd66bf5d1481a9e2'),
+ ('crm_people_recovery_capability(uuid)','7930ef4f42883e35ba35fa37aa447e42'),
+ ('crm_people_recovery_catalog_owned()','d57287479573da01cd69915c8f25f892'),
+ ('crm_people_recovery_item_owned()','01aa5d75fbbcdbc84df0eb026217dffe'),
+ ('crm_people_recovery_item_proof(uuid,uuid)','ece7284a588843d2b0796f41a74d187e'),
+ ('crm_people_recovery_owned_write()','9a9d16b476cbd3a9b24087c29adaa224'),
+ ('crm_people_recovery_plan_immutable()','4a9761ebcc559a4a354008d77450cf59'),
+ ('crm_people_recovery_previously_materialized(uuid,bigint,text)','c65ec09a7a88f99440d2fa26a06b641a'),
+ ('crm_people_recovery_refresh_approval()','a88cf5fd26f32bd5bf55ace37576d431'),
+ ('crm_people_recovery_result_owned()','84bf104fe30a78fbe6db527ad8b3a1cf'),
+ ('crm_people_recovery_write_fence()','3c267000f5f91beaa1d382f52675e6e0'),
+ ('crm_person_recovered_prepare_history()','2fc7f5c83cf37be62b23531be3e39a0e'),
+ ('crm_workspace_mutation_guard()','aa24cd513dda9818b61038d518c474ae'),
+ ('crm_workspace_shared(uuid)','fcbfe49c9552877b819ff365ca6b4b2f')) required(signature,expected_hash))
+ AND (SELECT bool_and(EXISTS(SELECT 1 FROM pg_trigger t WHERE t.tgrelid=to_regclass('public.'||relation) AND t.tgname=name AND t.tgenabled IN ('O','A') AND md5(pg_get_triggerdef(t.oid))=expected_hash)) FROM (VALUES
+ ('migration_people_recovery_requirement','people_recovery_requirement_immutable','95788fafaf59ac4c705952f4721a6632'),
+ ('migration_people_recovery_candidate','people_recovery_owned','1d4ffb0773e86a1397e390fada05cdb6'),
+ ('migration_people_recovery_candidate','people_recovery_immutable','360864d53ad14194c041a65bae93a78b'),
+ ('migration_people_recovery_key','people_recovery_owned','06359445cfa8080aa7980725bf53ae93'),
+ ('migration_people_recovery_key','people_recovery_immutable','bfdb557981ad7176ee4eaa513fb0e8e2'),
+ ('migration_people_recovery_choice','people_recovery_owned','4fdf4fff49094a768dc244a84ae87ce6'),
+ ('migration_people_recovery_choice','people_recovery_immutable','09141d22392d90343f2978b255ed4209'),
+ ('migration_people_admission','people_recovery_write_fence','5c1f050d3ab93f6880d4aac3864bcf12'),
+ ('migration_people_admission_plan','people_recovery_write_fence','b9ee347d40b5179c2c7dcdd05e968ea6'),
+ ('migration_people_admission_item','people_recovery_write_fence','aac15edddb5aeca9e6eb6758d53694c8'),
+ ('migration_people_admission_result','people_recovery_write_fence','c19518a9eda186cb86c751b547b778b3'),
+ ('migration_people_admission_contact','people_recovery_write_fence','6cf8c948d15b80914830c95152790fe6'),
+ ('migration_people_admission_receipt','people_recovery_write_fence','42772c9772551413d7cf4bea3778b3cc'),
+ ('person_recovered','person_recovered_append_only','ad366c2dab94b6c9f760231d962264b2'),
+ ('person_recovered','person_recovered_no_truncate','5c1de6969ac036ef1e0a6e22bdf24458'),
+ ('person_recovered','workspace_mutation_guard','fa543536dde59e7df979ffb3f3075443'),
+ ('person_recovered','person_recovered_prepare_history','4a0633e9d90c9da7c31be9a1d8be5500'),
+ ('person_recovered','history_review_rows','bf1e6a34586e4b39ffde690665d25e80'),
+ ('migration_people_admission_item','people_recovery_item_owned','489e5410b0e583b86f4d3be2ba338b41'),
+ ('migration_people_admission_plan','people_recovery_plan_immutable','c17247141429678969768e96befb2fa1'),
+ ('migration_admitted_people_refresh_item','people_recovery_refresh_approval','a442fc43bd9faaf44971e4e16dfb6af6'),
+ ('migration_people_recovery_catalog','people_recovery_catalog_immutable','3bf9901f645eb02da0906c83f4246e37'),
+ ('migration_people_recovery_catalog','people_recovery_catalog_owned','e5bc832dde20bc55ecde30626ac28b1a'),
+ ('migration_people_admission_result','people_recovery_result_owned','922a119251b69705a4cd7aee587afeb2')) required(relation,name,expected_hash))
+ AND (SELECT bool_and(has_table_privilege('crm_app',to_regclass('public.'||name),'SELECT') AND has_table_privilege('crm_app',to_regclass('public.'||name),'INSERT') AND NOT has_table_privilege('crm_app',to_regclass('public.'||name),'UPDATE,DELETE,TRUNCATE') AND NOT EXISTS(SELECT 1 FROM pg_class c,LATERAL aclexplode(COALESCE(c.relacl,acldefault('r',c.relowner))) a WHERE c.oid=to_regclass('public.'||name) AND a.grantee=0)) FROM (VALUES
+ ('migration_people_recovery_requirement'),
+ ('migration_people_recovery_candidate'),
+ ('migration_people_recovery_key'),
+ ('migration_people_recovery_choice'),
+ ('migration_people_recovery_catalog'),
+ ('person_recovered')) required(name))
+ AND (SELECT bool_and(EXISTS(SELECT 1 FROM pg_index i WHERE i.indexrelid=to_regclass('public.'||name) AND i.indisvalid AND i.indisready AND md5(pg_get_indexdef(i.indexrelid))=expected_hash)) FROM (VALUES
+ ('people_recovery_candidate_stage','c05bf19513bce8a1026117fdaf3ab679'),
+ ('people_recovery_candidate_assignee','72eb02ea0761e366a2c2cdfa2bca18ed'),
+ ('people_recovery_key_page','503c52265892bb20851a042daba05684'),
+ ('people_recovery_choice_lookup','637347b6e8e25f299ddab8c4498e1a57'),
+ ('people_recovery_original_hold','741f3fa726f95a0a2ba23811eb2217fa'),
+ ('people_recovery_admission_hold','8a4bd07cd9d69b878bdee029b447146e'),
+ ('people_recovery_original_success','4cdb3743261f738a1897c50e2ba98e27'),
+ ('people_recovery_admission_success','5457d23500962ee61e7e3f52927027a2'),
+ ('person_recovered_history','fcd18d71179b701cf70eec3a77339c50'),
+ ('people_recovery_catalog_key','a7acaa2ab8b649c3d79e25ad4fdcdfcc'),
+ ('recovery_metadata_coverage','148d822e407c39387cd5c9e0db60ac0a'),
+ ('recovery_activity_coverage','9c0e902faa77130b15e0412e851271c4'),
+ ('recovery_history_coverage','0aeb306ccc8ef5dc073cf7cb499cd4d0'),
+ ('recovery_choice_key_version','3b2e4475dd233fce7031781016796b62')) required(name,expected_hash))
+ ,false)

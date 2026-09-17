@@ -361,7 +361,26 @@ pub(crate) async fn existing_fact(
     let fact = sqlx::query(&format!("SELECT f.* FROM {table} f JOIN person p ON p.id=f.person_id AND p.organization_id=f.organization_id WHERE f.id=$1 AND f.organization_id=$2 AND f.identity_id=$3 AND f.person_id=$4"))
         .bind(id).bind(org.0).bind(identity.get::<Uuid,_>("id")).bind(identity.get::<Option<Uuid>,_>("person_id")).fetch_optional(&mut *conn).await?;
     let Some(fact) = fact else { return Ok(None) };
-    let decoded = if let Some(root) = identity.get::<Option<Uuid>, _>("admitted_root_id") {
+    let decoded = if let Some(bundle) = identity.get::<Option<Uuid>, _>("refresh_bundle_id") {
+        for field in [
+            "refresh_bundle_id",
+            "refresh_plan_id",
+            "refresh_manifest_id",
+        ] {
+            if fact.get::<Option<Uuid>, _>(field) != identity.get::<Option<Uuid>, _>(field) {
+                return Ok(None);
+            }
+        }
+        super::family_refresh::history_display::initial(
+            conn,
+            key,
+            org,
+            bundle,
+            identity.get("refresh_plan_id"),
+            identity.get("refresh_manifest_id"),
+        )
+        .await
+    } else if let Some(root) = identity.get::<Option<Uuid>, _>("admitted_root_id") {
         for field in [
             "admitted_root_id",
             "admitted_plan_id",
@@ -383,7 +402,8 @@ pub(crate) async fn existing_fact(
         )
         .await
     } else {
-        if fact.get::<Option<Uuid>, _>("admitted_root_id").is_some()
+        if fact.get::<Option<Uuid>, _>("refresh_bundle_id").is_some()
+            || fact.get::<Option<Uuid>, _>("admitted_root_id").is_some()
             || fact.get::<Option<Uuid>, _>("attempt_id")
                 != identity.get::<Option<Uuid>, _>("owner_run_id")
         {

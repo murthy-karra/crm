@@ -317,7 +317,8 @@ pub(crate) async fn validate_person_tag_capacity(
         .sum();
     // Preserve idempotent no-op/removal behavior even for a preexisting over-cap
     // fixture. A fresh addition must fit the final set, after all removals.
-    if actions.iter().any(|a| a.add && !a.present) && count + delta > 20 {
+    if actions.iter().any(|a| a.add && !a.present) && count + delta > super::PERSON_TAG_LIMIT as i64
+    {
         return Err(TagError::PersonTagLimitReached);
     }
     Ok(())

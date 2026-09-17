@@ -128,6 +128,7 @@ fn build_app_with_routers_inner(
             .merge(routes::migrations::router())
             .merge(routes::core_change_reports::router())
             .merge(routes::people_refreshes::router())
+            .merge(routes::family_refreshes::router())
             .merge(routes::people_admissions::router())
             .merge(routes::admitted_people_refreshes::router())
             .merge(routes::admitted_metadata_imports::router())
@@ -315,6 +316,47 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
                             tracing::warn!(outcome=%error, "core change report sweep failed");
                             break;
                         }
+                    }
+                }
+                // Alternate preparation and execution within the same finite
+                // budget so a large retained capture cannot starve confirmed work.
+                let release = state.current_import_release().await;
+                let mut idle = [false; 2];
+                for turn in 0..32 {
+                    use domain::migration::family_refresh::{
+                        execution,
+                        preparation_worker::{self, Progress},
+                    };
+                    let lane = turn % 2;
+                    let result = if lane == 0 {
+                        preparation_worker::run_once(
+                            &pool,
+                            &state.raw_payload_key,
+                            &state.snapshot_policy,
+                        )
+                        .await
+                    } else {
+                        execution::run_once(
+                            &pool,
+                            &state.raw_payload_key,
+                            &state.snapshot_policy,
+                            release.as_deref(),
+                        )
+                        .await
+                    };
+                    match result {
+                        Ok(Progress::Advanced | Progress::Paused) => {
+                            idle[lane] = false;
+                            tokio::task::yield_now().await;
+                        }
+                        Ok(Progress::Idle) => idle[lane] = true,
+                        Err(error) => {
+                            idle[lane] = true;
+                            tracing::warn!(outcome=%error, lane, "family refresh sweep failed");
+                        }
+                    }
+                    if idle.iter().all(|value| *value) {
+                        break;
                     }
                 }
             }

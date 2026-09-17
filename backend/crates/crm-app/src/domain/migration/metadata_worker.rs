@@ -1,6 +1,7 @@
 //! Bounded retained-only metadata preparation and execution. No FUB reader exists here.
 use super::{
     crypto,
+    family_refresh::metadata_baseline as baseline,
     metadata::{self, Choice, Patch},
     metadata_model::{self as m, Counts, Manifest, Mapping, Operation, ResultData, Target},
     metadata_source::{self as source, Entity, Record},
@@ -1440,7 +1441,13 @@ async fn people(
     let source_bytes = s::bytes(&record.provenance)?.len() as i64;
     // JSON result encryption, exact source, all outcomes, native variable-width
     // cells, operation identity keys, and fixed closed receipt/counter allowance.
+    let native_bytes = if let Some((_, person)) = parent {
+        s::bytes(&baseline::observe(conn, j.org, person).await?)?.len() as i64
+    } else {
+        0
+    };
     let bound = source_bytes
+        .saturating_add(native_bytes)
         .saturating_add(planned.saturating_mul(3))
         .saturating_add(256 * 1024);
     if bound > s::UNIT {
@@ -1732,6 +1739,7 @@ async fn catalog_result(
         outcome,
         local.wire(),
         &ResultData {
+            after_state: None,
             source: data.source.clone(),
             operations: operation,
             reasons: data.reasons.clone(),
@@ -1948,6 +1956,25 @@ async fn execute(
     } else {
         "not_supplied"
     };
+    let after_state = if outcome != "held" {
+        if let Some(person) = person {
+            let receipts: Vec<_> = manifest
+                .operations
+                .iter()
+                .map(|op| baseline::Receipt {
+                    kind: &op.kind,
+                    source_key: &op.source_key,
+                    target: op.target_id,
+                    outcome: &op.disposition,
+                })
+                .collect();
+            Some(baseline::capture(conn, j.org, j.id, unit, person, &receipts).await?)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
     added += result(
         conn,
         key,
@@ -1959,6 +1986,7 @@ async fn execute(
         outcome,
         local.wire(),
         &ResultData {
+            after_state,
             source: source.provenance,
             operations: serde_json::to_value(&manifest.operations)
                 .map_err(|_| MigrationError::Crypto)?,

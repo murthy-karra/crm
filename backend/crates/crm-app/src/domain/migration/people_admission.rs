@@ -77,12 +77,39 @@ pub async fn prepare(
     cmd: PreparePeopleAdmission,
     readiness: Option<&ReleaseReadiness>,
 ) -> Result<Value, MigrationError> {
+    prepare_internal(pool, key, policy, ctx, cmd, None, readiness).await
+}
+pub(crate) async fn prepare_internal(
+    pool: &PgPool,
+    key: &RawPayloadKey,
+    policy: &SnapshotPolicy,
+    ctx: &CommandContext,
+    cmd: PreparePeopleAdmission,
+    recovery: Option<super::people_recovery::PrepareRecovery>,
+    readiness: Option<&ReleaseReadiness>,
+) -> Result<Value, MigrationError> {
     let mut tx = s::begin(pool, ctx).await?;
-    let digest = s::digest(key, ctx, "prepare", None, &cmd)?;
-    if let Some(v) = s::replay(&mut tx, key, ctx, "prepare", cmd.request_id, &digest).await? {
+    let action = if recovery.is_some() {
+        "prepare_recovery"
+    } else {
+        "prepare"
+    };
+    let digest = if let Some(ref recovery) = recovery {
+        s::digest(key, ctx, action, None, recovery)?
+    } else {
+        s::digest(key, ctx, action, None, &cmd)?
+    };
+    if let Some(v) = s::replay(&mut tx, key, ctx, action, cmd.request_id, &digest).await? {
         return Ok(v);
     }
     release(&mut tx, readiness).await?;
+    if recovery.is_some() {
+        readiness
+            .ok_or(MigrationError::ReleaseNotReady)?
+            .require_people_recovery(&mut tx)
+            .await
+            .map_err(|_| MigrationError::ReleaseNotReady)?;
+    }
     let parent: Uuid = sqlx::query_scalar("SELECT parent_import_id FROM migration_core_change_report WHERE id=$1 AND organization_id=$2")
         .bind(cmd.report_id).bind(ctx.organization_id.0).fetch_optional(&mut *tx).await?.ok_or(MigrationError::NotFound)?;
     s::lock_parent(&mut tx, ctx.organization_id, parent).await?;
@@ -94,6 +121,9 @@ pub async fn prepare(
     {
         return Err(MigrationError::SourceNotEligible);
     }
+    if let Some(ref recovery) = recovery {
+        super::people_recovery::validate_anchor(&mut tx, ctx, &report, recovery).await?;
+    }
     let id = Uuid::new_v4();
     let started = report
         .get::<Option<chrono::DateTime<chrono::Utc>>, _>("newer_started_at")
@@ -101,7 +131,13 @@ pub async fn prepare(
     let completed = report
         .get::<Option<chrono::DateTime<chrono::Utc>>, _>("newer_completed_at")
         .ok_or(MigrationError::SourceNotEligible)?;
-    sqlx::query("INSERT INTO migration_people_admission(id,organization_id,parent_import_id,parent_plan_id,report_id,source_account_id,original_snapshot_id,original_sequence,newer_snapshot_id,newer_sequence,newer_started_at,newer_completed_at,workspace_revision,initiated_by_user_id,engine_version,state) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'preparing')").bind(id).bind(ctx.organization_id.0).bind(report.get::<Uuid,_>("parent_import_id")).bind(report.get::<Uuid,_>("parent_plan_id")).bind(cmd.report_id).bind(report.get::<i64,_>("source_account_id")).bind(report.get::<Uuid,_>("original_snapshot_id")).bind(report.get::<i64,_>("original_sequence")).bind(report.get::<Uuid,_>("newer_snapshot_id")).bind(report.get::<i64,_>("newer_sequence")).bind(started).bind(completed).bind(report.get::<i64,_>("workspace_revision")).bind(ctx.actor_user_id.0).bind(s::ENGINE).execute(&mut *tx).await?;
+    sqlx::query("INSERT INTO migration_people_admission(id,organization_id,parent_import_id,parent_plan_id,report_id,source_account_id,original_snapshot_id,original_sequence,newer_snapshot_id,newer_sequence,newer_started_at,newer_completed_at,workspace_revision,initiated_by_user_id,engine_version,state,mode,recovery_original_plan_id,recovery_admission_id,recovery_admission_plan_id,recovery_remainder) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'preparing',$16,$17,$18,$19,$20)").bind(id).bind(ctx.organization_id.0).bind(report.get::<Uuid,_>("parent_import_id")).bind(report.get::<Uuid,_>("parent_plan_id")).bind(cmd.report_id).bind(report.get::<i64,_>("source_account_id")).bind(report.get::<Uuid,_>("original_snapshot_id")).bind(report.get::<i64,_>("original_sequence")).bind(report.get::<Uuid,_>("newer_snapshot_id")).bind(report.get::<i64,_>("newer_sequence")).bind(started).bind(completed).bind(report.get::<i64,_>("workspace_revision")).bind(ctx.actor_user_id.0).bind(if recovery.is_some() { super::people_recovery::ENGINE } else { s::ENGINE })
+        .bind(if recovery.is_some() { "mapping_recovery" } else { "ordinary" })
+        .bind(recovery.as_ref().and_then(|r| r.anchor.original_plan()))
+        .bind(recovery.as_ref().and_then(|r| r.anchor.admission()))
+        .bind(recovery.as_ref().and_then(|r| r.anchor.admission_plan()))
+        .bind(recovery.as_ref().is_some_and(|r| r.anchor.remainder()))
+        .execute(&mut *tx).await?;
     let run = resource(&mut tx, ctx.organization_id.0, id).await?;
     let inputs = s::validate_run(&mut tx, key, ctx.organization_id, &run).await?;
     check_boundary(&mut tx, key, ctx.organization_id, &run, &inputs).await?;
@@ -121,7 +157,7 @@ pub async fn prepare(
         &mut tx,
         key,
         ctx,
-        "prepare",
+        action,
         cmd.request_id,
         id,
         &digest,
@@ -147,6 +183,9 @@ pub async fn repreview(
     if r.get::<Uuid, _>("initiated_by_user_id") != ctx.actor_user_id.0
         || r.get::<String, _>("state") != "ready"
     {
+        return Err(MigrationError::Conflict);
+    }
+    if super::people_recovery::is_recovery(&r) {
         return Err(MigrationError::Conflict);
     }
     s::validate_run(&mut tx, key, ctx.organization_id, &r).await?;
@@ -183,12 +222,40 @@ pub async fn confirm(
     cmd: ConfirmPeopleAdmission,
     readiness: Option<&ReleaseReadiness>,
 ) -> Result<Value, MigrationError> {
+    confirm_internal(pool, key, ctx, id, cmd, None, readiness).await
+}
+pub(crate) async fn confirm_internal(
+    pool: &PgPool,
+    key: &RawPayloadKey,
+    ctx: &CommandContext,
+    id: Uuid,
+    cmd: ConfirmPeopleAdmission,
+    recovery: Option<super::people_recovery::RecoveryAcknowledgement>,
+    readiness: Option<&ReleaseReadiness>,
+) -> Result<Value, MigrationError> {
     let mut tx = s::begin(pool, ctx).await?;
-    let digest = s::digest(key, ctx, "confirm", Some(id), &cmd)?;
+    let digest = if let Some(ref ack) = recovery {
+        s::digest(
+            key,
+            ctx,
+            "confirm",
+            Some(id),
+            &json!({"command":cmd,"recovery":ack}),
+        )?
+    } else {
+        s::digest(key, ctx, "confirm", Some(id), &cmd)?
+    };
     if let Some(v) = s::replay(&mut tx, key, ctx, "confirm", cmd.request_id, &digest).await? {
         return Ok(v);
     }
     release(&mut tx, readiness).await?;
+    if recovery.is_some() {
+        readiness
+            .ok_or(MigrationError::ReleaseNotReady)?
+            .require_people_recovery(&mut tx)
+            .await
+            .map_err(|_| MigrationError::ReleaseNotReady)?;
+    }
     let r = resource(&mut tx, ctx.organization_id.0, id).await?;
     if r.get::<Uuid, _>("initiated_by_user_id") != ctx.actor_user_id.0
         || r.get::<String, _>("state") != "ready"
@@ -210,6 +277,7 @@ pub async fn confirm(
     {
         return Err(MigrationError::Conflict);
     }
+    super::people_recovery::validate_confirmation(&mut tx, ctx, &r, &p, recovery.as_ref()).await?;
     let inputs = validate_plan(&mut tx, key, ctx.organization_id, &r, &p).await?;
     check_boundary(&mut tx, key, ctx.organization_id, &r, &inputs).await?;
     super::store::require_admin(&mut tx, ctx).await?;
@@ -283,6 +351,18 @@ async fn lifecycle(
     {
         return Err(MigrationError::Conflict);
     }
+    if action == "retry"
+        && super::people_recovery::is_recovery(&r)
+        && r.get::<Option<Uuid>, _>("confirmed_admission_plan_id")
+            .is_none()
+        && (r
+            .get::<Option<i64>, _>("recovery_frozen_revision")
+            .is_none()
+            || r.get::<Option<String>, _>("pause_reason").as_deref()
+                == Some("awaiting_mapping_choices"))
+    {
+        return Err(MigrationError::Conflict);
+    }
     let state = if action == "cancel" {
         "cancelled"
     } else if r
@@ -332,13 +412,16 @@ async fn validate_plan(
     Ok(inputs)
 }
 
-async fn check_boundary(
+pub(crate) async fn check_boundary(
     conn: &mut sqlx::PgConnection,
     key: &RawPayloadKey,
     org: crate::ids::OrganizationId,
     run: &sqlx::postgres::PgRow,
     inputs: &Value,
 ) -> Result<(), MigrationError> {
+    if super::people_recovery::is_recovery(run) {
+        return super::people_recovery::check_boundary(conn, org, run).await;
+    }
     let previous = sqlx::query("SELECT * FROM migration_people_admission WHERE organization_id=$1 AND parent_import_id=$2 AND id<>$3 AND confirmed_admission_plan_id IS NOT NULL ORDER BY confirmed_completed_at DESC,created_at DESC,id DESC LIMIT 1")
         .bind(org.0).bind(run.get::<Uuid,_>("parent_import_id")).bind(run.get::<Uuid,_>("id")).fetch_optional(&mut *conn).await?;
     let Some(previous) = previous else {

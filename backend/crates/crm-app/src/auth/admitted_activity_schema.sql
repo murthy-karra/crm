@@ -1,5 +1,5 @@
 -- One shared readiness inventory for Rust startup/confirmation and release preflight.
--- Function body hashes pin the definitions in 20261004000001/003. They detect
+-- Function body hashes pin admitted definitions plus the refresh identity meter. They detect
 -- incomplete replacement as well as missing functions; this is not a secret hash.
 SELECT COALESCE(
   EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=to_regclass('public.migration_admitted_activity_source') AND attname='source_person_id' AND atttypid='text'::regtype AND NOT attisdropped)
@@ -56,11 +56,11 @@ SELECT COALESCE(
       AND NOT EXISTS(SELECT 1 FROM aclexplode(COALESCE(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE')))
     FROM (VALUES ('crm_admitted_activity_retained_size(text,jsonb)','7b2209180deaa25ae2bfe13c28b46a8e'),
     ('crm_admitted_activity_measure_row()','f8cf014971be4c64058a1260467d9ddf'),
-    ('crm_activity_measure_row()','2031135b8362b8bb918114f24d60be23'),
+    ('crm_activity_measure_row()','d090cc1b64bb52b75f081a9bfa98980b'),
     ('crm_activity_complete_read(uuid)','0f665c63735a5ed020023edaa19a5ffe'),
     ('crm_admitted_activity_insert_allowed(uuid,text,jsonb)','4201639b79f89301e915cb6efeb584cf'),
-    ('crm_workspace_mutation_guard()','c46e8f6b68fc6eadde2ee20a1b7c6507'),
-    ('crm_workspace_shared(uuid)','2923ac107ebd11ea2e1c82c1a42bb32f')) expected(signature,body_md5))
+    ('crm_workspace_mutation_guard()','ff5357f7664aa79c6ddee863ce099e34'),
+    ('crm_workspace_shared(uuid)','5935cf5ffc9c1d2dfddf67bc62c2b76f')) expected(signature,body_md5))
   AND (SELECT bool_and(EXISTS(SELECT 1 FROM pg_trigger t WHERE t.tgrelid=to_regclass('public.'||name)
       AND t.tgname=name||'_measure' AND t.tgenabled IN ('O','A') AND t.tgtype=29
       AND t.tgfoid=to_regprocedure('public.crm_admitted_activity_measure_row()')))

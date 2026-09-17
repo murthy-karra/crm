@@ -150,29 +150,35 @@
       "path": "backend/crates/crm-app/src/auth/workspace.rs",
       "function": "read",
       "start_line": 67,
-      "sha256": "460000c6e97fce424fa9240d51feee83e57427fb758edca22b526370847a6102"
+      "sha256": "460000c6e97fce424fa9240d51feee83e57427fb758edca22b526370847a6102",
+      "shared_revision": "D-090/010e6",
+      "shared_revision_note": "Both paired arms share current authorization and its recovery reader stamp. The three frozen baseline query bodies remain unchanged."
     },
     {
       "path": "backend/crates/crm-app/src/auth/workspace.rs",
       "function": "read_check",
-      "start_line": 78,
-      "sha256": "788243492e4292843f4b2223fdb4e8c966c7a281e1e86b49f04e1c502b0c7df5",
-      "shared_revision": "D-088/010e5",
-      "shared_revision_note": "010e5 adds the independent transaction-local mapping-repair reader stamp. Both paired arms intentionally share this current HTTP/authentication helper; frozen reader bodies remain exact cd3b010. This is not a historical authentication-stack or worker-throughput comparison."
+      "start_line": 158,
+      "sha256": "819243528a5a5657331991ecf23091c96b2fbd09b426b70dc1c1d7ac6adfd75b",
+      "shared_revision": "D-092/010g1",
+      "shared_revision_note": "Both paired arms share current authorization. The exact change from D-090 is the added transaction-local crm.family_refresh_reader stamp in the existing SELECT, with no new round trip. The three frozen baseline reader bodies remain byte-exact; this is not a full historical authentication-stack comparison.",
+      "previous_shared_sha256": "6cfb35d52469d23435648a759905fea52eb9f632291cf29fa547a649c6235c8c"
     },
     {
       "path": "backend/crates/crm-app/src/auth/workspace.rs",
       "function": "ordinary",
-      "start_line": 47,
-      "sha256": "d863e053e9a9775e7db7e4100498b8f04455b3d9ee29e4e863b4e10f4f2952c9",
-      "shared_revision": "D-088/010e5",
-      "shared_revision_note": "010e5 adds the independent transaction-local mapping-repair reader stamp. Both paired arms intentionally share this current HTTP/authentication helper; frozen reader bodies remain exact cd3b010. This is not a historical authentication-stack or worker-throughput comparison."
+      "start_line": 117,
+      "sha256": "71f115ff41f64e5189f0c5a9e800653602c65551f8336c19eeab783aebfb33db",
+      "shared_revision": "D-092/010g1",
+      "shared_revision_note": "Both paired arms share current authorization. The exact change from D-090 is the added transaction-local crm.family_refresh_reader stamp in the existing SELECT, with no new round trip. The three frozen baseline reader bodies remain byte-exact; this is not a full historical authentication-stack comparison.",
+      "previous_shared_sha256": "b6066c666695d422851f8dd15e2f4fce199235ef30700d064721f60551b792a0"
     },
     {
       "path": "backend/crates/crm-app/src/auth/workspace.rs",
       "function": "with_reader",
       "start_line": 21,
-      "sha256": "d917ced204a7bb1b00605c6dce6b18ed0a28a73954fbc25cca26df7418dca04e"
+      "sha256": "d917ced204a7bb1b00605c6dce6b18ed0a28a73954fbc25cca26df7418dca04e",
+      "shared_revision": "D-090/010e6",
+      "shared_revision_note": "Both paired arms share current authorization and its recovery reader stamp. The three frozen baseline query bodies remain unchanged."
     }
   ]
 }

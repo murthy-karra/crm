@@ -16,10 +16,14 @@ Keep the administrator review hold, full fidelity reporting and source-data gate
 | **010e5: stage/agent repair — deployed** | Repair blocked updates to existing original/admitted People | [Verification](../tasks/SLICE_010e5_VERIFICATION.md); [Release](../tasks/SLICE_010e5_RELEASE.md), D-088 accepted |
 | **Later repair/delta/cutover scope** | Remaining coverage, deliberate mapping repair, per-family updates and activation | Separate accepted policies, final coverage/reconciliation, customer-data gates and recovery/cutoff procedure |
 
-**Current boundary — D-088:** [010e5 mapping repair](SLICE_010e5_MAPPING_REPAIR.md)
-is implemented and verified locally for existing original/admitted People.
-The user selected recovery of never-imported People next. That scope and later
-delta/cutover policies need their own accepted plans; 010e5 is deployed to shared development.
+**Current boundary — D-090/D-091:** 010e6 never-imported mapping-hold recovery
+is verified and merged locally as `2a4c207`; shared development remains 010e5.
+The user deferred deployment and selected one combined metadata/activity/history
+refresh package. [010g1](SLICE_010g1_COMBINED_FAMILY_REFRESH.md) owns that accepted
+scope and its contracts. It preserves family-specific execution while combining
+review and delivery. Its D-092 implementation and
+[local acceptance gates](../tasks/SLICE_010g1_VERIFICATION.md) are complete; merge,
+push and deployment remain deferred.
 
 Write the next family specification just in time after the preceding evidence.
 010f3's assignment/contracts are accepted under D-082. 010f4 is the accepted

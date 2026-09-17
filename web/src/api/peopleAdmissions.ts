@@ -3,11 +3,13 @@ import { useImportAccess } from './imports'
 
 export const admissionDispositions = ['eligible', 'already_imported', 'already_admitted', 'excluded_original', 'held_baseline_gap', 'held_evidence_gap', 'held_mapping_gap', 'held_identity', 'held_target', 'settled', 'cancelled'] as const
 export type AdmissionDisposition = typeof admissionDispositions[number]
-export interface AdmissionCounts { total:string; eligible:string; already_imported:string; already_admitted:string; excluded_original:string; held:string; intended_contacts:string }
+export interface AdmissionCounts { total:string; eligible:string; already_imported:string; already_admitted:string; excluded_original:string; held:string; intended_contacts:string; recovery_candidates?:string; recovery_unassigned?:string }
 export interface AdmissionPlan { id:string; revision:string; digest:string; expires_at:string|null; counts:AdmissionCounts }
 export interface AdmissionBoundary { snapshot_id:string; sequence:string; started_at:string|null; completed_at:string|null }
-export interface AdmissionCoverage { covered_families:string[]; deferred_families:string[]; review_hold:boolean }
+export interface RecoveryFollowOn {family:string;label:string;status:string;root_id:string|null;run_state:string|null;can_review:boolean;admission_id:string;parent_import_id:string;prerequisite:string}
+export interface AdmissionCoverage { follow_on?:RecoveryFollowOn[]; covered_families:string[]; deferred_families:string[]; review_hold:boolean }
 export interface PeopleAdmission {
+  mode?:'ordinary'|'mapping_recovery'; recovery?:RecoveryState|null; confirmed_admission_plan_id?:string|null;
   id:string; parent_import_id:string; report_id:string; state:string; lifecycle_revision:string; created_at:string; updated_at:string; completed_at:string|null; pause_reason:string|null
   newer_snapshot_id:string; newer_sequence:string; retained_bytes:string; reserved_bytes:string; progress:{settled_items:string}; source_boundary: { original:AdmissionBoundary; newer:AdmissionBoundary }; coverage:AdmissionCoverage; plan?:AdmissionPlan
   actions:{confirm:boolean;repreview:boolean;retry:boolean;cancel:boolean}
@@ -24,7 +26,7 @@ export interface AdmissionProvenance { person_id:string; admission_id:string; it
 export interface ProvenancePage { plan_id:string; plan_revision:string; items:AdmissionContact[]; next_cursor:string|null }
 export interface ProvenanceFieldFragment { field:string; offset:string; total_bytes:string; fragment:string; next_cursor:string|null }
 export interface AdmissionReceipt { admission_id:string; state:string }
-export interface AdmissionConfirm { request_id:string; plan_id:string; plan_revision:string; plan_digest:string; eligible_count:string; acknowledged_coverage:boolean; acknowledged_mappings:boolean; acknowledged_distinct_contacts:boolean; acknowledged_review_hold:boolean }
+export interface AdmissionConfirm { recovery?:{mapping_digest:number[];candidate_count:string;contact_count:string;unassigned_count:string;acknowledged_creation:boolean}; request_id:string; plan_id:string; plan_revision:string; plan_digest:string; eligible_count:string; acknowledged_coverage:boolean; acknowledged_mappings:boolean; acknowledged_distinct_contacts:boolean; acknowledged_review_hold:boolean }
 
 const root = '/migrations/fub/people-admissions'
 const path = (id:string) => `${root}/${encodeURIComponent(id)}`
@@ -50,3 +52,15 @@ export const usePeopleAdmissionAccess=()=>useImportAccess('people-admissions')
 export const admissionActive=(v?:PeopleAdmission)=>!!v && ['preparing','queued','running'].includes(v.state)
 export const admissionLabel=(value:string)=>({preparing:'Preparing qualified People',ready:'Ready for admission review',queued:'Queued',running:'Admitting People',paused:'Paused',completed:'Completed',cancelled:'Cancelled',eligible:'Eligible new Person',already_imported:'Already in original import',already_admitted:'Already admitted',excluded_original:'Excluded: present at original boundary',held_baseline_gap:'Held: original boundary gap',held_evidence_gap:'Held: retained evidence gap',held_mapping_gap:'Held: inherited mapping gap',held_identity:'Held: source identity',held_target:'Held: target unavailable',settled:'Admitted'} as Record<string,string>)[value] ?? 'Unrecognized admission detail'
 export const admissionAccessError=(e:unknown)=>e instanceof Error && 'status' in e && ([401,403].includes((e as {status:number}).status))
+
+export type RecoveryAnchor = {kind:'original';import_id:string;plan_id:string} | {kind:'admission';admission_id:string;plan_id:string;remainder:boolean}
+export interface RecoveryStart {request_id:string;report_id:string;anchor:RecoveryAnchor;expected_anchor_revision:string}
+export interface RecoveryState {mode:'mapping_recovery';original_plan_id:string|null;anchor_admission_id:string|null;anchor_plan_id:string|null;remainder:boolean;candidate_count:string;mapping_revision:string|null;mapping_digest:number[]|null}
+export interface RecoveryMapping {id:string;source:{kind:string;key?:string};source_key_bytes:string;source_key_truncated:boolean;kind:'stage'|'assignee';choice_id:string|null;disposition:string|null;target_id:string|null;dependent_count:string}
+export interface RecoveryMappings {admission_id:string;draft_revision:string;candidates_complete:boolean;candidate_count:string;items:RecoveryMapping[];next_cursor:string|null}
+export const preparePeopleRecovery=(body:RecoveryStart,signal?:AbortSignal)=>post<AdmissionReceipt>(`${root}/recoveries`,body,signal)
+export const fetchRecoveryMappings=(id:string,cursor?:string,signal?:AbortSignal)=>apiFetch<RecoveryMappings>(`${path(id)}/recovery-mappings${query({cursor,limit:'20'})}`,{signal})
+export const postRecoveryMapping=(id:string,body:unknown)=>post<AdmissionReceipt>(`${path(id)}/recovery-mappings`,body)
+export const sealRecoveryMappings=(id:string,body:unknown)=>post<AdmissionReceipt>(`${path(id)}/plans`,body)
+
+export const fetchRecoveryMappingField=(id:string,key:string,cursor?:string,signal?:AbortSignal)=>apiFetch<{fragment:string;next_cursor:string|null}>(`${path(id)}/recovery-mappings/${encodeURIComponent(key)}/field${query({cursor})}`,{signal})

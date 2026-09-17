@@ -46,7 +46,7 @@ use crate::import_support::Fixture;
 use crm_api::domain::migration::{admitted_metadata_worker, snapshot_source::Stream};
 use serde_json::Value;
 
-async fn drain_preparation(f: &Fixture, root: Uuid) {
+pub(super) async fn drain_preparation(f: &Fixture, root: Uuid) {
     for _ in 0..1000 {
         let ready:bool=sqlx::query_scalar("SELECT p.state='ready' FROM migration_admitted_metadata_plan p JOIN migration_admitted_metadata_import i ON i.latest_plan_id=p.id WHERE i.id=$1").bind(root).fetch_one(&f.pool).await.unwrap();
         if ready {
@@ -123,7 +123,7 @@ async fn prepared_typed_native(migrator: &PgPool, native: bool) -> (Fixture, Uui
     assert!(sqlx::query_scalar::<_,bool>("SELECT i.snapshot_id=r.newer_snapshot_id AND i.capture_sequence=r.newer_sequence FROM migration_admitted_metadata_import i JOIN migration_core_change_report r ON r.id=i.source_report_id WHERE i.id=$1").bind(root).fetch_one(&f.pool).await.unwrap());
     (f, root, plan, person)
 }
-async fn approve_all(f: &Fixture, root: Uuid, _plan: Uuid) -> Uuid {
+pub(super) async fn approve_all(f: &Fixture, root: Uuid, _plan: Uuid) -> Uuid {
     let ids = sqlx::query_scalar::<_, Uuid>(
         "SELECT id FROM migration_admitted_metadata_mapping WHERE import_id=$1 ORDER BY kind,id",
     )
@@ -194,7 +194,7 @@ async fn approve_all(f: &Fixture, root: Uuid, _plan: Uuid) -> Uuid {
     .unwrap();
     plan
 }
-async fn finish(f: &Fixture, root: Uuid) {
+pub(super) async fn finish(f: &Fixture, root: Uuid) {
     for _ in 0..30 {
         let state: String =
             sqlx::query_scalar("SELECT state FROM migration_admitted_metadata_import WHERE id=$1")
@@ -241,6 +241,7 @@ async fn admitted_metadata_typed_units_preserve_types_and_settle_together(migrat
         calls,
         "execution uses retained evidence only"
     );
+    crate::db_family_refresh::assert_metadata_after_states(&f, root, true).await;
     let values:Value=sqlx::query_scalar("SELECT jsonb_object_agg(f.external_key,jsonb_build_object('type',v.field_type,'text',v.text_value,'number',v.number_value::text,'date',v.date_value::text,'choice',o.label,'origin',v.origin)) FROM person_custom_field_value v JOIN custom_field f ON f.id=v.field_id LEFT JOIN custom_field_option o ON o.id=v.option_id WHERE v.person_id=$1").bind(person).fetch_one(&f.pool).await.unwrap();
     assert_eq!(values["customText"]["text"], "Exact retained text");
     assert_eq!(values["customNumber"]["number"], "123456.1250");
@@ -654,9 +655,15 @@ async fn admitted_metadata_hot_units_seek_past_settled_people_at_d050(migrator: 
         .fetch_one(&mut *c)
         .await
         .unwrap();
-    sqlx::query("CREATE TEMP TABLE admitted_scale AS SELECT n,gen_random_uuid() AS person,gen_random_uuid() AS manifest,gen_random_uuid() AS result FROM generate_series(1,$1::bigint) n").bind(25_000-count).execute(&mut *c).await.unwrap();
+    sqlx::query("CREATE TEMP TABLE admitted_scale AS SELECT n,gen_random_uuid() AS person,gen_random_uuid() AS manifest,gen_random_uuid() AS result,gen_random_uuid() AS admission_item,gen_random_uuid() AS admission_result FROM generate_series(1,$1::bigint) n").bind(25_000-count).execute(&mut *c).await.unwrap();
     sqlx::query("INSERT INTO person(id,organization_id,first_name,last_name,stage_id,assigned_user_id) SELECT person,$1,'Synthetic','Metadata '||n,$2,$3 FROM admitted_scale").bind(f.org).bind(f.lead_stage).bind(f.actor).execute(&mut *c).await.unwrap();
-    sqlx::query("INSERT INTO migration_admitted_metadata_manifest(id,import_id,plan_id,organization_id,admission_result_id,person_id,source_person_id,disposition,baseline_nonce,baseline_ciphertext,item_byte_bound,settled_at) SELECT x.manifest,m.import_id,m.plan_id,m.organization_id,m.admission_result_id,x.person,(1000000+x.n)::text,'settled',m.baseline_nonce,m.baseline_ciphertext,m.item_byte_bound,clock_timestamp() FROM admitted_scale x CROSS JOIN migration_admitted_metadata_manifest m WHERE m.import_id=$1 AND m.plan_id=(SELECT confirmed_plan_id FROM migration_admitted_metadata_import WHERE id=$1) AND m.person_id=$2").bind(root).bind(person).execute(&mut *c).await.unwrap();
+    // D-085 requires each scale Person to retain its own exact admission tuple.
+    // These are inert EXPLAIN rows only. Restore the build guard before probes.
+    sqlx::query("ALTER TABLE migration_people_admission_item DISABLE TRIGGER migration_people_admission_item_building").execute(&mut *c).await.unwrap();
+    sqlx::query("INSERT INTO migration_people_admission_item SELECT (jsonb_populate_record(NULL::migration_people_admission_item,to_jsonb(i)||jsonb_build_object('id',x.admission_item,'source_key',(1000000+x.n)::text,'source_id',(1000000+x.n)::text,'prospective_person_id',x.person,'settled_result_id',x.admission_result))).* FROM admitted_scale x CROSS JOIN migration_admitted_metadata_manifest m JOIN migration_people_admission_item i ON i.id=m.admission_item_id WHERE m.import_id=$1 AND m.plan_id=(SELECT confirmed_plan_id FROM migration_admitted_metadata_import WHERE id=$1) AND m.person_id=$2").bind(root).bind(person).execute(&mut *c).await.unwrap();
+    sqlx::query("ALTER TABLE migration_people_admission_item ENABLE TRIGGER migration_people_admission_item_building").execute(&mut *c).await.unwrap();
+    sqlx::query("INSERT INTO migration_people_admission_result SELECT (jsonb_populate_record(NULL::migration_people_admission_result,to_jsonb(r)||jsonb_build_object('id',x.admission_result,'item_id',x.admission_item,'source_id',(1000000+x.n)::text,'person_id',x.person))).* FROM admitted_scale x CROSS JOIN migration_admitted_metadata_manifest m JOIN migration_people_admission_result r ON r.id=m.admission_result_id WHERE m.import_id=$1 AND m.plan_id=(SELECT confirmed_plan_id FROM migration_admitted_metadata_import WHERE id=$1) AND m.person_id=$2").bind(root).bind(person).execute(&mut *c).await.unwrap();
+    sqlx::query("INSERT INTO migration_admitted_metadata_manifest(id,import_id,plan_id,organization_id,admission_result_id,person_id,expected_person_id,source_person_id,disposition,baseline_nonce,baseline_ciphertext,item_byte_bound,settled_at) SELECT x.manifest,m.import_id,m.plan_id,m.organization_id,x.admission_result,x.person,x.person,(1000000+x.n)::text,'settled',m.baseline_nonce,m.baseline_ciphertext,m.item_byte_bound,clock_timestamp() FROM admitted_scale x CROSS JOIN migration_admitted_metadata_manifest m WHERE m.import_id=$1 AND m.plan_id=(SELECT confirmed_plan_id FROM migration_admitted_metadata_import WHERE id=$1) AND m.person_id=$2").bind(root).bind(person).execute(&mut *c).await.unwrap();
     sqlx::query("INSERT INTO migration_admitted_metadata_operation(id,manifest_id,import_id,plan_id,organization_id,kind,mapping_id,source_key,target_id,disposition,nonce,ciphertext) SELECT gen_random_uuid(),x.manifest,o.import_id,o.plan_id,o.organization_id,o.kind,o.mapping_id,o.source_key,o.target_id,o.disposition,o.nonce,o.ciphertext FROM admitted_scale x CROSS JOIN migration_admitted_metadata_operation o WHERE o.import_id=$1 AND o.manifest_id=(SELECT id FROM migration_admitted_metadata_manifest WHERE import_id=$1 AND plan_id=(SELECT confirmed_plan_id FROM migration_admitted_metadata_import WHERE id=$1) AND person_id=$2)").bind(root).bind(person).execute(&mut *c).await.unwrap();
     sqlx::query("INSERT INTO migration_admitted_metadata_result(id,import_id,plan_id,unit_id,manifest_id,organization_id,kind,disposition,person_id,nonce,ciphertext) SELECT x.result,r.import_id,r.plan_id,x.manifest,x.manifest,r.organization_id,'people',r.disposition,x.person,r.nonce,r.ciphertext FROM admitted_scale x CROSS JOIN migration_admitted_metadata_result r WHERE r.import_id=$1 AND r.kind='people'").bind(root).execute(&mut *c).await.unwrap();
     sqlx::query("INSERT INTO person_custom_field_value(organization_id,person_id,field_id,field_type,text_value,number_value,date_value,option_id,updated_by_user_id,origin,correlation_id) SELECT v.organization_id,x.person,v.field_id,v.field_type,v.text_value,v.number_value,v.date_value,v.option_id,v.updated_by_user_id,v.origin,v.correlation_id FROM admitted_scale x CROSS JOIN person_custom_field_value v WHERE v.organization_id=$1 AND v.person_id=$2").bind(f.org).bind(person).execute(&mut *c).await.unwrap();
@@ -3459,4 +3466,282 @@ async fn admitted_owner_hot_proof(
         org,
         snapshot
     );
+}
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn family_refresh_metadata_admitted_discovery_preserves_coverage_and_ownership(
+    migrator: PgPool,
+) {
+    use crm_api::domain::migration::family_refresh::{
+        metadata_discovery::{self, Discovery},
+        model::Hold,
+    };
+    let (f, root, plan, person) = prepared_typed(&migrator).await;
+    approve_all(&f, root, plan).await;
+    finish(&f, root).await;
+    let parent: Uuid = sqlx::query_scalar(
+        "SELECT parent_import_id FROM migration_admitted_metadata_import WHERE id=$1",
+    )
+    .bind(root)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    let claim =
+        crate::db_family_refresh::prepared_family_refresh(&migrator, &f, parent, "metadata").await;
+    let cohort: Uuid = sqlx::query_scalar(
+        "SELECT id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND person_id=$2",
+    )
+    .bind(claim.bundle)
+    .bind(person)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    match metadata_discovery::discover(&f.pool, &f.key, &claim, cohort)
+        .await
+        .unwrap()
+    {
+        Discovery::Proven(p) => {
+            assert_eq!(p.baseline.person, person);
+            assert_eq!(p.ownership.tags.len(), 1);
+            assert_eq!(p.ownership.fields.len(), 4);
+        }
+        Discovery::Held(h) => panic!("unexpected hold: {h:?}"),
+    }
+    let original:Uuid=sqlx::query_scalar("SELECT id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND source_person_id='101'").bind(claim.bundle).fetch_one(&f.pool).await.unwrap();
+    assert!(matches!(
+        metadata_discovery::discover(&f.pool, &f.key, &claim, original)
+            .await
+            .unwrap(),
+        Discovery::Held(Hold::FirstCoverageRequired)
+    ));
+    let mut wrong = claim;
+    wrong.token = Uuid::new_v4();
+    assert!(
+        metadata_discovery::discover(&f.pool, &f.key, &wrong, cohort)
+            .await
+            .is_err()
+    );
+}
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn family_refresh_catalog_authenticates_existing_admitted_claims(migrator: PgPool) {
+    use crm_api::domain::migration::family_refresh::{
+        commands::{self, PrepareFamilyRefresh},
+        mapping_selection::{MappingPatch, Selection},
+        metadata_destination::{self, Inspection},
+        model::{Family, Hold},
+        plan_commands::{self, PlanFamilyRefresh},
+        preparation_worker::{self as worker, Progress},
+    };
+    let (f, root, plan, _) = prepared_typed(&migrator).await;
+    approve_all(&f, root, plan).await;
+    finish(&f, root).await;
+    let parent: Uuid = sqlx::query_scalar(
+        "SELECT parent_import_id FROM migration_admitted_metadata_import WHERE id=$1",
+    )
+    .bind(root)
+    .fetch_one(&f.pool)
+    .await
+    .unwrap();
+    let selected=report(&f,parent,vec![json!({"id":104,"firstName":"Admitted","lastName":"Person","stage":"Lead","assignedUserId":3,"tags":["PAST CLIENT"]})]).await;
+    let before:serde_json::Value=sqlx::query_scalar("SELECT jsonb_agg(to_jsonb(c) ORDER BY kind,source_key) FROM migration_metadata_catalog_claim c WHERE organization_id=$1").bind(f.org).fetch_one(&migrator).await.unwrap();
+    let draft = commands::prepare(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &crm_api::auth::workspace::ReleaseReadiness::for_tests(),
+        &f.ctx,
+        PrepareFamilyRefresh {
+            request_id: Uuid::new_v4(),
+            parent_import_id: parent,
+            core_report_id: Some(selected),
+            history_capture_id: None,
+            families: vec![Family::Metadata],
+        },
+    )
+    .await
+    .unwrap();
+    for step in 0..40 {
+        if crate::db_family_refresh_commands::advance_to_review_phase(&f, "catalog_walk_complete")
+            .await
+            == Progress::Idle
+        {
+            break;
+        }
+        assert!(step < 39);
+    }
+    let rows=sqlx::query("SELECT m.id,c.target_id FROM migration_family_refresh_mapping m JOIN migration_metadata_catalog_claim c ON c.organization_id=m.organization_id AND c.kind=m.kind AND c.source_key=m.source_key_hmac JOIN migration_family_refresh_bundle b ON b.id=m.bundle_id AND b.organization_id=m.organization_id AND b.source_account_id=c.source_account_id WHERE m.plan_id=$1").bind(draft.families[0].plan_id).fetch_all(&migrator).await.unwrap();
+    assert_eq!(rows.len(), 7);
+    let mut current = plan_commands::plan(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &f.ctx,
+        draft.bundle_id,
+        PlanFamilyRefresh {
+            request_id: Uuid::new_v4(),
+            expected_revision: draft.revision,
+            family: Family::Metadata,
+            patches: rows
+                .into_iter()
+                .map(|r| MappingPatch {
+                    mapping_id: r.get("id"),
+                    choice: Selection::Existing {
+                        target_id: r.get("target_id"),
+                    },
+                })
+                .collect(),
+            source_timezone: None,
+        },
+    )
+    .await
+    .unwrap();
+    for step in 0..40 {
+        if crate::db_family_refresh_commands::advance_to_review_phase(&f, "catalog_walk_complete")
+            .await
+            == Progress::Idle
+        {
+            break;
+        }
+        assert!(step < 39);
+    }
+    let claim = crate::db_family_refresh_commands::claim_metadata_inspection(
+        &f,
+        current.bundle_id,
+        current.families[0].plan_id,
+    )
+    .await;
+    let rows = sqlx::query(
+        "SELECT id,kind,target_id FROM migration_family_refresh_mapping WHERE plan_id=$1",
+    )
+    .bind(claim.plan)
+    .fetch_all(&migrator)
+    .await
+    .unwrap();
+    let mut tag = Uuid::nil();
+    for row in rows {
+        if row.get::<String, _>("kind") == "tag" {
+            tag = row.get("id");
+        }
+        let inspected = metadata_destination::inspect(&f.pool, &f.key, &claim, row.get("id"))
+            .await
+            .unwrap();
+        let Inspection::Ready(evidence) = inspected else {
+            panic!("an explicit exact admitted claim must remain reusable");
+        };
+        assert_eq!(evidence.target, row.get::<Uuid, _>("target_id"));
+    }
+    worker::release(&f.pool, &claim).await.unwrap();
+    current = plan_commands::plan(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &f.ctx,
+        current.bundle_id,
+        PlanFamilyRefresh {
+            request_id: Uuid::new_v4(),
+            expected_revision: current.revision.clone(),
+            family: Family::Metadata,
+            patches: vec![MappingPatch {
+                mapping_id: tag,
+                choice: Selection::CreateMatching,
+            }],
+            source_timezone: None,
+        },
+    )
+    .await
+    .unwrap();
+    for step in 0..40 {
+        if crate::db_family_refresh_commands::advance_to_review_phase(&f, "catalog_walk_complete")
+            .await
+            == Progress::Idle
+        {
+            break;
+        }
+        assert!(step < 39);
+    }
+    let claim = crate::db_family_refresh_commands::claim_metadata_inspection(
+        &f,
+        current.bundle_id,
+        current.families[0].plan_id,
+    )
+    .await;
+    let tag: Uuid = sqlx::query_scalar(
+        "SELECT id FROM migration_family_refresh_mapping WHERE plan_id=$1 AND kind='tag'",
+    )
+    .bind(claim.plan)
+    .fetch_one(&migrator)
+    .await
+    .unwrap();
+    assert!(
+        matches!(
+            metadata_destination::inspect(&f.pool, &f.key, &claim, tag)
+                .await
+                .unwrap(),
+            Inspection::Held(Hold::SourceConflict)
+        ),
+        "a new prospective ID cannot replace an immutable claim"
+    );
+    let after:serde_json::Value=sqlx::query_scalar("SELECT jsonb_agg(to_jsonb(c) ORDER BY kind,source_key) FROM migration_metadata_catalog_claim c WHERE organization_id=$1").bind(f.org).fetch_one(&migrator).await.unwrap();
+    assert_eq!(
+        after, before,
+        "inspection preserves exact original owner and encrypted registry evidence"
+    );
+    worker::release(&f.pool, &claim).await.unwrap();
+}
+
+#[sqlx::test]
+#[ignore = "requires isolated PostgreSQL migrator"]
+async fn family_refresh_legacy_admitted_metadata_bootstrap(migrator: PgPool) {
+    use crm_api::domain::migration::family_refresh::{
+        metadata_discovery::{self, Discovery},
+        model::Hold,
+    };
+    let (f, root, plan, person) = prepared_typed(&migrator).await;
+    approve_all(&f, root, plan).await;
+    finish(&f, root).await;
+    crate::db_family_refresh::legacy_results(&migrator, &f, root, "metadata", true).await;
+    let parent: Uuid = sqlx::query_scalar(
+        "SELECT parent_import_id FROM migration_admitted_metadata_import WHERE id=$1",
+    )
+    .bind(root)
+    .fetch_one(&migrator)
+    .await
+    .unwrap();
+    let claim =
+        crate::db_family_refresh::prepared_family_refresh(&migrator, &f, parent, "metadata").await;
+    let cohort: Uuid = sqlx::query_scalar(
+        "SELECT id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND person_id=$2",
+    )
+    .bind(claim.bundle)
+    .bind(person)
+    .fetch_one(&migrator)
+    .await
+    .unwrap();
+    let proof = match metadata_discovery::discover(&f.pool, &f.key, &claim, cohort)
+        .await
+        .unwrap()
+    {
+        Discovery::Proven(proof) => proof,
+        Discovery::Held(hold) => panic!("legacy admitted metadata held: {hold:?}"),
+    };
+    assert_eq!(proof.ownership.tags.len(), 1);
+    assert_eq!(proof.ownership.fields.len(), 4);
+    let target: Uuid = sqlx::query_scalar(
+        "SELECT field_id FROM person_custom_field_value WHERE person_id=$1 AND field_type='text'",
+    )
+    .bind(person)
+    .fetch_one(&migrator)
+    .await
+    .unwrap();
+    sqlx::query("UPDATE person_custom_field_value SET text_value='local edit' WHERE person_id=$1 AND field_id=$2").bind(person).bind(target).execute(&migrator).await.unwrap();
+    sqlx::query("UPDATE person_custom_field_value SET text_value='Exact retained text' WHERE person_id=$1 AND field_id=$2").bind(person).bind(target).execute(&migrator).await.unwrap();
+    assert!(matches!(
+        metadata_discovery::discover(&f.pool, &f.key, &claim, cohort)
+            .await
+            .unwrap(),
+        Discovery::Held(Hold::LocalChange)
+    ));
 }

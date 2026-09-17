@@ -276,3 +276,13 @@ Required synthetic evidence:
 Run brief/final gates; maximum two review/fix rounds. Completion means accounted
 first metadata coverage, not cutover readiness. Policies/contracts in this draft
 need review and acceptance before implementation.
+
+## D-090 recovery amendment
+
+The accepted [010e6 recovery specification](../plans/SLICE_010e6_NEVER_IMPORTED_RECOVERY.md)
+extends admission and follow-on qualification for explicitly anchored, successfully
+created recovery People. Normal modes retain this specification's rules. Original
+holds are immutable; recovery is a distinct admission mode with its own initial
+approvals/provenance. Initial approval readers recognize recovery-owned evidence
+before original fallback, with subsequent exact-key 010e5 repair precedence.
+No fabricated original results or automatic family cascade is permitted.

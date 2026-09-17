@@ -109,4 +109,29 @@ describe('bounded historical Person review', () => {
     expect(api.mock.calls.map(([url]) => url)).toEqual(['/me', '/people/person/migration-review/timeline?family=all&dated=known&limit=3', '/people/person/migration-review/inquiries?limit=1'])
     expect(document.querySelectorAll('select')).toHaveLength(0)
   })
+  it('browses bounded retained versions and capture provenance without displaying message bodies', async () => {
+    const current = { ...entry(), version: '3', read_revision: '1', correlation_id: 'correlation', provenance: { owner_kind: 'refresh', plan_id: 'plan', attempt_id: null, manifest_id: 'manifest', identity_id: 'identity', source_time_basis: 'fub_record_created', stable_position: '1', capture_id: 'current-capture' } }
+    await setup(url => {
+      if (url.endsWith('/versions/2')) return { ...current, version: '2', metadata: { ...entry().metadata, source_status: 'prior-version-status' }, provenance: { ...current.provenance, capture_id: 'prior-capture' } }
+      if (url.includes('/versions?')) return page([{ ...entry(), version: url.includes('cursor=older') ? '2' : '3' }], url.includes('cursor=older') ? null : 'older')
+      if (url.includes('/timeline/fub_')) return current
+      return page(url.includes('/timeline?') ? [{ ...entry(), version: '3' }] : [])
+    })
+    await click('Inspect fact metadata'); await click('Browse versions'); await click('More versions'); await click('Inspect version 2')
+    expect(document.body.textContent).toContain('Corrected source record · version 3')
+    expect(document.body.textContent).toContain('prior-version-status')
+    expect(document.body.textContent).toContain('Retained capture prior-capture')
+    expect(document.body.textContent).not.toContain('NEVER DISPLAY BODY')
+    expect(api.mock.calls.filter(([url]) => url.includes('/versions')).map(([url]) => url)).toEqual(['/people/person/history/fub_text_record_imported/identity/versions?limit=25', '/people/person/history/fub_text_record_imported/identity/versions?limit=25&cursor=older', '/people/person/history/fub_text_record_imported/identity/versions/2'])
+  })
+  it('discards an in-flight version page when authority changes', async () => {
+    const pending = deferred<unknown>()
+    const { client } = await setup(url => url.includes('/versions?') ? pending.promise : url.includes('/timeline/fub_') ? { ...entry(), version: '2', read_revision: '1', correlation_id: 'correlation', provenance: { plan_id: 'plan', attempt_id: null, manifest_id: 'manifest', identity_id: 'identity', source_time_basis: 'unknown', stable_position: '1' } } : page(url.includes('/timeline?') ? [entry()] : []))
+    await click('Inspect fact metadata'); await click('Browse versions')
+    client.setQueryData(queryKeys.me, me('member')); await flushPromises()
+    pending.resolve(page([{ ...entry(), version: '1', metadata: { source_status: 'LATE VERSION PRIVATE' } }])); await flushPromises()
+    expect(document.body.textContent).not.toContain('LATE VERSION PRIVATE')
+    expect(document.querySelector('[role=dialog]')).toBeNull()
+  })
+
 })

@@ -72,6 +72,10 @@ async fn prepare_page(
     let mut tx = pool.begin().await?;
     crate::auth::workspace::bounded_lock_wait(&mut tx).await?;
     let run = s::lock_run(&mut tx, org, id).await?;
+    // Dispatch is a hint; cancellation may commit before this row lock.
+    if run.get::<String, _>("state") != "preparing" {
+        return Ok(());
+    }
     let frozen = s::validate_run(&mut tx, key, org, &run).await?;
     lock_initiator_admin(&mut tx, org, run.get("initiated_by_user_id")).await?;
     if run.get::<String, _>("preparation_phase") != "groups" {
@@ -79,11 +83,35 @@ async fn prepare_page(
         tx.commit().await?;
         return Ok(());
     }
+    if super::people_recovery::is_recovery(&run) && !run.get::<bool, _>("recovery_catalog_complete")
+    {
+        super::people_recovery::catalog(&mut tx, key, policy, org, &run).await?;
+        tx.commit().await?;
+        return Ok(());
+    }
+    if super::people_recovery::is_recovery(&run)
+        && !run.get::<bool, _>("recovery_candidates_complete")
+    {
+        super::people_recovery::discover(&mut tx, key, policy, org, &run).await?;
+        tx.commit().await?;
+        return Ok(());
+    }
+    if super::people_recovery::is_recovery(&run)
+        && run
+            .get::<Option<i64>, _>("recovery_frozen_revision")
+            .is_none()
+    {
+        return Err(MigrationError::Conflict);
+    }
     let plan=if let Some(v)=sqlx::query_scalar::<_,Uuid>("SELECT id FROM migration_people_admission_plan WHERE admission_id=$1 AND organization_id=$2 AND state='building' ORDER BY revision DESC LIMIT 1 FOR UPDATE").bind(id).bind(org.0).fetch_optional(&mut *tx).await?{v}else{let p=Uuid::new_v4();let revision:i64=sqlx::query_scalar("SELECT COALESCE(max(revision),0)+1 FROM migration_people_admission_plan WHERE admission_id=$1 AND organization_id=$2").bind(id).bind(org.0).fetch_one(&mut *tx).await?;let input=s::seal(key,org,id,p,"inputs",&frozen)?;let bytes=(input.nonce.len()+input.ciphertext.len()) as i64;let token=s::reserve(&mut tx,org,id,"prepare",None,bytes.max(1),policy).await?;sqlx::query("INSERT INTO migration_people_admission_plan(id,admission_id,organization_id,revision,state,inputs_nonce,inputs_ciphertext) VALUES($1,$2,$3,$4,'building',$5,$6)").bind(p).bind(id).bind(org.0).bind(revision).bind(input.nonce.as_slice()).bind(input.ciphertext).execute(&mut *tx).await?;s::release(&mut tx,org,id,token,bytes).await?;p};
     let checkpoint: String = run.get("preparation_checkpoint_key");
     // A qualified candidate may consume the entire 16 MiB raw-input budget,
     // so one descriptor is the bounded preparation transaction unit.
-    let rows=sqlx::query("SELECT source_key,source_id FROM migration_core_change_group WHERE report_id=$1 AND organization_id=$2 AND family='people' AND source_key>$3 ORDER BY source_key LIMIT 1").bind(run.get::<Uuid,_>("report_id")).bind(org.0).bind(&checkpoint).fetch_all(&mut *tx).await?;
+    let rows = if super::people_recovery::is_recovery(&run) {
+        sqlx::query("SELECT source_id AS source_key,source_id FROM migration_people_recovery_candidate WHERE admission_id=$1 AND organization_id=$2 AND source_id>$3 ORDER BY source_id LIMIT 1").bind(id).bind(org.0).bind(&checkpoint).fetch_all(&mut *tx).await?
+    } else {
+        sqlx::query("SELECT source_key,source_id FROM migration_core_change_group WHERE report_id=$1 AND organization_id=$2 AND family='people' AND source_key>$3 ORDER BY source_key LIMIT 1").bind(run.get::<Uuid,_>("report_id")).bind(org.0).bind(&checkpoint).fetch_all(&mut *tx).await?
+    };
     if rows.is_empty() {
         let totals=sqlx::query("SELECT total_count,eligible_count,already_imported_count,already_admitted_count,excluded_original_count,held_count,intended_contact_count FROM migration_people_admission_plan WHERE id=$1 AND organization_id=$2").bind(plan).bind(org.0).fetch_one(&mut *tx).await?;
         let rolling: Option<Vec<u8>> = sqlx::query_scalar("SELECT digest FROM migration_people_admission_plan WHERE id=$1 AND organization_id=$2 FOR UPDATE").bind(plan).bind(org.0).fetch_one(&mut *tx).await?;
@@ -129,7 +157,14 @@ async fn prepare_page(
             .as_ref()
             .map(|value| value.3.clone())
             .unwrap_or(Value::Null);
-        let provenance = json!({"source_id":key_id,"source_capture_id":capture,"source_ordinal":ordinal,"original_snapshot_id":run.get::<Uuid,_>("original_snapshot_id"),"original_sequence":run.get::<i64,_>("original_sequence").to_string(),"newer_snapshot_id":run.get::<Uuid,_>("newer_snapshot_id"),"newer_sequence":run.get::<i64,_>("newer_sequence").to_string(),"plan_id":run.get::<Uuid,_>("parent_plan_id"),"engine_version":run.get::<String,_>("engine_version"),"stage_mapping_id":stage_mapping,"assignee_mapping_id":assignee_mapping,"fields":fields,"coverage":"core_only_notes_tasks_metadata_history_deferred"});
+        let mut provenance = json!({"source_id":key_id,"source_capture_id":capture,"source_ordinal":ordinal,"original_snapshot_id":run.get::<Uuid,_>("original_snapshot_id"),"original_sequence":run.get::<i64,_>("original_sequence").to_string(),"newer_snapshot_id":run.get::<Uuid,_>("newer_snapshot_id"),"newer_sequence":run.get::<i64,_>("newer_sequence").to_string(),"plan_id":run.get::<Uuid,_>("parent_plan_id"),"engine_version":run.get::<String,_>("engine_version"),"stage_mapping_id":stage_mapping,"assignee_mapping_id":assignee_mapping,"fields":fields,"coverage":"core_only_notes_tasks_metadata_history_deferred"});
+        if super::people_recovery::is_recovery(&run) {
+            provenance["recovery"] = super::people_recovery::frozen(&run);
+            provenance["recovery_stage_choice_id"] = json!(stage_mapping);
+            provenance["recovery_assignee_choice_id"] = json!(assignee_mapping);
+            provenance["stage_mapping_id"] = Value::Null;
+            provenance["assignee_mapping_id"] = Value::Null;
+        }
         let p = s::seal(key, org, id, item, "projection", &projection)?;
         let e = s::seal(key, org, id, item, "provenance", &provenance)?;
         let contacts = if let Some((_, _, contacts, _)) = record.as_ref() {
@@ -158,7 +193,7 @@ async fn prepare_page(
                 .map(|(_, _, sealed)| sealed.nonce.len() + sealed.ciphertext.len())
                 .sum::<usize>()) as i64;
         let token = s::reserve(&mut tx, org, id, "prepare", None, bound.max(1), policy).await?;
-        sqlx::query("INSERT INTO migration_people_admission_item(id,admission_id,plan_id,organization_id,source_key,source_id,prospective_person_id,disposition,source_capture_id,source_ordinal,stage_mapping_id,assignee_mapping_id,projection_nonce,projection_ciphertext,provenance_nonce,provenance_ciphertext,item_byte_bound) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)").bind(item).bind(id).bind(plan).bind(org.0).bind(&key_id).bind(source_id.as_deref()).bind(target).bind(&disp).bind(capture).bind(ordinal).bind(stage_mapping).bind(assignee_mapping).bind(p.nonce.as_slice()).bind(p.ciphertext.as_slice()).bind(e.nonce.as_slice()).bind(e.ciphertext.as_slice()).bind(bound.max(1)).execute(&mut *tx).await?;
+        sqlx::query("INSERT INTO migration_people_admission_item(id,admission_id,plan_id,organization_id,source_key,source_id,prospective_person_id,disposition,source_capture_id,source_ordinal,stage_mapping_id,assignee_mapping_id,projection_nonce,projection_ciphertext,provenance_nonce,provenance_ciphertext,item_byte_bound,recovery_stage_choice_id,recovery_assignee_choice_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)").bind(item).bind(id).bind(plan).bind(org.0).bind(&key_id).bind(source_id.as_deref()).bind(target).bind(&disp).bind(capture).bind(ordinal).bind(if super::people_recovery::is_recovery(&run) {None}else{stage_mapping}).bind(if super::people_recovery::is_recovery(&run) {None}else{assignee_mapping}).bind(p.nonce.as_slice()).bind(p.ciphertext.as_slice()).bind(e.nonce.as_slice()).bind(e.ciphertext.as_slice()).bind(bound.max(1)).bind(if super::people_recovery::is_recovery(&run) {stage_mapping}else{None}).bind(if super::people_recovery::is_recovery(&run) {assignee_mapping}else{None}).execute(&mut *tx).await?;
         if !contacts.is_empty() {
             for (contact_id, c, sealed) in contacts {
                 sqlx::query("INSERT INTO migration_people_admission_contact(id,item_id,admission_id,organization_id,kind,import_order,value_nonce,value_ciphertext,primary_contact) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)").bind(contact_id).bind(item).bind(id).bind(org.0).bind(&c.kind).bind(c.import_order).bind(sealed.nonce.as_slice()).bind(sealed.ciphertext).bind(c.import_order==0).execute(&mut *tx).await?;
@@ -173,6 +208,9 @@ async fn prepare_page(
             _ => "held_count",
         };
         sqlx::query(&format!("UPDATE migration_people_admission_plan SET total_count=total_count+1,{col}={col}+1,prepared_bytes=prepared_bytes+$3 WHERE id=$1 AND organization_id=$2")).bind(plan).bind(org.0).bind(bound).execute(&mut *tx).await?;
+        if super::people_recovery::is_recovery(&run) {
+            sqlx::query("UPDATE migration_people_admission_plan SET recovery_candidate_count=recovery_candidate_count+1,recovery_unassigned_count=recovery_unassigned_count+$3 WHERE id=$1 AND organization_id=$2").bind(plan).bind(org.0).bind(i64::from(disp=="eligible" && assignee.is_none() && assignee_mapping.is_some())).execute(&mut *tx).await?;
+        }
         let descriptor = json!({"id":item,"source_key":key_id,"source_id":source_id,"prospective_person_id":target,"disposition":disp,"capture":capture,"ordinal":ordinal,"stage_mapping_id":stage_mapping,"assignee_mapping_id":assignee_mapping,"projection_cipher":Sha256::digest(&p.ciphertext).to_vec(),"provenance_cipher":Sha256::digest(&e.ciphertext).to_vec(),"contacts":contact_hashes});
         let previous: Option<Vec<u8>> = sqlx::query_scalar("SELECT digest FROM migration_people_admission_plan WHERE id=$1 AND organization_id=$2 FOR UPDATE").bind(plan).bind(org.0).fetch_one(&mut *tx).await?;
         let first_item = previous.is_none();
@@ -327,13 +365,21 @@ async fn classify(
     ),
     MigrationError,
 > {
+    if super::people_recovery::is_recovery(run) {
+        let candidate:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM migration_people_recovery_candidate WHERE admission_id=$1 AND organization_id=$2 AND source_id=$3)").bind(run.get::<Uuid,_>("id")).bind(org.0).bind(source_id).fetch_one(&mut *conn).await?;
+        if !candidate {
+            return Err(MigrationError::SourceNotEligible);
+        }
+    }
     // Existing identity has precedence over any later raw observation. Its
     // target must still exist; a tombstone is a held condition, never a new
     // Person admission.
-    let identity = sqlx::query("SELECT i.admission_id,EXISTS(SELECT 1 FROM person p WHERE p.id=i.target_id AND p.organization_id=i.organization_id) live FROM migration_import_identity i WHERE i.organization_id=$1 AND i.source_account_id=$2 AND i.family='people' AND i.source_id=$3")
+    let identity = sqlx::query("SELECT i.admission_id,EXISTS(SELECT 1 FROM person p WHERE p.id=i.target_id AND p.organization_id=i.organization_id) live,CASE WHEN i.admission_id IS NULL THEN EXISTS(SELECT 1 FROM migration_import_result r WHERE r.import_id=i.import_id AND r.plan_id=i.plan_id AND r.manifest_id=i.manifest_id AND r.organization_id=i.organization_id AND r.source_id=i.source_id AND r.person_id=i.target_id AND r.disposition IN ('imported','already_imported')) ELSE EXISTS(SELECT 1 FROM migration_people_admission_result r WHERE r.id=i.admission_result_id AND r.admission_id=i.admission_id AND r.item_id=i.admission_item_id AND r.organization_id=i.organization_id AND r.source_id=i.source_id AND r.person_id=i.target_id AND r.disposition='settled') END qualified FROM migration_import_identity i WHERE i.organization_id=$1 AND i.source_account_id=$2 AND i.family='people' AND i.source_id=$3")
         .bind(org.0).bind(run.get::<i64,_>("source_account_id")).bind(source_id).fetch_optional(&mut *conn).await?;
     if let Some(identity) = identity {
-        let disposition = if !identity.get::<bool, _>("live") {
+        let disposition = if !identity.get::<bool, _>("live")
+            || (super::people_recovery::is_recovery(run) && !identity.get::<bool, _>("qualified"))
+        {
             "held_identity"
         } else if identity.get::<Option<Uuid>, _>("admission_id").is_some() {
             "already_admitted"
@@ -342,16 +388,31 @@ async fn classify(
         };
         return Ok((disposition.into(), None, None, None, None, None, None, None));
     }
+    if super::people_recovery::is_recovery(run)
+        && super::people_recovery::previously_materialized(conn, org, run, source_id).await?
+    {
+        return Ok((
+            "held_identity".into(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        ));
+    }
     // Original presence excludes admission even if the current retained
     // stream later becomes malformed or lacks that record.
-    if source::original_contains(
-        conn,
-        org,
-        run.get("original_snapshot_id"),
-        run.get("original_sequence"),
-        source_id,
-    )
-    .await?
+    if !super::people_recovery::is_recovery(run)
+        && source::original_contains(
+            conn,
+            org,
+            run.get("original_snapshot_id"),
+            run.get("original_sequence"),
+            source_id,
+        )
+        .await?
     {
         return Ok((
             "excluded_original".into(),
@@ -402,6 +463,21 @@ async fn classify(
             ));
         }
     };
+    if super::people_recovery::is_recovery(run)
+        && !super::people_recovery::observation_matches(conn, key, org, run, source_id, &newer)
+            .await?
+    {
+        return Ok((
+            "held_evidence_gap".into(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        ));
+    }
     let capture = newer.capture_id;
     let ordinal = newer.ordinal;
     let raw_bytes = newer.raw_bytes;
@@ -418,7 +494,12 @@ async fn classify(
             None,
         ));
     }
-    let mappings = match source::resolve_mappings(conn, key, org, run, &record).await {
+    let resolved = if super::people_recovery::is_recovery(run) {
+        super::people_recovery::resolve(conn, key, org, run, &record).await
+    } else {
+        source::resolve_mappings(conn, key, org, run, &record).await
+    };
+    let mappings = match resolved {
         Ok(mappings) if raw_bytes.saturating_add(mappings.raw_bytes) <= s::CAPTURE_LIMIT => {
             mappings
         }
@@ -523,12 +604,29 @@ async fn execute_one(
     let mut tx = pool.begin().await?;
     crate::auth::workspace::bounded_lock_wait(&mut tx).await?;
     let run = s::lock_run(&mut tx, org, id).await?;
+    if !matches!(run.get::<String, _>("state").as_str(), "queued" | "running") {
+        return Ok(());
+    }
     release
         .ok_or(MigrationError::ReleaseNotReady)?
         .require_people_admission(&mut tx)
         .await
         .map_err(|_| MigrationError::ReleaseNotReady)?;
-    let lease = if run.get::<String, _>("state") == "queued" {
+    if super::people_recovery::is_recovery(&run) {
+        release
+            .ok_or(MigrationError::ReleaseNotReady)?
+            .require_people_recovery(&mut tx)
+            .await
+            .map_err(|_| MigrationError::ReleaseNotReady)?;
+    }
+    let expired = run
+        .get::<Option<chrono::DateTime<Utc>>, _>("lease_expires_at")
+        .is_none_or(|t| t <= Utc::now());
+    let lease = if run.get::<String, _>("state") == "queued"
+        || (super::people_recovery::is_recovery(&run)
+            && run.get::<String, _>("state") == "running"
+            && expired)
+    {
         let token = Uuid::new_v4();
         sqlx::query("UPDATE migration_people_admission SET state='running',lease_token=$3,lease_epoch=lease_epoch+1,lifecycle_revision=lifecycle_revision+1,lease_expires_at=clock_timestamp()+interval '60 seconds' WHERE id=$1 AND organization_id=$2").bind(id).bind(org.0).bind(token).execute(&mut *tx).await?;
         token
@@ -584,7 +682,11 @@ async fn execute_one(
         .execute(&mut *tx)
         .await?;
     let prior:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM migration_import_identity WHERE organization_id=$1 AND source_account_id=$2 AND family='people' AND source_id=$3)").bind(org.0).bind(run.get::<i64,_>("source_account_id")).bind(&source_id).fetch_one(&mut *tx).await?;
-    if prior {
+    if prior
+        || (super::people_recovery::is_recovery(&run)
+            && super::people_recovery::previously_materialized(&mut tx, org, &run, &source_id)
+                .await?)
+    {
         settle_hold(&mut tx, org, id, &item, "held_identity", lease, policy).await?;
         tx.commit().await?;
         return Ok(());
@@ -599,7 +701,9 @@ async fn execute_one(
         &item.get::<Vec<u8>, _>("projection_ciphertext"),
     )?;
     lock_initiator_admin(&mut tx, org, run.get("initiated_by_user_id")).await?;
-    recheck_mapping_targets(&mut tx, org, &item, &projection).await?;
+    if !super::people_recovery::is_recovery(&run) {
+        recheck_mapping_targets(&mut tx, org, &item, &projection).await?;
+    }
     let (disposition, current, capture, ordinal, stage, assignee, stage_mapping, assignee_mapping) =
         classify(&mut tx, key, org, &run, &source_id).await?;
     let expected = current.map(|value| {
@@ -613,8 +717,18 @@ async fn execute_one(
     if disposition != "eligible"
         || capture != item.get("source_capture_id")
         || ordinal != item.get("source_ordinal")
-        || stage_mapping != item.get("stage_mapping_id")
-        || assignee_mapping != item.get("assignee_mapping_id")
+        || stage_mapping
+            != item.get(if super::people_recovery::is_recovery(&run) {
+                "recovery_stage_choice_id"
+            } else {
+                "stage_mapping_id"
+            })
+        || assignee_mapping
+            != item.get(if super::people_recovery::is_recovery(&run) {
+                "recovery_assignee_choice_id"
+            } else {
+                "assignee_mapping_id"
+            })
         || expected.as_ref() != Some(&projection)
     {
         return Err(MigrationError::SourceNotEligible);
@@ -650,9 +764,18 @@ async fn execute_one(
     let provenance=sqlx::query("SELECT provenance_nonce,provenance_ciphertext FROM migration_people_admission_item WHERE id=$1").bind(item.get::<Uuid,_>("id")).fetch_one(&mut *tx).await?;
     sqlx::query("INSERT INTO person_admission_provenance(id,organization_id,person_id,admission_id,item_id,result_id,nonce,ciphertext) VALUES($1,$2,$3,$4,$5,$6,$7,$8)").bind(Uuid::new_v4()).bind(org.0).bind(person).bind(id).bind(item.get::<Uuid,_>("id")).bind(result).bind(provenance.get::<Vec<u8>,_>("provenance_nonce")).bind(provenance.get::<Vec<u8>,_>("provenance_ciphertext")).execute(&mut *tx).await?;
     let admitted_fact = Uuid::new_v4();
-    sqlx::query("INSERT INTO person_admitted(id,organization_id,actor_kind,on_behalf_of_user_id,origin,occurred_at,correlation_id,person_id,admission_id,plan_id,item_id,result_id) VALUES($1,$2,'system',$3,'migration',$4,$5,$6,$7,$8,$9,$10)").bind(admitted_fact).bind(org.0).bind(run.get::<Uuid,_>("initiated_by_user_id")).bind(now).bind(id).bind(person).bind(id).bind(plan).bind(item.get::<Uuid,_>("id")).bind(result).execute(&mut *tx).await?;
-    sqlx::query("INSERT INTO stage_changed(id,organization_id,actor_kind,on_behalf_of_user_id,origin,occurred_at,correlation_id,causation_id,person_id,from_stage_id,to_stage_id,reason) VALUES($1,$2,'system',$3,'migration',$4,$5,$6,$7,NULL,$8,'migration_admission')").bind(Uuid::new_v4()).bind(org.0).bind(run.get::<Uuid,_>("initiated_by_user_id")).bind(now).bind(id).bind(admitted_fact).bind(person).bind(Uuid::parse_str(projection["stage_id"].as_str().ok_or(MigrationError::Crypto)?).map_err(|_|MigrationError::Crypto)?).execute(&mut *tx).await?;
-    sqlx::query("INSERT INTO assignment_changed(id,organization_id,actor_kind,on_behalf_of_user_id,origin,occurred_at,correlation_id,causation_id,person_id,from_user_id,to_user_id,reason) VALUES($1,$2,'system',$3,'migration',$4,$5,$6,$7,NULL,$8,'migration_admission')").bind(Uuid::new_v4()).bind(org.0).bind(run.get::<Uuid,_>("initiated_by_user_id")).bind(now).bind(id).bind(admitted_fact).bind(person).bind(projection["assigned_user_id"].as_str().and_then(|value|Uuid::parse_str(value).ok())).execute(&mut *tx).await?;
+    if super::people_recovery::is_recovery(&run) {
+        sqlx::query("INSERT INTO person_recovered(id,organization_id,actor_kind,on_behalf_of_user_id,origin,occurred_at,correlation_id,person_id,admission_id,plan_id,item_id,result_id,candidate_id) SELECT $1,$2,'system',$3,'migration',$4,$5,$6,$7,$8,$9,$10,c.id FROM migration_people_recovery_candidate c WHERE c.admission_id=$7 AND c.organization_id=$2 AND c.source_id=$11").bind(admitted_fact).bind(org.0).bind(run.get::<Uuid,_>("initiated_by_user_id")).bind(now).bind(id).bind(person).bind(id).bind(plan).bind(item.get::<Uuid,_>("id")).bind(result).bind(&source_id).execute(&mut *tx).await?;
+    } else {
+        sqlx::query("INSERT INTO person_admitted(id,organization_id,actor_kind,on_behalf_of_user_id,origin,occurred_at,correlation_id,person_id,admission_id,plan_id,item_id,result_id) VALUES($1,$2,'system',$3,'migration',$4,$5,$6,$7,$8,$9,$10)").bind(admitted_fact).bind(org.0).bind(run.get::<Uuid,_>("initiated_by_user_id")).bind(now).bind(id).bind(person).bind(id).bind(plan).bind(item.get::<Uuid,_>("id")).bind(result).execute(&mut *tx).await?;
+    }
+    let initialization_reason = if super::people_recovery::is_recovery(&run) {
+        "migration_recovery"
+    } else {
+        "migration_admission"
+    };
+    sqlx::query("INSERT INTO stage_changed(id,organization_id,actor_kind,on_behalf_of_user_id,origin,occurred_at,correlation_id,causation_id,person_id,from_stage_id,to_stage_id,reason) VALUES($1,$2,'system',$3,'migration',$4,$5,$6,$7,NULL,$8,$9)").bind(Uuid::new_v4()).bind(org.0).bind(run.get::<Uuid,_>("initiated_by_user_id")).bind(now).bind(id).bind(admitted_fact).bind(person).bind(Uuid::parse_str(projection["stage_id"].as_str().ok_or(MigrationError::Crypto)?).map_err(|_|MigrationError::Crypto)?).bind(initialization_reason).execute(&mut *tx).await?;
+    sqlx::query("INSERT INTO assignment_changed(id,organization_id,actor_kind,on_behalf_of_user_id,origin,occurred_at,correlation_id,causation_id,person_id,from_user_id,to_user_id,reason) VALUES($1,$2,'system',$3,'migration',$4,$5,$6,$7,NULL,$8,$9)").bind(Uuid::new_v4()).bind(org.0).bind(run.get::<Uuid,_>("initiated_by_user_id")).bind(now).bind(id).bind(admitted_fact).bind(person).bind(projection["assigned_user_id"].as_str().and_then(|value|Uuid::parse_str(value).ok())).bind(initialization_reason).execute(&mut *tx).await?;
     sqlx::query("UPDATE migration_people_admission_item SET settled_result_id=$3,settled_at=clock_timestamp(),disposition='settled' WHERE id=$1 AND admission_id=$2").bind(item.get::<Uuid,_>("id")).bind(id).bind(result).execute(&mut *tx).await?;
     sqlx::query("UPDATE migration_people_admission SET settled_items=settled_items+1 WHERE id=$1 AND organization_id=$2").bind(id).bind(org.0).execute(&mut *tx).await?;
     s::release(&mut tx, org, id, work_reservation, work_bytes).await?;
@@ -749,9 +872,36 @@ async fn settle_hold(
         .unwrap_or_else(|| item.get("source_key"));
     let bytes = (source.len() + disposition.len()) as i64;
     let reservation = s::reserve(tx, org, id, "work", Some(lease), bytes.max(1), policy).await?;
+    sqlx::query("SELECT set_config('crm.people_admission_permit',$1,true)")
+        .bind(json!({"lease":lease,"item":item.get::<Uuid,_>("id")}).to_string())
+        .execute(&mut **tx)
+        .await?;
     let result = Uuid::new_v4();
     sqlx::query("INSERT INTO migration_people_admission_result(id,admission_id,item_id,organization_id,source_id,disposition,actor_user_id) SELECT $1,$2,$3,$4,COALESCE(source_id,source_key),$5,initiated_by_user_id FROM migration_people_admission_item i JOIN migration_people_admission a ON a.id=i.admission_id WHERE i.id=$3").bind(result).bind(id).bind(item.get::<Uuid,_>("id")).bind(org.0).bind(disposition).execute(&mut **tx).await?;
     sqlx::query("UPDATE migration_people_admission_item SET disposition=$3,settled_result_id=$4,settled_at=clock_timestamp() WHERE id=$1 AND admission_id=$2").bind(item.get::<Uuid,_>("id")).bind(id).bind(disposition).bind(result).execute(&mut **tx).await?;
     s::release(tx, org, id, reservation, bytes).await?;
     Ok(())
+}
+
+#[cfg(feature = "test-support")]
+pub async fn execute_stale_selection_for_test(
+    pool: &PgPool,
+    key: &RawPayloadKey,
+    policy: &SnapshotPolicy,
+    release: Option<&ReleaseReadiness>,
+    org: OrganizationId,
+    id: Uuid,
+) -> Result<(), MigrationError> {
+    execute_one(pool, key, policy, release, org, id).await
+}
+
+#[cfg(feature = "test-support")]
+pub async fn prepare_stale_selection_for_test(
+    pool: &PgPool,
+    key: &RawPayloadKey,
+    policy: &SnapshotPolicy,
+    org: OrganizationId,
+    id: Uuid,
+) -> Result<(), MigrationError> {
+    prepare_page(pool, key, policy, org, id).await
 }

@@ -1,11 +1,19 @@
 # Project state
 
-Updated: 2026-09-15 — Mobile007 / 010d3 deployed to shared development.
+Updated: 2026-09-15 — 010e5 deployed; 010e6 verified and merged locally.
 Current status and live residuals only. [History](PROJECT_HISTORY.md) preserves
 completed chronology. Decisions remain authoritative; use the
 [reading index](../decisions/DECISION_INDEX.md).
 
 ## Current state
+
+**010e6 recovery is accepted under D-090 and implemented on
+`main` as `2a4c207`; final verification passed and the local fast-forward merge is complete.** It creates positively
+proven mapping-held People once and supplies separate family handoffs. Independent
+implementation review is READY, round 2. [Status](../tasks/SLICE_010e6_IMPLEMENTATION_STATUS.md)
+and [verification](../tasks/SLICE_010e6_VERIFICATION.md) own current evidence.
+Shared development remains on the verified [010e5 release](../tasks/SLICE_010e5_RELEASE.md).
+
 
 **Mobile006 / 010f4 are implemented, verified, merged to main, pushed and deployed
 to shared development under D-084 and its release follow-up.** Both native clients
@@ -34,7 +42,9 @@ Mobile004/010e4 and preceding slices remain documented in history.
 
 ## Current branch and retained resources
 
-`main` contains the Mobile007 / 010d3 release. Its runtime identity and smoke
+`main` includes 010e6 implementation `2a4c207`, fast-forwarded from `512bc4a`.
+The feature branch remains retained; publication and deployment are pending.
+`main` contains the 010e5 release as well as Mobile007 / 010d3. Its runtime identity and smoke
 checks are recorded in [the release record](../tasks/MOBILE_007_010d3_RELEASE.md).
 Private verification services and build outputs remain retained.
 Three previously completed writer worktrees and five milestone branches
@@ -51,11 +61,16 @@ native API3106 is available; the isolated browser QA processes are stopped.
 existing People first. Implementation and local verification are complete under
 D-088; [evidence](../tasks/SLICE_010e5_VERIFICATION.md) records the gates. Commit `05abffa`
 is merged, pushed and deployed to shared development;
-[release evidence](../tasks/SLICE_010e5_RELEASE.md) owns current runtime identity. Never-imported People recovery follows separately.
+[release evidence](../tasks/SLICE_010e5_RELEASE.md) owns current runtime identity. Never-imported People recovery is implemented and verified under D-090, awaiting
+its separate publication/deployment step.
 Remaining family deltas, activation and complete migration fidelity retain their
 own scope in the [family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md).
 
 ## Last accepted decision
+
+**D-090:** accepts [010e6 recovery](SLICE_010e6_NEVER_IMPORTED_RECOVERY.md)
+and its declared shared-contract changes for implementation. D-089 planning is
+complete; the user approved implementation through the ended Lavish session.
 
 **D-088:** accepts 010e5 implementation and one reviewer for independent planning/
 implementation review. Implementation is verified and merged into local `main` as `05abffa`; shared
@@ -188,18 +203,27 @@ linked verification records; they are not claims about present runtime health.
 
 ## Next recommended action
 
-010e5 is implemented, verified, pushed and deployed to shared development. Next migration planning: recover never-imported People, including
-identity safety and follow-on family imports. See [010e5 status](../tasks/SLICE_010e5_IMPLEMENTATION_STATUS.md).
+The combined [010g1](SLICE_010g1_COMBINED_FAMILY_REFRESH.md) metadata,
+notes/tasks and history update package accepted under D-092 is implemented and
+[verified locally](../tasks/SLICE_010g1_VERIFICATION.md) on
+`codex/010g1-family-refresh`. Merge, push and deployment remain deferred by the
+user; preserve the 010e5 runtime.
 
-Use the [Mobile007 / 010d3 release record](../tasks/MOBILE_007_010d3_RELEASE.md)
-for shared-development runtime identity and recovery. [Final evidence](../tasks/MOBILE_007_010d3_FINAL_VERIFICATION.md)
-records the passing implementation gates and retained corrections.
-The [family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md) retains the sequential
-migration scope. Native calling follows the agreed progression. Physical-phone/design/live-source work remains deferred;
+010e6 verification and local commit/merge are complete. Push and deployment
+require a subsequent user instruction. The current
+shared-development runtime is recorded by [010e5](../tasks/SLICE_010e5_RELEASE.md).
+
+The [family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md) records delivered
+families and the combined 010g1 follow-up. Native calling follows the agreed progression. Physical-phone/design/live-source work remains deferred;
 complete customer erasure/restore readiness before real customer data.
 No repeat implementation or release action is pending for Mobile006/010f4.
 
 ## Approval currently required
+
+010g1 P1–P4 and its declared shared contracts are accepted under D-092. Its
+planning and two-round implementation reviews are complete; local implementation
+and final acceptance gates passed. Merge, push and deployment remain explicitly
+deferred.
 
 None for the completed D-084 implementation, publication, cleanup and shared-
 development release. D-084 superseded D-083's planning-only boundary.

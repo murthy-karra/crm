@@ -285,7 +285,7 @@ async fn admitted_history_three_families_and_exact_replay(pool: PgPool) {
     measured(&f, replay_root).await;
 }
 
-async fn confirm(f: &Fixture, root: Uuid) {
+pub(super) async fn confirm(f: &Fixture, root: Uuid) {
     let v = h::get(&f.pool, &f.ctx, root).await.unwrap();
     h::confirm(
         &f.pool,

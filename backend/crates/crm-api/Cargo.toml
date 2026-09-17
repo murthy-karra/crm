@@ -115,3 +115,7 @@ required-features = ["test-support"]
 [[example]]
 name = "mobile_today_perf"
 required-features = ["test-support"]
+
+[[example]]
+name = "family_refresh_query_inventory"
+required-features = ["test-support"]

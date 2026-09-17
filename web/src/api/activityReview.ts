@@ -4,11 +4,13 @@ import { apiFetch } from './client'
 import { useImportAccess } from './imports'
 import type { HistoryEntry, PersonDetailResponse, TaskKind, UserRef } from './types'
 
+export interface ReviewRefreshProvenance { bundle_id: string; item_id: string; revision: string; source_account_id: string; source_id: string }
 export interface ReviewProvenance {
   activity_import_id: string; result_id: string; source_account_id: string; source_id: string; source_url: string
 }
 export type ReviewCoreHistory = Exclude<HistoryEntry, { kind: 'note' | 'task_completed' }>
 export function reviewHistoryTitle(kind: ReviewCoreHistory['kind']) {
+  if (kind === 'person_recovered') return 'Person recovered after a mapping hold'
   if (kind === 'person_admitted') return 'Newly observed Person added from Follow Up Boss'
   if (kind === 'person_imported') return 'Person imported from Follow Up Boss'
   if (kind === 'inquiry_received') return 'Inquiry received'
@@ -19,6 +21,7 @@ export function reviewHistoryTitle(kind: ReviewCoreHistory['kind']) {
 }
 export function reviewHistoryDetail(entry: ReviewCoreHistory) {
   switch (entry.kind) {
+    case 'person_recovered': return 'Core details recovered; follow-on families have separate previews.'
     case 'person_admitted': return 'Core details admitted; notes, tasks, metadata and history coverage are pending.'
     case 'person_imported': return 'Original source and import result are available below.'
     case 'stage_changed': return `${entry.detail.from_stage?.name ?? 'New Person'} → ${entry.detail.to_stage.name} · ${entry.detail.reason === 'manual' ? 'Manual change' : 'Intake'}`
@@ -37,13 +40,13 @@ export interface ActivityReviewCore extends Omit<PersonDetailResponse, 'history'
 }
 export interface ReviewNote {
   id: string; created_at: string; updated_at: string; author: UserRef | null
-  can_manage: false; provenance: ReviewProvenance | null; excerpt: string; has_more: boolean
+  can_manage: false; provenance: ReviewProvenance | null; refresh_provenance?: ReviewRefreshProvenance | null; excerpt: string; has_more: boolean
 }
 export interface ReviewFullNote extends Omit<ReviewNote, 'excerpt' | 'has_more'> { body: string }
 export interface ReviewTask {
   id: string; title: string; kind: TaskKind; due_at: string | null; completed_at: string | null
   created_at: string; updated_at: string; assignee: UserRef | null; created_by: UserRef | null
-  completed_by: UserRef | null; can_manage: false; provenance: ReviewProvenance | null
+  completed_by: UserRef | null; can_manage: false; provenance: ReviewProvenance | null; refresh_provenance?: ReviewRefreshProvenance | null
 }
 export interface ReviewPage<T> { items: T[]; next_cursor: string | null; activity_revision: string }
 export type ReviewTaskState = 'open' | 'completed'

@@ -14,6 +14,7 @@ pub use commands::{
     PersonTagOutcome, RemovePersonTag, RenameTag, RenameTagOutcome,
 };
 pub use error::TagError;
+pub(crate) use model::PERSON_TAG_LIMIT;
 pub use model::{can_manage, Tag, TagRef};
 pub use queries::{exists, list_for_organization, list_for_person, names_for, TagRow};
 

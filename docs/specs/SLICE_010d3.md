@@ -256,3 +256,13 @@ planning artifact, not a CRM redesign.
 
 Use D-050 review/performance limits and the paired final gate sequence. This draft
 has author inspection only; implementation tests and independent review are pending.
+
+## D-090 recovery amendment
+
+The accepted [010e6 recovery specification](../plans/SLICE_010e6_NEVER_IMPORTED_RECOVERY.md)
+extends admission and follow-on qualification for explicitly anchored, successfully
+created recovery People. Normal modes retain this specification's rules. Original
+holds are immutable; recovery is a distinct admission mode with its own initial
+approvals/provenance. Initial approval readers recognize recovery-owned evidence
+before original fallback, with subsequent exact-key 010e5 repair precedence.
+No fabricated original results or automatic family cascade is permitted.

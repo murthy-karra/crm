@@ -256,6 +256,17 @@ async fn handover(
     release.require_admitted_metadata(conn).await?;
     super::store::lock_org(conn, ctx.organization_id).await?;
     qualify_preparation(conn, key, ctx, cmd).await?;
+    handover_qualified(conn, key, ctx).await
+}
+
+/// Reuse only after typed source qualification while holding workspace-exclusive,
+/// current admin, release-readiness and Organization locks, in that order.
+/// The caller owns the transaction; original claims keep their original payer.
+pub(super) async fn handover_qualified(
+    conn: &mut sqlx::PgConnection,
+    key: &RawPayloadKey,
+    ctx: &CommandContext,
+) -> Result<(), MigrationError> {
     let readiness = sqlx::query("SELECT state,engine_version FROM migration_metadata_catalog_readiness WHERE organization_id=$1 FOR UPDATE")
         .bind(ctx.organization_id.0).fetch_optional(&mut *conn).await?;
     if let Some(row) = readiness {

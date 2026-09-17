@@ -34,12 +34,12 @@ pub(super) fn task(id: u64) -> Value {
         "assignedUserId":3,"isCompleted":false,"created":"2026-09-01T12:00:00Z","updated":null})
 }
 
-fn note() -> Value {
+pub(super) fn note() -> Value {
     json!({"id":11,"personId":101,"createdById":3,"subject":"Source subject","body":"main detail",
         "isHtml":false,"created":"2026-09-01T12:00:00.123456Z","updated":null,"type":"Note"})
 }
 
-fn note_capture(book: &Book, detail: Value) {
+pub(super) fn note_capture(book: &Book, detail: Value) {
     // Book keys captures by stream/offset; use one note ID per fixture. A list
     // body intentionally differs: only the requested enriched detail executes.
     book.set_records(
@@ -377,6 +377,7 @@ async fn activity_source_imports_exact_notes_tasks_roles_and_confirmed_date_poli
         let done = confirm(&f, child, &final_plan).await;
         assert_eq!(done["counts"]["notes"]["applied"], "1");
         assert_eq!(done["counts"]["tasks"]["applied"], "3");
+        crate::db_family_refresh::assert_activity_after_states(&f, child, false).await;
         let native = sqlx::query("SELECT * FROM note WHERE organization_id=$1")
             .bind(f.org)
             .fetch_one(&f.pool)

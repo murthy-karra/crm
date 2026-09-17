@@ -583,6 +583,7 @@ export interface PersonAdmittedDetail {
 
 export type HistoryEntry =
   | (HistoryEntryBase & { kind: 'person_admitted'; detail: PersonAdmittedDetail })
+  | (HistoryEntryBase & { kind: 'person_recovered'; detail: PersonAdmittedDetail })
   | (HistoryEntryBase & { kind: 'person_imported'; detail: PersonImportedDetail })
   | (HistoryEntryBase & { kind: 'inquiry_received'; detail: InquiryReceivedDetail })
   | (HistoryEntryBase & { kind: 'routing_decision'; detail: RoutingDecisionDetail })

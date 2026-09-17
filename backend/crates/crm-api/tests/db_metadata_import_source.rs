@@ -1986,6 +1986,14 @@ async fn metadata_execution_scenario(migrator: PgPool, mode: u8) {
 #[sqlx::test]
 #[ignore = "requires PostgreSQL migrator"]
 async fn family_refresh_remainder_keeps_families_from_different_confirmed_attempts(pool: PgPool) {
+    combined_remainder_scenario(pool, false).await;
+}
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn family_refresh_partial_completion_preserves_cancelled_remainder(pool: PgPool) {
+    combined_remainder_scenario(pool, true).await;
+}
+async fn combined_remainder_scenario(pool: PgPool, partial: bool) {
     use crm_api::{
         auth::workspace::ReleaseReadiness,
         domain::migration::family_refresh::{
@@ -2176,6 +2184,88 @@ async fn family_refresh_remainder_keeps_families_from_different_confirmed_attemp
         vec![Family::Metadata, Family::Activity],
     )
     .await;
+    if partial {
+        cancel(&f, prepared.bundle_id, vec![Family::Activity]).await;
+        for turn in 0..40 {
+            if execution::run_once(
+                &f.pool,
+                &f.key,
+                &f.policy,
+                Some(&ReleaseReadiness::for_tests()),
+            )
+            .await
+            .unwrap()
+                == Progress::Idle
+            {
+                break;
+            }
+            assert!(turn < 39);
+        }
+        let d = queries::detail(&f.pool, &f.ctx, prepared.bundle_id)
+            .await
+            .unwrap();
+        assert_eq!(d.bundle.state, "cancelled");
+        assert_eq!(
+            d.families
+                .iter()
+                .find(|p| p.family == Family::Metadata)
+                .unwrap()
+                .state,
+            "completed"
+        );
+        assert!(
+            d.families
+                .iter()
+                .find(|p| p.family == Family::Activity)
+                .unwrap()
+                .remainder_eligible
+        );
+        let next = remainder::create(
+            &f.pool,
+            &f.key,
+            &f.policy,
+            Some(&ReleaseReadiness::for_tests()),
+            &f.ctx,
+            prepared.bundle_id,
+            FamilyControl {
+                request_id: Uuid::new_v4(),
+                expected_revision: d.bundle.revision,
+                families: vec![Family::Activity],
+            },
+        )
+        .await
+        .unwrap();
+        drain(&f).await;
+        confirm(&f, next.bundle_id, vec![Family::Activity]).await;
+        for turn in 0..40 {
+            if execution::run_once(
+                &f.pool,
+                &f.key,
+                &f.policy,
+                Some(&ReleaseReadiness::for_tests()),
+            )
+            .await
+            .unwrap()
+                == Progress::Idle
+            {
+                break;
+            }
+            assert!(turn < 39);
+        }
+        assert_eq!(
+            queries::detail(&f.pool, &f.ctx, next.bundle_id)
+                .await
+                .unwrap()
+                .bundle
+                .state,
+            "completed"
+        );
+        sqlx::raw_sql(include_str!("fixtures/family_refresh_byte_inventory.sql"))
+            .execute(&pool)
+            .await
+            .unwrap();
+        return;
+    }
     cancel(
         &f,
         prepared.bundle_id,

@@ -20,9 +20,9 @@
   and preview5187 are stopped; QA tab closed and viewport reset. Evidence and
   synthetic databases remain retained. No live FUB calls, shared `crm_dev` writes,
   installed native-store changes or shared-runtime replacement.
-- Shared development remains on [010e5](SLICE_010e5_RELEASE.md).
-- Local commit and merge are complete. Push and deployment remain pending;
-  feature branch and unrelated local artifacts are retained.
+- Subsequent user authorization completed publication, merge and deployment
+  with [010g1 on 2026-09-17](SLICE_010g1_RELEASE.md). Merged branches were cleaned
+  up; prior verification and recovery evidence remain retained.
 
 Recovery covers positively proven mapping-held People. Later family imports need
 separate previews/confirmation. Identity repair, resurrection, arbitrary skipped

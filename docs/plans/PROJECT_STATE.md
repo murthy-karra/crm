@@ -1,6 +1,6 @@
 # Project state
 
-Updated: 2026-09-15 — 010e5 deployed; 010e6 verified and merged locally.
+Updated: 2026-09-17 — 010g1 and 010e6 published and deployed to shared development.
 Current status and live residuals only. [History](PROJECT_HISTORY.md) preserves
 completed chronology. Decisions remain authoritative; use the
 [reading index](../decisions/DECISION_INDEX.md).
@@ -12,7 +12,7 @@ completed chronology. Decisions remain authoritative; use the
 proven mapping-held People once and supplies separate family handoffs. Independent
 implementation review is READY, round 2. [Status](../tasks/SLICE_010e6_IMPLEMENTATION_STATUS.md)
 and [verification](../tasks/SLICE_010e6_VERIFICATION.md) own current evidence.
-Shared development remains on the verified [010e5 release](../tasks/SLICE_010e5_RELEASE.md).
+Shared development now runs the verified [010g1 / 010e6 release](../tasks/SLICE_010g1_RELEASE.md) at source `74e63a8`.
 
 
 **Mobile006 / 010f4 are implemented, verified, merged to main, pushed and deployed
@@ -42,10 +42,9 @@ Mobile004/010e4 and preceding slices remain documented in history.
 
 ## Current branch and retained resources
 
-`main` includes 010e6 implementation `2a4c207`, fast-forwarded from `512bc4a`.
-The feature branch remains retained; publication and deployment are pending.
-`main` contains the 010e5 release as well as Mobile007 / 010d3. Its runtime identity and smoke
-checks are recorded in [the release record](../tasks/MOBILE_007_010d3_RELEASE.md).
+`main` is published through `74e63a8`, including 010g1 and 010e6. All merged
+feature branches and the old history worktree were removed. Current runtime
+identity and smoke checks are in [the release record](../tasks/SLICE_010g1_RELEASE.md).
 Private verification services and build outputs remain retained.
 Three previously completed writer worktrees and five milestone branches
 were removed after preserving all lane histories and the exact dirty migration
@@ -61,8 +60,9 @@ native API3106 is available; the isolated browser QA processes are stopped.
 existing People first. Implementation and local verification are complete under
 D-088; [evidence](../tasks/SLICE_010e5_VERIFICATION.md) records the gates. Commit `05abffa`
 is merged, pushed and deployed to shared development;
-[release evidence](../tasks/SLICE_010e5_RELEASE.md) owns current runtime identity. Never-imported People recovery is implemented and verified under D-090, awaiting
-its separate publication/deployment step.
+[010e5 evidence](../tasks/SLICE_010e5_RELEASE.md) records that prior release.
+Never-imported People recovery and the combined family refresh are now deployed
+under the [010g1 release follow-up](../tasks/SLICE_010g1_RELEASE.md).
 Remaining family deltas, activation and complete migration fidelity retain their
 own scope in the [family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md).
 
@@ -206,12 +206,10 @@ linked verification records; they are not claims about present runtime health.
 The combined [010g1](SLICE_010g1_COMBINED_FAMILY_REFRESH.md) metadata,
 notes/tasks and history update package accepted under D-092 is implemented and
 [verified locally](../tasks/SLICE_010g1_VERIFICATION.md) on
-`codex/010g1-family-refresh`. Merge, push and deployment remain deferred by the
-user; preserve the 010e5 runtime.
-
-010e6 verification and local commit/merge are complete. Push and deployment
-require a subsequent user instruction. The current
-shared-development runtime is recorded by [010e5](../tasks/SLICE_010e5_RELEASE.md).
+the former `codex/010g1-family-refresh` branch. Subsequent authorization completed
+merge, push, cleanup and shared-development deployment with 010e6.
+[Release evidence](../tasks/SLICE_010g1_RELEASE.md) owns the current runtime.
+No implementation or release action remains pending for these slices.
 
 The [family ladder](SLICE_010_ADMITTED_PEOPLE_LADDER.md) records delivered
 families and the combined 010g1 follow-up. Native calling follows the agreed progression. Physical-phone/design/live-source work remains deferred;
@@ -222,8 +220,8 @@ No repeat implementation or release action is pending for Mobile006/010f4.
 
 010g1 P1–P4 and its declared shared contracts are accepted under D-092. Its
 planning and two-round implementation reviews are complete; local implementation
-and final acceptance gates passed. Merge, push and deployment remain explicitly
-deferred.
+and final acceptance gates passed. Subsequent merge, publication, cleanup and
+shared-development deployment were authorized and completed on 2026-09-17.
 
 None for the completed D-084 implementation, publication, cleanup and shared-
 development release. D-084 superseded D-083's planning-only boundary.

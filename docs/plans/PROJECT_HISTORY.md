@@ -9,6 +9,15 @@ Use [PROJECT_STATE.md](PROJECT_STATE.md) for current work, live residuals and ne
 actions, and the [decision log](../decisions/DECISION_LOG.md) for authority.
 Per-slice verification/release records remain the detailed evidence.
 
+## 010g1 / 010e6 published and deployed — 2026-09-17
+
+User-authorized PRs #1/#2 merged to `74e63a8`; merged branches and the old
+history worktree were removed. Shared development now runs that exact source,
+with isolated API/Web artifacts, a validated backup, 35 migrations, preserved
+existing data hashes, fresh compatibility gates and successful HTTP/browser/tunnel
+smoke. Native API3106 and stores remain untouched.
+[Release evidence](../tasks/SLICE_010g1_RELEASE.md) owns details and recovery limits.
+
 ## 010g1 combined family refresh accepted locally — 2026-09-17
 
 Implementation on `codex/010g1-family-refresh` delivered the full accepted

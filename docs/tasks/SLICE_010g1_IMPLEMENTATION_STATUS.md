@@ -1,8 +1,9 @@
 # 010g1 — Implementation status
 
-**COMPLETE LOCALLY — D-092, 2026-09-17.** The accepted combined plan and contracts
+**DEPLOYED TO SHARED DEVELOPMENT — D-092 follow-up, 2026-09-17.** The accepted combined plan and contracts
 are implemented and verified on `codex/010g1-family-refresh`. The accepted Lavish
-session was not reopened. Merge, push and deployment remain deferred.
+session was not reopened. Subsequent user authorization completed publication,
+merge, cleanup and shared-development deployment. [Release evidence](SLICE_010g1_RELEASE.md).
 
 ## Delivered
 
@@ -43,8 +44,9 @@ record of commands, results, retained failures, provenance and limitations.
 
 ## Preserved boundaries
 
-No merge, push, deployment, live FUB/customer processing or activation. The shared
-runtime, unrelated `docs/prompts/MODEL_ROUTING.md` and `.lavish/` are preserved.
+No live FUB/customer processing or activation. The shared runtime was upgraded
+under the release follow-up; `MODEL_ROUTING.md` and `.lavish/` were separately
+committed and merged at the user’s request.
 Isolated API/preview processes were stopped. Build outputs and evidence remain
 under `/private/tmp`. Full synchronization, cutover, unsupported/private data and
 O-012/O-013 remain outside this accepted slice.

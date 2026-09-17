@@ -3096,3 +3096,9 @@ No additional writer delegation, publication/deployment, live FUB/customer work,
 activation or production work is authorized. Preserve the 010e5 runtime, local
 verified 010e6 and native stores. The user ended the Lavish session; do not reopen
 it for routine progress updates.
+
+**Release follow-up — 2026-09-17:** The user subsequently authorized push/merge,
+merged-branch/worktree cleanup, and deployment to the existing shared-development
+environment. These are complete for 010g1 and its 010e6 prerequisite; the
+[release record](../tasks/SLICE_010g1_RELEASE.md) owns runtime and recovery evidence.
+Production, live FUB/customer processing and activation remain separate.

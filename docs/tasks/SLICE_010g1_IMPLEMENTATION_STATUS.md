@@ -7,8 +7,9 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 - Branch `codex/010g1-family-refresh`; preceding common Web milestone `af19664`.
 - One primary writer and one authorized independent implementation reviewer.
-  Round 1 found two issues, both fixed with regressions; final review closure
-  remains pending. Preserve D-050's two-round limit and one final paired gate.
+  Round 1 found two issues, both fixed with regressions. Round 2 closed without
+  actionable findings at `12586c3`; the review budget is exhausted. Preserve
+  D-050's one final paired gate.
 - Do not merge, push or deploy. Preserve unrelated `docs/prompts/MODEL_ROUTING.md`
   and `.lavish/`, the shared runtime and native stores.
 
@@ -57,13 +58,21 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 ## Remaining acceptance work
 
-1. Close independent review after the two round-1 fixes.
-2. Complete real synthetic production-Web desktop/390px workflow: combined
-   mappings/holds/destructive counts, lost-response confirmation, partial cancel,
-   exact successor, reload, history versions and private-state clearing.
-3. Complete repository gate, SQLx schema/offline checks and serial DB/API/
-   compatibility suite. Finish the single realistic 25k EXPLAIN and correctly
-   configured paired Person/Today gate. Record any gaps honestly.
+1. Finish the final 25k query-plan gate. The first run exposed full scans for
+   Person-filtered previews, sparse result filters and remainder availability;
+   migration 034 and the scalar summary query address those findings.
+2. Complete SQLx schema/offline checks and the serial DB/API/compatibility suite,
+   then the correctly configured single paired Person/Today gate.
+
+The repository gate passed before the small lifecycle verification fix
+(`ebe05b6`): 1,037 Rust and 1,327 Web tests, Clippy, production build and supporting
+checks (`/private/tmp/010g1-final-check.log`). That fix has its own passing DB
+regression. Production-Web acceptance passed at desktop/390px with real typed
+API/worker persistence: mappings, destructive counts, local holds, uncertain
+confirmation with byte-identical retry, partial cancellation, exact remainder,
+reload, current/prior history versions and logout clearing. Evidence lives in
+`/private/tmp/010g1-final-browser`; selector/fixture failures are retained rather
+than silently discarded. No final package pass is claimed yet.
 
 ## Isolation
 

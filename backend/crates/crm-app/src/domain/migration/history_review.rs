@@ -554,6 +554,27 @@ pub fn candidate_sql_for_test(kind: &str, dated: Dated) -> Option<String> {
         .find(|k| k.name == kind)
         .map(|k| candidate_sql(*k, dated, false, None))
 }
+/// Exact immutable-version reader shapes for isolated query-plan evidence.
+#[cfg(feature = "test-support")]
+pub fn version_sql_for_test(kind: &str, shape: &str) -> Option<String> {
+    let kind = *KINDS
+        .iter()
+        .find(|k| k.name == kind && k.family != Family::Native)?;
+    let projection = if shape == "first" {
+        Projection::FirstVersion
+    } else {
+        Projection::PriorVersions
+    };
+    let sql = candidate_branch(kind, Dated::Known, true, None, projection);
+    match shape {
+        "first" => Some(sql),
+        "page" => Some(format!(
+            "{sql} AND v.version<$4 ORDER BY v.version DESC LIMIT $5"
+        )),
+        "detail" => Some(format!("{sql} AND v.version=$4 LIMIT 1")),
+        _ => None,
+    }
+}
 #[cfg(feature = "test-support")]
 pub fn candidate_after_sql_for_test(kind: &str, dated: Dated, after_kind: &str) -> Option<String> {
     let kind = *KINDS.iter().find(|k| k.name == kind)?;

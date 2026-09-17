@@ -1,4 +1,4 @@
--- D-092 exact shared runtime/preflight inventory after migration 032.
+-- D-092 exact shared runtime/preflight inventory after migration 034.
 -- Includes native fences, source/copy walks, accounting, constraints and indexes.
 SELECT COALESCE(
  (SELECT bool_and(EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=to_regprocedure('public.'||signature) AND md5(pg_get_functiondef(p.oid))=expected_hash AND pg_get_userbyid(p.proowner)<>'crm_app' AND EXISTS(SELECT 1 FROM aclexplode(COALESCE(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE')=public_execute::boolean AND has_function_privilege('crm_app',p.oid,'EXECUTE')=app_execute::boolean)) FROM (VALUES
@@ -119,14 +119,14 @@ SELECT COALESCE(
  ('migration_family_refresh_history_display','16802c80f9ca6e355c3960dd7e3d5cf1'),
  ('migration_family_refresh_history_head','8b8f64f73bd2fcc7c6650c355ab3e9f8'),
  ('migration_family_refresh_history_page','7c7c4ea8d51b5bf686f2ef941251d10c'),
- ('migration_family_refresh_manifest','f20bb19987cb25c6ebdebc1823ef0ffa'),
+ ('migration_family_refresh_manifest','e13b320672aac3767cd33aede468f91c'),
  ('migration_family_refresh_mapping','6400a6c74e5939c463a51e026f479c0f'),
  ('migration_family_refresh_mapping_patch','3a991c3522e96d907ab9bc89180f2573'),
  ('migration_family_refresh_plan','a53aa437387717a8b2625ae459fb4bf6'),
  ('migration_family_refresh_receipt','214e9aebf6dbf4e477ae4cdb22899c4e'),
  ('migration_family_refresh_requirement','06744b493d24d8380219ceefe407e26f'),
  ('migration_family_refresh_reservation','d99b77d33489b496df34f14d1f86de6d'),
- ('migration_family_refresh_result','0840627b7d1fd28c8c1cde3316aeda0f'),
+ ('migration_family_refresh_result','e7c39cb1b2c9e3667687103c704b03e0'),
  ('migration_family_refresh_source','9b808cff7e8ce6a5d4b15e68718f6283'),
  ('migration_family_refresh_write_proof','8abf5c75b60eb9a6398c044a6f59c0d6')) expected(name,expected_hash))
  AND (SELECT bool_and(EXISTS(SELECT 1 FROM pg_trigger t WHERE t.tgrelid=to_regclass('public.'||table_name) AND t.tgname=trigger_name AND md5(pg_get_triggerdef(t.oid))=expected_hash AND t.tgenabled::text=enabled)) FROM (VALUES

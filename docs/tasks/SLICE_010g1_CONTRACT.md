@@ -738,3 +738,16 @@ strings. Native activity rows add optional `refresh_provenance` with bundle/item
 revision/source identity, keeping existing first-import provenance distinct.
 The activity read revision includes committed refresh positions. Source-only
 coverage is retained even when a unit becomes held during execution.
+
+### Common Web workflow checkpoint — 2026-09-16
+
+The migration screen now provides retained-source/family selection, scoped mapping
+choices and target suggestions, exact decimal counts, field review, explicit
+confirmation, per-family Cancel/Resume and bounded committed-result pages. The
+confirmation modal submits its frozen plan IDs/revisions/digests/counts. Unchecked
+families are explicitly acknowledged as excluded/cancelled. Uncertain requests
+retain their original ID/body for receipt replay; account/role/workspace changes
+clear private local state. Preparation progress refreshes mapping inventory;
+committed positions refresh result pages. Remainder is not offered until its typed
+command is implemented and verified. No native scheduler release is enabled by
+this UI checkpoint.

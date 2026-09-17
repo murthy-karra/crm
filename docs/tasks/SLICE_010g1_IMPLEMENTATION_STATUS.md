@@ -6,12 +6,12 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 ## Working constraints
 
 - Branch `codex/010g1-family-refresh`, base `dd140b0`; latest preceding history reader milestone
-  is **`c965e83`**. One primary writer; the previously authorized single
+  is **`9b03868`**. One primary writer; the previously authorized single
   implementation reviewer remains reserved for the final review. Planning review
   READY, round 1. Preserve D-050's two review/fix rounds and final performance gate.
 - Do not merge, push or deploy. Preserve unrelated `docs/prompts/MODEL_ROUTING.md`
   and `.lavish/`, the shared 010e5 runtime, local verified 010e6 and native stores.
-- Common refresh HTTP commands/readers and history version reads are installed; the Web workflow remains pending. No refresh native
+- Common refresh HTTP commands/readers, history version reads and the Web review workflow are installed; exact Remainder remains pending. No refresh native
   executor is wired. This slice is not complete.
 
 ## Implemented foundation and preparation
@@ -74,7 +74,20 @@ initializer missing the family flag was fixed. Clippy with warnings denied passe
 (`/private/tmp/010g1-review-apis-clippy.log`). Field/native activity Web tests pass
 20/20; focused lint/typecheck pass. Six viewport checks and mobile/desktop visual
 inspection pass (`/private/tmp/010g1-fields-browser/checks.json`). The common Web
-panel is being built; Remainder, scheduler admission and final gates remain.
+panel now selects retained sources and families, edits scoped mappings, reviews
+exact counts and fields, confirms a frozen request, tracks results, cancels and
+resumes individual families. Uncertain responses replay the same request ID/body;
+authority changes clear private state. Remainder, scheduler admission and final
+gates remain.
+
+Web verification: all 1,325 tests pass across 103 files
+(`/private/tmp/010g1-workflow-all-web.log`); the final mapping/progress adjustment
+passes all five focused workflow tests. Typecheck, focused lint and isolated
+production build pass (`/private/tmp/010g1-workflow-{final-typecheck,final-lint,build}.log`).
+The build reports the existing large-chunk warning (MigrationView is now 505 kB).
+Combined preview and scrollable confirmation pass six viewport checks with no
+page errors (`/private/tmp/010g1-workflow-browser/checks.json`); mobile confirmation
+and desktop preview were visually inspected. Synthetic fixture files removed.
 
 ## Remaining implementation
 
@@ -86,8 +99,8 @@ panel is being built; Remainder, scheduler admission and final gates remain.
 3. Complete activity and metadata execution edge coverage,
    including source/native/head/member/catalog revalidation, atomic results/
    accounting/heads and after-state production. Preserve compatible reader capability inventories.
-4. Finish the common Web review/confirm/progress workflow, exact Remainder and
-   complete scheduler/readiness admission. Preserve
+4. Add exact Remainder to the common Web workflow and complete scheduler/readiness
+   admission. Preserve
    existing mobile/Operator/read-path compatibility and review-workspace gates.
 5. Run the authorized independent implementation review, required database/API/
    browser/final-tree checks and the single realistic paired-relative + EXPLAIN

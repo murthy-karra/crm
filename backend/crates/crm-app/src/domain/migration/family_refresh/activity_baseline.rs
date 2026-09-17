@@ -196,6 +196,11 @@ pub async fn discover(
             );
         }
     }
+    // A refresh first owner requires its authenticated successful head. Never
+    // reinterpret a missing/damaged refresh head as an original import owner.
+    if identity.get::<Option<Uuid>, _>("refresh_plan_id").is_some() {
+        return Ok(Discovery::Held(Hold::BaselineUnproven));
+    }
     let admitted = identity
         .get::<Option<Uuid>, _>("admitted_import_id")
         .is_some();

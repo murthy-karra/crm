@@ -1759,6 +1759,19 @@ async fn assert_activity_mapping_conversion(
 #[sqlx::test]
 #[ignore = "requires PostgreSQL migrator"]
 async fn family_refresh_activity_proposals_are_atomic_stable_and_do_not_write_native(pool: PgPool) {
+    activity_execution_scenario(pool, 0).await;
+}
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn family_refresh_activity_execution_is_atomic_and_metered(pool: PgPool) {
+    activity_execution_scenario(pool, 1).await;
+}
+#[sqlx::test]
+#[ignore = "requires PostgreSQL migrator"]
+async fn family_refresh_activity_execution_holds_local_changes(pool: PgPool) {
+    activity_execution_scenario(pool, 2).await;
+}
+async fn activity_execution_scenario(pool: PgPool, mode: u8) {
     use crm_api::domain::migration::{
         family_refresh::{
             activity_plan::{self, Decision, Evidence, Prepared},
@@ -1770,6 +1783,10 @@ async fn family_refresh_activity_proposals_are_atomic_stable_and_do_not_write_na
         snapshot_source::Stream,
     };
     let book = db_activity_source::book();
+    if mode > 0 {
+        db_activity_source::note_capture(&book, db_activity_source::note());
+    }
+
     book.set_records(Stream::TasksOpen, vec![db_activity_source::task(21)]);
     let f = import_support::fixture_with_book(&pool, book).await;
     let parent = db_activity_source::completed_parent(&f).await;
@@ -1784,6 +1801,11 @@ async fn family_refresh_activity_proposals_are_atomic_stable_and_do_not_write_na
     .fetch_one(&pool)
     .await
     .unwrap();
+    if mode > 0 {
+        let mut note = db_activity_source::note();
+        note["body"] = json!("Updated retained note");
+        db_activity_source::note_capture(&f.reader, note);
+    }
     let mut changed = db_activity_source::task(21);
     changed["name"] = json!("Updated retained title");
     f.reader.set_records(
@@ -2060,11 +2082,11 @@ async fn family_refresh_activity_proposals_are_atomic_stable_and_do_not_write_na
         p.get::<i64, _>("retained_bytes")
     );
     worker::release(&f.pool, &claim).await.unwrap();
-    for step in 0..20 {
+    for step in 0..30 {
         if worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap() == Progress::Idle {
             break;
         }
-        assert!(step < 19);
+        assert!(step < 29);
     }
     assert!(sqlx::query_scalar::<_, bool>(
         "SELECT source_walk_complete FROM migration_family_refresh_plan WHERE id=$1"
@@ -2081,7 +2103,7 @@ async fn family_refresh_activity_proposals_are_atomic_stable_and_do_not_write_na
         .fetch_one(&pool)
         .await
         .unwrap(),
-        3,
+        if mode == 0 { 3 } else { 4 },
         "traversal reuses frozen outcomes"
     );
     assert_eq!(
@@ -2095,6 +2117,245 @@ async fn family_refresh_activity_proposals_are_atomic_stable_and_do_not_write_na
         "ready",
         "worker seals only after source, ownership, proof and count walks complete"
     );
+    if mode == 0 {
+        return;
+    }
+    use crm_api::domain::migration::family_refresh::{
+        confirmation::{self, ConfirmFamilyRefresh, SelectedPlan},
+        execution,
+    };
+    sqlx::query("UPDATE organization_membership SET status='active' WHERE organization_id=$1 AND user_id=$2").bind(f.org).bind(f.member).execute(&pool).await.unwrap();
+    let sealed=sqlx::query("SELECT b.revision AS bundle_revision,encode(b.digest,'hex') AS bundle_digest,p.revision,encode(p.digest,'hex') AS digest,p.counts FROM migration_family_refresh_bundle b JOIN migration_family_refresh_plan p ON p.bundle_id=b.id AND p.organization_id=b.organization_id WHERE p.id=$1").bind(plan).fetch_one(&pool).await.unwrap();
+    let release = crm_api::auth::workspace::ReleaseReadiness::for_tests();
+    confirmation::confirm(
+        &f.pool,
+        &f.key,
+        &release,
+        &f.ctx,
+        claim.bundle,
+        ConfirmFamilyRefresh {
+            request_id: Uuid::new_v4(),
+            expected_revision: sealed.get::<i64, _>("bundle_revision").to_string(),
+            bundle_digest: sealed.get("bundle_digest"),
+            families: vec![SelectedPlan {
+                family: Family::Activity,
+                plan_id: plan,
+                plan_revision: sealed.get::<i64, _>("revision").to_string(),
+                plan_digest: sealed.get("digest"),
+                expected_counts: serde_json::from_value(sealed.get("counts")).unwrap(),
+            }],
+            acknowledged_exclusions: true,
+        },
+    )
+    .await
+    .unwrap();
+    if mode == 2 {
+        sqlx::query("UPDATE task SET title='Local task title' WHERE organization_id=$1 AND source_external_id LIKE '%:21'").bind(f.org).execute(&pool).await.unwrap();
+    }
+    let executing = execution::claim_next(&f.pool).await.unwrap().unwrap();
+    let checkpoint_sql="SELECT jsonb_build_object('tasks',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM task t WHERE organization_id=p.organization_id),'heads',(SELECT count(*) FROM migration_family_refresh_head WHERE organization_id=p.organization_id),'identities',(SELECT count(*) FROM migration_activity_identity WHERE organization_id=p.organization_id),'results',(SELECT count(*) FROM migration_family_refresh_result WHERE plan_id=p.id),'position',apply_position,'measured',measured_bytes,'retained',retained_bytes,'reserved',reserved_bytes) FROM migration_family_refresh_plan p WHERE id=$1";
+    let before: serde_json::Value = sqlx::query_scalar(checkpoint_sql)
+        .bind(plan)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        execution::apply_once(&f.pool, &f.key, &tiny, &release, &executing)
+            .await
+            .unwrap(),
+        execution::Progress::Capacity
+    );
+    sqlx::raw_sql("CREATE FUNCTION test_activity_execute_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic execution fault'; END $$; CREATE TRIGGER test_activity_execute_fault BEFORE INSERT ON migration_family_refresh_result FOR EACH ROW EXECUTE FUNCTION test_activity_execute_fault()").execute(&pool).await.unwrap();
+    assert!(
+        execution::apply_once(&f.pool, &f.key, &f.policy, &release, &executing)
+            .await
+            .is_err()
+    );
+    sqlx::raw_sql("DROP TRIGGER test_activity_execute_fault ON migration_family_refresh_result; DROP FUNCTION test_activity_execute_fault()").execute(&pool).await.unwrap();
+    assert_eq!(
+        sqlx::query_scalar::<_, serde_json::Value>(checkpoint_sql)
+            .bind(plan)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        before
+    );
+    // Advance the update/hold, then fault the addition after its native row and
+    // exclusive identity have been written. Both must roll back together.
+    assert_eq!(
+        execution::apply_once(&f.pool, &f.key, &f.policy, &release, &executing)
+            .await
+            .unwrap(),
+        execution::Progress::Advanced
+    );
+    let before_addition: serde_json::Value = sqlx::query_scalar(checkpoint_sql)
+        .bind(plan)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    sqlx::raw_sql("CREATE FUNCTION test_activity_execute_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic addition fault'; END $$; CREATE TRIGGER test_activity_execute_fault BEFORE INSERT ON migration_family_refresh_result FOR EACH ROW EXECUTE FUNCTION test_activity_execute_fault()").execute(&pool).await.unwrap();
+    assert!(
+        execution::apply_once(&f.pool, &f.key, &f.policy, &release, &executing)
+            .await
+            .is_err()
+    );
+    sqlx::raw_sql("DROP TRIGGER test_activity_execute_fault ON migration_family_refresh_result; DROP FUNCTION test_activity_execute_fault()").execute(&pool).await.unwrap();
+    assert_eq!(
+        sqlx::query_scalar::<_, serde_json::Value>(checkpoint_sql)
+            .bind(plan)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        before_addition
+    );
+    for turn in 0..10 {
+        match execution::apply_once(&f.pool, &f.key, &f.policy, &release, &executing)
+            .await
+            .unwrap()
+        {
+            execution::Progress::Advanced => assert!(turn < 9),
+            execution::Progress::Finished => break,
+            execution::Progress::Capacity => panic!("unexpected capacity"),
+        }
+    }
+    assert_eq!(
+        sqlx::query_scalar::<_, String>(
+            "SELECT state FROM migration_family_refresh_plan WHERE id=$1"
+        )
+        .bind(plan)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        "completed"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, String>(
+            "SELECT title FROM task WHERE organization_id=$1 AND source_external_id LIKE '%:21'"
+        )
+        .bind(f.org)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        if mode == 2 {
+            "Local task title"
+        } else {
+            "Updated retained title"
+        }
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_activity_identity WHERE refresh_plan_id=$1"
+        )
+        .bind(plan)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        1
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM migration_family_refresh_head WHERE organization_id=$1"
+        )
+        .bind(f.org)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        if mode == 2 { 2 } else { 3 }
+    );
+    let results=sqlx::query("SELECT r.*,s.source_id FROM migration_family_refresh_result r JOIN migration_family_refresh_manifest u ON u.id=r.manifest_id AND u.organization_id=r.organization_id JOIN migration_family_refresh_source s ON s.id=u.source_row_id AND s.organization_id=u.organization_id WHERE r.plan_id=$1").bind(plan).fetch_all(&pool).await.unwrap();
+    for row in results {
+        let source: String = row.get("source_id");
+        let held = source == "23" || (mode == 2 && source == "21");
+        assert_eq!(
+            row.get::<String, _>("disposition"),
+            if held { "held" } else { "applied" }
+        );
+        let data: crm_api::domain::migration::family_refresh::native_baseline::ResultData = scope
+            .open(
+                &f.key,
+                row.get("id"),
+                Purpose::Result,
+                row.get("nonce"),
+                row.get("ciphertext"),
+            )
+            .unwrap();
+        assert_eq!(data.after_state.is_some(), !held);
+    }
+    let accounting = sqlx::query(
+        "SELECT measured_bytes,retained_bytes FROM migration_family_refresh_plan WHERE id=$1",
+    )
+    .bind(plan)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        accounting.get::<i64, _>("measured_bytes"),
+        accounting.get::<i64, _>("retained_bytes")
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, String>("SELECT body FROM note WHERE organization_id=$1")
+            .bind(f.org)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        "Subject: Source subject\n\nUpdated retained note"
+    );
+    // A subsequent bundle must authenticate the new refresh first owner, and
+    // its ownership walk must retain that identity even without a source row.
+    let next_report = admission::report(
+        &f,
+        parent,
+        vec![json!({"id":101,"firstName":"Synthetic","stage":"Lead","assignedUserId":3})],
+    )
+    .await;
+    let next = commands::prepare(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &release,
+        &f.ctx,
+        PrepareFamilyRefresh {
+            request_id: Uuid::new_v4(),
+            parent_import_id: parent,
+            core_report_id: Some(next_report),
+            history_capture_id: None,
+            families: vec![Family::Activity],
+        },
+    )
+    .await
+    .unwrap();
+    for step in 0..50 {
+        if advance_to_review_phase(&f, "mappings_complete").await == Progress::Idle {
+            break;
+        }
+        assert!(step < 49);
+    }
+    let next_claim = worker::claim_next(&f.pool).await.unwrap().unwrap();
+    let next_cohort:Uuid=sqlx::query_scalar("SELECT id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND source_person_id='101'").bind(next.bundle_id).fetch_one(&pool).await.unwrap();
+    use crm_api::domain::migration::family_refresh::activity_baseline;
+    let baseline = match activity_baseline::discover(
+        &f.pool,
+        &f.key,
+        &next_claim,
+        next_cohort,
+        Kind::Task,
+        "22",
+    )
+    .await
+    .unwrap()
+    {
+        activity_baseline::Discovery::Proven(b) => b,
+        activity_baseline::Discovery::Held(h) => panic!("refresh-owned addition baseline: {h:?}"),
+    };
+    assert!(baseline.owned);
+    assert_eq!(baseline.revision, 1);
+    assert_eq!(Some(baseline.result_id), baseline.head_id);
+    let owned:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM crm_family_refresh_owned_activity($1,$2) WHERE kind='task' AND source_id='22' AND target_id=$3)").bind(f.org).bind(next.bundle_id).bind(baseline.target_id).fetch_one(&f.pool).await.unwrap();
+    assert!(
+        owned,
+        "refresh first owners remain in subsequent missing-source walks"
+    );
+    worker::release(&f.pool, &next_claim).await.unwrap();
 }
 
 #[sqlx::test]

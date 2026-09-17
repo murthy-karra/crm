@@ -2586,3 +2586,28 @@ Evidence: `/private/tmp/010g1-lifecycle-family-db.log`,
 `/private/tmp/010g1-family_refresh_partial_cancel-db.log`, and
 `/private/tmp/010g1-lifecycle-final-clippy.log`. No HTTP or native executor was
 connected to the scheduler in this milestone.
+
+## 010g1 metadata execution — 1796ea3 — 2026-09-16
+
+Metadata execution now applies closed encrypted native recipes, refresh-owned
+catalog claims and atomic whole-Person deltas. Each commit revalidates source,
+identity, native state/revision, head and catalog snapshots; native writes,
+authenticated after-state, result, head CAS, counts and measured bytes settle
+atomically. The bounded execution runner releases each successful lease and can
+pause for storage, integrity or release readiness. It currently dispatches only
+metadata and is not connected to the application scheduler.
+
+Focused tests verify capacity, native/result rollback and retry, result pagination
+and tenant isolation, running cancellation/replay, full completion/count
+reconciliation and changed-catalog holds. Evidence:
+`/private/tmp/010g1-metadata-execution-db.log` and
+`/private/tmp/010g1-metadata-execution-terminal-db.log`.
+The integrated family run passed all 45 tests
+(`/private/tmp/010g1-metadata-execution-family-db.log`).
+Final focused execution checks also pass, including durable release-readiness
+pause, explicit Resume and completion
+(`/private/tmp/010g1-metadata-execution-final-db.log`).
+Library Clippy passes with warnings denied
+(`/private/tmp/010g1-metadata-execution-final-clippy.log`); 55 release-preflight
+checks pass (`/private/tmp/010g1-metadata-preflight-tests.log`). Formatting/diff
+checks pass. HTTP/Web exposure and the final slice-wide gates remain pending.

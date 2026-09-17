@@ -648,3 +648,33 @@ bounded result reader authenticates scope/filter/revision cursors and never load
 ciphertext. The runner currently dispatches metadata only and is not connected to
 the application scheduler until the remaining family executors/readiness gates
 are complete. HTTP/Web exposure and final release gates remain pending.
+
+### Atomic activity execution checkpoint
+
+Migration 029 gives `migration_activity_identity` a third exclusive refresh owner
+with a composite manifest FK. Its insertion guard requires the exact next live
+confirmed activity unit, matching source identity and an already-written native
+row matching the immutable INSERT proof. The existing immutable identity and
+byte formula remain; only the owning plan receives the identity charge. The
+admitted-activity readiness inventory pins the amended meter's exact body hash.
+Ownership traversal includes successful terminal refresh first owners, preserving
+source absence and deletion tombstones for later bundles.
+
+The shared bounded execution queue dispatches notes/tasks as well as metadata.
+Activity execution authenticates retained conversion and approved role snapshots,
+locks mapped memberships before Organization/retention locks, and rechecks the
+accepted scan, Person identity, baseline head, full native row and revision.
+New identities recheck first coverage and global/native collisions. Native recipes
+remain the sole write path. Source-only coverage is included when comparing the
+complete frozen proposal, independently of native action counts. Held units do
+not receive heads or after-state; successful updates/additions retain authenticated
+native after-state and positive ownership. Native rows, new identities, result,
+head and bytes roll back together on failure.
+
+History execution, current-history projections, exact Remainder, HTTP/Web and
+final release checks remain pending. Native scheduling is still disconnected.
+
+Common workspace guards now stamp the installed family reader capability, so
+retained captures and later refresh bundles remain usable after confirmation.
+Until current-version history projection is installed, corrected history fails
+closed instead of displaying stale first-import metadata.

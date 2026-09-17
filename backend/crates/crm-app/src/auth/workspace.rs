@@ -99,7 +99,7 @@ pub async fn activity_complete_read(
 
 pub async fn shared(conn: &mut PgConnection, org: OrganizationId) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "SELECT set_config('crm.mapping_repair_reader','fub-people-mapping-repair-v1',true),set_config('crm.people_recovery_reader','fub-people-recovery-v1',true)",
+        "SELECT set_config('crm.mapping_repair_reader','fub-people-mapping-repair-v1',true),set_config('crm.people_recovery_reader','fub-people-recovery-v1',true),set_config('crm.family_refresh_reader','fub-family-refresh-v1',true)",
     )
     .execute(&mut *conn)
     .await?;
@@ -116,7 +116,7 @@ pub async fn shared(conn: &mut PgConnection, org: OrganizationId) -> Result<(), 
 }
 pub async fn ordinary(conn: &mut PgConnection, org: OrganizationId) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "SELECT set_config('crm.mapping_repair_reader','fub-people-mapping-repair-v1',true),set_config('crm.people_recovery_reader','fub-people-recovery-v1',true)",
+        "SELECT set_config('crm.mapping_repair_reader','fub-people-mapping-repair-v1',true),set_config('crm.people_recovery_reader','fub-people-recovery-v1',true),set_config('crm.family_refresh_reader','fub-family-refresh-v1',true)",
     )
     .execute(&mut *conn)
     .await?;
@@ -162,7 +162,7 @@ pub async fn read_check(
     operational_only: bool,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "SELECT set_config('crm.mapping_repair_reader','fub-people-mapping-repair-v1',true),set_config('crm.people_recovery_reader','fub-people-recovery-v1',true)",
+        "SELECT set_config('crm.mapping_repair_reader','fub-people-mapping-repair-v1',true),set_config('crm.people_recovery_reader','fub-people-recovery-v1',true),set_config('crm.family_refresh_reader','fub-family-refresh-v1',true)",
     )
     .execute(&mut *conn)
     .await?;

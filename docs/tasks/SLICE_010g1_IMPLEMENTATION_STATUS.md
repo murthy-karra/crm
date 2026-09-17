@@ -5,8 +5,8 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 ## Working constraints
 
-- Branch `codex/010g1-family-refresh`, base `dd140b0`; latest committed sealing/lifecycle milestone
-  is **`9796b2c`**. One primary writer; the previously authorized single
+- Branch `codex/010g1-family-refresh`, base `dd140b0`; latest preceding metadata execution milestone
+  is **`1796ea3`**. One primary writer; the previously authorized single
   implementation reviewer remains reserved for the final review. Planning review
   READY, round 1. Preserve D-050's two review/fix rounds and final performance gate.
 - Do not merge, push or deploy. Preserve unrelated `docs/prompts/MODEL_ROUTING.md`
@@ -51,38 +51,34 @@ through Lavish Send & End. Do not reopen that session. Deployment is deferred.
 
 ## Current verified milestone
 
-Metadata execution now applies closed encrypted native recipes, refresh-owned
-catalog claims and atomic whole-Person deltas. Each commit revalidates source,
-identity, native state/revision, head and catalog snapshots; native writes,
-authenticated after-state, result, head CAS, counts and measured bytes settle
-atomically. The bounded execution runner releases each successful lease and can
-pause for storage, integrity or release readiness. It currently dispatches only
-metadata and is not connected to the application scheduler.
+Metadata and activity now execute through the same bounded queue. Notes/tasks
+revalidate frozen source conversion, mapped memberships, accepted scans, native
+rows/revisions and baseline heads. New activity identities use an exclusive
+refresh owner and are discoverable by later bundles. Native writes, identity,
+result, after-state, head and accounting commit atomically. Scheduling remains
+disconnected while history and the public workflow are completed.
 
-Focused tests verify capacity, native/result rollback and retry, result pagination
-and tenant isolation, running cancellation/replay, full completion/count
-reconciliation and changed-catalog holds. Evidence:
-`/private/tmp/010g1-metadata-execution-db.log` and
-`/private/tmp/010g1-metadata-execution-terminal-db.log`.
-The integrated family run passed all 45 tests
-(`/private/tmp/010g1-metadata-execution-family-db.log`).
-Final focused execution checks also pass, including durable release-readiness
-pause, explicit Resume and completion
-(`/private/tmp/010g1-metadata-execution-final-db.log`).
-Library Clippy passes with warnings denied
-(`/private/tmp/010g1-metadata-execution-final-clippy.log`); 55 release-preflight
-checks pass (`/private/tmp/010g1-metadata-preflight-tests.log`). Formatting/diff
-checks pass. HTTP/Web exposure and the final slice-wide gates remain pending.
+The focused activity checks pass, including capacity, update/addition result-fault
+rollback and retry, local-change holds, note conversion and fresh-bundle ownership
+recovery (`/private/tmp/010g1-activity-execution-final-db.log`). The integrated run
+passed 45/47; the two new tests failed only at their later snapshot setup because
+the common reader capability was absent. After adding that capability, both pass.
+The corrected-history reader temporarily fails closed until its current-version
+projection is installed. Existing imported history review compatibility passes
+(`/private/tmp/010g1-activity-reader-compat.log`). Library Clippy passes with
+warnings denied (`/private/tmp/010g1-activity-final-clippy.log`); 55 preflight checks
+pass (`/private/tmp/010g1-activity-preflight-tests.log`). Final slice-wide gates
+remain pending.
 
 ## Remaining implementation
 
 1. Bootstrap legacy baselines only where independently provable. Add refresh-owned
-   initial activity/history identities and catalog claims with exclusive typed
+   initial history identities with exclusive typed
    owner shapes; extend existing ownership/baseline/reader adapters accordingly.
 2. Implement exact Remainder. Preserve frozen unfinished
    units, sources/mappings/targets and baseline heads; settled holds are not
    unfinished work. Complete cancellation/resume crash and capacity coverage.
-3. Complete activity/history execution and metadata execution edge coverage,
+3. Complete history execution and activity edge coverage and metadata execution edge coverage,
    including source/native/head/member/catalog revalidation, atomic results/
    accounting/heads and after-state production. Preserve compatible reader capability inventories.
 4. Finish bounded results, field fragments, proof and history-version readers;

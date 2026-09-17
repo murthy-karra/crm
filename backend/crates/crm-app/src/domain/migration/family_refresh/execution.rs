@@ -73,10 +73,10 @@ pub(super) fn scope(claim: &Claim, p: &PgRow) -> Result<Scope, MigrationError> {
         revision: p.get("revision"),
     })
 }
-/// Initially dispatched for metadata; additional family executors join this
-/// same queue once their exclusive owner/read adapters are installed.
+/// Metadata and activity share the confirmed queue; history joins after its
+/// exclusive initial owner and version-aware execution adapters are installed.
 pub async fn claim_next(pool: &PgPool) -> Result<Option<Claim>, MigrationError> {
-    let runnable="p.family='metadata' AND p.state IN ('queued','running') AND p.phase='apply' AND p.confirmed_at IS NOT NULL AND NOT p.cancel_requested AND b.confirmed_at IS NOT NULL AND b.state IN ('queued','running','paused') AND (p.lease_token IS NULL OR p.lease_expires_at<=clock_timestamp())";
+    let runnable="p.family IN ('metadata','activity') AND p.state IN ('queued','running') AND p.phase='apply' AND p.confirmed_at IS NOT NULL AND NOT p.cancel_requested AND b.confirmed_at IS NOT NULL AND b.state IN ('queued','running','paused') AND (p.lease_token IS NULL OR p.lease_expires_at<=clock_timestamp())";
     let sql=format!("SELECT p.id,p.bundle_id,p.organization_id FROM migration_family_refresh_plan p JOIN migration_family_refresh_bundle b ON b.id=p.bundle_id AND b.organization_id=p.organization_id JOIN migration_workspace w ON w.organization_id=b.organization_id AND w.import_id=b.parent_import_id AND w.plan_id=b.parent_plan_id JOIN organization_membership m ON m.organization_id=b.organization_id AND m.user_id=b.executor_user_id WHERE {runnable} AND m.role='admin' AND m.status='active' ORDER BY p.lease_epoch,p.created_at,p.id LIMIT 1");
     let Some(candidate) = sqlx::query(&sql).fetch_optional(pool).await? else {
         return Ok(None);
@@ -183,7 +183,15 @@ pub async fn apply_once(
         unit.get("ciphertext"),
     )?;
     drop(tx);
-    super::metadata_execution::apply(pool, key, policy, release, claim, scope, unit).await
+    match scope.family {
+        super::model::Family::Metadata => {
+            super::metadata_execution::apply(pool, key, policy, release, claim, scope, unit).await
+        }
+        super::model::Family::Activity => {
+            super::activity_execution::apply(pool, key, policy, release, claim, scope, unit).await
+        }
+        super::model::Family::History => Err(MigrationError::Conflict),
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

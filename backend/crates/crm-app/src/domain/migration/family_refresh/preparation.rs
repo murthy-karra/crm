@@ -11,7 +11,7 @@ pub(super) async fn begin(
     pool: &PgPool,
     claim: &Claim,
 ) -> Result<(Transaction<'static, Postgres>, PgRow, PgRow), MigrationError> {
-    admit(pool, claim, false).await
+    admit(pool, claim, false, &[]).await
 }
 /// Read-only proof adapters are reusable while a confirmed unit owns a live
 /// execution lease. Preparation mutations retain their stricter admission.
@@ -19,12 +19,20 @@ pub(super) async fn read_begin(
     pool: &PgPool,
     claim: &Claim,
 ) -> Result<(Transaction<'static, Postgres>, PgRow, PgRow), MigrationError> {
-    admit(pool, claim, true).await
+    admit(pool, claim, true, &[]).await
+}
+pub(super) async fn read_begin_members(
+    pool: &PgPool,
+    claim: &Claim,
+    members: &[Uuid],
+) -> Result<(Transaction<'static, Postgres>, PgRow, PgRow), MigrationError> {
+    admit(pool, claim, true, members).await
 }
 async fn admit(
     pool: &PgPool,
     claim: &Claim,
     allow_execution: bool,
+    members: &[Uuid],
 ) -> Result<(Transaction<'static, Postgres>, PgRow, PgRow), MigrationError> {
     if claim.epoch <= 0 {
         return Err(MigrationError::InvalidInput);
@@ -37,6 +45,10 @@ async fn admit(
     // immutable while preparing; it is rechecked below with the locked bundle.
     let executor=sqlx::query_scalar::<_,Uuid>("SELECT m.user_id FROM migration_family_refresh_bundle b JOIN organization_membership m ON m.organization_id=b.organization_id AND m.user_id=b.executor_user_id WHERE b.id=$1 AND b.organization_id=$2 AND m.role='admin' AND m.status='active' FOR SHARE OF m")
         .bind(claim.bundle).bind(claim.organization.0).fetch_optional(&mut *tx).await?.ok_or(MigrationError::Forbidden)?;
+    if !members.is_empty() {
+        sqlx::query("SELECT m.user_id FROM organization_membership m JOIN app_user u ON u.id=m.user_id WHERE m.organization_id=$1 AND m.user_id=ANY($2) ORDER BY m.user_id FOR SHARE OF m")
+            .bind(claim.organization.0).bind(members).fetch_all(&mut *tx).await?;
+    }
     if allow_execution {
         sqlx::query("SELECT id FROM organization WHERE id=$1 FOR UPDATE")
             .bind(claim.organization.0)

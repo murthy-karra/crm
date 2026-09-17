@@ -135,6 +135,14 @@ async fn begin<'a>(
     let parent = activity_review::review_binding(&mut tx, org, person)
         .await?
         .ok_or(ReviewError::NotFound)?;
+    // Until the version-aware projection is installed, a corrected identity
+    // must never fall back to its immutable first-import display. Metadata and
+    // activity refresh readers can already use the common capability barrier.
+    let corrected: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM migration_family_refresh_history_head WHERE organization_id=$1 AND person_id=$2 AND version>1)")
+        .bind(org.0).bind(person.0).fetch_one(&mut *tx).await?;
+    if corrected {
+        return Err(ReviewError::Unavailable);
+    }
     let state = sqlx::query(STATE_SQL)
         .bind(org.0)
         .bind(person.0)

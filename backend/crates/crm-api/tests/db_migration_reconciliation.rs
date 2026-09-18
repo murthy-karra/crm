@@ -84,9 +84,26 @@ async fn reconciliation_is_bounded_tenant_scoped_and_review_only(migrator: PgPoo
     let fixture = import_support::fixture(&migrator, import_support::default_people()).await;
     let import_id = completed_import(&fixture).await;
 
-    let summary = reconciliation::summary(&fixture.pool, &fixture.ctx, import_id)
+    // Existing import detail takes the Organization row before the import row.
+    // A snapshot-only report must not invert that order by locking its joined
+    // import first and then waiting on this Organization row.
+    let mut detail_tx = fixture.pool.begin().await.unwrap();
+    workspace::shared(&mut detail_tx, fixture.ctx.organization_id)
         .await
         .unwrap();
+    sqlx::query("SELECT id FROM organization WHERE id=$1 FOR UPDATE")
+        .bind(fixture.org)
+        .fetch_one(&mut *detail_tx)
+        .await
+        .unwrap();
+    let summary = tokio::time::timeout(
+        std::time::Duration::from_secs(3),
+        reconciliation::summary(&fixture.pool, &fixture.ctx, import_id),
+    )
+    .await
+    .expect("report must not wait on import-detail row locks")
+    .unwrap();
+    detail_tx.rollback().await.unwrap();
     let value = serde_json::to_value(&summary).unwrap();
     assert_eq!(value["original_import_id"], json!(import_id));
     assert_eq!(value["review_hold"], true);

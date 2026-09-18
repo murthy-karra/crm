@@ -76,7 +76,6 @@ JOIN migration_workspace w ON w.organization_id=i.organization_id AND w.import_i
 JOIN organization o ON o.id=i.organization_id
 WHERE i.id=$1 AND i.organization_id=$2 AND i.state='completed'
   AND i.confirmed_plan_id=w.plan_id
-FOR SHARE OF i,o
 "#;
 
 /// Query 2: one bounded row per lineage run. Successful People are fenced

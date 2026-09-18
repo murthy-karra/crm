@@ -7,6 +7,15 @@ completed chronology. Decisions remain authoritative; use the
 
 ## Current state
 
+**Local migration follow-up:** `codex/migration-completion` integrates the
+coverage inventory, repeated-refresh head fix and regressions, and the
+administrator reconciliation report. Functional/database tests, the sixteen-step
+browser journey, and seven exact query plans at 25,000 People / 50 members passed.
+Final integration checks passed; evidence is tracked in the
+[verification record](../reviews/migration-completion-2026-09-17.md).
+This branch is not merged or deployed. Live FUB qualification and unsupported
+destination families remain deferred; the report exposes those gaps.
+
 **010e6 recovery is accepted under D-090 and implemented on
 `main` as `2a4c207`; final verification passed and the local fast-forward merge is complete.** It creates positively
 proven mapping-held People once and supplies separate family handoffs. Independent

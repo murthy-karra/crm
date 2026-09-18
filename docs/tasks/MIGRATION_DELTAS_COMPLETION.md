@@ -5,6 +5,11 @@ not add a delta-cycle resource, source-deletion semantics, a polling worker,
 or shared-contract changes. It proves repeated retained-evidence refresh behavior
 already required by D-092. Live FUB/customer work and activation remain deferred.
 
+Implementation and the repeated-cycle/accounting regression are complete. The
+[integration verification record](../reviews/migration-completion-2026-09-17.md)
+owns the passing evidence and the existing-head advancement defect repaired
+during execution.
+
 ## Verified current behavior
 
 010g1 already provides the intended repeat-refresh substrate:

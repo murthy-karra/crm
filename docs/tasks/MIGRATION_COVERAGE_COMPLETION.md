@@ -6,6 +6,9 @@ owns only the static coverage taxonomy in
 tests. It makes no shared API/persistence contract change and authorizes no source
 call, customer processing, activation, deployment, merge or push.
 
+The inventory is implemented and integrated. Final verification is recorded in
+the [integration evidence](../reviews/migration-completion-2026-09-17.md).
+
 ## Decision and implementation baseline
 
 The source of truth is D-012, D-015, D-050 and D-059–D-092. The deployed

@@ -1,18 +1,20 @@
 //! Synthetic reconciliation contract, authorization, and tenant evidence.
 use axum::http::StatusCode;
+#[cfg(feature = "perf-harness")]
+use crm_api::domain::migration::family_refresh::{
+    commands::{self as family_refresh_commands, PrepareFamilyRefresh},
+    model::Family,
+};
 use crm_api::{
     auth::workspace::{self, ReleaseReadiness},
     domain::migration::{
-        family_refresh::{
-            commands::{self as family_refresh_commands, PrepareFamilyRefresh},
-            model::Family,
-        },
         imports::{self, AssigneeChoice, AssigneePatch, StageChoice, StagePatch},
         people_admission, people_admission_worker, reconciliation,
     },
 };
 use http_body_util::BodyExt;
 use serde_json::{json, Value};
+#[cfg(feature = "perf-harness")]
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -367,6 +369,7 @@ async fn reconciliation_deduplicates_history_identity_across_terminal_roots(migr
     assert_eq!(events["result_totals"]["applied"], "0");
     assert_eq!(events["result_totals"]["already_current"], "1");
 }
+#[cfg(feature = "perf-harness")]
 fn sql_sha256(sql: &str) -> String {
     Sha256::digest(sql.as_bytes())
         .iter()
@@ -374,6 +377,7 @@ fn sql_sha256(sql: &str) -> String {
         .collect()
 }
 
+#[cfg(feature = "perf-harness")]
 async fn explain(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     label: &str,
@@ -407,6 +411,7 @@ async fn explain(
     plan
 }
 
+#[cfg(feature = "perf-harness")]
 async fn explain_root(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     org: Uuid,
@@ -432,12 +437,13 @@ async fn explain_root(
     );
     let rows = plan[0]["Plan"]["Actual Rows"].as_f64().unwrap();
     assert!(
-        rows.is_finite() && rows >= 0.0 && rows <= 1.0,
+        rows.is_finite() && (0.0..=1.0).contains(&rows),
         "root returned {rows} rows"
     );
     plan
 }
 
+#[cfg(feature = "perf-harness")]
 #[sqlx::test]
 #[ignore = "D-050 one-shot plan evidence at the declared operating envelope"]
 async fn d050_query_plans_at_operating_envelope(migrator: PgPool) {

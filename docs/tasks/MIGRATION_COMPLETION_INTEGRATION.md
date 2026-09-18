@@ -1,6 +1,8 @@
 # Migration coverage, repeated refresh, and reconciliation
 
-Status: implementation in progress, 2026-09-17.
+Status: scoped implementation verified, 2026-09-17. The
+[verification record](../reviews/migration-completion-2026-09-17.md) owns final
+tests, review, query plans and residuals. Local branch only; not merged or deployed.
 
 ## Assigned scope
 

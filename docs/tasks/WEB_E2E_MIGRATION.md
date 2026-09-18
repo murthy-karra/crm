@@ -28,8 +28,10 @@ The follow-up on `codex/migration-completion` extends the final step with the
 unified reconciliation panel: original People counts, separate metadata/activity/
 history results, per-family completed refresh plans after an activity remainder,
 explicit standalone-tag coverage gaps, uncached administrator-only responses,
-member/foreign-Organization denial, and a 390-pixel-wide panel capture. This
-extension's final verification is recorded separately from the earlier run below.
+member/foreign-Organization denial, and 390-pixel-wide panel/evidence captures.
+Final run `c2f53c28447d` passed all sixteen steps with `verified_empty` cleanup;
+the [follow-up verification record](../reviews/migration-completion-2026-09-17.md)
+owns its evidence, the acceptance deadlock repair and remaining boundaries.
 
 The private source fixture has two deterministic source versions. A private
 control also gates execution in the fixture-owned refresh worker scheduler, so

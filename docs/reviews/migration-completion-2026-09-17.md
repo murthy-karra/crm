@@ -1,7 +1,7 @@
 # Migration coverage, repeated refresh, and reconciliation verification
 
-Status: integration verification in progress. This record does not yet declare
-the branch ready to merge.
+Status: scoped implementation verified on `codex/migration-completion`.
+Ready for merge review; not merged, pushed or deployed.
 
 ## Scope
 
@@ -36,6 +36,16 @@ and live FUB qualification remain open, explicitly represented as gaps.
   `/tmp/crm-migration-repeat-final.log`. It additionally checks terminal manifests,
   plan counts/positions/bytes, zero reservations, and preserving the earlier
   note result after a task-only remainder.
+- The same regression passed again after the lineage counting repairs: 1 test,
+  20.50 seconds, `/tmp/crm-migration-repeat-final-reviewed.log`.
+- All five reconciliation database cases passed after the deadlock repair,
+  including a held-Organization-row-lock regression: 55.92 seconds,
+  `/tmp/crm-reconciliation-final-lock-regression.log`.
+- The final migration browser run `c2f53c28447d` passed all sixteen steps with
+  the deadlock repair and `verified_empty` cleanup. The unchanged 390px panel
+  and evidence-reference layout were visually inspected in the earlier passing
+  run `5babfff39af2`; the final run also produced both screenshots. Evidence:
+  `.e2e/runs/c2f53c28447d/migration-1-a1/`.
 
 The family regression used the real typed commands, worker execution, guards
 and database constraints. The existing-head fix is committed as `205d831`:
@@ -61,6 +71,12 @@ exactly one affected row required, unchanged transaction and storage payer.
   `a442297e929d` stopped because build inputs changed while the image was
   building. Neither run is browser acceptance evidence; final execution must
   use a stable tree.
+- Browser run `c4f92c297be2` exposed a real lock-order deadlock between the
+  report's import-then-Organization row locks and the existing import reader's
+  Organization-then-import locks. Commit `b5a6471` removes unnecessary report
+  row locks. REPEATABLE READ, the shared workspace advisory lock and membership
+  authority lock remain. A deterministic concurrent-row-lock regression and
+  the final browser rerun passed.
 
 ## Independent review
 
@@ -80,15 +96,80 @@ repair set is:
 
 The reviewer found no blocker in the narrow refresh-head mutation fix, static
 coverage inventory, authorization/workspace/tenant/snapshot/cache/response-size
-fences, or stale-response lifecycle. Round two will verify the backend repairs
-and final acceptance evidence; no third review round is planned.
+fences, or stale-response lifecycle. Two substantive review rounds were used.
 
-## Remaining gates
+Round two approved the lineage repairs after five focused DB cases passed.
+The later deadlock was found by acceptance execution; the reviewer inspected
+that narrow fix and confirmed that workspace/authority fences and snapshot
+consistency remain intact. This was an acceptance-fix inspection, not another
+substantive review round. The reviewer independently matched all seven SQL hashes
+to the final root and approved the plan gate. Final integration checks passed.
 
-- Integrate and verify review repairs.
-- Run the strengthened repeated-cycle PostgreSQL regression and final reader
-  tests serially.
-- Inspect exact query plans at 25,000 People / 50 memberships.
-- Complete the full repository gate and real migration Playwright journey;
-  inspect the 390px screenshots.
-- Record the independent review disposition, final tested tree, and residuals.
+## Plan evidence
+
+One successful final `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` run covers all seven
+exact exported report statements, including the final lock-free root lookup.
+The fixture contains 25,000 People, 50 members, 25,000 selected rows per initial
+ledger, 25,000 distinct refresh cohorts, 75,000 refresh manifests/results across
+three families, and 25,000 warning captures. Superseded initial plan rows are
+reported separately, not silently excluded from total retained volume.
+
+The plan fixture uses existing development administrator credentials only to
+seed inert cardinality in a disposable database transaction. It restores normal
+trigger behavior before EXPLAIN and rolls back all scale rows. No application
+or migrator privilege was changed. This fixture proves plan shape, not mutation,
+encryption or source fidelity. Normal functional tests retain their real guards.
+
+| Statement | Execution ms | Output rows |
+| --- | ---: | ---: |
+| Root | 0.066 | 1 |
+| Cohorts | 76.392 | 1 |
+| Metadata totals | 46.972 | 1 |
+| Activity totals | 99.947 | 2 |
+| History totals | 154.114 | 3 |
+| Latest refresh | 1,301.142 | 6 |
+| Source warnings | 34.571 | 6 |
+
+Inspection found bounded ledger scans/hash joins and indexed cohort probes,
+not a full-ledger scan repeated for each Person. Whole-tenant aggregate scans
+are expected when the fixture's rows all belong to the requested tenant.
+The latest-refresh query performs a fixed six-family expansion and uses
+`family_refresh_manifest_cohort_page`. History sorting spilled 636/637 temporary
+read/write blocks; latest refresh spilled 1,509/1,512. These costs and timings
+are reported trends, not absolute latency or production-capacity gates.
+
+Raw plans, exact SQL hashes and bindings are retained under
+`/private/tmp/crm-reconciliation-plan-evidence/`; the successful exit-zero log is
+`/private/tmp/crm-reconciliation-plans-final.log` (66.18 seconds including setup).
+Earlier fixture-only failures (privileged setup, confirmed-vs-retained counting,
+and decimal EXPLAIN row parsing) are retained in separately named failure logs.
+They are not passing plan evidence.
+
+This is a new administrator report, with no prior endpoint to pair against.
+Person and Today read paths are unchanged; no new capacity claim or benchmark
+matrix is introduced.
+
+## Final integration gate and residuals
+
+The final `./scripts/check` after production fix `b5a6471`, fixture integration
+`2d6b5a7`, and opt-in feature gating passed with exit zero in 144 seconds:
+1,047 Rust tests, five doctests, 1,334 Web tests, format/lint, production
+compilation, Web build, runner tests and email-worker tests. Log:
+`/tmp/crm-migration-final-check.log`. Build outputs were isolated under
+`/tmp/crm-merge-ready-target` and `/tmp/crm-migration-integration-web`.
+
+The scale fixture and its helpers are behind the existing `perf-harness`
+feature, keeping privileged scale setup out of the ordinary ignored DB suite.
+Its final feature-specific lint/compilation also passed:
+`cargo clippy -p crm-api --test all --features perf-harness --locked -- -D warnings`,
+log `/tmp/crm-reconciliation-perf-feature-check.log`. The feature guard and
+equivalent range-contains lint correction do not change the measured statements
+or fixture data; the completed plan evidence remains applicable.
+
+Focused DB and browser acceptance above are the database evidence for this
+change; a full `scripts/check-db` run is not claimed.
+
+Live FUB qualification, missing destination domains, privacy/erasure policy and
+workspace activation remain deferred. Coverage flags expose these gaps; neither
+synthetic acceptance nor this report declares complete migration fidelity or
+cutover readiness. Shared development remains unchanged.

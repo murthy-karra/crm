@@ -215,6 +215,13 @@ transaction-local inaccessible captures. The evidence records exact SQL, SHA-256
 typed bindings, returned-row ceilings, and `EXPLAIN (ANALYZE, BUFFERS, FORMAT
 JSON)`. It reads capture metadata but never selects or decrypts retained payloads.
 
+The scale test is gated by the existing `perf-harness` feature, so the normal
+ignored database suite runs only the five functional reconciliation tests. To
+run the one-shot fixture explicitly, use `cargo test -p crm-api --test all
+--features perf-harness --locked
+db_migration_reconciliation::d050_query_plans_at_operating_envelope -- --ignored
+--test-threads=1 --nocapture` with an administrator-owned disposable test database.
+
 Inert cardinality copies require the existing development PostgreSQL superuser
 so the rolled-back transaction can suppress row/FK triggers. The fixture restores
 `session_replication_role=origin` before ANALYZE and every EXPLAIN. This grants

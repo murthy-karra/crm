@@ -1871,7 +1871,7 @@ pub(crate) async fn activity_execution_scenario(pool: PgPool, mode: u8) {
     f.reader.set_records(
         Stream::TasksOpen,
         vec![
-            changed,
+            changed.clone(),
             db_activity_source::task(22),
             db_activity_source::task(23),
         ],
@@ -2554,20 +2554,7 @@ pub(crate) async fn activity_execution_scenario(pool: PgPool, mode: u8) {
     // Finish the second retained cycle through the ordinary exact-remainder
     // path. The applied tail must carry the first refresh's baseline/head,
     // rather than regenerating a new identity from source equality.
-    for turn in 0..80 {
-        worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap();
-        let state: String =
-            sqlx::query_scalar("SELECT state FROM migration_family_refresh_plan WHERE id=$1")
-                .bind(next.families[0].plan_id)
-                .fetch_one(&pool)
-                .await
-                .unwrap();
-        if state == "ready" {
-            break;
-        }
-        assert!(turn < 79, "second cycle did not seal");
-    }
-    let second_plan = next.families[0].plan_id;
+    let second_plan = map_repeat_activity(&f, next.bundle_id, next.families[0].plan_id).await;
     let sealed = sqlx::query("SELECT b.revision AS bundle_revision,encode(b.digest,'hex') AS bundle_digest,p.revision,encode(p.digest,'hex') AS digest,p.counts FROM migration_family_refresh_bundle b JOIN migration_family_refresh_plan p ON p.bundle_id=b.id AND p.organization_id=b.organization_id WHERE p.id=$1")
         .bind(second_plan).fetch_one(&pool).await.unwrap();
     confirmation::confirm(
@@ -2659,20 +2646,7 @@ pub(crate) async fn activity_execution_scenario(pool: PgPool, mode: u8) {
     )
     .await
     .unwrap();
-    let third_plan = third.families[0].plan_id;
-    for turn in 0..100 {
-        worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap();
-        let state: String =
-            sqlx::query_scalar("SELECT state FROM migration_family_refresh_plan WHERE id=$1")
-                .bind(third_plan)
-                .fetch_one(&pool)
-                .await
-                .unwrap();
-        if state == "ready" {
-            break;
-        }
-        assert!(turn < 99, "third cycle did not seal");
-    }
+    let third_plan = map_repeat_activity(&f, third.bundle_id, third.families[0].plan_id).await;
     let sealed = sqlx::query("SELECT b.revision AS bundle_revision,encode(b.digest,'hex') AS bundle_digest,p.revision,encode(p.digest,'hex') AS digest,p.counts FROM migration_family_refresh_bundle b JOIN migration_family_refresh_plan p ON p.bundle_id=b.id AND p.organization_id=b.organization_id WHERE p.id=$1")
         .bind(third_plan).fetch_one(&pool).await.unwrap();
     sqlx::query(
@@ -2737,9 +2711,84 @@ pub(crate) async fn activity_execution_scenario(pool: PgPool, mode: u8) {
         .unwrap(),
         head_before
     );
-    assert_eq!(sqlx::query_scalar::<_,String>("SELECT r.reason FROM migration_family_refresh_result r JOIN migration_family_refresh_manifest u ON u.id=r.manifest_id AND u.organization_id=r.organization_id WHERE r.plan_id=$1 AND r.disposition='held' AND u.source_id='22'").bind(third_plan).fetch_one(&pool).await.unwrap(),"local_change");
+    assert_eq!(sqlx::query_scalar::<_,String>("SELECT r.reason FROM migration_family_refresh_result r JOIN migration_family_refresh_manifest u ON u.id=r.manifest_id AND u.organization_id=r.organization_id JOIN migration_family_refresh_source s ON s.id=u.source_row_id AND s.organization_id=u.organization_id WHERE r.plan_id=$1 AND r.disposition='held' AND u.kind='task' AND s.source_id='22'").bind(third_plan).fetch_one(&pool).await.unwrap(),"local_change");
     assert_eq!(sqlx::query_scalar::<_,String>("SELECT r.reason FROM migration_family_refresh_result r JOIN migration_family_refresh_manifest u ON u.id=r.manifest_id AND u.organization_id=r.organization_id WHERE r.plan_id=$1 AND r.disposition='held' AND u.source_id='21'").bind(third_plan).fetch_one(&pool).await.unwrap(),"source_not_observed");
     assert!(sqlx::query_scalar::<_,bool>("SELECT EXISTS(SELECT 1 FROM task WHERE organization_id=$1 AND source_external_id LIKE '%:21' AND deleted_at IS NULL)").bind(f.org).fetch_one(&pool).await.unwrap());
+}
+
+// Each new capture requires its own explicit reviewed mapping choices. A prior
+// accepted baseline is ownership evidence, not permission to reuse mappings.
+async fn map_repeat_activity(
+    f: &import_support::Fixture,
+    bundle: Uuid,
+    initial_plan: Uuid,
+) -> Uuid {
+    use crm_api::domain::migration::family_refresh::{
+        mapping_selection::{MappingPatch, Selection},
+        plan_commands::{self, PlanFamilyRefresh},
+    };
+    async fn seal(f: &import_support::Fixture, plan: Uuid) {
+        for turn in 0..100 {
+            worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap();
+            let state: String =
+                sqlx::query_scalar("SELECT state FROM migration_family_refresh_plan WHERE id=$1")
+                    .bind(plan)
+                    .fetch_one(&f.pool)
+                    .await
+                    .unwrap();
+            if state == "ready" {
+                return;
+            }
+            assert!(turn < 99, "repeat cycle did not seal: {state}");
+        }
+    }
+    seal(f, initial_plan).await;
+    let mappings =
+        sqlx::query("SELECT id,kind FROM migration_family_refresh_mapping WHERE plan_id=$1")
+            .bind(initial_plan)
+            .fetch_all(&f.pool)
+            .await
+            .unwrap();
+    let patches = mappings
+        .into_iter()
+        .map(|row| MappingPatch {
+            mapping_id: row.get("id"),
+            choice: match row.get::<String, _>("kind").as_str() {
+                "task_kind" => Selection::Kind {
+                    kind: crm_api::domain::task::TaskKind::Call,
+                },
+                "task_assignee" => Selection::Existing {
+                    target_id: f.member,
+                },
+                _ => Selection::Existing { target_id: f.actor },
+            },
+        })
+        .collect();
+    let revision: i64 =
+        sqlx::query_scalar("SELECT revision FROM migration_family_refresh_bundle WHERE id=$1")
+            .bind(bundle)
+            .fetch_one(&f.pool)
+            .await
+            .unwrap();
+    let planned = plan_commands::plan(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &f.ctx,
+        bundle,
+        PlanFamilyRefresh {
+            request_id: Uuid::new_v4(),
+            expected_revision: revision.to_string(),
+            family: Family::Activity,
+            patches,
+            source_timezone: None,
+        },
+    )
+    .await
+    .unwrap();
+    let plan = planned.families[0].plan_id;
+    seal(f, plan).await;
+    plan
 }
 
 #[sqlx::test]

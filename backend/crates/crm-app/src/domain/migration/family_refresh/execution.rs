@@ -244,7 +244,25 @@ pub(super) async fn finish_inserted(
     result: ResultUnit,
 ) -> Result<Progress, MigrationError> {
     if result.data.after_state.is_some() {
-        let changed=sqlx::query("INSERT INTO migration_family_refresh_head(organization_id,source_account_id,kind,source_key_hmac,person_id,target_id,result_id,version,storage_plan_id) SELECT $1,b.source_account_id,$3,$4,$5,$6,$7,1,$8 FROM migration_family_refresh_bundle b WHERE b.id=$2 AND b.organization_id=$1 ON CONFLICT(organization_id,source_account_id,kind,source_key_hmac) DO UPDATE SET result_id=EXCLUDED.result_id,version=migration_family_refresh_head.version+1 WHERE migration_family_refresh_head.result_id IS NOT DISTINCT FROM $9::uuid").bind(claim.organization.0).bind(claim.bundle).bind(unit.get::<String,_>("kind")).bind(unit.get::<Vec<u8>,_>("source_key_hmac")).bind(result.person).bind(result.target).bind(result_id).bind(claim.plan).bind(unit.get::<Option<Uuid>,_>("expected_head_id")).execute(&mut *tx).await?.rows_affected();
+        // PostgreSQL invokes BEFORE INSERT triggers before resolving an upsert
+        // conflict. Existing heads must take the guarded UPDATE path directly:
+        // the insertion guard correctly rejects a non-null expected head.
+        let expected_head = unit.get::<Option<Uuid>, _>("expected_head_id");
+        let changed = if let Some(expected) = expected_head {
+            sqlx::query("UPDATE migration_family_refresh_head h SET result_id=$7,version=h.version+1 FROM migration_family_refresh_bundle b WHERE b.id=$2 AND b.organization_id=$1 AND h.organization_id=$1 AND h.source_account_id=b.source_account_id AND h.kind=$3 AND h.source_key_hmac=$4 AND h.person_id=$5 AND h.target_id=$6 AND h.result_id=$8")
+                .bind(claim.organization.0).bind(claim.bundle)
+                .bind(unit.get::<String, _>("kind"))
+                .bind(unit.get::<Vec<u8>, _>("source_key_hmac"))
+                .bind(result.person).bind(result.target).bind(result_id).bind(expected)
+                .execute(&mut *tx).await?.rows_affected()
+        } else {
+            sqlx::query("INSERT INTO migration_family_refresh_head(organization_id,source_account_id,kind,source_key_hmac,person_id,target_id,result_id,version,storage_plan_id) SELECT $1,b.source_account_id,$3,$4,$5,$6,$7,1,$8 FROM migration_family_refresh_bundle b WHERE b.id=$2 AND b.organization_id=$1 ON CONFLICT(organization_id,source_account_id,kind,source_key_hmac) DO NOTHING")
+                .bind(claim.organization.0).bind(claim.bundle)
+                .bind(unit.get::<String, _>("kind"))
+                .bind(unit.get::<Vec<u8>, _>("source_key_hmac"))
+                .bind(result.person).bind(result.target).bind(result_id).bind(claim.plan)
+                .execute(&mut *tx).await?.rows_affected()
+        };
         if changed != 1 {
             return Err(MigrationError::Conflict);
         }

@@ -145,6 +145,9 @@ was performed. Re-inventory actual workloads before later confirmations.
 
 ## Parked / queued tracks
 
+- **Migration follow-up:** parked at the user's request after the verified
+  local integration. The [migration backlog](MIGRATION_BACKLOG.md) owns remaining
+  release, source qualification, fidelity, cutover and optional follow-up work.
 - **Mobile design/system information and physical-phone/cellular testing:**
   explicitly user-deferred. Preserve essential saved-work/access/sync feedback.
   [Device follow-up](../tasks/MOBILE_001_PHYSICAL_DEVICE_FOLLOWUP.md) owns prerequisites.

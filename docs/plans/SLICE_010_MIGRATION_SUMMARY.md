@@ -6,6 +6,7 @@ The [release record](../tasks/SLICE_010g1_RELEASE.md) owns deployed identity and
 evidence. The current [migration completion follow-up](../tasks/MIGRATION_COMPLETION_INTEGRATION.md)
 adds an explicit coverage inventory, a unified retained-result reader, and
 multi-cycle verification on a separate local branch; it is not deployed.
+Remaining work is parked in the [migration backlog](MIGRATION_BACKLOG.md).
 
 The user selected a new, empty CRM Organization first (D-059), then approved
 API-first assessment and encrypted saved credentials (D-060). Unsupported

@@ -159,8 +159,10 @@ review-ineligible migration errors apply.
 
 Open one REPEATABLE READ transaction before resolving the original import. The
 endpoint is application-level read-only, but the transaction is not PostgreSQL
-READ ONLY because the existing membership/workspace guards take share locks.
-All source, cohort, outcome, head, and taxonomy-derived cells use that transaction.
+READ ONLY because the existing authorization guards may lock membership state. The
+root projection itself takes no row lock; REPEATABLE READ supplies the consistent
+snapshot without conflicting with migration lifecycle lock order. All source,
+cohort, outcome, manifest, and taxonomy-derived cells use that transaction.
 workspace_revision is the workspace revision observed in it. Concurrent
 import, repair, remainder, or refresh activity cannot mix a response; a later
 request can observe a later whole snapshot.
@@ -195,13 +197,29 @@ The exact statements are exported as public constants in `reconciliation.rs`:
 Static `coverage_inventory` is the eighth in-process input and performs no SQL.
 Latest refresh selection ranks by dynamic manifest kind before choosing a plan,
 so task-only or calls-only remainders cannot erase earlier note/event evidence.
-Admission totals collapse terminal attempts by stable source key: any settled identity in the grouped origin is applied once; otherwise the latest item is categorized once as already-current, held, excluded, or unprocessed. Metadata and activity retain the latest stable source unit per grouped origin. History HMAC identities retain only the latest terminal outcome, while identityless facts use their retained observation/ordinal as the honest lineage key. Source warnings cover original, confirmed admission/recovery, and family-refresh snapshots and retain one representative evidence ID per fixed family/code category.
+Admission totals collapse terminal attempts by stable source key: any settled
+identity in the grouped origin is applied once; otherwise the latest item is
+categorized once as already-current, held, excluded, or unprocessed. Metadata
+and activity retain the latest stable source unit per grouped origin. History
+HMAC identities retain only the latest terminal outcome, while identityless
+facts use their retained observation/ordinal as the honest lineage key. Source
+warnings cover original, confirmed admission/recovery, and family-refresh
+snapshots and retain one representative evidence ID per fixed family/code
+category.
 
-The DB test fixture should include the realistic 25k-Person baseline and run
-EXPLAIN (ANALYZE, BUFFERS) for queries 2–5. Expected plan shape is existing
-composite parent/result indexes, keyset/parent scopes, and no broad scan of
-mutable business tables or raw encrypted payloads. Run this D-050 plan check only
-when the root grants the serial DB slot.
+The one-shot D-050 fixture explains all seven exported statements at 25,000
+People and 50 members. Each selected original ledger has 25,000 manifests. The
+refresh shape has 25,000 distinct Person cohorts and 25,000 manifests/results
+for each of metadata, activity, and history. The source-warning shape has 25,000
+transaction-local inaccessible captures. The evidence records exact SQL, SHA-256,
+typed bindings, returned-row ceilings, and `EXPLAIN (ANALYZE, BUFFERS, FORMAT
+JSON)`. It reads capture metadata but never selects or decrypts retained payloads.
+
+Inert cardinality copies require the existing development PostgreSQL superuser
+so the rolled-back transaction can suppress row/FK triggers. The fixture restores
+`session_replication_role=origin` before ANALYZE and every EXPLAIN. This grants
+nothing to `crm_app` or `crm_migrator` and is not runtime mutation evidence. Run
+the check only in the root-granted serial database slot.
 
 ## Synthetic acceptance
 
@@ -228,8 +246,18 @@ uses a dedicated CARGO_TARGET_DIR without touching shared-development artifacts.
 
 ## Verification status
 
-The three focused PostgreSQL reconciliation cases passed on 2026-09-17 using
-`CARGO_TARGET_DIR=/private/tmp/crm-reconciliation-target`; the retained log is
-`/private/tmp/crm-reconciliation-db-final.log`. The realistic 25k-Person
-`EXPLAIN (ANALYZE, BUFFERS)` evidence remains a required integration gate and is
-not claimed by this lane's functional run.
+Five focused PostgreSQL reconciliation cases passed on 2026-09-17 using
+`CARGO_TARGET_DIR=/private/tmp/crm-reconciliation-target`; the retained final
+correctness log is `/private/tmp/crm-reconciliation-correctness-final.log`. It
+includes positive ledgers, authorization/tenant bounds, recovery grouping, and
+two-terminal admission/history deduplication. The realistic plan evidence is
+retained at `/private/tmp/crm-reconciliation-plans-final.log`, with the seven
+raw JSON plans in `/private/tmp/crm-reconciliation-plan-evidence/`. The one-shot
+runner passed in 66.18 seconds. Statement execution times were 0.066 ms for the
+root, 76.392 ms for cohorts, 46.972 ms for metadata, 99.947 ms for activity,
+154.114 ms for history, 1,301.142 ms for latest refresh, and 34.571 ms for
+source warnings. The plans use linear ledger scans with hash/aggregate joins or
+indexed selected-result lookups; no statement repeatedly scans a full ledger
+per Person. History spilled 636/637 temporary blocks and latest refresh spilled
+1,509/1,512 temporary blocks at this envelope. Those spills are a trend to
+monitor rather than an absolute developer-machine latency gate.

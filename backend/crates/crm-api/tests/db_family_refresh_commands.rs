@@ -2590,6 +2590,27 @@ pub(crate) async fn activity_execution_scenario(pool: PgPool, mode: u8) {
     )
     .await;
 
+    // A task-only remainder must not erase the note outcome already settled
+    // by its predecessor, even though both kinds share an Activity plan.
+    let reconciled = crm_api::domain::migration::reconciliation::summary(&f.pool, &f.ctx, parent)
+        .await
+        .unwrap();
+    let value = serde_json::to_value(reconciled).unwrap();
+    let families = value["families"].as_array().unwrap();
+    let notes = families
+        .iter()
+        .find(|family| family["coverage"]["family"] == "notes")
+        .unwrap();
+    let note = &notes["cohorts"][0]["latest_bundle"];
+    assert_eq!(note["bundle_id"], next.bundle_id.to_string());
+    assert_eq!(note["outcome_totals"]["already_current"], "1");
+    let tasks = families
+        .iter()
+        .find(|family| family["coverage"]["family"] == "tasks")
+        .unwrap();
+    let latest_tasks = &tasks["cohorts"][0]["latest_bundle"];
+    assert_ne!(latest_tasks["bundle_id"], next.bundle_id.to_string());
+    assert_eq!(latest_tasks["state"], "completed");
     let task_22: Uuid = sqlx::query_scalar(
         "SELECT id FROM task WHERE organization_id=$1 AND source_external_id LIKE '%:22'",
     )
@@ -2689,6 +2710,47 @@ pub(crate) async fn activity_execution_scenario(pool: PgPool, mode: u8) {
         worker::release(&f.pool, &claim).await.unwrap();
         assert!(turn < 29);
     }
+    let final_plans = sqlx::query("SELECT p.*, (SELECT count(*) FROM migration_family_refresh_result r WHERE r.plan_id=p.id AND r.organization_id=p.organization_id) AS result_count, (SELECT count(*) FROM migration_family_refresh_manifest m WHERE m.plan_id=p.id AND m.organization_id=p.organization_id AND m.inherited_result_id IS NULL AND NOT EXISTS(SELECT 1 FROM migration_family_refresh_result r WHERE r.manifest_id=m.id AND r.organization_id=m.organization_id)) AS unfinished FROM migration_family_refresh_plan p WHERE p.organization_id=$1 AND p.state='completed'")
+        .bind(f.org).fetch_all(&pool).await.unwrap();
+    assert!(
+        final_plans.len() >= 3,
+        "every capture must reach a completed execution, including the second-cycle remainder"
+    );
+    assert!(
+        final_plans
+            .iter()
+            .any(|p| p.get::<Uuid, _>("id") == third_plan),
+        "third cycle must be completed"
+    );
+    for row in final_plans {
+        let totals: Counts = serde_json::from_value(row.get("results")).unwrap();
+        assert!(totals.reconciles());
+        assert_eq!(
+            row.get::<i64, _>("unfinished"),
+            0,
+            "completed plan cannot leave a manifest without its terminal result"
+        );
+        assert_eq!(
+            row.get::<i64, _>("apply_position"),
+            row.get::<i64, _>("position")
+        );
+        assert_eq!(totals.units as i64, row.get::<i64, _>("result_count"));
+        assert_eq!(
+            totals.units as i64,
+            row.get::<i64, _>("position") - row.get::<i64, _>("inherited_position")
+        );
+        assert_eq!(
+            row.get::<i64, _>("measured_bytes"),
+            row.get::<i64, _>("retained_bytes")
+        );
+        assert_eq!(row.get::<i64, _>("reserved_bytes"), 0);
+    }
+    assert!(!sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM migration_family_refresh_bundle WHERE organization_id=$1 AND shared_measured_bytes<>shared_retained_bytes)")
+        .bind(f.org).fetch_one(&pool).await.unwrap(), "shared evidence must remain charged exactly once across cycles");
+    sqlx::raw_sql(include_str!("fixtures/family_refresh_byte_inventory.sql"))
+        .execute(&pool)
+        .await
+        .unwrap();
     assert_eq!(
         sqlx::query_scalar::<_, String>(
             "SELECT title FROM task WHERE id=$1 AND organization_id=$2",
@@ -2787,6 +2849,45 @@ async fn map_repeat_activity(
     .await
     .unwrap();
     let plan = planned.families[0].plan_id;
+    // Source rows use UUID keyset order. Freeze the note first through the real
+    // preparation path so cancellation reliably leaves a task-only remainder.
+    for turn in 0..100 {
+        worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap();
+        if sqlx::query_scalar::<_, bool>(
+            "SELECT mappings_complete FROM migration_family_refresh_plan WHERE id=$1",
+        )
+        .bind(plan)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap()
+        {
+            break;
+        }
+        assert!(turn < 99, "repeat mappings did not complete");
+    }
+    let claim = worker::claim_next(&f.pool).await.unwrap().unwrap();
+    assert_eq!(claim.plan, plan);
+    let cohort: Uuid = sqlx::query_scalar("SELECT id FROM migration_family_refresh_cohort WHERE bundle_id=$1 AND source_person_id='101'")
+        .bind(bundle).fetch_one(&f.pool).await.unwrap();
+    use crm_api::domain::migration::family_refresh::{activity_plan, model::Kind};
+    let activity_plan::Prepared::Unit(note) =
+        activity_plan::prepare_unit(&f.pool, &f.key, &f.policy, &claim, cohort, Kind::Note, "11")
+            .await
+            .unwrap()
+    else {
+        panic!("note must be prepared");
+    };
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT position FROM migration_family_refresh_manifest WHERE id=$1"
+        )
+        .bind(note)
+        .fetch_one(&f.pool)
+        .await
+        .unwrap(),
+        1
+    );
+    worker::release(&f.pool, &claim).await.unwrap();
     seal(f, plan).await;
     plan
 }

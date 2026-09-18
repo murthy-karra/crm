@@ -24,6 +24,13 @@ metadata/activity/history refresh, cancellation of one confirmed family, and its
 exact unfinished remainder. SQL assertions are read-only and check authoritative
 results alongside actual browser operations and HTTP receipts.
 
+The follow-up on `codex/migration-completion` extends the final step with the
+unified reconciliation panel: original People counts, separate metadata/activity/
+history results, per-family completed refresh plans after an activity remainder,
+explicit standalone-tag coverage gaps, uncached administrator-only responses,
+member/foreign-Organization denial, and a 390-pixel-wide panel capture. This
+extension's final verification is recorded separately from the earlier run below.
+
 The private source fixture has two deterministic source versions. A private
 control also gates execution in the fixture-owned refresh worker scheduler, so
 cancellation happens after confirmation and before execution without relying on

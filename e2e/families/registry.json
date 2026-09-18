@@ -135,7 +135,7 @@
       "Review combined metadata activity and history refresh",
       "Cancel one confirmed family while other families finish",
       "Apply the exact unfinished activity remainder",
-      "Reload retained migration results and prove isolation"
+      "Reconcile retained family results and coverage gaps and prove isolation"
     ]
   },
   "calls": {

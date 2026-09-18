@@ -12,6 +12,7 @@ import AdmittedMetadataImportPanel from '../components/migration/AdmittedMetadat
 import MetadataImportPanel from '../components/migration/MetadataImportPanel.vue'
 import ActivityImportPanel from '../components/migration/ActivityImportPanel.vue'
 import FamilyRefreshPanel from '../components/migration/FamilyRefreshPanel.vue'
+import MigrationReconciliationPanel from '../components/migration/MigrationReconciliationPanel.vue'
 import AdmittedHistoryImportPanel from '../components/migration/AdmittedHistoryImportPanel.vue'
 import AdmittedActivityImportPanel from '../components/migration/AdmittedActivityImportPanel.vue'
 import HistoryCapturePanel from '../components/migration/HistoryCapturePanel.vue'
@@ -517,6 +518,7 @@ async function openRecoveryStep(step:import('../api/peopleAdmissions').RecoveryF
     />
 
     <FamilyRefreshPanel :refresh-workspace="refreshWorkspace" />
+    <MigrationReconciliationPanel />
 
     <PeopleRefreshPanel
       :refresh-workspace="refreshWorkspace"

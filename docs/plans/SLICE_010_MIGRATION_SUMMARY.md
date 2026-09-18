@@ -1,13 +1,17 @@
 # Slice 010 — FUB migration planning summary
 
-**Status: 010a DEPLOYED AND VERIFIED (2026-09-11); live FUB validation deferred.
-010b core-first capture/preview is also deployed and verified under D-063;
-010c, 010f1, 010f2, 010d1, 010d2, 010e1 and 010e2 are also deployed and verified under their accepted decisions and follow-ups (through 2026-09-13).** The user
-selected **a new, empty CRM Organization first** (D-059), then approved 010a's
-API-first assessment and encrypted saved credentials (D-060). Unaccepted
-later-rung recommendations remain proposals. Initial survey used main `b2fb368`, after 019b;
-010c code findings use main `c6c5930`, after 010b's release.
-No FUB account was connected or customer data fetched.
+**Status: 010g1 combined family refresh and 010e6 recovery are released to
+shared development (2026-09-17); live FUB qualification remains deferred.**
+The [release record](../tasks/SLICE_010g1_RELEASE.md) owns deployed identity and
+evidence. The current [migration completion follow-up](../tasks/MIGRATION_COMPLETION_INTEGRATION.md)
+adds an explicit coverage inventory, a unified retained-result reader, and
+multi-cycle verification on a separate local branch; it is not deployed.
+
+The user selected a new, empty CRM Organization first (D-059), then approved
+API-first assessment and encrypted saved credentials (D-060). Unsupported
+families and live-source gaps remain explicit; the implemented paths do not
+establish full migration fidelity or cutover readiness. No customer data or live
+FUB account is used by this follow-up's synthetic verification.
 
 **010a planning follow-up (historical):** the user approved the next rung, which now
 has a [010a specification](../specs/SLICE_010a.md) and

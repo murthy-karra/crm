@@ -129,6 +129,7 @@ fn build_app_with_routers_inner(
             .merge(routes::core_change_reports::router())
             .merge(routes::people_refreshes::router())
             .merge(routes::family_refreshes::router())
+            .merge(routes::migration_reconciliation::router())
             .merge(routes::people_admissions::router())
             .merge(routes::admitted_people_refreshes::router())
             .merge(routes::admitted_metadata_imports::router())
@@ -144,6 +145,9 @@ fn build_app_with_routers_inner(
             .layer(axum::middleware::from_fn_with_state(
                 state.clone(),
                 auth::workspace_http::guard,
+            ))
+            .layer(axum::middleware::from_fn(
+                routes::migration_reconciliation::cache_policy,
             ))
             .with_state(state),
     );

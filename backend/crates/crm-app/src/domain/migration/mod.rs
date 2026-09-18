@@ -56,7 +56,9 @@ pub mod snapshot_worker;
 pub(crate) mod store;
 pub mod worker;
 
+pub mod coverage_inventory;
 pub mod family_refresh;
+pub mod reconciliation;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

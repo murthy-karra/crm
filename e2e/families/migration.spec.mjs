@@ -17,6 +17,7 @@ test('migration-v1: source evidence → frozen plan → administrator review', a
   async function api(actor, method, path, data, status = 200) {
     const response = await actor.page.request.fetch(path, { method, data });
     const body = response.status() === 204 ? null : await response.json();
+    if (path.endsWith('/reconciliation')) expect(response.headers()['cache-control']).toBe('no-store');
     evidence('http', { actor: actor.key, method, path, request: data, status: response.status(), response: body });
     expect(response.status(), method + ' ' + path).toBe(status); return body;
   }
@@ -330,6 +331,44 @@ test('migration-v1: source evidence → frozen plan → administrator review', a
       await expect(panel()).toContainText(/administrator review/i);
       const final = await api(actors.admin, 'GET', root + '/imports/' + imported);
       expect(final.state).toBe('completed'); expect(final.counts.imported_people).toBe('2');
+      const reconciliation = actors.admin.page.getByTestId('migration-reconciliation');
+      await reconciliation.getByLabel('People import for reconciliation', { exact: true }).selectOption(imported);
+      await expect(reconciliation).toContainText(/standalone tag/i);
+      await expect(reconciliation).toContainText(/unqualified/i);
+      const reconciled = await api(actors.admin, 'GET', root + '/imports/' + imported + '/reconciliation');
+      expect(reconciled.original_import_id).toBe(imported);
+      expect(reconciled.review_hold).toBe(true);
+      const originalPeople = reconciled.families.find(f => f.coverage.family === 'people_contacts');
+      expect(originalPeople.unit).toBe('people');
+      expect(originalPeople.cohorts.find(c => c.cohort_origin === 'original').result_totals.applied).toBe('2');
+      for (const [family, count] of [['embedded_person_tags', '2'], ['custom_fields', '2'], ['notes', '1'], ['tasks', '1'], ['historical_events', '1']]) {
+        const outcome = reconciled.families.find(f => f.coverage.family === family).cohorts.find(c => c.cohort_origin === 'original');
+        expect(outcome.result_totals.applied, family + ' initial outcomes').toBe(count);
+        expect(outcome.latest_bundle.state, family + ' latest family state').toBe('completed');
+        expect(outcome.latest_bundle.outcome_totals.applied, family + ' latest outcomes').toBe(count);
+        if (family === 'notes' || family === 'tasks') expect(outcome.latest_bundle.bundle_id).toBe(bundleId);
+        else expect(outcome.latest_bundle.bundle_id).not.toBe(bundleId);
+      }
+      const unsupportedCatalog = reconciled.families.find(f => f.coverage.family === 'standalone_tag_catalog');
+      expect(unsupportedCatalog.coverage.path).toBe('unqualified_source');
+      expect(unsupportedCatalog.cohorts).toEqual([]);
+      const desktopViewport = actors.admin.page.viewportSize();
+      await actors.admin.page.setViewportSize({ width: 390, height: 844 });
+      const peopleEvidence = reconciliation.locator('[data-family="people_contacts"] details').filter({ hasText: 'Evidence references' });
+      await peopleEvidence.getByText('Evidence references', { exact: true }).click();
+      await expect(peopleEvidence).toContainText(imported);
+      await reconciliation.getByRole('heading', { name: 'Migration reconciliation', exact: true }).scrollIntoViewIfNeeded();
+      expect(await reconciliation.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+      await testInfo.attach('migration-reconciliation-mobile', {
+        body: await actors.admin.page.screenshot(), contentType: 'image/png',
+      });
+      await peopleEvidence.scrollIntoViewIfNeeded();
+      await testInfo.attach('migration-reconciliation-evidence-mobile', {
+        body: await actors.admin.page.screenshot(), contentType: 'image/png',
+      });
+      if (desktopViewport) await actors.admin.page.setViewportSize(desktopViewport);
+      await api(actors.alice, 'GET', root + '/imports/' + imported + '/reconciliation', undefined, 403);
+      await api(actors.casey, 'GET', root + '/imports/' + imported + '/reconciliation', undefined, 404);
       for (const actor of allActors) {
         await actor.recorder.flush(); expect(actor.recorder.errors).toEqual([]);
         for (const f of actor.recorder.frames) if (f.message.push?.pub) expect(f.message.push.pub.data.organization_id).toBe(actor.identity.organization.id);

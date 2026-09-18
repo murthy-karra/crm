@@ -45,3 +45,4 @@ pub mod admitted_metadata_imports;
 pub mod admitted_people_refreshes;
 
 pub mod family_refreshes;
+pub mod migration_reconciliation;

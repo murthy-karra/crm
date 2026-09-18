@@ -312,10 +312,7 @@ mod tests {
         assert_eq!(families.len(), inventory().len());
         assert!(inventory().iter().all(|descriptor| {
             descriptor.path != CoveragePath::Implemented
-                || descriptor
-                    .blocker_codes
-                    .iter()
-                    .any(|code| *code == "migration_review_only")
+                || descriptor.blocker_codes.contains(&"migration_review_only")
         }));
     }
 

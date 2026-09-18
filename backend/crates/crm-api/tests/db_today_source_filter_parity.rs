@@ -8,7 +8,7 @@
 use std::collections::BTreeSet;
 
 use chrono::{DateTime, Duration as ChronoDuration, TimeZone, Utc};
-use sqlx::PgPool;
+use sqlx::{Acquire, PgPool};
 use uuid::Uuid;
 
 use crate::common::{
@@ -2359,4 +2359,308 @@ async fn tags_source_admits_and_drops_on_tag_removal(migrator_pool: PgPool) {
             .any(|i| i.person.id.as_uuid() == person),
         "the Person must be dropped once the tag is removed"
     );
+}
+
+/// Batched reference probes preserve tenant isolation, first-clause error
+/// precedence, duplicate handling and the deadline-aware Today path.
+#[sqlx::test]
+#[ignore]
+async fn batched_today_references_preserve_validation(migrator_pool: PgPool) {
+    use crm_api::domain::person::filter::FilterError;
+    use std::time::{Duration, Instant};
+
+    let (org, user) = create_org_with_stages_and_member(
+        &migrator_pool,
+        "Batched references",
+        "batch@refs.test",
+        "Batch",
+        PW,
+    )
+    .await;
+    let (foreign, foreign_user) = create_org_with_stages_and_member(
+        &migrator_pool,
+        "Foreign references",
+        "foreign@refs.test",
+        "Foreign",
+        PW,
+    )
+    .await;
+    let (stage, stage2) = first_stage_ids(&migrator_pool, org).await;
+    let (foreign_stage, _) = first_stage_ids(&migrator_pool, foreign).await;
+    let tags: Vec<Uuid> = sqlx::query_scalar(
+        "INSERT INTO tag (organization_id,created_by_user_id,name) SELECT $1,$2,'Batch ' || n FROM generate_series(1,50) n RETURNING id"
+    ).bind(org).bind(user).fetch_all(&migrator_pool).await.unwrap();
+    let foreign_tag: Uuid = sqlx::query_scalar(
+        "INSERT INTO tag (organization_id,created_by_user_id,name) VALUES ($1,$2,'Foreign') RETURNING id"
+    ).bind(foreign).bind(foreign_user).fetch_one(&migrator_pool).await.unwrap();
+    let app = connect_as_app(&migrator_pool).await;
+    let mut conn = app.acquire().await.unwrap();
+    let valid = FilterDefinition {
+        version: 1,
+        clauses: vec![
+            Clause::Stage(StageClause {
+                stage_ids: vec![StageId(stage), StageId(stage2)],
+            }),
+            Clause::AssignedTo(AssignedToClause {
+                assignees: vec![Assignee::User(UserId(user)), Assignee::Me],
+            }),
+            Clause::Tags(TagIdsClause {
+                tag_ids: tags.iter().copied().map(TagId).collect(),
+            }),
+        ],
+    };
+    valid.validate().unwrap();
+    for timed in [false, true] {
+        let mut tx = conn.begin().await.unwrap();
+        async fn validate(
+            filter: &FilterDefinition,
+            conn: &mut sqlx::PgConnection,
+            org: Uuid,
+            timed: bool,
+        ) -> Result<(), FilterError> {
+            if timed {
+                filter
+                    .validate_references_until(
+                        conn,
+                        OrganizationId(org),
+                        Instant::now() + Duration::from_secs(5),
+                    )
+                    .await
+            } else {
+                filter.validate_references(conn, OrganizationId(org)).await
+            }
+        }
+        validate(&valid, &mut tx, org, timed).await.unwrap();
+        // Reference validation itself has always accepted duplicates; shape
+        // validation is the separate layer that rejects them.
+        let duplicate = FilterDefinition {
+            version: 1,
+            clauses: vec![Clause::Tags(TagIdsClause {
+                tag_ids: vec![TagId(tags[0]), TagId(tags[0])],
+            })],
+        };
+        validate(&duplicate, &mut tx, org, timed).await.unwrap();
+        for bad in [foreign_stage, Uuid::new_v4()] {
+            let mut invalid = valid.clone();
+            invalid.clauses[0] = Clause::Stage(StageClause {
+                stage_ids: vec![StageId(stage), StageId(bad)],
+            });
+            assert!(matches!(
+                validate(&invalid, &mut tx, org, timed).await,
+                Err(FilterError::InvalidStage)
+            ));
+        }
+        let mut invalid = valid.clone();
+        invalid.clauses[1] = Clause::AssignedTo(AssignedToClause {
+            assignees: vec![
+                Assignee::User(UserId(user)),
+                Assignee::User(UserId(foreign_user)),
+            ],
+        });
+        invalid.clauses[2] = Clause::Tags(TagIdsClause {
+            tag_ids: vec![TagId(foreign_tag)],
+        });
+        assert!(matches!(
+            validate(&invalid, &mut tx, org, timed).await,
+            Err(FilterError::InvalidAssignee)
+        ));
+        invalid.clauses.remove(1);
+        assert!(matches!(
+            validate(&invalid, &mut tx, org, timed).await,
+            Err(FilterError::InvalidTag)
+        ));
+        invalid.clauses[1] = Clause::NotTags(TagIdsClause {
+            tag_ids: vec![TagId(tags[0]), TagId(Uuid::new_v4())],
+        });
+        assert!(matches!(
+            validate(&invalid, &mut tx, org, timed).await,
+            Err(FilterError::InvalidTag)
+        ));
+        // Membership validation still accepts an inactive member; changing
+        // that policy is outside this optimization.
+        sqlx::query("UPDATE organization_membership SET status='inactive' WHERE organization_id=$1 AND user_id=$2")
+            .bind(org).bind(user).execute(&mut *tx).await.unwrap();
+        validate(&valid, &mut tx, org, timed).await.unwrap();
+        tx.rollback().await.unwrap();
+    }
+    assert!(matches!(
+        valid
+            .validate_references_until(
+                &mut conn,
+                OrganizationId(org),
+                Instant::now() - Duration::from_secs(1)
+            )
+            .await,
+        Err(FilterError::Database(_))
+    ));
+}
+
+/// Opt-in D-050 paired HTTP gate. Ordinary ignored-test runs do not compile it.
+#[cfg(feature = "perf-harness")]
+#[sqlx::test]
+#[ignore]
+async fn today_reference_batch_http_perf(migrator_pool: PgPool) {
+    use axum::{body::Body, http::Request};
+    use crm_api::domain::person::filter::reference_probe_baseline::ENABLED;
+    use std::time::Instant;
+    use tower::ServiceExt;
+
+    let output = std::path::PathBuf::from(
+        std::env::var("CRM_TODAY_REFERENCE_PERF_OUTPUT")
+            .expect("explicit performance evidence path"),
+    );
+    assert!(output.is_absolute());
+    let (org, user) = create_org_with_stages_and_member(
+        &migrator_pool,
+        "Today batching performance",
+        "perf@refs.test",
+        "Perf",
+        PW,
+    )
+    .await;
+    // Scale-only rows in this owned SQLx database; no shared service or worker.
+    let extra_users: Vec<Uuid> = sqlx::query_scalar("INSERT INTO app_user(email,display_name) SELECT 'batch-'||n||'@perf.test','Member '||n FROM generate_series(1,49) n RETURNING id")
+        .fetch_all(&migrator_pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO organization_membership(organization_id,user_id,role,status) SELECT $1,unnest($2::uuid[]),'member','active'",
+    )
+    .bind(org)
+    .bind(&extra_users)
+    .execute(&migrator_pool)
+    .await
+    .unwrap();
+    let stages: Vec<Uuid> =
+        sqlx::query_scalar("SELECT id FROM stage WHERE organization_id=$1 ORDER BY position,id")
+            .bind(org)
+            .fetch_all(&migrator_pool)
+            .await
+            .unwrap();
+    let tags:Vec<Uuid> = sqlx::query_scalar("INSERT INTO tag(organization_id,created_by_user_id,name) SELECT $1,$2,'Tag '||n FROM generate_series(1,50) n RETURNING id")
+        .bind(org).bind(user).fetch_all(&migrator_pool).await.unwrap();
+    sqlx::query("INSERT INTO person(organization_id,stage_id,assigned_user_id,first_name) SELECT $1,$2,$3,'Person '||n FROM generate_series(1,25000) n")
+        .bind(org).bind(stages[0]).bind(user).execute(&migrator_pool).await.unwrap();
+    let mut members = vec![user];
+    members.extend(extra_users);
+    let app = connect_as_app(&migrator_pool).await;
+    let filter = FilterDefinition {
+        version: 1,
+        clauses: vec![
+            Clause::Stage(StageClause {
+                stage_ids: stages.iter().copied().map(StageId).collect(),
+            }),
+            Clause::AssignedTo(AssignedToClause {
+                assignees: members
+                    .iter()
+                    .copied()
+                    .map(|id| Assignee::User(UserId(id)))
+                    .collect(),
+            }),
+            Clause::NotTags(TagIdsClause {
+                tag_ids: tags.iter().copied().map(TagId).collect(),
+            }),
+        ],
+    };
+    create_and_enable_source(
+        &app,
+        org,
+        user,
+        SavedListScope::Personal,
+        "Reference-rich source",
+        filter,
+    )
+    .await;
+    for table in [
+        "person",
+        "stage",
+        "organization_membership",
+        "tag",
+        "saved_list",
+        "today_work_source",
+    ] {
+        sqlx::query(&format!("ANALYZE {table}"))
+            .execute(&migrator_pool)
+            .await
+            .unwrap();
+    }
+    let clock = Utc.with_ymd_and_hms(2026, 9, 18, 0, 0, 0).unwrap();
+    let config = crate::common::test_config();
+    let state = crm_api::state::AppState::for_tests(
+        app.clone(),
+        &config,
+        crm_api::realtime::Publisher::recording(),
+    );
+    let router = crm_api::build_app_with_today_router(
+        state,
+        crm_api::routes::today::router_with_test_clock(clock),
+    );
+    let cookie = crate::common::login_cookie(&router, "perf@refs.test", PW).await;
+    let mut samples = [Vec::<f64>::new(), Vec::<f64>::new()];
+    let mut expected = None;
+    for round in 0..45 {
+        for legacy in if round % 2 == 0 {
+            [true, false]
+        } else {
+            [false, true]
+        } {
+            let request = Request::builder()
+                .uri("/api/today")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap();
+            let start = Instant::now();
+            let response = ENABLED
+                .scope(legacy, router.clone().oneshot(request))
+                .await
+                .unwrap();
+            assert_eq!(response.status(), 200);
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let elapsed = start.elapsed().as_secs_f64() * 1000.0;
+            let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(value["sources"]["status"], "complete");
+            assert_eq!(value["items"].as_array().unwrap().len(), 200);
+            if let Some(expected) = &expected {
+                assert_eq!(&value, expected);
+            } else {
+                expected = Some(value);
+            }
+            if round >= 5 {
+                samples[usize::from(!legacy)].push(elapsed);
+            }
+        }
+    }
+    for sample in &mut samples {
+        sample.sort_by(f64::total_cmp);
+    }
+    let p95 = [samples[0][37], samples[1][37]];
+    let passed = p95[1] <= p95[0] + 25.0_f64.max(p95[0] * 0.1);
+    let filter_source = include_str!("../../crm-app/src/domain/person/filter.rs");
+    let mut plans = serde_json::Map::new();
+    for (name, ids) in [
+        ("STAGE_REFERENCES_SQL", &stages),
+        ("ASSIGNEE_REFERENCES_SQL", &members),
+        ("TAG_REFERENCES_SQL", &tags),
+    ] {
+        let marker = format!("const {name}: &str = \"");
+        let statement = filter_source
+            .split(&marker)
+            .nth(1)
+            .unwrap()
+            .split("\";")
+            .next()
+            .unwrap();
+        let plan: serde_json::Value = sqlx::query_scalar(&format!(
+            "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) {statement}"
+        ))
+        .bind(org)
+        .bind(ids)
+        .fetch_one(&app)
+        .await
+        .unwrap();
+        plans.insert(name.to_string(), plan);
+    }
+    let report = serde_json::json!({"baseline":"11f5d85 per-identifier probes","same_build":true,"people":25000,"members":50,"stages":9,"tags":50,"sources":1,"clock":clock,"samples_per_arm":40,"warmups_per_arm":5,"alternating":true,"dto_equal":true,"items":200,"legacy_p95_ms":p95[0],"batched_p95_ms":p95[1],"d050_pass":passed,"legacy_ms":samples[0],"batched_ms":samples[1],"plans":plans});
+    std::fs::write(&output, serde_json::to_vec_pretty(&report).unwrap()).unwrap();
+    assert!(passed, "paired Today request regression: {p95:?}");
 }

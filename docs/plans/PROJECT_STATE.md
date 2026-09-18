@@ -7,6 +7,17 @@ completed chronology. Decisions remain authoritative; use the
 
 ## Current state
 
+**Local read optimization:** Person detail already uses one current-state
+projection lookup plus one history union. Today now batches stage/assignee/tag
+reference validation by clause; no new projection table or shared contract was
+added. The reference-heavy 25k-People/50-member paired fixture returned identical
+responses with p95 68.7 ms → 29.1 ms; 278 relevant DB tests, all 10 E2E families
+(103 steps, cleanup verified), formatting, normal lint and production compilation passed.
+[Read-path audit and verification](../reviews/today-read-path-2026-09-17.md)
+records exact scope, failures/corrections and limits. This Today change is retained
+locally and undeployed on `codex/migration-completion`. A compact Today summary
+projection remains a candidate requiring separate evidence and contract design.
+
 **Local migration follow-up:** `codex/migration-completion` integrates the
 coverage inventory, repeated-refresh head fix and regressions, and the
 administrator reconciliation report. Functional/database tests, the sixteen-step

@@ -45,9 +45,6 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use sqlx::PgConnection;
 
 use crate::domain::custom_field::{self, FieldType};
-use crate::domain::person::queries as person_queries;
-use crate::domain::stage;
-use crate::domain::tag;
 use crate::ids::{CustomFieldId, CustomFieldOptionId, OrganizationId, StageId, TagId, UserId};
 
 /// A JSON value parsed with duplicate-object-key rejection applied AT
@@ -203,7 +200,7 @@ pub enum FilterError {
     InvalidStage,
     InvalidAssignee,
     /// docs/specs/SLICE_011e.md §4b: a `tags`/`not_tags` value does not
-    /// exist in the active Organization (`tag::exists`) — non-leaking,
+    /// exist in the active Organization — non-leaking,
     /// byte-identical for a nonexistent or cross-Organization id, exactly
     /// like `InvalidStage`/`InvalidAssignee`.
     InvalidTag,
@@ -1133,59 +1130,16 @@ impl FilterDefinition {
         organization_id: OrganizationId,
     ) -> Result<(), FilterError> {
         for clause in &self.clauses {
-            match clause {
-                Clause::Stage(c) => {
-                    for id in &c.stage_ids {
-                        let exists = stage::exists(conn, *id, organization_id)
-                            .await
-                            .map_err(FilterError::Database)?;
-                        if !exists {
-                            return Err(FilterError::InvalidStage);
-                        }
-                    }
-                }
-                Clause::AssignedTo(c) => {
-                    for a in &c.assignees {
-                        if let Assignee::User(user_id) = a {
-                            let is_member = person_queries::is_organization_member(
-                                conn,
-                                organization_id,
-                                *user_id,
-                            )
-                            .await
-                            .map_err(FilterError::Database)?;
-                            if !is_member {
-                                return Err(FilterError::InvalidAssignee);
-                            }
-                        }
-                    }
-                }
-                Clause::Tags(c) | Clause::NotTags(c) => {
-                    for id in &c.tag_ids {
-                        let exists = tag::exists(conn, organization_id, *id)
-                            .await
-                            .map_err(tag_error_to_database)?;
-                        if !exists {
-                            return Err(FilterError::InvalidTag);
-                        }
-                    }
-                }
-                Clause::CustomText(_)
-                | Clause::CustomNumber(_)
-                | Clause::CustomDate(_)
-                | Clause::CustomChoice(_) => {
-                    validate_custom_reference(conn, organization_id, clause).await?;
-                }
-                _ => {}
+            if validate_reference_group(conn, organization_id, clause, None).await? {
+                continue;
             }
+            validate_custom_reference(conn, organization_id, clause).await?;
         }
         Ok(())
     }
 
-    /// The Today source evaluator validates each source inside one absolute
-    /// wall-clock allowance. Re-arm PostgreSQL's transaction-local statement
-    /// timeout before every reference probe so a late probe receives only the
-    /// source's remaining time, never a fresh full-source budget.
+    /// Re-arm the timeout before each bounded reference group, using the same
+    /// absolute source deadline. Custom-field checks retain their own probes.
     pub async fn validate_references_until(
         &self,
         conn: &mut PgConnection,
@@ -1193,72 +1147,97 @@ impl FilterDefinition {
         deadline: Instant,
     ) -> Result<(), FilterError> {
         for clause in &self.clauses {
-            match clause {
-                Clause::Stage(c) => {
-                    for id in &c.stage_ids {
-                        set_statement_timeout_until(conn, deadline).await?;
-                        let exists = stage::exists(conn, *id, organization_id)
-                            .await
-                            .map_err(FilterError::Database)?;
-                        if !exists {
-                            return Err(FilterError::InvalidStage);
-                        }
-                    }
-                }
-                Clause::AssignedTo(c) => {
-                    for a in &c.assignees {
-                        if let Assignee::User(user_id) = a {
-                            set_statement_timeout_until(conn, deadline).await?;
-                            let is_member = person_queries::is_organization_member(
-                                conn,
-                                organization_id,
-                                *user_id,
-                            )
-                            .await
-                            .map_err(FilterError::Database)?;
-                            if !is_member {
-                                return Err(FilterError::InvalidAssignee);
-                            }
-                        }
-                    }
-                }
-                Clause::Tags(c) | Clause::NotTags(c) => {
-                    for id in &c.tag_ids {
-                        set_statement_timeout_until(conn, deadline).await?;
-                        let exists = tag::exists(conn, organization_id, *id)
-                            .await
-                            .map_err(tag_error_to_database)?;
-                        if !exists {
-                            return Err(FilterError::InvalidTag);
-                        }
-                    }
-                }
-                Clause::CustomText(_)
-                | Clause::CustomNumber(_)
-                | Clause::CustomDate(_)
-                | Clause::CustomChoice(_) => {
-                    validate_custom_reference_until(conn, organization_id, clause, deadline)
-                        .await?;
-                }
-                _ => {}
+            if validate_reference_group(conn, organization_id, clause, Some(deadline)).await? {
+                continue;
             }
+            validate_custom_reference_until(conn, organization_id, clause, deadline).await?;
         }
         Ok(())
     }
 }
 
-/// `tag::exists` returns `Result<bool, tag::TagError>` (the module's shared
-/// command/read error shape) rather than a bare `sqlx::Error` like
-/// `stage::exists`; `TagError::Database` is the only variant a simple
-/// existence probe can actually produce, but the type still requires this
-/// mapping to be total.
-fn tag_error_to_database(err: tag::TagError) -> FilterError {
-    match err {
-        tag::TagError::Database(error) => FilterError::Database(error),
-        _ => FilterError::Database(sqlx::Error::Decode(
-            "tag::exists returned an unexpected non-database TagError".into(),
-        )),
+/// Frozen per-identifier reference probes for the opt-in same-build Today
+/// performance comparison. No production binary or HTTP parameter exposes it.
+#[cfg(feature = "test-support")]
+#[path = "reference_probe_baseline.rs"]
+pub mod reference_probe_baseline;
+
+// One bounded statement per clause instead of one per selected identifier.
+// NOT EXISTS preserves the old all-identifiers-exist semantics, including
+// duplicates. Each probe retains the Organization predicate; membership status
+// is deliberately unchanged from is_organization_member (D-027/O-004).
+const STAGE_REFERENCES_SQL: &str = "SELECT NOT EXISTS (
+    SELECT 1 FROM unnest($2::uuid[]) AS requested(id)
+    WHERE NOT EXISTS (SELECT 1 FROM stage
+        WHERE stage.organization_id=$1 AND stage.id=requested.id))";
+const ASSIGNEE_REFERENCES_SQL: &str = "SELECT NOT EXISTS (
+    SELECT 1 FROM unnest($2::uuid[]) AS requested(id)
+    WHERE NOT EXISTS (SELECT 1 FROM organization_membership
+        WHERE organization_id=$1 AND user_id=requested.id))";
+const TAG_REFERENCES_SQL: &str = "SELECT NOT EXISTS (
+    SELECT 1 FROM unnest($2::uuid[]) AS requested(id)
+    WHERE NOT EXISTS (SELECT 1 FROM tag
+        WHERE tag.organization_id=$1 AND tag.id=requested.id))";
+
+async fn validate_reference_group(
+    conn: &mut PgConnection,
+    organization_id: OrganizationId,
+    clause: &Clause,
+    deadline: Option<Instant>,
+) -> Result<bool, FilterError> {
+    let (statement, ids, error): (_, Vec<uuid::Uuid>, _) = match clause {
+        Clause::Stage(c) => (
+            STAGE_REFERENCES_SQL,
+            c.stage_ids.iter().map(|id| id.0).collect(),
+            FilterError::InvalidStage,
+        ),
+        Clause::AssignedTo(c) => (
+            ASSIGNEE_REFERENCES_SQL,
+            c.assignees
+                .iter()
+                .filter_map(|assignee| match assignee {
+                    Assignee::User(id) => Some(id.0),
+                    _ => None,
+                })
+                .collect(),
+            FilterError::InvalidAssignee,
+        ),
+        Clause::Tags(c) | Clause::NotTags(c) => (
+            TAG_REFERENCES_SQL,
+            c.tag_ids.iter().map(|id| id.0).collect(),
+            FilterError::InvalidTag,
+        ),
+        _ => return Ok(false),
+    };
+    if ids.is_empty() {
+        return Ok(true);
     }
+    #[cfg(feature = "test-support")]
+    if reference_probe_baseline::ENABLED
+        .try_with(|enabled| *enabled)
+        .unwrap_or(false)
+    {
+        return if reference_probe_baseline::validate(conn, organization_id, clause, &ids, deadline)
+            .await?
+        {
+            Ok(true)
+        } else {
+            Err(error)
+        };
+    }
+    if let Some(deadline) = deadline {
+        set_statement_timeout_until(conn, deadline).await?;
+    }
+    let valid: bool = sqlx::query_scalar(statement)
+        .bind(organization_id.0)
+        .bind(&ids)
+        .fetch_one(conn)
+        .await
+        .map_err(FilterError::Database)?;
+    if !valid {
+        return Err(error);
+    }
+    Ok(true)
 }
 
 async fn set_statement_timeout_until(

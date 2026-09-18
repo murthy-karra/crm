@@ -180,10 +180,11 @@ async fn link_unmatched_attempt(
     )
     .await?;
 
+    let mut contact_added = false;
     if cmd.add_contact_method {
         if let Some(email) = held.counterparty_email.as_deref() {
             if let Some(normalized) = contact::normalize_email(email) {
-                sqlx::query!(
+                contact_added = sqlx::query!(
                     r#"INSERT INTO contact_method (organization_id, person_id, kind, value, normalized_value)
                        VALUES ($1, $2, 'email', $3, $4)
                        ON CONFLICT (person_id, kind, normalized_value) DO NOTHING"#,
@@ -193,12 +194,17 @@ async fn link_unmatched_attempt(
                     normalized.as_str(),
                 )
                 .execute(&mut *tx)
-                .await?;
+                .await?
+                .rows_affected()
+                    > 0;
             }
         }
     }
 
     store::mark_linked(&mut tx, cmd.id, organization_id).await?;
+    if contact_added {
+        crate::domain::person::projection::rebuild(&mut tx, organization_id, cmd.person_id).await?;
+    }
     tx.commit().await?;
 
     if inserted.is_some() {

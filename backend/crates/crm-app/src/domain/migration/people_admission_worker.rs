@@ -779,6 +779,8 @@ async fn execute_one(
     sqlx::query("UPDATE migration_people_admission_item SET settled_result_id=$3,settled_at=clock_timestamp(),disposition='settled' WHERE id=$1 AND admission_id=$2").bind(item.get::<Uuid,_>("id")).bind(id).bind(result).execute(&mut *tx).await?;
     sqlx::query("UPDATE migration_people_admission SET settled_items=settled_items+1 WHERE id=$1 AND organization_id=$2").bind(id).bind(org.0).execute(&mut *tx).await?;
     s::release(&mut tx, org, id, work_reservation, work_bytes).await?;
+    crate::domain::person::projection::rebuild(&mut tx, org, crate::ids::PersonId::new(person))
+        .await?;
     tx.commit().await?;
     Ok(())
 }

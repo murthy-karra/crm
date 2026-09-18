@@ -407,8 +407,17 @@ pub async fn open_for_person(
     person_id: PersonId,
 ) -> Result<Vec<Task>, TaskError> {
     let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
-    let conn = &mut *workspace_read;
-    crate::auth::workspace::activity_complete_read(conn, organization_id).await?;
+    crate::auth::workspace::activity_complete_read(&mut workspace_read, organization_id).await?;
+    open_for_person_in_authorized_read(&mut workspace_read, organization_id, person_id).await
+}
+
+/// Same query as [`open_for_person`], using an already-authorized workspace
+/// transaction whose activity-read gate has been checked.
+pub async fn open_for_person_in_authorized_read(
+    conn: &mut PgConnection,
+    organization_id: OrganizationId,
+    person_id: PersonId,
+) -> Result<Vec<Task>, TaskError> {
     let rows = sqlx::query_as!(
         TaskRowFullDb,
         r#"SELECT t.id, t.title, t.kind, t.due_at,

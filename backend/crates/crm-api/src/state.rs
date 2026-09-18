@@ -58,6 +58,7 @@ impl AppState {
         let db = match config.database_url.as_deref() {
             Some(url) => Some(
                 PgPoolOptions::new()
+                    .max_connections(config.database_max_connections)
                     .acquire_timeout(config.database_connect_timeout)
                     .connect_lazy(url)?,
             ),

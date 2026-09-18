@@ -49,6 +49,12 @@ impl FromRequestParts<AppState> for AuthContext {
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
+        // Protected-route middleware has already resolved this same request's
+        // session. Reuse its trusted, request-local result instead of issuing a
+        // second session/membership query in every handler extractor.
+        if let Some(auth) = parts.extensions.get::<AuthContext>() {
+            return Ok(auth.clone());
+        }
         let identity = resolve_session(parts, state).await?;
         let organization = identity.organization.ok_or(ApiError::Unauthenticated)?;
 

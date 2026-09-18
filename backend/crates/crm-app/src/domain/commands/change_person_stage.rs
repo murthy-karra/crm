@@ -145,5 +145,9 @@ pub async fn change_person_stage_in_transaction(
     let summary = person_queries::summary_by_id(conn, ctx.organization_id, cmd.person_id)
         .await?
         .ok_or(CommandError::PersonNotFound)?;
+    if changed {
+        crate::domain::person::projection::rebuild(conn, ctx.organization_id, cmd.person_id)
+            .await?;
+    }
     Ok(Some(ChangedPersonStage { summary, changed }))
 }

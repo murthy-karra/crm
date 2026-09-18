@@ -8,6 +8,9 @@ const DEFAULT_BIND_ADDR: &str = "127.0.0.1:3000";
 const DEFAULT_CONNECT_TIMEOUT_MS: u64 = 2000;
 const MIN_CONNECT_TIMEOUT_MS: u64 = 1;
 const MAX_CONNECT_TIMEOUT_MS: u64 = 30_000;
+const DEFAULT_DATABASE_MAX_CONNECTIONS: u32 = 10;
+const MIN_DATABASE_MAX_CONNECTIONS: u32 = 1;
+const MAX_DATABASE_MAX_CONNECTIONS: u32 = 200;
 
 use crm_app::config::MIN_REALTIME_TOKEN_SECRET_BYTES;
 pub use crm_app::config::{
@@ -143,6 +146,7 @@ pub struct Config {
     pub bind_addr: SocketAddr,
     pub database_url: Option<String>,
     pub database_connect_timeout: Duration,
+    pub database_max_connections: u32,
     pub session_secret: SessionSecret,
     pub session_ttl: Duration,
     pub session_cookie_secure: bool,
@@ -201,6 +205,8 @@ pub enum ConfigError {
     NonLoopbackBindAddr(SocketAddr),
     InvalidConnectTimeout(String),
     ConnectTimeoutOutOfBounds(u64),
+    InvalidDatabaseMaxConnections(String),
+    DatabaseMaxConnectionsOutOfBounds(u32),
     MissingSessionSecret,
     SessionSecretTooShort(usize),
     InvalidSessionTtl(String),
@@ -280,6 +286,14 @@ impl fmt::Display for ConfigError {
             ConfigError::ConnectTimeoutOutOfBounds(value) => write!(
                 f,
                 "CRM_DATABASE_CONNECT_TIMEOUT_MS must be between {MIN_CONNECT_TIMEOUT_MS} and {MAX_CONNECT_TIMEOUT_MS}, got {value}"
+            ),
+            ConfigError::InvalidDatabaseMaxConnections(value) => write!(
+                f,
+                "CRM_DATABASE_MAX_CONNECTIONS is not a valid integer: {value}"
+            ),
+            ConfigError::DatabaseMaxConnectionsOutOfBounds(value) => write!(
+                f,
+                "CRM_DATABASE_MAX_CONNECTIONS must be between {MIN_DATABASE_MAX_CONNECTIONS} and {MAX_DATABASE_MAX_CONNECTIONS}, got {value}"
             ),
             ConfigError::MissingSessionSecret => write!(f, "CRM_SESSION_SECRET is required"),
             ConfigError::SessionSecretTooShort(len) => write!(
@@ -497,6 +511,20 @@ impl Config {
             return Err(ConfigError::ConnectTimeoutOutOfBounds(timeout_ms));
         }
 
+        let database_max_connections = match get("CRM_DATABASE_MAX_CONNECTIONS") {
+            Some(value) => value
+                .parse::<u32>()
+                .map_err(|_| ConfigError::InvalidDatabaseMaxConnections(value.clone()))?,
+            None => DEFAULT_DATABASE_MAX_CONNECTIONS,
+        };
+        if !(MIN_DATABASE_MAX_CONNECTIONS..=MAX_DATABASE_MAX_CONNECTIONS)
+            .contains(&database_max_connections)
+        {
+            return Err(ConfigError::DatabaseMaxConnectionsOutOfBounds(
+                database_max_connections,
+            ));
+        }
+
         let session_secret_raw =
             get("CRM_SESSION_SECRET").ok_or(ConfigError::MissingSessionSecret)?;
         if session_secret_raw.len() < MIN_SESSION_SECRET_BYTES {
@@ -647,6 +675,7 @@ impl Config {
             bind_addr,
             database_url,
             database_connect_timeout: Duration::from_millis(timeout_ms),
+            database_max_connections,
             session_secret,
             session_ttl,
             session_cookie_secure,
@@ -1091,6 +1120,7 @@ mod tests {
         assert_eq!(config.bind_addr, "127.0.0.1:3000".parse().unwrap());
         assert_eq!(config.database_url, None);
         assert_eq!(config.database_connect_timeout, Duration::from_millis(2000));
+        assert_eq!(config.database_max_connections, 10);
         assert_eq!(config.session_ttl, Duration::from_secs(168 * 3600));
         assert!(!config.session_cookie_secure);
         assert_eq!(config.cors_allowed_origin, None);
@@ -1174,6 +1204,7 @@ mod tests {
             ("CRM_API_BIND_ADDR", "127.0.0.1:4000"),
             ("DATABASE_URL", "postgres://localhost/test"),
             ("CRM_DATABASE_CONNECT_TIMEOUT_MS", "500"),
+            ("CRM_DATABASE_MAX_CONNECTIONS", "100"),
         ]))
         .unwrap();
         assert_eq!(config.bind_addr, "127.0.0.1:4000".parse().unwrap());
@@ -1182,6 +1213,18 @@ mod tests {
             Some("postgres://localhost/test")
         );
         assert_eq!(config.database_connect_timeout, Duration::from_millis(500));
+        assert_eq!(config.database_max_connections, 100);
+    }
+
+    #[test]
+    fn rejects_database_max_connections_outside_bounds() {
+        let below =
+            Config::from_source(source(&[("CRM_DATABASE_MAX_CONNECTIONS", "0")])).unwrap_err();
+        assert_eq!(below, ConfigError::DatabaseMaxConnectionsOutOfBounds(0));
+
+        let above =
+            Config::from_source(source(&[("CRM_DATABASE_MAX_CONNECTIONS", "201")])).unwrap_err();
+        assert_eq!(above, ConfigError::DatabaseMaxConnectionsOutOfBounds(201));
     }
 
     #[test]

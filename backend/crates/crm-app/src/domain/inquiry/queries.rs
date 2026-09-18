@@ -81,7 +81,16 @@ pub async fn list_for_person(
     person_id: PersonId,
 ) -> Result<Vec<InquirySummary>, sqlx::Error> {
     let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
-    let conn = &mut *workspace_read;
+    list_for_person_in_authorized_read(&mut workspace_read, organization_id, person_id).await
+}
+
+/// Same query as [`list_for_person`], using an already-authorized workspace
+/// transaction.
+pub async fn list_for_person_in_authorized_read(
+    conn: &mut PgConnection,
+    organization_id: OrganizationId,
+    person_id: PersonId,
+) -> Result<Vec<InquirySummary>, sqlx::Error> {
     let rows = sqlx::query_as!(
         InquirySummaryRow,
         r#"SELECT id, source, source_external_id, message, received_at

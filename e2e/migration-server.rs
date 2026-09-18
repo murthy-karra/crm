@@ -94,6 +94,7 @@ impl FubReader for FixtureReader {
 }
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    crm_api::telemetry::init();
     assert_eq!(std::env::var("E2E_FAMILY").as_deref(), Ok("migration"));
     let config = Config::from_env()?;
     let reader = Arc::new(FixtureReader {

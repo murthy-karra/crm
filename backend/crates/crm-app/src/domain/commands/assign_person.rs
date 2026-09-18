@@ -108,6 +108,11 @@ async fn assign_person_attempt(
         .await?
         .ok_or(CommandError::PersonNotFound)?;
 
+    if changed {
+        crate::domain::person::projection::rebuild(&mut tx, ctx.organization_id, cmd.person_id)
+            .await?;
+    }
+
     tx.commit().await?;
 
     // An event only when changed (docs/specs/SLICE_003.md §4).

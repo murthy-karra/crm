@@ -324,6 +324,7 @@ pub async fn update_person_details_in_transaction(
     .bind(ctx.organization_id.0)
     .fetch_one(&mut *conn)
     .await?;
+    crate::domain::person::projection::rebuild(conn, ctx.organization_id, cmd.person_id).await?;
     Ok(Some(UpdatedPersonDetails {
         details_revision,
         changed: true,

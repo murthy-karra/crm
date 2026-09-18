@@ -398,6 +398,13 @@ async fn update_custom_field_attempt(
     )
     .await?;
 
+    crate::domain::person::projection::rebuild_for_custom_field(
+        &mut tx,
+        ctx.organization_id,
+        cmd.field_id,
+    )
+    .await?;
+
     let field = load_custom_field_or_corrupt(&mut tx, ctx.organization_id, cmd.field_id).await?;
     tx.commit().await?;
     Ok(UpdateCustomFieldOutcome {
@@ -464,6 +471,9 @@ async fn reorder_custom_fields_attempt(
     }
 
     queries::reorder_field_positions(&mut tx, ctx.organization_id, &cmd.field_ids).await?;
+
+    crate::domain::person::projection::rebuild_for_custom_field_order(&mut tx, ctx.organization_id)
+        .await?;
 
     let fields = queries::list_definitions(&mut tx, ctx.organization_id).await?;
     tx.commit().await?;
@@ -675,6 +685,13 @@ async fn update_custom_field_option_attempt(
     )
     .await?;
 
+    crate::domain::person::projection::rebuild_for_custom_field(
+        &mut tx,
+        ctx.organization_id,
+        cmd.field_id,
+    )
+    .await?;
+
     let field = load_custom_field_or_corrupt(&mut tx, ctx.organization_id, cmd.field_id).await?;
     tx.commit().await?;
     Ok(UpdateCustomFieldOptionOutcome {
@@ -861,7 +878,9 @@ pub(crate) async fn apply_prepared_person_value(
     conn: &mut PgConnection,
     prepared: PreparedPersonValue,
 ) -> Result<bool, CustomFieldError> {
-    match prepared.value {
+    let organization_id = prepared.organization_id;
+    let person_id = prepared.person_id;
+    let changed = match prepared.value {
         Some(value) => {
             queries::upsert_value(
                 conn,
@@ -888,7 +907,11 @@ pub(crate) async fn apply_prepared_person_value(
             )
             .await
         }
+    }?;
+    if changed {
+        crate::domain::person::projection::rebuild(conn, organization_id, person_id).await?;
     }
+    Ok(changed)
 }
 
 // --- ClearPersonCustomFieldValue -----------------------------------------------

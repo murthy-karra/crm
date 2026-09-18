@@ -628,6 +628,7 @@ where
         }
 
         store::mark_resolved(&mut tx, locked.id, organization_id, new_inquiry_id).await?;
+        crate::domain::person::projection::rebuild(&mut tx, organization_id, person_id).await?;
         tx.commit().await?;
 
         // Exactly one event per command execution, not per fact: a

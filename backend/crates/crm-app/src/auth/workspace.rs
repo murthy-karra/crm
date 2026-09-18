@@ -97,6 +97,22 @@ pub async fn activity_complete_read(
     Ok(())
 }
 
+/// Fence the complete Person representation against both history and activity
+/// review anchors. The materialized dependency guarantees both volatile checks
+/// run while keeping this combined read boundary to one SQLx execution.
+pub async fn person_detail_complete_read(
+    conn: &mut PgConnection,
+    org: OrganizationId,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "WITH history_gate AS MATERIALIZED (SELECT crm_history_complete_read($1)) SELECT crm_activity_complete_read($1) FROM history_gate",
+    )
+    .bind(org.0)
+    .execute(conn)
+    .await?;
+    Ok(())
+}
+
 pub async fn shared(conn: &mut PgConnection, org: OrganizationId) -> Result<(), sqlx::Error> {
     sqlx::query(
         "SELECT set_config('crm.mapping_repair_reader','fub-people-mapping-repair-v1',true),set_config('crm.people_recovery_reader','fub-people-recovery-v1',true),set_config('crm.family_refresh_reader','fub-family-refresh-v1',true)",
@@ -162,24 +178,15 @@ pub async fn read_check(
     operational_only: bool,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "SELECT set_config('crm.mapping_repair_reader','fub-people-mapping-repair-v1',true),set_config('crm.people_recovery_reader','fub-people-recovery-v1',true),set_config('crm.family_refresh_reader','fub-family-refresh-v1',true)",
+        "WITH configured AS MATERIALIZED (SELECT set_config('crm.mapping_repair_reader','fub-people-mapping-repair-v1',true),set_config('crm.people_recovery_reader','fub-people-recovery-v1',true),set_config('crm.family_refresh_reader','fub-family-refresh-v1',true),set_config('crm.history_reader',$1,true),set_config('crm.admitted_activity_reader',$2,true),set_config('crm.admitted_history_reader','fub-admitted-history-v1',true)) SELECT crm_workspace_read($3,$4,$5) FROM configured",
     )
+    .bind(HISTORY_TIMELINE_CAPABILITY)
+    .bind(ADMITTED_ACTIVITY_CAPABILITY)
+    .bind(org.0)
+    .bind(actor.0)
+    .bind(operational_only)
     .execute(&mut *conn)
     .await?;
-    // Every caller holds an explicit read transaction. Set on this actual
-    // connection, including nested SQLx readers; middleware and handlers do not
-    // share a pooled connection. Transaction-local state cannot survive reuse.
-    sqlx::query("SELECT set_config('crm.history_reader',$1,true),set_config('crm.admitted_activity_reader',$2,true),set_config('crm.admitted_history_reader','fub-admitted-history-v1',true)")
-        .bind(HISTORY_TIMELINE_CAPABILITY)
-        .bind(ADMITTED_ACTIVITY_CAPABILITY)
-        .execute(&mut *conn)
-        .await?;
-    sqlx::query("SELECT crm_workspace_read($1,$2,$3)")
-        .bind(org.0)
-        .bind(actor.0)
-        .bind(operational_only)
-        .execute(conn)
-        .await?;
     Ok(())
 }
 pub async fn operational_read(

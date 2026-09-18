@@ -1088,6 +1088,17 @@ async fn execute_noop(
         sqlx::query("UPDATE migration_people_refresh_baseline SET refresh_id=$4,result_id=$5,projection_row_id=$6,projection_nonce=$7,projection_ciphertext=$8,version=version+1,updated_at=clock_timestamp() WHERE organization_id=$1 AND parent_import_id=$2 AND source_id=$3").bind(org.0).bind(r.get::<Uuid,_>("parent_import_id")).bind(source_id).bind(id).bind(result).bind(item_id).bind(head.nonce.as_slice()).bind(head.ciphertext).execute(&mut *conn).await?;
     }
     sqlx::query("UPDATE migration_people_refresh_item SET settled_result_id=$3,settled_at=clock_timestamp() WHERE id=$1 AND refresh_id=$2").bind(item_id).bind(id).bind(result).execute(&mut *conn).await?;
-    sqlx::query("UPDATE migration_people_refresh SET settled_items=settled_items+1 WHERE id=$1 AND organization_id=$2").bind(id).bind(org.0).execute(conn).await?;
+    sqlx::query("UPDATE migration_people_refresh SET settled_items=settled_items+1 WHERE id=$1 AND organization_id=$2").bind(id).bind(org.0).execute(&mut *conn).await?;
+    if disposition == "settled" {
+        crate::domain::person::projection::rebuild(
+            conn,
+            org,
+            crate::ids::PersonId::new(
+                item.get::<Option<Uuid>, _>("person_id")
+                    .ok_or(MigrationError::Crypto)?,
+            ),
+        )
+        .await?;
+    }
     Ok(retained_delta)
 }

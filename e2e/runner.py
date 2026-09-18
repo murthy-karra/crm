@@ -250,6 +250,10 @@ def attempt(run_id, family, copy, number, images, revision, options):
     write_json(private / "centrifugo.json", {"log": {"level": "info"}, "health": {"enabled": True},
         "client": {"allowed_origins": ["http://web:8080"]}, "channel": {"namespaces": [{"name": "org"}]}})
     write_json(private / "compose.json", config(project, private, artifacts, images, credentials, family))
+    if getattr(options, 'sql_profile', False):
+        manifest = json.loads((private / 'compose.json').read_text())
+        manifest['services']['api']['environment']['CRM_SQL_PROFILE'] = '1'
+        write_json(private / 'compose.json', manifest)
     for file in private.iterdir():
         file.chmod(0o600)
     cmd = compose(project, private)
@@ -333,6 +337,17 @@ def attempt(run_id, family, copy, number, images, revision, options):
                 if step['status'] == 'running':
                     step.update(status='failed', error=report.get('error', 'browser stopped before step completed'))
             write_json(artifacts / 'steps.json', steps)
+        if getattr(options, 'sql_profile', False):
+            try:
+                # runner.py is also imported as e2e.runner by the unit suite.
+                try:
+                    from .sql_profile import summarize
+                except ImportError:
+                    from sql_profile import summarize
+                report['sql_profile'] = summarize(artifacts)
+            except Exception as error:
+                report['sql_profile_error'] = str(error)
+                report['status'] = 'failed'
         write_json(artifacts / "run.json", report)
         print(f"{project}: {report['status']} ({report['cleanup']}) — {artifacts}", flush=True)
         if keep:
@@ -456,6 +471,7 @@ def main():
     parser.add_argument("--retries", type=int, default=0, help="fresh whole-family attempts")
     parser.add_argument("--timeout", type=int, default=420, help="seconds per family, after builds")
     parser.add_argument("--keep-failed", action="store_true")
+    parser.add_argument("--sql-profile", action="store_true", help="count sanitized SQLx executions per HTTP request and journey")
     parser.add_argument("--fail-step", type=int, help="diagnostics self-check: deliberately fail this numbered browser step")
     parser.add_argument("--cleanup")
     parser.add_argument("--images", type=Path, help="reuse an earlier run's immutable images.json")

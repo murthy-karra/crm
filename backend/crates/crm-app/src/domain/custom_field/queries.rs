@@ -678,7 +678,16 @@ pub async fn values_for_person(
     person_id: PersonId,
 ) -> Result<Vec<Value>, CustomFieldError> {
     let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
-    let conn = &mut *workspace_read;
+    values_for_person_in_authorized_read(&mut workspace_read, organization_id, person_id).await
+}
+
+/// Same query as [`values_for_person`], using an already-authorized workspace
+/// transaction.
+pub async fn values_for_person_in_authorized_read(
+    conn: &mut PgConnection,
+    organization_id: OrganizationId,
+    person_id: PersonId,
+) -> Result<Vec<Value>, CustomFieldError> {
     let rows = sqlx::query!(
         r#"SELECT v.field_id, cf.label as field_label, cf.field_type,
                   v.text_value,

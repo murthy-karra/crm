@@ -1881,6 +1881,12 @@ async fn execute(
                     }
                     permit(conn, j, unit, op.target_id).await?;
                     sqlx::query("INSERT INTO person_tag(organization_id,person_id,tag_id,added_by_user_id) VALUES($1,$2,$3,$4)").bind(j.org.0).bind(person).bind(op.target_id).bind(j.actor.0).execute(&mut *conn).await?;
+                    crate::domain::person::projection::rebuild(
+                        conn,
+                        j.org,
+                        crate::ids::PersonId::new(person),
+                    )
+                    .await?;
                     op.disposition = "applied".into();
                 }
             } else {
@@ -1913,6 +1919,12 @@ async fn execute(
                         }
                         permit(conn, j, unit, op.target_id).await?;
                         sqlx::query("INSERT INTO person_custom_field_value(organization_id,person_id,field_id,field_type,text_value,number_value,date_value,option_id,updated_by_user_id,origin,correlation_id) VALUES($1,$2,$3,$4,$5,CAST($6::text AS numeric),$7,$8,$9,'migration',$10)").bind(j.org.0).bind(person).bind(op.target_id).bind(&t.field_type).bind(text).bind(number).bind(date).bind(option).bind(j.actor.0).bind(j.id).execute(&mut *conn).await?;
+                        crate::domain::person::projection::rebuild(
+                            conn,
+                            j.org,
+                            crate::ids::PersonId::new(person),
+                        )
+                        .await?;
                         op.disposition = "applied".into();
                     }
                 }

@@ -1,0 +1,2099 @@
+{
+  "revision": "82b185d",
+  "scope": "Shared-development public schema, read-only catalog snapshot; all 111 migration SHA-384 checksums match checkout. Last explicit definition references can precede later dynamic patches. See effective-functions.sql for actual bodies.",
+  "function_count": 160,
+  "trigger_count": 445,
+  "categories": {
+    "workspace authorization and compatibility fences": 13,
+    "migration eligibility, ownership and workflow guards": 72,
+    "storage measurement and accounting integrity": 16,
+    "erasure and suppression propagation": 9,
+    "derived projections and revisions": 33,
+    "query and fingerprint helpers": 6,
+    "migration work selection": 6,
+    "reservation workflow and accounting": 3,
+    "append-only integrity": 2
+  },
+  "functions": [
+    {
+      "name": "crm_activity_complete_read",
+      "arguments": "org uuid",
+      "language": "plpgsql",
+      "category": "workspace authorization and compatibility fences",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261004000001_fub_admitted_activity_import.sql",
+        "line": 234
+      },
+      "effective_definition_sha256": "bc372352ac4ed3219718d896fc9080dd1f43cd604414f4b9f5044cbd9c952991"
+    },
+    {
+      "name": "crm_activity_insert_allowed",
+      "arguments": "org uuid, table_name text, row_value jsonb",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260920000001_fub_activity_import.sql",
+        "line": 197
+      },
+      "effective_definition_sha256": "c1038eaa40d476d731addde813d74cd50db08e759de3d6cedf1ab8ef5b9427a5"
+    },
+    {
+      "name": "crm_activity_measure_row",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "storage measurement and accounting integrity",
+      "trigger_bindings": 12,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261004000001_fub_admitted_activity_import.sql",
+        "line": 216
+      },
+      "effective_definition_sha256": "ef3d0f48bc79ecae41f5aa60ddcbc659031d51d9bc70a4e36a278a4de1c9a652"
+    },
+    {
+      "name": "crm_activity_retained_size",
+      "arguments": "table_name text, v jsonb",
+      "language": "plpgsql",
+      "category": "storage measurement and accounting integrity",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260920000001_fub_activity_import.sql",
+        "line": 156
+      },
+      "effective_definition_sha256": "fe442c922b2392d3b83413d9e52a7ccf7fb794824596a3ea897dcdaeb746e72e"
+    },
+    {
+      "name": "crm_admitted_activity_insert_allowed",
+      "arguments": "org uuid, table_name text, row_value jsonb",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261004000001_fub_admitted_activity_import.sql",
+        "line": 243
+      },
+      "effective_definition_sha256": "dcb2b9cf006ab0e78ac098ff7a7d374c62b7b04ca1fb62101c46f34f049cc8ad"
+    },
+    {
+      "name": "crm_admitted_activity_measure_row",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "storage measurement and accounting integrity",
+      "trigger_bindings": 11,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261004000001_fub_admitted_activity_import.sql",
+        "line": 194
+      },
+      "effective_definition_sha256": "1213a93e42f858094987add050c2e5e0d9251f8f9c93e00dbcc7139e7fe53172"
+    },
+    {
+      "name": "crm_admitted_activity_retained_size",
+      "arguments": "table_name text, v jsonb",
+      "language": "plpgsql",
+      "category": "storage measurement and accounting integrity",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261004000001_fub_admitted_activity_import.sql",
+        "line": 182
+      },
+      "effective_definition_sha256": "bab9e002ffade1c02dc2fb92385b3d8b4c79fc360c1160078eb0b8fcd61e410e"
+    },
+    {
+      "name": "crm_admitted_history_evidence_insert",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 3,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261005000001_fub_admitted_history.sql",
+        "line": 333
+      },
+      "effective_definition_sha256": "b95c1af6098b89a74dfa272914f5c6d2276dd787bf666354edcc4aecc69a342e"
+    },
+    {
+      "name": "crm_admitted_history_fact_allowed",
+      "arguments": "v jsonb, table_name text",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261005000001_fub_admitted_history.sql",
+        "line": 246
+      },
+      "effective_definition_sha256": "a3856b6f4e11117e1baadaaa6253a8b98d5134c993613aca9b45d00f195028d7"
+    },
+    {
+      "name": "crm_admitted_history_identity_erasure",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "erasure and suppression propagation",
+      "trigger_bindings": 1,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261005000001_fub_admitted_history.sql",
+        "line": 349
+      },
+      "effective_definition_sha256": "36606e2eb7fb81f7fe02d1d69e49ee369c521392a701fb6d5c1ecb7df2c2bba4"
+    },
+    {
+      "name": "crm_admitted_history_immutable",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 9,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261005000001_fub_admitted_history.sql",
+        "line": 221
+      },
+      "effective_definition_sha256": "bacbfeeb74437d57169e243908f434d6fb2eaa0f020f49ea2d5ba81ffb28901d"
+    },
+    {
+      "name": "crm_admitted_history_measure",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "storage measurement and accounting integrity",
+      "trigger_bindings": 8,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261005000001_fub_admitted_history.sql",
+        "line": 187
+      },
+      "effective_definition_sha256": "cf0c86abdd186a0f73a6e3cb32f3cc2204a44de4c4d8bd0f2e9ede9c689ab84d"
+    },
+    {
+      "name": "crm_admitted_history_owner_insert",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 2,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261005000001_fub_admitted_history.sql",
+        "line": 278
+      },
+      "effective_definition_sha256": "f5e5103db1b5c104f907ed2fd0b6b751f816574302352f43e85a5855d6e9b48e"
+    },
+    {
+      "name": "crm_admitted_history_person_erasure",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "erasure and suppression propagation",
+      "trigger_bindings": 1,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261005000001_fub_admitted_history.sql",
+        "line": 322
+      },
+      "effective_definition_sha256": "e47b908741ab73e9bf36e96d3eb36e077699160ff95e380eafdf2f676688b8c6"
+    },
+    {
+      "name": "crm_admitted_history_result_insert",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261005000001_fub_admitted_history.sql",
+        "line": 375
+      },
+      "effective_definition_sha256": "339b322f7728987e0fc7c01e8bb71be2a22f5471a1d89ff06f20c8b544054e5c"
+    },
+    {
+      "name": "crm_admitted_history_retained_size",
+      "arguments": "v jsonb",
+      "language": "plpgsql",
+      "category": "storage measurement and accounting integrity",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261005000001_fub_admitted_history.sql",
+        "line": 177
+      },
+      "effective_definition_sha256": "2c2a316db90e91df2d508ce1896cd67ff282e0814e0e588ab9eb8037fe264ecd"
+    },
+    {
+      "name": "crm_admitted_history_suppress",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "erasure and suppression propagation",
+      "trigger_bindings": 1,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261005000001_fub_admitted_history.sql",
+        "line": 311
+      },
+      "effective_definition_sha256": "de105b2ce4cd70d515aa855dc3d8cf6e6a43155230630f3a1c5271d6255c3633"
+    },
+    {
+      "name": "crm_admitted_history_write_fence",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "workspace authorization and compatibility fences",
+      "trigger_bindings": 23,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261005000001_fub_admitted_history.sql",
+        "line": 164
+      },
+      "effective_definition_sha256": "996a679e403da88cb03a23ea51c59fd0b3e906bb04299cb85336e927c9f5adcb"
+    },
+    {
+      "name": "crm_admitted_metadata_insert_allowed",
+      "arguments": "org uuid, permit text, row_value jsonb",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261002000002_admitted_metadata_units.sql",
+        "line": 13
+      },
+      "effective_definition_sha256": "295a25937b6fb4be07fa922ef3dcccee2a65859f0c99047121bcd898b4a78c8a"
+    },
+    {
+      "name": "crm_admitted_metadata_mapping_counts",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 2,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261002000006_admitted_metadata_views.sql",
+        "line": 31
+      },
+      "effective_definition_sha256": "56f3cc30f0d4054ce6b29c0603755472217bdaccd9817e30ac00505d2680c762"
+    },
+    {
+      "name": "crm_admitted_metadata_owner_keys",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 6,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261002000009_admitted_metadata_owner_integrity.sql",
+        "line": 63
+      },
+      "effective_definition_sha256": "619b89a39b46bf928540d11990f621e5d6876a6e642757e78073facea997664d"
+    },
+    {
+      "name": "crm_admitted_metadata_preparation_bytes",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "storage measurement and accounting integrity",
+      "trigger_bindings": 5,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261002000004_admitted_metadata_preparation.sql",
+        "line": 37
+      },
+      "effective_definition_sha256": "68178dc3c8daf9613164eba12a2e67fd92ed5f014d312e3e61da79f53117e492"
+    },
+    {
+      "name": "crm_admitted_people_refresh_mutation_allowed",
+      "arguments": "org uuid, permit text, table_name text, operation text, old_row jsonb, new_row jsonb",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261006000001_fub_people_mapping_repair.sql",
+        "line": 456
+      },
+      "effective_definition_sha256": "cc0c33db9141db6fb8af7bddef391dbf84ce18ee8b2da2bc9d4883fba95c6320"
+    },
+    {
+      "name": "crm_family_history_display_guard",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000003_fub_family_refresh_history.sql",
+        "line": 97
+      },
+      "effective_definition_sha256": "6aa94204de24b190d38e04d67ee20922e3c72185a6489d2186ba653321969347"
+    },
+    {
+      "name": "crm_family_history_erasure",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "erasure and suppression propagation",
+      "trigger_bindings": 1,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000009_fub_family_refresh_history_budget.sql",
+        "line": 106
+      },
+      "effective_definition_sha256": "f15deae43f17f22ff046fdd8d1dedf70b27772b6cbaa748e95b03beb2334b837"
+    },
+    {
+      "name": "crm_family_history_first_allowed",
+      "arguments": "v jsonb, table_name text",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000030_fub_family_refresh_history_ownership.sql",
+        "line": 37
+      },
+      "effective_definition_sha256": "2099bf821047b53cfbb90d810ceafc0642d05d689a4e6172430113b0ce35196f"
+    },
+    {
+      "name": "crm_family_history_first_erasure",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "erasure and suppression propagation",
+      "trigger_bindings": 1,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000030_fub_family_refresh_history_ownership.sql",
+        "line": 133
+      },
+      "effective_definition_sha256": "e27173d400fd6dc4675a71347c0227322b02eb0373478695a17712fbab4f4097"
+    },
+    {
+      "name": "crm_family_history_first_insert",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 2,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000030_fub_family_refresh_history_ownership.sql",
+        "line": 80
+      },
+      "effective_definition_sha256": "8439222016e71628109de722f94339e4d92c56c9eefcc75681019613e47c935d"
+    },
+    {
+      "name": "crm_family_history_first_suppress",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "erasure and suppression propagation",
+      "trigger_bindings": 1,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000030_fub_family_refresh_history_ownership.sql",
+        "line": 125
+      },
+      "effective_definition_sha256": "c14911bf9aed3b5f6320e79c0a824648566ec74b7beeb91c273546a40d9681f9"
+    },
+    {
+      "name": "crm_family_history_head_guard",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000003_fub_family_refresh_history.sql",
+        "line": 64
+      },
+      "effective_definition_sha256": "1ba6c677d639990dc19c0ca6654ab0a07f6b58b7b4c0c986bda09d83689efa8c"
+    },
+    {
+      "name": "crm_family_history_version_apply",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 3,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000003_fub_family_refresh_history.sql",
+        "line": 151
+      },
+      "effective_definition_sha256": "ba649a6a06afe2b5e1568ac46aa63ed343e71aaadbc4ea5188ade0f118841deb"
+    },
+    {
+      "name": "crm_family_history_version_guard",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 3,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000003_fub_family_refresh_history.sql",
+        "line": 113
+      },
+      "effective_definition_sha256": "4f79fcabe943352367c0aa06395127ccde594d806d30991f126bc09cdcbe4cbf"
+    },
+    {
+      "name": "crm_family_refresh_accounting_complete",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "storage measurement and accounting integrity",
+      "trigger_bindings": 3,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000002_fub_family_refresh_accounting.sql",
+        "line": 132
+      },
+      "effective_definition_sha256": "b3409847175452e9757267a1a2bfbb64e9aefce07977b1f8314ab2a09ea39586"
+    },
+    {
+      "name": "crm_family_refresh_activity_owned_fence",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000016_fub_family_refresh_activity_owned_walk.sql",
+        "line": 66
+      },
+      "effective_definition_sha256": "654be1b07de82b10299b47c8b2d8a4b10fafe7441972e3a5c7703473da1ba754"
+    },
+    {
+      "name": "crm_family_refresh_activity_owner",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000029_fub_family_refresh_activity_ownership.sql",
+        "line": 20
+      },
+      "effective_definition_sha256": "021c1db8610019cb4ad832ca42235429c9fdeae994a54af73fbe11be3b8cecb3"
+    },
+    {
+      "name": "crm_family_refresh_activity_walk_fence",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000015_fub_family_refresh_activity_walk.sql",
+        "line": 4
+      },
+      "effective_definition_sha256": "10f3defc60420983006522b6058855fb6b9e742bb040d8357f67f317bda387eb"
+    },
+    {
+      "name": "crm_family_refresh_apply_fence",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000028_fub_family_refresh_execution.sql",
+        "line": 11
+      },
+      "effective_definition_sha256": "6c7f97442b8f81438cdd0b12f55d63d928795bb93b5045985e3ca4bb9e69513c"
+    },
+    {
+      "name": "crm_family_refresh_boundary",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000004_fub_family_refresh_cohort.sql",
+        "line": 3
+      },
+      "effective_definition_sha256": "c23c794c63205497d0947bc80173fd258d5d2ff533a4824c58f5d33327baa1e8"
+    },
+    {
+      "name": "crm_family_refresh_bundle_guard",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000001_fub_family_refresh.sql",
+        "line": 339
+      },
+      "effective_definition_sha256": "7fd505c41d8ae59623aa2143fb080422abdc438dc50edfcd037dd8b7e0976d1c"
+    },
+    {
+      "name": "crm_family_refresh_capability",
+      "arguments": "org uuid",
+      "language": "plpgsql",
+      "category": "workspace authorization and compatibility fences",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000001_fub_family_refresh.sql",
+        "line": 179
+      },
+      "effective_definition_sha256": "c040c813a89d067c45d8e7f44f00e3e6be9d80d0dc7a2f497c1b664fea77c2fd"
+    },
+    {
+      "name": "crm_family_refresh_catalog_measure",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "storage measurement and accounting integrity",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000027_fub_family_refresh_catalog_ownership.sql",
+        "line": 37
+      },
+      "effective_definition_sha256": "fa83e073ebc0a9f15df7fad4796887feef31585a13428765a7b98d3aae1829d7"
+    },
+    {
+      "name": "crm_family_refresh_catalog_owner",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000027_fub_family_refresh_catalog_ownership.sql",
+        "line": 16
+      },
+      "effective_definition_sha256": "2974867983ff410b1855a5d68980a678cd0807459f5a18a038b58148bc57b4b7"
+    },
+    {
+      "name": "crm_family_refresh_catalog_unit_fence",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000020_fub_family_refresh_catalog_units.sql",
+        "line": 6
+      },
+      "effective_definition_sha256": "92b913a091b35b9d50dfc20cf19f53dd521b4b549eb5cbca7995d47591e780a7"
+    },
+    {
+      "name": "crm_family_refresh_catalog_walk_fence",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000021_fub_family_refresh_catalog_walk.sql",
+        "line": 43
+      },
+      "effective_definition_sha256": "17e9a41262806b223fd61851a6aebececed03c3ab220b0f6d4617e3e9d326364"
+    },
+    {
+      "name": "crm_family_refresh_cohort_fence",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 2,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000005_fub_family_refresh_cohort_fences.sql",
+        "line": 4
+      },
+      "effective_definition_sha256": "11f6a61613244389dfda3d65cbf46bf5f28fc0f2a01d046b586a2eb0b7763565"
+    },
+    {
+      "name": "crm_family_refresh_core_index_guard",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 3,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000006_fub_family_refresh_core_index.sql",
+        "line": 16
+      },
+      "effective_definition_sha256": "1808c0318e725104d92fa2fc5e5de71ab9098a47e9930cfc2b788a65e06a7931"
+    },
+    {
+      "name": "crm_family_refresh_head_guard",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000001_fub_family_refresh.sql",
+        "line": 361
+      },
+      "effective_definition_sha256": "ddda62c1487247b23e00a6ebbdfa3b670f7466862bfd19c5d346cd16a1cc4be4"
+    },
+    {
+      "name": "crm_family_refresh_head_storage",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "storage measurement and accounting integrity",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000002_fub_family_refresh_accounting.sql",
+        "line": 26
+      },
+      "effective_definition_sha256": "54c8c812f936f3e444117a8fc73a6103afcfa973c7c7c436f245a0aa8dfcaf5d"
+    },
+    {
+      "name": "crm_family_refresh_history_index_guard",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 3,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000008_fub_family_refresh_history_index.sql",
+        "line": 17
+      },
+      "effective_definition_sha256": "e46c6142217ef4ed2055a1bc1c6b67cfab1b319dd2558fc512e5c3677d5be593"
+    },
+    {
+      "name": "crm_family_refresh_manifest_source_guard",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000007_fub_family_refresh_source_reuse.sql",
+        "line": 11
+      },
+      "effective_definition_sha256": "855679ed7b739bd080f25165f71bed6d6ec05a6ac940230e95bd74c68c8625a0"
+    },
+    {
+      "name": "crm_family_refresh_mapping_fence",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 2,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000012_fub_family_refresh_mapping_inventory.sql",
+        "line": 27
+      },
+      "effective_definition_sha256": "3839a5c16cbd972557806aea18a6517c203657615a206530592cbe5f1e058776"
+    },
+    {
+      "name": "crm_family_refresh_mapping_order_projection",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000021_fub_family_refresh_catalog_walk.sql",
+        "line": 11
+      },
+      "effective_definition_sha256": "57868693ad75e0d251a96cba4b78acaabbd0b2cdd4e369c7d52655d22ee4cf71"
+    },
+    {
+      "name": "crm_family_refresh_measure",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "storage measurement and accounting integrity",
+      "trigger_bindings": 19,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000002_fub_family_refresh_accounting.sql",
+        "line": 33
+      },
+      "effective_definition_sha256": "8cfd3e9f91f1d9a6e89b0cc4314355256a0e48d0bd0c3b615a738db37af66491"
+    },
+    {
+      "name": "crm_family_refresh_metadata_owned_fence",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000023_fub_family_refresh_metadata_walk.sql",
+        "line": 43
+      },
+      "effective_definition_sha256": "ee54b6aa96400686a4bac5a96e70fa81b4df08a76622d44009865a6f5fb1332d"
+    },
+    {
+      "name": "crm_family_refresh_metadata_walk_fence",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000023_fub_family_refresh_metadata_walk.sql",
+        "line": 4
+      },
+      "effective_definition_sha256": "dde9252a0503c5498548bd76c3898afdd8a104f70439f301b9ebc61f34e258eb"
+    },
+    {
+      "name": "crm_family_refresh_missing_activity_fence",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000016_fub_family_refresh_activity_owned_walk.sql",
+        "line": 102
+      },
+      "effective_definition_sha256": "c26c90c590da0083a6e3e508a070819f2d1c9750e5131ac0bed301ed185c1071"
+    },
+    {
+      "name": "crm_family_refresh_mutation_allowed",
+      "arguments": "org uuid, table_name text, operation text, old_row jsonb, new_row jsonb",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000001_fub_family_refresh.sql",
+        "line": 279
+      },
+      "effective_definition_sha256": "0748a1bf533c4938e46f2e4ea7d96c1d9b0d2162da50b3184bb4092186fc8324"
+    },
+    {
+      "name": "crm_family_refresh_native_digest",
+      "arguments": "v jsonb",
+      "language": "sql",
+      "category": "query and fingerprint helpers",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000001_fub_family_refresh.sql",
+        "line": 276
+      },
+      "effective_definition_sha256": "d74b3c324382f9c8785164c5a419b328774c1294be34dbec3d62f6290dbab4d6"
+    },
+    {
+      "name": "crm_family_refresh_next_catalog_mapping",
+      "arguments": "org uuid, bundle uuid, plan uuid, after_id uuid",
+      "language": "sql",
+      "category": "migration work selection",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000021_fub_family_refresh_catalog_walk.sql",
+        "line": 33
+      },
+      "effective_definition_sha256": "a381267942c5175d1d88bbe2a62296d6666caf9962ee8edf7703d786681760fe"
+    },
+    {
+      "name": "crm_family_refresh_next_mapping_source",
+      "arguments": "org uuid, bundle uuid, family text, after_id uuid",
+      "language": "plpgsql",
+      "category": "migration work selection",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000019_fub_family_refresh_mapping_order.sql",
+        "line": 10
+      },
+      "effective_definition_sha256": "4f241598b5793e1c5de1e3a8917a4c29af1a9e5a03cbb3ef7c315f4e4bec4539"
+    },
+    {
+      "name": "crm_family_refresh_next_owned_activity",
+      "arguments": "org uuid, bundle uuid, after_kind text, after_source text",
+      "language": "sql",
+      "category": "migration work selection",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000016_fub_family_refresh_activity_owned_walk.sql",
+        "line": 56
+      },
+      "effective_definition_sha256": "9b5c073716899c2aca6e18356aad537f4cd3fad6fe65d885cd375eb5852ad627"
+    },
+    {
+      "name": "crm_family_refresh_next_owned_history",
+      "arguments": "org uuid, bundle uuid, after_id uuid",
+      "language": "sql",
+      "category": "migration work selection",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000011_fub_family_refresh_history_owned_walk.sql",
+        "line": 16
+      },
+      "effective_definition_sha256": "6b02fc424ad6cb6d2e294a347c293be1e8c8c20a0288f9a95c6a712d84e23981"
+    },
+    {
+      "name": "crm_family_refresh_owned_activity",
+      "arguments": "org uuid, bundle uuid",
+      "language": "sql",
+      "category": "migration work selection",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000029_fub_family_refresh_activity_ownership.sql",
+        "line": 55
+      },
+      "effective_definition_sha256": "b2f4e586e8eb392de2891927fe530563adca2e19b0ec3f1fed2d21f7618124e2"
+    },
+    {
+      "name": "crm_family_refresh_owned_insert",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 7,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000001_fub_family_refresh.sql",
+        "line": 241
+      },
+      "effective_definition_sha256": "8215d151c96e95e574db98e936fcfb5da8973fafc1b550675db3c17a0be9f397"
+    },
+    {
+      "name": "crm_family_refresh_owned_walk_fence",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000011_fub_family_refresh_history_owned_walk.sql",
+        "line": 44
+      },
+      "effective_definition_sha256": "accee737ced7deb4b51bb297dba22b1aa63b81bb0f893920541483f2186da0b4"
+    },
+    {
+      "name": "crm_family_refresh_patch_fence",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000014_fub_family_refresh_mapping_patches.sql",
+        "line": 20
+      },
+      "effective_definition_sha256": "457b7392d4591606f97136602925ee90fbf1bfd3908b4dca9705413e4185fa72"
+    },
+    {
+      "name": "crm_family_refresh_person_metadata_fence",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000022_fub_family_refresh_person_metadata.sql",
+        "line": 3
+      },
+      "effective_definition_sha256": "623a84a2039c7997af2a1e37a60f5201122b53fd76903d66d84a1887b33ecffb"
+    },
+    {
+      "name": "crm_family_refresh_plan_guard",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000001_fub_family_refresh.sql",
+        "line": 195
+      },
+      "effective_definition_sha256": "e5475e3cce533db588c7aaf42876a6607fae1340060f7ed4712814ad03149028"
+    },
+    {
+      "name": "crm_family_refresh_recipe_fence",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000024_fub_family_refresh_sealing.sql",
+        "line": 42
+      },
+      "effective_definition_sha256": "0be00b50dc98e7f4b61ac2bb8b708bb5207e191768dc22a22a129105bcae9369"
+    },
+    {
+      "name": "crm_family_refresh_reclaim",
+      "arguments": "org uuid, bundle uuid, plan uuid, reservation uuid, epoch bigint",
+      "language": "plpgsql",
+      "category": "reservation workflow and accounting",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000009_fub_family_refresh_history_budget.sql",
+        "line": 84
+      },
+      "effective_definition_sha256": "3575921de32649a1eb6a2fa924415620d5b5149df336abf9ae7391837e987ebb"
+    },
+    {
+      "name": "crm_family_refresh_remainder_bundle_guard",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000032_fub_family_refresh_remainder.sql",
+        "line": 203
+      },
+      "effective_definition_sha256": "a8332cdf4d8090c7ca5bb6485f40b6401cd50e647f3c07971209aaff76d43a73"
+    },
+    {
+      "name": "crm_family_refresh_remainder_copy_guard",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 6,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000032_fub_family_refresh_remainder.sql",
+        "line": 55
+      },
+      "effective_definition_sha256": "33bf19793739f41ceb595b8dd2b7372e62ac6112fac280ee2d6329d3bea29366"
+    },
+    {
+      "name": "crm_family_refresh_remainder_next",
+      "arguments": "p migration_family_refresh_plan",
+      "language": "plpgsql",
+      "category": "migration work selection",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000032_fub_family_refresh_remainder.sql",
+        "line": 122
+      },
+      "effective_definition_sha256": "8adf7088c8eed86839347d19a4c7925f46f72211c97ad0afc82d0658ee031802"
+    },
+    {
+      "name": "crm_family_refresh_remainder_plan_guard",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000032_fub_family_refresh_remainder.sql",
+        "line": 27
+      },
+      "effective_definition_sha256": "0c189a56834d7b7fcb5ee50ffe840d5cc78ef2326f688a6994e7adbd5a5672fd"
+    },
+    {
+      "name": "crm_family_refresh_remainder_progress_guard",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000032_fub_family_refresh_remainder.sql",
+        "line": 155
+      },
+      "effective_definition_sha256": "342537e85b68fdfe5d091fc667cdfdb70196c775e8be334ee9b029bcead7ee1b"
+    },
+    {
+      "name": "crm_family_refresh_reserve",
+      "arguments": "org uuid, bundle uuid, plan uuid, reservation uuid, epoch bigint, amount bigint, purpose text, run_ceiling bigint, org_ceiling bigint",
+      "language": "plpgsql",
+      "category": "reservation workflow and accounting",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000009_fub_family_refresh_history_budget.sql",
+        "line": 15
+      },
+      "effective_definition_sha256": "d26a717bda526633c189d816aa415209334262e6483d5bbec9f62ed381c1b2ca"
+    },
+    {
+      "name": "crm_family_refresh_retained_size",
+      "arguments": "v jsonb",
+      "language": "plpgsql",
+      "category": "storage measurement and accounting integrity",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000001_fub_family_refresh.sql",
+        "line": 386
+      },
+      "effective_definition_sha256": "52557eb56ae089cb2dead6c126a8241dc036360c1017636d3589a83f5290e771"
+    },
+    {
+      "name": "crm_family_refresh_revision_installed",
+      "arguments": "kind text",
+      "language": "sql",
+      "category": "query and fingerprint helpers",
+      "trigger_bindings": 0,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000033_fub_family_refresh_legacy_revision.sql",
+        "line": 6
+      },
+      "effective_definition_sha256": "05d82369200fbc63283cdb1610729e5d0bc2e269e4c2477dd58356f3cad7fcf7"
+    },
+    {
+      "name": "crm_family_refresh_sealing_fence",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 2,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000024_fub_family_refresh_sealing.sql",
+        "line": 20
+      },
+      "effective_definition_sha256": "acd42063a86391719409af83f47e8a02722f8d48860037abee4c776159af72f2"
+    },
+    {
+      "name": "crm_family_refresh_settle",
+      "arguments": "org uuid, bundle uuid, plan uuid, reservation uuid, epoch bigint, release_control boolean",
+      "language": "plpgsql",
+      "category": "reservation workflow and accounting",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000009_fub_family_refresh_history_budget.sql",
+        "line": 52
+      },
+      "effective_definition_sha256": "823cbd408cd2d3801f5d64d82daa326461e8bf9c9b9de468957e4557f22bfa3b"
+    },
+    {
+      "name": "crm_family_refresh_walk_fence",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261008000010_fub_family_refresh_history_walk.sql",
+        "line": 10
+      },
+      "effective_definition_sha256": "b61de98a1ded9c3c39d26b5598e37158b937155ab23d6df9ec470da149df6f82"
+    },
+    {
+      "name": "crm_history_complete_read",
+      "arguments": "org uuid",
+      "language": "plpgsql",
+      "category": "workspace authorization and compatibility fences",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261005000001_fub_admitted_history.sql",
+        "line": 159
+      },
+      "effective_definition_sha256": "7e161c6c09e504d7c8299dd21cb8fc2acbef4c5365fbd4e4101f0dc8f82362cd"
+    },
+    {
+      "name": "crm_history_display_owner_immutable",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261005000001_fub_admitted_history.sql",
+        "line": 357
+      },
+      "effective_definition_sha256": "20757ed977a135792e62583019ce84bc54c0374bd9b6e18cacce9fa827083f59"
+    },
+    {
+      "name": "crm_history_import_display_change",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "erasure and suppression propagation",
+      "trigger_bindings": 1,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260922000001_fub_history_timeline.sql",
+        "line": 351
+      },
+      "effective_definition_sha256": "f1e0ea19e5dc899330e748aee053b04e07b53138409cc1942b4ac8ad6aa1fca9"
+    },
+    {
+      "name": "crm_history_import_display_guard",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260922000001_fub_history_timeline.sql",
+        "line": 345
+      },
+      "effective_definition_sha256": "2b840ed9a3a1e63de720a513b33e09307e19f0c5d5247b5bfee387950d83ff52"
+    },
+    {
+      "name": "crm_history_import_erased_identity",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "erasure and suppression propagation",
+      "trigger_bindings": 1,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260922000001_fub_history_timeline.sql",
+        "line": 331
+      },
+      "effective_definition_sha256": "3a8e719e681b60041df364253f122067fa08eef1d3745a82a199345269980904"
+    },
+    {
+      "name": "crm_history_import_fact_count",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 3,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260922000001_fub_history_timeline.sql",
+        "line": 318
+      },
+      "effective_definition_sha256": "9c97363d74e83ee907009e64c9710818f3112f742a87530cfc6d0b5b0331979c"
+    },
+    {
+      "name": "crm_history_import_fact_guard",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 3,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260922000001_fub_history_timeline.sql",
+        "line": 299
+      },
+      "effective_definition_sha256": "1a031c2e27be0835dbb0098990fb081fa6acde2117c6debbb6a9710c9e2e9e75"
+    },
+    {
+      "name": "crm_history_import_frozen",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 4,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260922000001_fub_history_timeline.sql",
+        "line": 136
+      },
+      "effective_definition_sha256": "649c644db023a89a64d0494d360409cf4dafe401986e448651a94f95e88db971"
+    },
+    {
+      "name": "crm_history_import_identity_immutable",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260922000001_fub_history_timeline.sql",
+        "line": 154
+      },
+      "effective_definition_sha256": "e16fb695f2e7c4360e9af1bf5317657129f819f9a2c5953f07b7c4777b97bf44"
+    },
+    {
+      "name": "crm_history_import_measure",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "storage measurement and accounting integrity",
+      "trigger_bindings": 10,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261005000001_fub_admitted_history.sql",
+        "line": 204
+      },
+      "effective_definition_sha256": "f3f1636f22b37d20a1ac6d47e2039e107e09cd3320f5ca73a491a7b522dc2577"
+    },
+    {
+      "name": "crm_history_import_person_erasure",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "erasure and suppression propagation",
+      "trigger_bindings": 1,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260922000001_fub_history_timeline.sql",
+        "line": 372
+      },
+      "effective_definition_sha256": "64a90279824afda460380d30c4105f8a37c5645a5a7779f64f56037e36f14f1b"
+    },
+    {
+      "name": "crm_history_import_retained_size",
+      "arguments": "v jsonb",
+      "language": "plpgsql",
+      "category": "storage measurement and accounting integrity",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260922000001_fub_history_timeline.sql",
+        "line": 164
+      },
+      "effective_definition_sha256": "19bd84a4a13efa2d59832205aa2486efb5d182ec8d61e538d64990f00e2ff48c"
+    },
+    {
+      "name": "crm_history_review_call_link",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 1,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260922000001_fub_history_timeline.sql",
+        "line": 279
+      },
+      "effective_definition_sha256": "8f0eaa656eaf77471804e322aefb9b5ecbcc3efa163340d4a5e5c542504a71f9"
+    },
+    {
+      "name": "crm_history_review_core_rows",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 3,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260922000001_fub_history_timeline.sql",
+        "line": 258
+      },
+      "effective_definition_sha256": "37e35612c0072247032551a7f7e7abd284d4bb247fcc7beea841187e69b8f0b8"
+    },
+    {
+      "name": "crm_history_review_custom_field_label",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 1,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260922000001_fub_history_timeline.sql",
+        "line": 273
+      },
+      "effective_definition_sha256": "7ea067c4ab89bac4fd1303b8885a3efb9809840e9dac4f09764a29a1863f9949"
+    },
+    {
+      "name": "crm_history_review_custom_field_option_label",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 1,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260922000001_fub_history_timeline.sql",
+        "line": 275
+      },
+      "effective_definition_sha256": "27d5bc8464bd9a0c4b1623cf65d414c9d06db3eaa987482df7ae8689989d0ea8"
+    },
+    {
+      "name": "crm_history_review_delta",
+      "arguments": "o uuid, p uuid, k text, d bigint",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 0,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260922000001_fub_history_timeline.sql",
+        "line": 222
+      },
+      "effective_definition_sha256": "b1853bb8630882a4f506bf5d2d9256c89f18bbb562c763f18e67421222cdca30"
+    },
+    {
+      "name": "crm_history_review_person",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 1,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260922000001_fub_history_timeline.sql",
+        "line": 230
+      },
+      "effective_definition_sha256": "5e03b6af1a4e671e1e9f15bceb2b48dad1a62d6fca6e9208814c464f7eaea2c9"
+    },
+    {
+      "name": "crm_history_review_rows",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 13,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260922000001_fub_history_timeline.sql",
+        "line": 236
+      },
+      "effective_definition_sha256": "978d1d5ffabdd247e1b1b3d2eeba9976ded7d7f2da95d550895c13adceb5afa5"
+    },
+    {
+      "name": "crm_history_review_stage_label",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 1,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260922000001_fub_history_timeline.sql",
+        "line": 269
+      },
+      "effective_definition_sha256": "194ae4cc4abfa5b6bd5c6bf65a5c6c4084e3a91564ea59ab23678ac0b0e5b611"
+    },
+    {
+      "name": "crm_history_review_tag_label",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 1,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260922000001_fub_history_timeline.sql",
+        "line": 271
+      },
+      "effective_definition_sha256": "9144606eb42c29440ffb013304ad4b66bfb302f34838eb62734a67038bd3ba1a"
+    },
+    {
+      "name": "crm_history_review_user_label",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 1,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260922000001_fub_history_timeline.sql",
+        "line": 267
+      },
+      "effective_definition_sha256": "9c4c5ab8b4afe4562127f5c35069886f2080881316e6adf9a3e319f84ec9da0a"
+    },
+    {
+      "name": "crm_mapping_repair_capability",
+      "arguments": "org uuid",
+      "language": "plpgsql",
+      "category": "workspace authorization and compatibility fences",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261006000001_fub_people_mapping_repair.sql",
+        "line": 397
+      },
+      "effective_definition_sha256": "62d378f981e573bdd7f259266154d79a964d9b9da59be323f20ef7450a8d7706"
+    },
+    {
+      "name": "crm_mapping_repair_head_write",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 2,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261006000001_fub_people_mapping_repair.sql",
+        "line": 364
+      },
+      "effective_definition_sha256": "611ef3dcd45bc36319972d89c5e2483fd0aaa6793d436166699e97c8f2219cc7"
+    },
+    {
+      "name": "crm_mapping_repair_identity",
+      "arguments": "owner_name text, root jsonb, item jsonb",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261006000001_fub_people_mapping_repair.sql",
+        "line": 145
+      },
+      "effective_definition_sha256": "e1e6eb09b91291179f6b82dd1b7b2a23271491ee07815096668b4cd4130be7ac"
+    },
+    {
+      "name": "crm_mapping_repair_mutation_evidence",
+      "arguments": "org uuid, owner_name text, permit text, table_name text",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261006000001_fub_people_mapping_repair.sql",
+        "line": 161
+      },
+      "effective_definition_sha256": "18d9a0548b6bb73387c512faaa00bf428e286d5adcee4dc9413ec695e422b2f5"
+    },
+    {
+      "name": "crm_mapping_repair_native_fingerprint",
+      "arguments": "org uuid, target uuid",
+      "language": "sql",
+      "category": "query and fingerprint helpers",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261006000001_fub_people_mapping_repair.sql",
+        "line": 179
+      },
+      "effective_definition_sha256": "1959d0228bf02b00cb2c615011f4293baf73180ad0b19f27ac98d4d55884b9ef"
+    },
+    {
+      "name": "crm_mapping_repair_owned_write",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 16,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261006000001_fub_people_mapping_repair.sql",
+        "line": 210
+      },
+      "effective_definition_sha256": "9ae7fe5a1fe1462e9748fc2ccd8b81ce55c99b6a95f90c8ac0f0835709987690"
+    },
+    {
+      "name": "crm_mapping_repair_target",
+      "arguments": "org uuid, kind text, target uuid",
+      "language": "plpgsql",
+      "category": "query and fingerprint helpers",
+      "trigger_bindings": 0,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261006000001_fub_people_mapping_repair.sql",
+        "line": 192
+      },
+      "effective_definition_sha256": "3cff8e447ada757afc1d3f0694169c2fa3058cab43a0f7fdef8e20c98befdead"
+    },
+    {
+      "name": "crm_mapping_repair_write_fence",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "workspace authorization and compatibility fences",
+      "trigger_bindings": 20,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261006000001_fub_people_mapping_repair.sql",
+        "line": 421
+      },
+      "effective_definition_sha256": "4f71147d37b5f6394bfb438ab5e9e5af63cf58509140147c7a6aca9ea78571d8"
+    },
+    {
+      "name": "crm_metadata_identity_guard",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261002000001_fub_admitted_metadata.sql",
+        "line": 149
+      },
+      "effective_definition_sha256": "dd254e94755e2d1f3f8ce2e40e3acbd9ba82148f4301bbc4af4647643efa4a9e"
+    },
+    {
+      "name": "crm_metadata_identity_key_matches",
+      "arguments": "source_key bytea, row_value jsonb",
+      "language": "sql",
+      "category": "query and fingerprint helpers",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261002000003_original_metadata_identity_key.sql",
+        "line": 4
+      },
+      "effective_definition_sha256": "f9af89baf1791b5ef6e88a7271f31ff359f9c76a7b16bfed2ff1d7a748fa4ef4"
+    },
+    {
+      "name": "crm_metadata_insert_allowed",
+      "arguments": "org uuid, table_name text, row_value jsonb",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261002000001_fub_admitted_metadata.sql",
+        "line": 128
+      },
+      "effective_definition_sha256": "50a758d586fba93774872df09848baf93e6450f22329dd5d21e611fd4d25b0ca"
+    },
+    {
+      "name": "crm_mobile_advance_metadata_catalog_revision",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 3,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261003000001_mobile_metadata.sql",
+        "line": 79
+      },
+      "effective_definition_sha256": "eccd9b0bf24ccfbb0e90e38c3268992eb849387ae94cefe9a06f2d6c40cfce35"
+    },
+    {
+      "name": "crm_mobile_advance_metadata_revision",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 2,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261003000001_mobile_metadata.sql",
+        "line": 54
+      },
+      "effective_definition_sha256": "d771e988f2db333d11ee75b414aebef340c8bde25e0a9fb644461e23522c9b9b"
+    },
+    {
+      "name": "crm_mobile_advance_stage_catalog_revision",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 1,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260929000001_mobile_stage_change.sql",
+        "line": 32
+      },
+      "effective_definition_sha256": "c73791d9b7c8c5ae593c7a504d8c1d2cbbc95dece54fb56820c53b1e32e734bc"
+    },
+    {
+      "name": "crm_mobile_component_revision",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 3,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260923000002_mobile_import_projection_compat.sql",
+        "line": 7
+      },
+      "effective_definition_sha256": "5f2adb6a9e0ae083c627c9f6aa309dcec04d749a7e43d12eb327c3da95b594c3"
+    },
+    {
+      "name": "crm_mobile_contact_details_revision",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 1,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261001000002_mobile_details_overflow.sql",
+        "line": 3
+      },
+      "effective_definition_sha256": "f91492d0f92f6c6c859965b1d5df3b874d4f59c8a6c4a5fabb1a4910cdacc871"
+    },
+    {
+      "name": "crm_mobile_create_metadata_catalog",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 1,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261003000001_mobile_metadata.sql",
+        "line": 29
+      },
+      "effective_definition_sha256": "fcfed8488fb55ff51015b0da1bd90e1284d0a133f005d345af966a3a3ede3cd5"
+    },
+    {
+      "name": "crm_mobile_details_revision",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261001000003_mobile_details_derived_revision.sql",
+        "line": 3
+      },
+      "effective_definition_sha256": "bbe0d42e2f9b996749dec82526184cc16fc8a8547a7956f1ad1e690a6474da74"
+    },
+    {
+      "name": "crm_mobile_label_revision",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 2,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260923000002_mobile_import_projection_compat.sql",
+        "line": 20
+      },
+      "effective_definition_sha256": "b7cd877686713b055b708db1da338e1ebe3a952c24645a49b3c1f0567e23daa9"
+    },
+    {
+      "name": "crm_mobile_metadata_catalog_revision",
+      "arguments": "p_organization_id uuid",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 0,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261003000001_mobile_metadata.sql",
+        "line": 17
+      },
+      "effective_definition_sha256": "3115c3d489a893bff5abfa532a2f294448194d936110117df5be750e55e5a282"
+    },
+    {
+      "name": "crm_mobile_metadata_person_revision",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261003000001_mobile_metadata.sql",
+        "line": 40
+      },
+      "effective_definition_sha256": "e1bb20376ef1092e79acf8f04bb77e68c3374622942aa63b16519ccf6f7cb058"
+    },
+    {
+      "name": "crm_mobile_note_revision",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260925000001_mobile_note_revision.sql",
+        "line": 6
+      },
+      "effective_definition_sha256": "362264d822cab5a3cc13d00727eab7c41d397b5e21640dfdc2c88cec25570544"
+    },
+    {
+      "name": "crm_mobile_person_revision",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260923000001_mobile_offline_foundation.sql",
+        "line": 14
+      },
+      "effective_definition_sha256": "c276a5358848c7cbe5dab05776c64e8bbf7efeb0a0d39b7841a36cdbd322a69f"
+    },
+    {
+      "name": "crm_mobile_stage_revision",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260929000001_mobile_stage_change.sql",
+        "line": 12
+      },
+      "effective_definition_sha256": "95662efd6b0137cb38c860c260ad207c04d8e8e07811d960d2bd68a74ac62c56"
+    },
+    {
+      "name": "crm_mobile_task_revision",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260923000001_mobile_offline_foundation.sql",
+        "line": 5
+      },
+      "effective_definition_sha256": "8c668dbece94f1d9f9ce9ad32e427811b54e95a67cb9e832f49ab74be599c44b"
+    },
+    {
+      "name": "crm_people_admission_contact_building",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260928000001_fub_people_admission.sql",
+        "line": 117
+      },
+      "effective_definition_sha256": "54da32120a610f090688e38d0c3f72bed6acc54ae3eb23c6785640cf1471386d"
+    },
+    {
+      "name": "crm_people_admission_item_building",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260928000001_fub_people_admission.sql",
+        "line": 109
+      },
+      "effective_definition_sha256": "fdccb03bf9cd750af5dea9236be9e7f185674d62e27207323ab3f8b4505506a9"
+    },
+    {
+      "name": "crm_people_admission_item_immutable",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260928000001_fub_people_admission.sql",
+        "line": 100
+      },
+      "effective_definition_sha256": "ed24008cff1fa9309c85de57ef276a7bc584dd1c748647192310a32797f7e9d1"
+    },
+    {
+      "name": "crm_people_admission_lock_stage",
+      "arguments": "org uuid, target uuid",
+      "language": "plpgsql",
+      "category": "query and fingerprint helpers",
+      "trigger_bindings": 0,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260928000001_fub_people_admission.sql",
+        "line": 191
+      },
+      "effective_definition_sha256": "6267486216dd7d5c29aeeb71201ea07bfecc7b4697cf8ef0b5913573ae547d89"
+    },
+    {
+      "name": "crm_people_admission_mutation_allowed",
+      "arguments": "org uuid, permit text, table_name text, operation text, row_value jsonb",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261007000001_fub_people_recovery.sql",
+        "line": 320
+      },
+      "effective_definition_sha256": "be7267ff12e489335618dbca4f9026be5943d884a0cab4c03ea68f121b3fba4e"
+    },
+    {
+      "name": "crm_people_admission_plan_immutable",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260928000001_fub_people_admission.sql",
+        "line": 80
+      },
+      "effective_definition_sha256": "d685c3d9ae9fa9f05a7e465960825192168f5d41e1dc73f5bbf54e06c185acde"
+    },
+    {
+      "name": "crm_people_recovery_capability",
+      "arguments": "org uuid",
+      "language": "plpgsql",
+      "category": "workspace authorization and compatibility fences",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261007000001_fub_people_recovery.sql",
+        "line": 108
+      },
+      "effective_definition_sha256": "b13965196e635850fbbe7232a7faac80a3eece7c574bd63dfbe38c6ab72fc7dd"
+    },
+    {
+      "name": "crm_people_recovery_catalog_owned",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261007000001_fub_people_recovery.sql",
+        "line": 440
+      },
+      "effective_definition_sha256": "53c4b1e32e5fa48974f85bb422cda6aaac82707dcd4bf0a0c527a80e625cb935"
+    },
+    {
+      "name": "crm_people_recovery_item_owned",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261007000001_fub_people_recovery.sql",
+        "line": 366
+      },
+      "effective_definition_sha256": "5fdabbf3986ffa9df9220aef508ca09ea62d661cb664e1306a7fc9d84e6bbe9e"
+    },
+    {
+      "name": "crm_people_recovery_item_proof",
+      "arguments": "org uuid, unit uuid",
+      "language": "sql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261007000001_fub_people_recovery.sql",
+        "line": 292
+      },
+      "effective_definition_sha256": "1a94bb1fa80eaea331f54076f23186b16d3517fd048c1767efbc22b0637f1c76"
+    },
+    {
+      "name": "crm_people_recovery_owned_write",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 3,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261007000001_fub_people_recovery.sql",
+        "line": 128
+      },
+      "effective_definition_sha256": "591d051a7323ef08946fcb9ecc7270f2f9eed1f7bad19cf88edeb4ddb648d2a6"
+    },
+    {
+      "name": "crm_people_recovery_plan_immutable",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261007000001_fub_people_recovery.sql",
+        "line": 386
+      },
+      "effective_definition_sha256": "364fa228f9270c8697fd9486c2928f524ac92a76f94cd2acb81934b58506e397"
+    },
+    {
+      "name": "crm_people_recovery_previously_materialized",
+      "arguments": "org uuid, account bigint, source text",
+      "language": "sql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261007000001_fub_people_recovery.sql",
+        "line": 249
+      },
+      "effective_definition_sha256": "edde53fd9e8b2a8b5baa118e5df8f0d10f19930fc500b0249fd0b61d1f87197c"
+    },
+    {
+      "name": "crm_people_recovery_refresh_approval",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261007000001_fub_people_recovery.sql",
+        "line": 402
+      },
+      "effective_definition_sha256": "33a32ade586d788f581c25dd2d46fa524b28483918b471427b2514d1e817e2bc"
+    },
+    {
+      "name": "crm_people_recovery_result_owned",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261007000001_fub_people_recovery.sql",
+        "line": 450
+      },
+      "effective_definition_sha256": "a67e50e1c2d9769303d1757b1c2040c143c9b284d64bb90b620b8176038a781c"
+    },
+    {
+      "name": "crm_people_recovery_write_fence",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "workspace authorization and compatibility fences",
+      "trigger_bindings": 6,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261007000001_fub_people_recovery.sql",
+        "line": 197
+      },
+      "effective_definition_sha256": "64b3a52c6a2fe97cfab14564391eeb54356d71ee2331aa2a71ff1decbc6c77a8"
+    },
+    {
+      "name": "crm_people_refresh_mutation_allowed",
+      "arguments": "org uuid, permit text, table_name text, operation text, row_value jsonb",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261006000001_fub_people_mapping_repair.sql",
+        "line": 441
+      },
+      "effective_definition_sha256": "b87fc7625bee41730c3e571d404cdb13a36602884908963503fd900775ce5708"
+    },
+    {
+      "name": "crm_person_admitted_prepare_history",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 1,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260928000001_fub_people_admission.sql",
+        "line": 240
+      },
+      "effective_definition_sha256": "5b5e80e9a083d6b15f849435e87e8ac01c02cd95f9c4145b00a5a049f84830cf"
+    },
+    {
+      "name": "crm_person_recovered_prepare_history",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 1,
+      "security_definer": true,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261007000001_fub_people_recovery.sql",
+        "line": 283
+      },
+      "effective_definition_sha256": "b02c7a72ac3dd281139b69b95ada7db10142f377b5a016c4da0b16f99012d9dc"
+    },
+    {
+      "name": "crm_workspace_mutation_guard",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "workspace authorization and compatibility fences",
+      "trigger_bindings": 35,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261004000001_fub_admitted_activity_import.sql",
+        "line": 273
+      },
+      "effective_definition_sha256": "56c7e10515ca1c5594fa951620e14698605487235bce54fe9f0c59298c84f16f"
+    },
+    {
+      "name": "crm_workspace_operational",
+      "arguments": "org uuid",
+      "language": "plpgsql",
+      "category": "workspace authorization and compatibility fences",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260918000001_fub_people_import.sql",
+        "line": 185
+      },
+      "effective_definition_sha256": "4dd1e5d665e0ffea7871856f5febb4069c4b437737d57437d8fb8f8565ec5743"
+    },
+    {
+      "name": "crm_workspace_organization_guard",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "workspace authorization and compatibility fences",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260918000001_fub_people_import.sql",
+        "line": 251
+      },
+      "effective_definition_sha256": "b4251d4b0498af0477a74af6929e1c735cbb8216f5e22d6894fcb4eab1975208"
+    },
+    {
+      "name": "crm_workspace_read",
+      "arguments": "org uuid, actor uuid, operational_only boolean",
+      "language": "plpgsql",
+      "category": "workspace authorization and compatibility fences",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260922000001_fub_history_timeline.sql",
+        "line": 194
+      },
+      "effective_definition_sha256": "8304e71cfcadd613914013de28bc814e28d11765c193d34beb4dc0a97263c93e"
+    },
+    {
+      "name": "crm_workspace_shared",
+      "arguments": "org uuid",
+      "language": "plpgsql",
+      "category": "workspace authorization and compatibility fences",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20261006000001_fub_people_mapping_repair.sql",
+        "line": 408
+      },
+      "effective_definition_sha256": "d525ed6692b60408a9d666ab23a1bcec61250c50ffb7cc9cfec8409cecb16dc9"
+    },
+    {
+      "name": "migration_core_change_bytes",
+      "arguments": "v jsonb, table_name text",
+      "language": "plpgsql",
+      "category": "storage measurement and accounting integrity",
+      "trigger_bindings": 0,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260924000001_core_change_reports.sql",
+        "line": 81
+      },
+      "effective_definition_sha256": "604ebe16d9d8873616a898c68d65c6f6f1fb49de654c918304f78199f7d5ccde"
+    },
+    {
+      "name": "migration_core_change_charge",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "storage measurement and accounting integrity",
+      "trigger_bindings": 5,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260924000001_core_change_reports.sql",
+        "line": 101
+      },
+      "effective_definition_sha256": "8bac6a5c75457888a3fc105b9cff1e5fdcc5c3d0e64bc07f16393fc86826eca1"
+    },
+    {
+      "name": "migration_core_change_immutable",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "migration eligibility, ownership and workflow guards",
+      "trigger_bindings": 3,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260924000001_core_change_reports.sql",
+        "line": 118
+      },
+      "effective_definition_sha256": "40d28ef7983dd661b0d7f1e04297f619e90a9c20acec6e1ad4152d9da4f76e31"
+    },
+    {
+      "name": "person_touch_correspondence",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260910000001_person_last_activity.sql",
+        "line": 58
+      },
+      "effective_definition_sha256": "a9130a51c48c92810387d6cbfadefdda0e3ea8d56ff23e13b92c164cf87b6f67"
+    },
+    {
+      "name": "person_touch_last_contact",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260910000001_person_last_activity.sql",
+        "line": 43
+      },
+      "effective_definition_sha256": "0dd21c7b13ddf215c2dbde0a8c8e96f8c58b06f068a144b35ebb90bf8476259b"
+    },
+    {
+      "name": "person_touch_last_inquiry",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "derived projections and revisions",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260910000001_person_last_activity.sql",
+        "line": 35
+      },
+      "effective_definition_sha256": "2db682be0827437f7cdee79b71fdd2c4288c95ee1945ccce66be917920184095"
+    },
+    {
+      "name": "reject_direct_mutation",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "append-only integrity",
+      "trigger_bindings": 1,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260911000001_inquiry_append_only.sql",
+        "line": 71
+      },
+      "effective_definition_sha256": "7b9ab80a89713a78eb86bcd97fc241def3a549b1d2efc3e66812cbc495e38870"
+    },
+    {
+      "name": "reject_mutation",
+      "arguments": "",
+      "language": "plpgsql",
+      "category": "append-only integrity",
+      "trigger_bindings": 99,
+      "security_definer": false,
+      "last_explicit_definition": {
+        "path": "backend/crates/crm-api/migrations/20260821000004_inquiry_and_facts.sql",
+        "line": 155
+      },
+      "effective_definition_sha256": "cde58098087754c78b85e71406f47bfd6af27aef340fb2bb24ea4970cc635d22"
+    }
+  ]
+}

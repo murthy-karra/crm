@@ -25,7 +25,7 @@ pub use model::{
 };
 pub use queries::{
     filter_names_for_fields, list_definitions, live_field_type_for_filter, load_custom_field,
-    option_ids_belong_to_field_for_filter, values_for_person,
+    option_ids_belong_to_field_for_filter, values_for_person, values_for_person_in_authorized_read,
 };
 
 pub(crate) use commands::{

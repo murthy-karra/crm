@@ -192,6 +192,8 @@ fn make_span_with(request: &Request) -> Span {
         "request",
         method = %request.method(),
         uri = %request.uri().path(),
+        profile_route = request.extensions().get::<axum::extract::MatchedPath>()
+            .map(|path| path.as_str()).unwrap_or("unmatched"),
         version = ?request.version(),
         filter_kinds = tracing::field::Empty,
         filter_clause_count = tracing::field::Empty,

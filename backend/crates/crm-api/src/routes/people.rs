@@ -15,13 +15,13 @@ use crate::domain::commands::{
 };
 use crate::domain::custom_field::{self, ClearPersonCustomFieldValue, SetPersonCustomFieldValue};
 use crate::domain::envelope::CommandContext;
+#[cfg(feature = "test-support")]
 use crate::domain::inquiry::queries as inquiry_queries;
 use crate::domain::person::filter::{FilterDefinition, PersonFilterParams};
 use crate::domain::person::queries as person_queries;
 use crate::domain::person::sort::PersonSort;
 use crate::domain::person::PersonVisibilityScope;
 use crate::domain::tag::{self, AddPersonTag, RemovePersonTag};
-use crate::domain::task;
 use crate::error::ApiError;
 use crate::ids::{CustomFieldId, PersonId, StageId, TagId, UserId};
 use crate::state::AppState;
@@ -251,108 +251,36 @@ async fn get_person(
     let scope = PersonVisibilityScope::from_auth(&auth);
     let organization_id = scope.organization_id();
 
-    // Preserve scoped 404 without running the legacy inquiry aggregate before
-    // the complete-reader gates. Imported volume belongs to the paged reader.
-    let exists = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM person WHERE organization_id=$1 AND id=$2)",
+    // This response includes the complete native history/activity timeline.
+    // Fence both review anchors inside the same shared workspace transaction
+    // before reading the current-state projection or its history.
+    crate::auth::workspace::person_detail_complete_read(&mut conn, organization_id)
+        .await
+        .map_err(ApiError::database)?;
+
+    let mut snapshot =
+        crm_app::domain::person::projection::load(&mut conn, organization_id, person_id)
+            .await
+            .map_err(ApiError::database)?
+            .ok_or(ApiError::NotFound)?;
+    crm_app::domain::person::projection::decorate_for_viewer(
+        &mut snapshot,
+        auth.actor_user_id,
+        auth.role,
+    );
+
+    let history = person_queries::history_snapshot_in_authorized_read(
+        &mut conn,
+        organization_id,
+        person_id,
+        auth.actor_user_id,
+        auth.role == Role::Admin,
     )
-    .bind(organization_id.0)
-    .bind(person_id.0)
-    .fetch_one(&mut *conn)
     .await
     .map_err(ApiError::database)?;
-    if !exists {
-        return Err(ApiError::NotFound);
-    }
-
-    crate::auth::workspace::history_complete_read(&mut conn, organization_id)
-        .await
-        .map_err(ApiError::database)?;
-    crate::auth::workspace::activity_complete_read(&mut conn, organization_id)
-        .await
-        .map_err(ApiError::database)?;
-
-    let person = person_queries::summary_by_id(&mut conn, organization_id, person_id)
-        .await
-        .map_err(ApiError::database)?
-        .ok_or(ApiError::NotFound)?;
-
-    let contact_methods =
-        person_queries::contact_methods_for_person(&mut conn, organization_id, person_id)
-            .await
-            .map_err(ApiError::database)?;
-
-    let inquiries = inquiry_queries::list_for_person(&mut conn, organization_id, person_id)
-        .await
-        .map_err(ApiError::database)?;
-
-    let mut history = person_queries::history_for_person(&mut conn, organization_id, person_id)
-        .await
-        .map_err(ApiError::database)?;
-    // The `note` and `task_completed` history kinds' `can_manage`
-    // (docs/specs/SLICE_015.md §5, docs/specs/SLICE_016.md §4, the
-    // tags-route pattern): the domain query always emits `false` (it has
-    // no viewer context); this route knows the viewer's role and id, so
-    // it overwrites the field — admin, or the viewer is the row's own
-    // author (note) / assignee or creator (task_completed). An unmatched
-    // imported actor (`actor: null` for a note; `assignee`/`created_by`
-    // both `null` for a task) is manageable by an admin only.
-    for entry in history.iter_mut() {
-        if entry.kind == "note" {
-            let can_manage = match &entry.actor {
-                Some(actor) => auth.role == Role::Admin || actor.id == auth.actor_user_id,
-                None => auth.role == Role::Admin,
-            };
-            entry.detail["can_manage"] = serde_json::json!(can_manage);
-        } else if entry.kind == "task_completed" {
-            let assignee_id = entry.detail["assignee"]["id"].as_str();
-            let created_by_id = entry.detail["created_by"]["id"].as_str();
-            let viewer_id = auth.actor_user_id.to_string();
-            let can_manage = auth.role == Role::Admin
-                || assignee_id == Some(viewer_id.as_str())
-                || created_by_id == Some(viewer_id.as_str());
-            entry.detail["can_manage"] = serde_json::json!(can_manage);
-        }
-    }
-
-    let tags = tag::list_for_person(&mut conn, organization_id, person_id).await?;
-
-    // `custom_fields` (docs/specs/SLICE_019.md §4): set values on LIVE
-    // fields only, in field position order — assembled here beside
-    // `tags`/`tasks`, no change to `crm-app/src/domain/person/` (spec's
-    // stated ownership boundary).
-    let custom_fields =
-        custom_field::values_for_person(&mut conn, organization_id, person_id).await?;
-
-    let tasks = task::open_for_person(&mut conn, organization_id, person_id).await?;
-    // The Person detail's `tasks[]` `can_manage` (docs/specs/SLICE_016.md
-    // §4): same viewer-relative overwrite as the history kind above — the
-    // domain read has no viewer context and always returns `false`.
-    let tasks: Vec<serde_json::Value> = tasks
-        .into_iter()
-        .map(|t| {
-            let can_manage = auth.role == Role::Admin
-                || t.assignee
-                    .as_ref()
-                    .is_some_and(|a| a.id == auth.actor_user_id)
-                || t.created_by
-                    .as_ref()
-                    .is_some_and(|c| c.id == auth.actor_user_id);
-            let mut value = serde_json::to_value(&t).unwrap_or(serde_json::Value::Null);
-            value["can_manage"] = serde_json::json!(can_manage);
-            value
-        })
-        .collect();
-
-    Ok(Json(json!({
-        "person": person,
-        "contact_methods": contact_methods,
-        "inquiries": inquiries,
-        "history": history,
-        "tags": tags,
-        "tasks": tasks,
-        "custom_fields": custom_fields,
-    })))
+    snapshot["history"] = serde_json::Value::Array(history);
+    conn.commit().await.map_err(ApiError::database)?;
+    Ok(Json(snapshot))
 }
 
 #[derive(Deserialize)]

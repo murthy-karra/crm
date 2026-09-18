@@ -223,6 +223,7 @@ pub(crate) async fn create_task_in_transaction(
         ctx.correlation_id.0,
     )
     .await?;
+    crate::domain::person::projection::rebuild(tx, ctx.organization_id, cmd.person_id).await?;
     // The creator of a brand-new task can always manage it (rule 1: they
     // are `created_by_user_id`, regardless of who the assignee is).
     queries::task_from_row(row, cmd.person_id, true)
@@ -382,6 +383,7 @@ pub(crate) async fn update_task_in_transaction(
         queries::lock_task_for_update(tx, ctx.organization_id, cmd.person_id, cmd.task_id)
             .await?
             .ok_or(TaskError::Corrupt)?;
+    crate::domain::person::projection::rebuild(tx, ctx.organization_id, cmd.person_id).await?;
     let can_manage = permitted(Some(role), ctx.actor_user_id, &updated_row);
     Ok(Some(UpdateTaskOutcome {
         task: queries::task_from_row(updated_row, cmd.person_id, can_manage)?,
@@ -506,6 +508,8 @@ pub(crate) async fn complete_task_in_transaction(
             .await?
             .ok_or(TaskError::Corrupt)?;
 
+    crate::domain::person::projection::rebuild(tx, ctx.organization_id, cmd.person_id).await?;
+
     Ok(Some(CompleteTaskOutcome {
         task: queries::task_from_row(updated_row, cmd.person_id, true)?,
         changed: true,
@@ -589,6 +593,7 @@ async fn reopen_task_attempt(
         queries::lock_task_for_update(&mut tx, ctx.organization_id, cmd.person_id, cmd.task_id)
             .await?
             .ok_or(TaskError::Corrupt)?;
+    crate::domain::person::projection::rebuild(&mut tx, ctx.organization_id, cmd.person_id).await?;
     tx.commit().await?;
 
     publish_task_changed(publisher, ctx, cmd.person_id).await;
@@ -702,6 +707,7 @@ async fn snooze_task_attempt(
         queries::lock_task_for_update(&mut tx, ctx.organization_id, cmd.person_id, cmd.task_id)
             .await?
             .ok_or(TaskError::Corrupt)?;
+    crate::domain::person::projection::rebuild(&mut tx, ctx.organization_id, cmd.person_id).await?;
     tx.commit().await?;
 
     publish_task_changed(publisher, ctx, cmd.person_id).await;
@@ -776,6 +782,7 @@ async fn delete_task_attempt(
         ctx.actor_user_id,
     )
     .await?;
+    crate::domain::person::projection::rebuild(&mut tx, ctx.organization_id, cmd.person_id).await?;
     tx.commit().await?;
 
     publish_task_changed(publisher, ctx, cmd.person_id).await;

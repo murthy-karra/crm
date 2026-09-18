@@ -34,7 +34,74 @@ immutable layer cache. Application processes run without internet egress.
 # Independent copies can also exercise runner isolation:
 ./scripts/e2e --family leads --copies 2 --concurrency 2
 python3 -m unittest e2e.test_runner -v
+# Count real API SQLx executions, grouped by request, endpoint and journey step:
+./scripts/e2e --all --concurrency 4 --sql-profile
 ```
+
+`--sql-profile` enables `CRM_SQL_PROFILE=1` only in each isolated API process.
+It writes `sql-profile.json` and `sql-profile.md` beside each family's evidence.
+The report separates HTTP requests from unscoped workers/pool maintenance and
+excludes seed/startup and health requests from journey HTTP totals. Step attribution
+uses server request start times against the recorded Playwright step intervals;
+overlapping requests are counted independently. Late completions remain attached
+to their initiating request. Missing telemetry fails profiling instead of reporting
+zero. Migration's injected-Reader server uses the same telemetry initializer.
+
+Profiling never emits SQL text, query parameters, request bodies, query strings,
+or credentials. SQLx events contribute only an allowlisted statement category and
+numeric elapsed time; HTTP grouping uses route templates and methods. Ordinary
+application logs continue through their existing formatter, with SQLx query events
+excluded from that formatter while profiling is enabled.
+
+These are **SQLx execution counts, not exact wire round trips**. In SQLx 0.8.6,
+BEGIN/savepoint creation and drop-triggered rollback bypass QueryLogger. Prepared
+statement setup may add protocol exchanges, and one execution can contain several
+statements. Trigger-internal SQL does not create additional client executions.
+Elapsed time includes client-observed database execution/lock/transfer work; it
+does not isolate server CPU or network latency. Synthetic E2E datasets establish
+actual path counts, not production capacity or a latency gate (D-050).
+
+For a bounded Person-detail HTTP load measurement, run
+`python3 -m e2e.load_person`. This reuses the same images, migrations, operational
+seed, isolated networking, credential sanitization and owned cleanup. By default
+it creates 100 distinct member identities and an isolated, data-light pool of
+25,000 valid Organization-scoped Person rows, then runs one agent and 100 agents
+for 30 seconds each. `--agents`, `--pool-size`, and `--duration-seconds` adjust
+those bounded inputs. Each agent uses an independent deterministic pseudo-random
+stream over the whole pool, so every request names a potentially different Person.
+Every response is checked against the requested Person, and the report records
+each agent's distinct-Person coverage. Each agent has one request in flight and
+no think time. The client uses Playwright's authenticated HTTP API; this does not
+measure browser rendering, realtime subscriptions or page fanout.
+
+The large Person fixture is inserted directly only in the owned benchmark database.
+It has no inquiries, history, contacts, tags, custom fields or tasks: creating
+25,000 People through intake would primarily measure that command's Organization-
+wide advisory lock, rather than Person-detail reads. The regular journey suite
+continues to create its business state through the real product interfaces.
+
+Use `--fixture history-heavy --heavy-pool-size 1000` to keep the 25,000-Person
+Organization but direct random reads at a production-shaped active cohort. Each
+target gets 3 contacts, 5 tags, 12 live notes, 12 open tasks, 8 completed tasks,
+20 contact facts, 10 stage facts and 10 assignment facts. The response validator
+requires exactly 60 ordered timeline entries and 12 open tasks on every HTTP 200.
+These benchmark-only rows are inserted directly by the PostgreSQL owner after
+normal migrations; they never create an alternate application mutation path.
+
+Use `--database-connections 100` to compare a larger API SQLx pool with the
+default of 10. The application admits concurrent workspace reads up to one half
+of the configured pool, preserving capacity for other request and worker work.
+
+SQLx verbose profiling is off. Only the owned PostgreSQL instance enables
+`pg_stat_statements`; the owned read-only audit role receives statistics-reading
+permission. Reports include statuses, payload validation, latency percentiles,
+server execution-counter deltas, activity samples and API/PostgreSQL container
+CPU/memory samples. Server counters include background application work and
+transaction-control statements, so they differ from SQLx profile counts. A
+completed measurement may contain HTTP errors; inspect `load-summary.json` rather
+than interpreting runner completion as an assertion that every response passed.
+This tiny warmed fixture is a diagnostic measurement, not a production capacity
+test, and is intentionally separate from the automatic testing gate.
 
 The runner builds the real Rust binaries and production Vue bundle entirely in
 Docker. It never loads the checkout `.env`, uses shared service ports, or writes

@@ -1037,6 +1037,8 @@ async fn import_task(
         return Err(MigrationError::SourceNotEligible);
     }
     sqlx::query("INSERT INTO task(id,organization_id,person_id,title,kind,due_at,assignee_user_id,created_by_user_id,completed_at,completed_by_user_id,origin,correlation_id,source,source_external_id,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,NULL,'migration',$10,'fub',$11,$12,$13)").bind(cmd.target).bind(j.org.0).bind(cmd.person).bind(cmd.title).bind(cmd.kind).bind(cmd.due).bind(cmd.assignee).bind(cmd.creator).bind(cmd.completed).bind(j.id).bind(cmd.source_key).bind(cmd.created).bind(cmd.updated).execute(&mut *conn).await?;
+    crate::domain::person::projection::rebuild(conn, j.org, crate::ids::PersonId::new(cmd.person))
+        .await?;
     Ok(sqlx::query_scalar::<_, i32>(
         "SELECT pg_column_size(t) FROM task t WHERE id=$1 AND organization_id=$2",
     )

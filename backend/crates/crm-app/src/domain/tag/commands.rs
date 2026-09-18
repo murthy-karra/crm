@@ -328,7 +328,7 @@ pub(crate) async fn apply_prepared_person_tag(
     conn: &mut PgConnection,
     prepared: PreparedPersonTag,
 ) -> Result<bool, TagError> {
-    apply_person_tag_in_transaction(
+    let changed = apply_person_tag_in_transaction(
         conn,
         prepared.organization_id,
         prepared.person_id,
@@ -336,7 +336,16 @@ pub(crate) async fn apply_prepared_person_tag(
         prepared.actor_user_id,
         prepared.add,
     )
-    .await
+    .await?;
+    if changed {
+        crate::domain::person::projection::rebuild(
+            conn,
+            prepared.organization_id,
+            prepared.person_id,
+        )
+        .await?;
+    }
+    Ok(changed)
 }
 
 #[derive(Debug, Clone)]
@@ -570,6 +579,13 @@ async fn rename_tag_attempt(
     }
 
     queries::update_tag_name(&mut tx, ctx.organization_id, cmd.tag_id, &name).await?;
+    sqlx::query(
+        "SELECT crm_rebuild_person_detail_projection(organization_id,person_id) FROM person_tag WHERE organization_id=$1 AND tag_id=$2",
+    )
+    .bind(ctx.organization_id.0)
+    .bind(cmd.tag_id.0)
+    .execute(&mut *tx)
+    .await?;
     tx.commit().await?;
     Ok(RenameTagOutcome {
         tag: Tag {
@@ -644,9 +660,24 @@ async fn delete_tag_attempt(
     // Rule 4: explicit, counted removal ahead of the tag delete. The FK
     // `ON DELETE CASCADE` stays as belt; no referencing definition is
     // rewritten.
+    let affected_people = sqlx::query_scalar::<_, uuid::Uuid>(
+        "SELECT person_id FROM person_tag WHERE organization_id=$1 AND tag_id=$2 ORDER BY person_id",
+    )
+    .bind(ctx.organization_id.0)
+    .bind(cmd.tag_id.0)
+    .fetch_all(&mut *tx)
+    .await?;
     let removed_from_people =
         queries::delete_person_tag_rows_for_tag(&mut tx, ctx.organization_id, cmd.tag_id).await?;
     queries::delete_tag_row(&mut tx, ctx.organization_id, cmd.tag_id).await?;
+    for person_id in affected_people {
+        crate::domain::person::projection::rebuild(
+            &mut tx,
+            ctx.organization_id,
+            PersonId::new(person_id),
+        )
+        .await?;
+    }
     tx.commit().await?;
 
     Ok(DeleteTagOutcome {

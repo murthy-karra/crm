@@ -1066,6 +1066,14 @@ async fn create_person(
     }
     actual += source.len() as i64 - r.get::<String, _>("checkpoint_source_id").len() as i64;
     sqlx::query("UPDATE migration_import SET checkpoint_source_id=$3,imported_people=imported_people+$4,imported_contacts=imported_contacts+$5,settled_people=settled_people+1 WHERE id=$1 AND organization_id=$2").bind(j.id).bind(j.org.0).bind(source).bind(i64::from(disposition=="imported")).bind(count).execute(&mut *conn).await?;
+    if disposition == "imported" {
+        crate::domain::person::projection::rebuild(
+            conn,
+            j.org,
+            crate::ids::PersonId::new(person_id.ok_or(MigrationError::Crypto)?),
+        )
+        .await?;
+    }
     imports::settle(conn, j.org, j.id, token, actual).await
 }
 

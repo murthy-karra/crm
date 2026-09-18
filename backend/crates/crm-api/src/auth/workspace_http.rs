@@ -156,7 +156,24 @@ async fn guard_inner(State(state): State<AppState>, request: Request, next: Next
         // Leave malformed-path and missing-session precedence to existing handlers.
         Err(_) => return next.run(request).await,
     };
+    // The extractor is request-local and was derived from the verified session
+    // above. Handlers reuse it rather than querying `user_session` again.
+    let (mut parts, body) = request.into_parts();
+    parts.extensions.insert(auth.clone());
+    let request = Request::from_parts(parts, body);
     if !read {
+        return workspace::with_reader(&auth, next.run(request)).await;
+    }
+    // Person detail opens one handler-owned scoped read transaction before it
+    // touches tenant data. Do not also retain a middleware guard transaction:
+    // that would require two pool connections for a single read. The exact
+    // route is intentional; every other protected GET retains the generic
+    // middleware admission/authorization barrier below.
+    let person_detail = request
+        .extensions()
+        .get::<MatchedPath>()
+        .is_some_and(|route| route.as_str() == "/api/people/{id}");
+    if person_detail {
         return workspace::with_reader(&auth, next.run(request)).await;
     }
     let Some(pool) = state.db.as_ref() else {

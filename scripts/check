@@ -6,7 +6,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
 
 python3 -B -m unittest discover -s "$repo_root/scripts/tests" -p 'test_*.py'
-(cd "$repo_root" && python3 -B -m unittest e2e.test_runner)
+(cd "$repo_root" && python3 -B -m unittest e2e.test_runner e2e.test_sql_profile)
 
 total_start=$SECONDS
 step_start=$SECONDS

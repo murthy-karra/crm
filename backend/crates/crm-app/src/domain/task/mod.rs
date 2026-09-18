@@ -20,7 +20,7 @@ pub use commands::{
 };
 pub use error::TaskError;
 pub use model::{PersonRef, Task, TaskKind, TaskTitle, TaskWithPerson};
-pub use queries::{open_for_assignee, open_for_person};
+pub use queries::{open_for_assignee, open_for_person, open_for_person_in_authorized_read};
 
 /// Internal wiring surface for `domain::person::queries::history_for_person`
 /// (not part of this module's cross-crate public API — `pub(crate)`).

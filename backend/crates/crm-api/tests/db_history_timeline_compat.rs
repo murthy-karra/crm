@@ -97,15 +97,17 @@ async fn timeline_anchor_fences_both_complete_readers_before_any_fact(migrator: 
         before.push(common::body_json(response).await);
     }
 
-    // Both handlers call history_complete_read before summary_by_id touches
-    // inquiry. Block that exact later relation, with no production test hook.
+    // Both handlers call their complete-read fence before touching their first
+    // representation relation. Person detail now reads its current-state
+    // projection while migration review still assembles from canonical inquiry
+    // rows, so block both actual relations without a production test hook.
     // HTTP middleware and each inner reader retain shared workspace permits.
     let mut barrier = migrator.begin().await.unwrap();
     let holder: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
         .fetch_one(&mut *barrier)
         .await
         .unwrap();
-    sqlx::query("LOCK TABLE inquiry IN ACCESS EXCLUSIVE MODE")
+    sqlx::query("LOCK TABLE inquiry, person_detail_projection IN ACCESS EXCLUSIVE MODE")
         .execute(&mut *barrier)
         .await
         .unwrap();
@@ -120,7 +122,7 @@ async fn timeline_anchor_fences_both_complete_readers_before_any_fact(migrator: 
         .collect();
     let reader_pids = tokio::time::timeout(std::time::Duration::from_millis(600), async {
         loop {
-            let pids:Vec<i32>=sqlx::query_scalar("SELECT DISTINCT waiting.pid FROM pg_locks waiting JOIN pg_locks held ON held.pid=waiting.pid AND held.database=waiting.database WHERE waiting.database=(SELECT oid FROM pg_database WHERE datname=current_database()) AND waiting.locktype='relation' AND waiting.relation='inquiry'::regclass AND waiting.mode='AccessShareLock' AND NOT waiting.granted AND held.locktype='advisory' AND held.mode='ShareLock' AND held.granted AND $1=ANY(pg_blocking_pids(waiting.pid)) ORDER BY waiting.pid LIMIT 2")
+            let pids:Vec<i32>=sqlx::query_scalar("SELECT DISTINCT waiting.pid FROM pg_locks waiting JOIN pg_locks held ON held.pid=waiting.pid AND held.database=waiting.database WHERE waiting.database=(SELECT oid FROM pg_database WHERE datname=current_database()) AND waiting.locktype='relation' AND waiting.relation IN ('inquiry'::regclass,'person_detail_projection'::regclass) AND waiting.mode='AccessShareLock' AND NOT waiting.granted AND held.locktype='advisory' AND held.mode='ShareLock' AND held.granted AND $1=ANY(pg_blocking_pids(waiting.pid)) ORDER BY waiting.pid LIMIT 2")
                 .bind(holder).fetch_all(&migrator).await.unwrap();
             if pids.len()==2 {return pids;}
             tokio::time::sleep(std::time::Duration::from_millis(2)).await;

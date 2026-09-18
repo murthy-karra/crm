@@ -938,7 +938,16 @@ pub async fn summary_by_id(
     person_id: PersonId,
 ) -> Result<Option<PersonSummary>, sqlx::Error> {
     let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
-    let conn = &mut *workspace_read;
+    summary_by_id_in_authorized_read(&mut workspace_read, organization_id, person_id).await
+}
+
+/// Same query as [`summary_by_id`], using a transaction whose workspace access
+/// has already been authorized by its caller.
+pub async fn summary_by_id_in_authorized_read(
+    conn: &mut PgConnection,
+    organization_id: OrganizationId,
+    person_id: PersonId,
+) -> Result<Option<PersonSummary>, sqlx::Error> {
     let row = sqlx::query_as!(
         PersonSummaryRow,
         r#"SELECT
@@ -980,7 +989,17 @@ pub async fn contact_methods_for_person(
     person_id: PersonId,
 ) -> Result<Vec<ContactMethodItem>, sqlx::Error> {
     let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
-    let conn = &mut *workspace_read;
+    contact_methods_for_person_in_authorized_read(&mut workspace_read, organization_id, person_id)
+        .await
+}
+
+/// Same query as [`contact_methods_for_person`], using an already-authorized
+/// workspace transaction.
+pub async fn contact_methods_for_person_in_authorized_read(
+    conn: &mut PgConnection,
+    organization_id: OrganizationId,
+    person_id: PersonId,
+) -> Result<Vec<ContactMethodItem>, sqlx::Error> {
     sqlx::query_as!(
         ContactMethodItem,
         r#"SELECT id, kind, value FROM contact_method
@@ -1568,13 +1587,34 @@ pub async fn history_for_person(
     person_id: PersonId,
 ) -> Result<Vec<HistoryEntry>, sqlx::Error> {
     let mut workspace_read = crate::auth::workspace::read(conn, organization_id).await?;
-    let conn = &mut *workspace_read;
-    crate::auth::workspace::activity_complete_read(conn, organization_id).await?;
+    crate::auth::workspace::activity_complete_read(&mut workspace_read, organization_id).await?;
+    history_for_person_in_authorized_read(&mut workspace_read, organization_id, person_id).await
+}
+
+/// Same history assembly as [`history_for_person`], using an already-authorized
+/// workspace transaction whose history/activity-read gates have been checked.
+pub async fn history_for_person_in_authorized_read(
+    conn: &mut PgConnection,
+    organization_id: OrganizationId,
+    person_id: PersonId,
+) -> Result<Vec<HistoryEntry>, sqlx::Error> {
     let mut entries = core_history_for_migration_review(conn, organization_id, person_id).await?;
     entries.extend(note_history_entries(conn, organization_id, person_id).await?);
     entries.extend(task_completed_history_entries(conn, organization_id, person_id).await?);
     entries.sort_by_key(|e| (e.occurred_at, e.recorded_at, e.kind_rank, e.id));
     Ok(entries)
+}
+
+/// Person-detail timeline projection in one ordered union of every history source.
+pub async fn history_snapshot_in_authorized_read(
+    conn: &mut PgConnection,
+    organization_id: OrganizationId,
+    person_id: PersonId,
+    viewer_id: UserId,
+    viewer_is_admin: bool,
+) -> Result<Vec<serde_json::Value>, sqlx::Error> {
+    super::history_snapshot::load(conn, organization_id, person_id, viewer_id, viewer_is_admin)
+        .await
 }
 
 /// Explicit core-history scope. Only the scoped admin review query exposes this

@@ -82,30 +82,41 @@ FOR SHARE OF i,o
 /// Query 2: one bounded row per lineage run. Successful People are fenced
 /// through the unique source identity ledger, so retries cannot become People.
 pub const COHORTS_SQL: &str = r#"
-WITH original AS (
+WITH admission_groups AS (
+ SELECT DISTINCT ON (a.mode) a.mode,a.id AS cohort_id
+ FROM migration_people_admission a
+ WHERE a.parent_import_id=$2 AND a.organization_id=$1 AND a.confirmed_admission_plan_id IS NOT NULL
+ ORDER BY a.mode,a.created_at,a.id
+), original AS (
  SELECT i.id AS cohort_id,'original'::text AS origin,i.id AS evidence_id,
         i.confirmed_plan_id AS plan_id,i.snapshot_id AS source_id,1::bigint AS run_count,
         count(DISTINCT mi.source_id) FILTER (WHERE r.disposition='imported')::bigint AS applied,
         count(DISTINCT mi.source_id) FILTER (WHERE r.disposition='already_imported')::bigint AS already_current,
         count(*) FILTER (WHERE r.disposition='held')::bigint AS held,
-        0::bigint AS excluded,count(*) FILTER (WHERE r.id IS NULL)::bigint AS unprocessed
+        0::bigint AS excluded,count(m.id) FILTER (WHERE r.id IS NULL)::bigint AS unprocessed
  FROM migration_import i
- JOIN migration_import_manifest m ON m.import_id=i.id AND m.plan_id=i.confirmed_plan_id AND m.organization_id=i.organization_id
+ LEFT JOIN migration_import_manifest m ON m.import_id=i.id AND m.plan_id=i.confirmed_plan_id AND m.organization_id=i.organization_id
  LEFT JOIN migration_import_result r ON r.manifest_id=m.id AND r.import_id=i.id AND r.organization_id=i.organization_id
  LEFT JOIN migration_import_identity mi ON mi.organization_id=i.organization_id
    AND mi.source_account_id=i.source_account_id AND mi.family='people'
    AND mi.source_id=m.source_id AND mi.import_id=i.id AND mi.plan_id=i.confirmed_plan_id
  WHERE i.id=$2 AND i.organization_id=$1
  GROUP BY i.id,i.confirmed_plan_id,i.snapshot_id
-), admissions AS (
- SELECT min(a.id::text)::uuid AS cohort_id,CASE WHEN a.mode='mapping_recovery' THEN 'recovery' ELSE 'admission' END AS origin,
-        min(a.id::text)::uuid AS evidence_id,min(a.confirmed_admission_plan_id::text)::uuid AS plan_id,
-        min(a.newer_snapshot_id::text)::uuid AS source_id,count(DISTINCT a.id)::bigint AS run_count,
-        count(DISTINCT mi.source_id)::bigint AS applied,0::bigint AS already_current,
-        count(DISTINCT item.source_key) FILTER (WHERE r.disposition LIKE 'held_%')::bigint AS held,
-        count(DISTINCT item.source_key) FILTER (WHERE item.disposition IN ('already_imported','already_admitted','excluded_original'))::bigint AS excluded,
-        count(DISTINCT item.source_key) FILTER (WHERE item.disposition='eligible' AND r.id IS NULL)::bigint AS unprocessed
+), admission_runs AS (
+ SELECT groups.cohort_id,a.mode,groups.cohort_id AS evidence_id,
+        (array_agg(a.confirmed_admission_plan_id ORDER BY a.created_at,a.id))[1] AS plan_id,
+        (array_agg(a.newer_snapshot_id ORDER BY a.created_at,a.id))[1] AS source_id,
+        count(DISTINCT a.id)::bigint AS run_count
  FROM migration_people_admission a
+ JOIN admission_groups groups ON groups.mode=a.mode
+ WHERE a.parent_import_id=$2 AND a.organization_id=$1 AND a.confirmed_admission_plan_id IS NOT NULL
+ GROUP BY groups.cohort_id,a.mode
+), admission_items AS (
+ SELECT groups.cohort_id,item.source_key,item.disposition AS item_disposition,r.disposition AS result_disposition,r.id AS result_id,
+        bool_or(mi.source_id IS NOT NULL OR COALESCE(r.disposition='settled',false)) OVER (PARTITION BY groups.cohort_id,item.source_key) AS succeeded,
+        row_number() OVER (PARTITION BY groups.cohort_id,item.source_key ORDER BY a.created_at DESC,a.id DESC) AS rank
+ FROM migration_people_admission a
+ JOIN admission_groups groups ON groups.mode=a.mode
  JOIN migration_people_admission_item item ON item.admission_id=a.id
    AND item.plan_id=a.confirmed_admission_plan_id AND item.organization_id=a.organization_id
  LEFT JOIN migration_people_admission_result r ON r.item_id=item.id AND r.admission_id=a.id AND r.organization_id=a.organization_id
@@ -113,7 +124,21 @@ WITH original AS (
    AND mi.source_account_id=a.source_account_id AND mi.family='people'
    AND mi.admission_id=a.id AND mi.admission_result_id=r.id AND mi.source_id=r.source_id
  WHERE a.parent_import_id=$2 AND a.organization_id=$1 AND a.confirmed_admission_plan_id IS NOT NULL
- GROUP BY a.mode
+), admissions AS (
+ SELECT runs.cohort_id,CASE WHEN runs.mode='mapping_recovery' THEN 'recovery' ELSE 'admission' END AS origin,
+        runs.evidence_id,runs.plan_id,runs.source_id,runs.run_count,
+        count(*) FILTER (WHERE item.rank=1 AND item.succeeded)::bigint AS applied,
+        count(*) FILTER (WHERE item.rank=1 AND NOT item.succeeded
+          AND item.item_disposition IN ('already_imported','already_admitted'))::bigint AS already_current,
+        count(*) FILTER (WHERE item.rank=1 AND NOT item.succeeded
+          AND (item.result_disposition LIKE 'held_%' OR item.item_disposition LIKE 'held_%'))::bigint AS held,
+        count(*) FILTER (WHERE item.rank=1 AND NOT item.succeeded
+          AND item.item_disposition='excluded_original')::bigint AS excluded,
+        count(*) FILTER (WHERE item.rank=1 AND NOT item.succeeded
+          AND item.item_disposition='eligible' AND item.result_id IS NULL)::bigint AS unprocessed
+ FROM admission_runs runs
+ LEFT JOIN admission_items item ON item.cohort_id=runs.cohort_id AND item.rank=1
+ GROUP BY runs.cohort_id,runs.mode,runs.evidence_id,runs.plan_id,runs.source_id,runs.run_count
 )
 SELECT * FROM original UNION ALL SELECT * FROM admissions ORDER BY origin,cohort_id
 "#;
@@ -122,10 +147,10 @@ SELECT * FROM original UNION ALL SELECT * FROM admissions ORDER BY origin,cohort
 /// collapses retried copies while retaining settled predecessors.
 pub const METADATA_TOTALS_SQL: &str = r#"
 WITH admission_groups AS (
- SELECT a.mode,min(a.id::text)::uuid AS cohort_id
+ SELECT DISTINCT ON (a.mode) a.mode,a.id AS cohort_id
  FROM migration_people_admission a
  WHERE a.parent_import_id=$2 AND a.organization_id=$1 AND a.confirmed_admission_plan_id IS NOT NULL
- GROUP BY a.mode
+ ORDER BY a.mode,a.created_at,a.id
 ), original_cells AS (
  SELECT root.parent_import_id AS cohort_id,m.source_id,m.id AS manifest_id,r.disposition,r.id AS result_id,
         root.id AS run_id,root.confirmed_plan_id AS plan_id,root.snapshot_id AS source_evidence
@@ -160,10 +185,10 @@ FROM cells GROUP BY cohort_id
 /// Query 4: notes and tasks, using stable source IDs to collapse retried copies.
 pub const ACTIVITY_TOTALS_SQL: &str = r#"
 WITH admission_groups AS (
- SELECT a.mode,min(a.id::text)::uuid AS cohort_id
+ SELECT DISTINCT ON (a.mode) a.mode,a.id AS cohort_id
  FROM migration_people_admission a
  WHERE a.parent_import_id=$2 AND a.organization_id=$1 AND a.confirmed_admission_plan_id IS NOT NULL
- GROUP BY a.mode
+ ORDER BY a.mode,a.created_at,a.id
 ), original_cells AS (
  SELECT root.parent_import_id AS cohort_id,k.kind,m.source_id,m.source_row_id,r.disposition,r.id AS result_id,
         root.id AS run_id,root.confirmed_plan_id AS plan_id,root.snapshot_id AS source_evidence
@@ -197,17 +222,20 @@ SELECT cohort_id,CASE kind WHEN 'note' THEN 'notes' ELSE 'tasks' END AS family,
 FROM cells GROUP BY cohort_id,kind
 "#;
 
-/// Query 5: history fact identities. Admitted remainder attempts reuse their
-/// manifest; the lateral terminal lookup therefore cannot duplicate a fact.
+/// Query 5: history fact identities. Stable identity HMACs collapse across terminal
+/// roots; identityless records retain their observation/ordinal lineage identity.
 pub const HISTORY_TOTALS_SQL: &str = r#"
 WITH admission_groups AS (
- SELECT a.mode,min(a.id::text)::uuid AS cohort_id
+ SELECT DISTINCT ON (a.mode) a.mode,a.id AS cohort_id
  FROM migration_people_admission a
  WHERE a.parent_import_id=$2 AND a.organization_id=$1 AND a.confirmed_admission_plan_id IS NOT NULL
- GROUP BY a.mode
+ ORDER BY a.mode,a.created_at,a.id
 ), original_cells AS (
  SELECT root.parent_import_id AS cohort_id,k.family,m.id AS manifest_id,r.disposition,r.id AS result_id,
-        root.id AS run_id,root.plan_id,root.id AS source_evidence
+        root.id AS run_id,root.plan_id,root.id AS source_evidence,root.created_at,
+        CASE WHEN m.id IS NULL THEN 'empty'
+             WHEN m.identity_hmac IS NOT NULL THEN 'identity:'||encode(m.identity_hmac,'hex')
+             ELSE 'observation:'||m.observation_id::text||':'||m.ordinal::text END AS stable_identity
  FROM migration_history_import_run root
  CROSS JOIN (VALUES ('events'::text),('calls'::text),('text_messages'::text)) k(family)
  LEFT JOIN migration_history_import_manifest m ON m.owner_run_id=root.id AND m.plan_id=root.plan_id AND m.organization_id=root.organization_id AND m.family=k.family
@@ -215,7 +243,10 @@ WITH admission_groups AS (
  WHERE root.parent_import_id=$2 AND root.organization_id=$1
 ), admitted_cells AS (
  SELECT groups.cohort_id,k.family,m.id AS manifest_id,r.disposition,r.id AS result_id,
-        root.id AS run_id,root.confirmed_plan_id AS plan_id,root.history_capture_id AS source_evidence
+        root.id AS run_id,root.confirmed_plan_id AS plan_id,root.history_capture_id AS source_evidence,root.created_at,
+        CASE WHEN m.id IS NULL THEN 'empty'
+             WHEN m.identity_hmac IS NOT NULL THEN 'identity:'||encode(m.identity_hmac,'hex')
+             ELSE 'observation:'||m.observation_id::text||':'||m.ordinal::text END AS stable_identity
  FROM migration_admitted_history_root root
  JOIN migration_people_admission admission ON admission.id=root.admission_id AND admission.organization_id=root.organization_id
  JOIN admission_groups groups ON groups.mode=admission.mode
@@ -227,7 +258,10 @@ WITH admission_groups AS (
    ORDER BY x.committed_at DESC,x.id DESC LIMIT 1
  ) r ON true
  WHERE root.parent_import_id=$2 AND root.organization_id=$1 AND root.confirmed_plan_id IS NOT NULL
-), cells AS (SELECT * FROM original_cells UNION ALL SELECT * FROM admitted_cells)
+), ranked AS (
+ SELECT *,row_number() OVER (PARTITION BY cohort_id,family,stable_identity ORDER BY created_at DESC,run_id DESC) AS rank
+ FROM (SELECT * FROM original_cells UNION ALL SELECT * FROM admitted_cells) cells
+)
 SELECT cohort_id,CASE family WHEN 'events' THEN 'historical_events' WHEN 'calls' THEN 'calls' ELSE 'texts' END AS family,
  count(*) FILTER (WHERE disposition='imported')::bigint AS applied,
  count(*) FILTER (WHERE disposition IN ('already_imported','already_present','equal_repeat'))::bigint AS already_current,
@@ -235,17 +269,17 @@ SELECT cohort_id,CASE family WHEN 'events' THEN 'historical_events' WHEN 'calls'
  count(*) FILTER (WHERE disposition='excluded')::bigint AS excluded,
  count(manifest_id) FILTER (WHERE result_id IS NULL)::bigint AS unprocessed,
  min(run_id::text)::uuid AS evidence_id,min(plan_id::text)::uuid AS plan_id,min(source_evidence::text)::uuid AS source_id
-FROM cells GROUP BY cohort_id,family
+FROM ranked WHERE rank=1 GROUP BY cohort_id,family
 "#;
 
 /// Queries 6-7: rank independently by family and lineage cohort. This is what
 /// prevents an activity-only remainder from hiding metadata/history evidence.
 pub const LATEST_REFRESH_SQL: &str = r#"
 WITH admission_groups AS (
- SELECT a.mode,min(a.id::text)::uuid AS cohort_id
+ SELECT DISTINCT ON (a.mode) a.mode,a.id AS cohort_id
  FROM migration_people_admission a
  WHERE a.parent_import_id=$2 AND a.organization_id=$1 AND a.confirmed_admission_plan_id IS NOT NULL
- GROUP BY a.mode
+ ORDER BY a.mode,a.created_at,a.id
 ), applicable AS (
  SELECT DISTINCT b.id AS bundle_id,p.id AS plan_id,p.family,
         CASE manifest.kind WHEN 'note' THEN 'notes' WHEN 'task' THEN 'tasks' WHEN 'event' THEN 'historical_events'
@@ -290,19 +324,37 @@ ORDER BY l.cohort_id,l.dynamic_family
 /// Query 8: retained source/capture warnings. Unknown source coverage is a
 /// blocker and never a decimal zero.
 pub const SOURCE_WARNINGS_SQL: &str = r#"
-SELECT DISTINCT CASE stream
- WHEN 'people' THEN 'people_contacts' WHEN 'users' THEN 'source_users' WHEN 'stages' THEN 'stages'
- WHEN 'custom_fields' THEN 'custom_fields' WHEN 'notes' THEN 'notes' WHEN 'tasks' THEN 'tasks'
- ELSE NULL END AS family,
- CASE WHEN truncated THEN 'retained_source_truncated'
-      WHEN NOT accepted THEN 'retained_source_inaccessible'
-      WHEN classification IN ('failed','incomplete') THEN 'retained_capture_incomplete'
-      ELSE NULL END AS code,c.id AS evidence_id
-FROM migration_snapshot_capture c
-JOIN migration_import i ON i.snapshot_id=c.snapshot_id AND i.organization_id=c.organization_id
-WHERE i.id=$2 AND c.organization_id=$1
- AND (c.truncated OR NOT c.accepted OR c.classification IN ('failed','incomplete'))
-ORDER BY family,code,evidence_id
+WITH lineage_snapshots AS (
+ SELECT i.snapshot_id
+ FROM migration_import i WHERE i.id=$2 AND i.organization_id=$1
+ UNION
+ SELECT a.newer_snapshot_id
+ FROM migration_people_admission a
+ WHERE a.parent_import_id=$2 AND a.organization_id=$1 AND a.confirmed_admission_plan_id IS NOT NULL
+ UNION
+ SELECT b.core_snapshot_id
+ FROM migration_family_refresh_bundle b
+ WHERE b.parent_import_id=$2 AND b.organization_id=$1 AND b.core_snapshot_id IS NOT NULL
+ UNION
+ SELECT p.source_snapshot_id
+ FROM migration_family_refresh_plan p
+ JOIN migration_family_refresh_bundle b ON b.id=p.bundle_id AND b.organization_id=p.organization_id
+ WHERE b.parent_import_id=$2 AND b.organization_id=$1 AND p.state<>'superseded' AND p.source_snapshot_id IS NOT NULL
+), warnings AS (
+ SELECT CASE c.stream
+  WHEN 'people' THEN 'people_contacts' WHEN 'users' THEN 'source_users' WHEN 'stages' THEN 'stages'
+  WHEN 'custom_fields' THEN 'custom_fields' WHEN 'notes' THEN 'notes' WHEN 'tasks' THEN 'tasks'
+  ELSE NULL END AS family,
+  CASE WHEN c.truncated THEN 'retained_source_truncated'
+       WHEN NOT c.accepted THEN 'retained_source_inaccessible'
+       WHEN c.classification IN ('failed','incomplete') THEN 'retained_capture_incomplete'
+       ELSE NULL END AS code,c.id AS evidence_id,c.captured_at
+ FROM lineage_snapshots lineage
+ JOIN migration_snapshot_capture c ON c.snapshot_id=lineage.snapshot_id AND c.organization_id=$1
+ WHERE c.truncated OR NOT c.accepted OR c.classification IN ('failed','incomplete')
+)
+SELECT family,code,(array_agg(evidence_id ORDER BY captured_at,evidence_id))[1] AS evidence_id
+FROM warnings GROUP BY family,code ORDER BY family,code
 "#;
 
 #[derive(Clone)]

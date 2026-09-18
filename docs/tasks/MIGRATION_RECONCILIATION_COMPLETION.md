@@ -24,8 +24,8 @@ Organization/workspace context. The reader uses only:
 - original/admitted metadata, activity, and history result ledgers and retained
   source/capture coverage;
 - core-change reports and history captures as evidence identifiers; and
-- D-092 family-refresh bundle, plan, cohort, manifest, immutable result, and
-  current-head records.
+- D-092 family-refresh bundle, plan, cohort, manifest, and immutable result
+  records.
 
 It imports the coverage lane's static public types from
 crm_app::domain::migration::coverage_inventory:
@@ -195,6 +195,7 @@ The exact statements are exported as public constants in `reconciliation.rs`:
 Static `coverage_inventory` is the eighth in-process input and performs no SQL.
 Latest refresh selection ranks by dynamic manifest kind before choosing a plan,
 so task-only or calls-only remainders cannot erase earlier note/event evidence.
+Admission totals collapse terminal attempts by stable source key: any settled identity in the grouped origin is applied once; otherwise the latest item is categorized once as already-current, held, excluded, or unprocessed. Metadata and activity retain the latest stable source unit per grouped origin. History HMAC identities retain only the latest terminal outcome, while identityless facts use their retained observation/ordinal as the honest lineage key. Source warnings cover original, confirmed admission/recovery, and family-refresh snapshots and retain one representative evidence ID per fixed family/code category.
 
 The DB test fixture should include the realistic 25k-Person baseline and run
 EXPLAIN (ANALYZE, BUFFERS) for queries 2–5. Expected plan shape is existing

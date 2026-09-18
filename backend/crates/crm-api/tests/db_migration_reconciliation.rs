@@ -1,10 +1,10 @@
 //! Synthetic reconciliation contract, authorization, and tenant evidence.
 use axum::http::StatusCode;
 use crm_api::{
-    auth::workspace,
+    auth::workspace::{self, ReleaseReadiness},
     domain::migration::{
         imports::{self, AssigneeChoice, AssigneePatch, StageChoice, StagePatch},
-        reconciliation,
+        people_admission, people_admission_worker, reconciliation,
     },
 };
 use http_body_util::BodyExt;
@@ -209,4 +209,139 @@ async fn reconciliation_keeps_recovery_as_its_own_bounded_origin(migrator: PgPoo
         .expect("recovery cohort");
     assert_eq!(recovery["cohort_id"], json!(admission_id));
     assert_ne!(recovery["result_totals"]["applied"], "0");
+}
+
+#[sqlx::test]
+#[ignore]
+async fn reconciliation_deduplicates_people_across_terminal_admissions(migrator: PgPool) {
+    let person = json!({"id":104,"firstName":"Admitted","stage":"Lead","assignedUserId":3,"phones":[{"value":"4155550104"}]});
+    let (fixture, import_id, first_admission) =
+        crate::db_admitted_people_refresh_execution::fixture_with_admission(
+            &migrator,
+            vec![person.clone()],
+        )
+        .await;
+    let second_admission = crate::db_admitted_people_refresh_execution::ready_admission(
+        &fixture,
+        import_id,
+        vec![
+            person,
+            json!({"id":105,"firstName":"Second","stage":"Lead","assignedUserId":3,"phones":[{"value":"4155550105"}]}),
+            json!({"id":101,"firstName":"Original","stage":"Lead","assignedUserId":3,"phones":[{"value":"4155550100"}]}),
+        ],
+    )
+    .await;
+    crate::db_admitted_people_refresh_execution::confirm_admission(&fixture, second_admission)
+        .await;
+    for _ in 0..100 {
+        if people_admission::detail(&fixture.pool, &fixture.key, &fixture.ctx, second_admission)
+            .await
+            .unwrap()["state"]
+            == "completed"
+        {
+            break;
+        }
+        assert!(people_admission_worker::run_once(
+            &fixture.pool,
+            &fixture.key,
+            &fixture.policy,
+            Some(&ReleaseReadiness::for_tests()),
+        )
+        .await
+        .unwrap());
+    }
+    assert_eq!(
+        people_admission::detail(&fixture.pool, &fixture.key, &fixture.ctx, second_admission)
+            .await
+            .unwrap()["state"],
+        "completed"
+    );
+
+    let value = serde_json::to_value(
+        reconciliation::summary(&fixture.pool, &fixture.ctx, import_id)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let admission = value["families"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|family| family["coverage"]["family"] == "people_contacts")
+        .unwrap()["cohorts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|cohort| cohort["cohort_origin"] == "admission")
+        .unwrap();
+    assert_eq!(admission["cohort_id"], json!(first_admission));
+    assert_eq!(admission["result_totals"]["applied"], "2");
+    assert_eq!(admission["result_totals"]["already_current"], "1");
+    assert_eq!(admission["result_totals"]["held"], "0");
+    assert_eq!(admission["result_totals"]["excluded"], "0");
+    assert_eq!(admission["result_totals"]["unprocessed"], "0");
+    let categorized: u64 = [
+        "applied",
+        "already_current",
+        "held",
+        "excluded",
+        "unprocessed",
+    ]
+    .into_iter()
+    .map(|key| {
+        admission["result_totals"][key]
+            .as_str()
+            .unwrap()
+            .parse::<u64>()
+            .unwrap()
+    })
+    .sum();
+    assert_eq!(
+        categorized, 3,
+        "each stable source key has exactly one outcome"
+    );
+}
+
+#[sqlx::test]
+#[ignore]
+async fn reconciliation_deduplicates_history_identity_across_terminal_roots(migrator: PgPool) {
+    let (fixture, import_id, _, _) = crate::db_family_refresh_acceptance::fixture(&migrator).await;
+    let new_root = Uuid::new_v4();
+    let new_plan = Uuid::new_v4();
+    let new_manifest = Uuid::new_v4();
+    let new_result = Uuid::new_v4();
+    let mut tx = migrator.begin().await.unwrap();
+    sqlx::query("SET CONSTRAINTS ALL DEFERRED")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO migration_history_import_run SELECT (jsonb_populate_record(NULL::migration_history_import_run,to_jsonb(seed)||jsonb_build_object('id',$3::uuid,'plan_id',$4::uuid,'created_at',clock_timestamp()+interval '1 second'))).* FROM (SELECT * FROM migration_history_import_run WHERE parent_import_id=$1 AND organization_id=$2 ORDER BY created_at,id LIMIT 1) seed")
+        .bind(import_id).bind(fixture.org).bind(new_root).bind(new_plan).execute(&mut *tx).await.unwrap();
+    sqlx::query("INSERT INTO migration_history_import_plan SELECT (jsonb_populate_record(NULL::migration_history_import_plan,to_jsonb(seed)||jsonb_build_object('id',$3::uuid,'owner_run_id',$4::uuid))).* FROM (SELECT p.* FROM migration_history_import_plan p JOIN migration_history_import_run root ON root.id=p.owner_run_id AND root.organization_id=p.organization_id WHERE root.parent_import_id=$1 AND p.organization_id=$2 ORDER BY root.created_at,root.id LIMIT 1) seed")
+        .bind(import_id).bind(fixture.org).bind(new_plan).bind(new_root).execute(&mut *tx).await.unwrap();
+    sqlx::query("INSERT INTO migration_history_import_manifest SELECT (jsonb_populate_record(NULL::migration_history_import_manifest,to_jsonb(seed)||jsonb_build_object('id',$3::uuid,'plan_id',$4::uuid,'owner_run_id',$5::uuid))).* FROM (SELECT m.* FROM migration_history_import_manifest m JOIN migration_history_import_run root ON root.id=m.owner_run_id AND root.organization_id=m.organization_id WHERE root.parent_import_id=$1 AND m.organization_id=$2 AND m.family='events' AND m.identity_hmac IS NOT NULL ORDER BY m.position LIMIT 1) seed")
+        .bind(import_id).bind(fixture.org).bind(new_manifest).bind(new_plan).bind(new_root).execute(&mut *tx).await.unwrap();
+    sqlx::query("INSERT INTO migration_history_import_result SELECT (jsonb_populate_record(NULL::migration_history_import_result,to_jsonb(seed)||jsonb_build_object('id',$3::uuid,'plan_id',$4::uuid,'owner_run_id',$5::uuid,'manifest_id',$6::uuid,'disposition','already_imported'))).* FROM (SELECT r.* FROM migration_history_import_result r JOIN migration_history_import_run root ON root.id=r.owner_run_id AND root.organization_id=r.organization_id WHERE root.parent_import_id=$1 AND r.organization_id=$2 AND r.family='events' ORDER BY r.position LIMIT 1) seed")
+        .bind(import_id).bind(fixture.org).bind(new_result).bind(new_plan).bind(new_root).bind(new_manifest).execute(&mut *tx).await.unwrap();
+    tx.commit().await.unwrap();
+
+    let value = serde_json::to_value(
+        reconciliation::summary(&fixture.pool, &fixture.ctx, import_id)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let events = value["families"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|family| family["coverage"]["family"] == "historical_events")
+        .unwrap()["cohorts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|cohort| cohort["cohort_origin"] == "original")
+        .unwrap();
+    assert_eq!(events["result_totals"]["applied"], "0");
+    assert_eq!(events["result_totals"]["already_current"], "1");
 }

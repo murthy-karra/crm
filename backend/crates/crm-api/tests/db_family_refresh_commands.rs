@@ -1829,7 +1829,7 @@ async fn family_refresh_activity_execution_holds_local_changes(pool: PgPool) {
 async fn family_refresh_remainder_preserves_only_unfinished_activity(pool: PgPool) {
     activity_execution_scenario(pool, 3).await;
 }
-async fn activity_execution_scenario(pool: PgPool, mode: u8) {
+pub(crate) async fn activity_execution_scenario(pool: PgPool, mode: u8) {
     use crm_api::domain::migration::{
         family_refresh::{
             activity_plan::{self, Decision, Evidence, Prepared},
@@ -2485,6 +2485,14 @@ async fn activity_execution_scenario(pool: PgPool, mode: u8) {
     );
     // A subsequent bundle must authenticate the new refresh first owner, and
     // its ownership walk must retain that identity even without a source row.
+    if mode == 4 {
+        let mut second_cycle = db_activity_source::task(22);
+        second_cycle["name"] = json!("Second retained title");
+        f.reader.set_records(
+            Stream::TasksOpen,
+            vec![changed.clone(), second_cycle, db_activity_source::task(23)],
+        );
+    }
     let next_report = admission::report(
         &f,
         parent,
@@ -2539,6 +2547,199 @@ async fn activity_execution_scenario(pool: PgPool, mode: u8) {
         "refresh first owners remain in subsequent missing-source walks"
     );
     worker::release(&f.pool, &next_claim).await.unwrap();
+    if mode != 4 {
+        return;
+    }
+
+    // Finish the second retained cycle through the ordinary exact-remainder
+    // path. The applied tail must carry the first refresh's baseline/head,
+    // rather than regenerating a new identity from source equality.
+    for turn in 0..80 {
+        worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap();
+        let state: String =
+            sqlx::query_scalar("SELECT state FROM migration_family_refresh_plan WHERE id=$1")
+                .bind(next.families[0].plan_id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        if state == "ready" {
+            break;
+        }
+        assert!(turn < 79, "second cycle did not seal");
+    }
+    let second_plan = next.families[0].plan_id;
+    let sealed = sqlx::query("SELECT b.revision AS bundle_revision,encode(b.digest,'hex') AS bundle_digest,p.revision,encode(p.digest,'hex') AS digest,p.counts FROM migration_family_refresh_bundle b JOIN migration_family_refresh_plan p ON p.bundle_id=b.id AND p.organization_id=b.organization_id WHERE p.id=$1")
+        .bind(second_plan).fetch_one(&pool).await.unwrap();
+    confirmation::confirm(
+        &f.pool,
+        &f.key,
+        &release,
+        &f.ctx,
+        next.bundle_id,
+        ConfirmFamilyRefresh {
+            request_id: Uuid::new_v4(),
+            expected_revision: sealed.get::<i64, _>("bundle_revision").to_string(),
+            bundle_digest: sealed.get("bundle_digest"),
+            families: vec![SelectedPlan {
+                family: Family::Activity,
+                plan_id: second_plan,
+                plan_revision: sealed.get::<i64, _>("revision").to_string(),
+                plan_digest: sealed.get("digest"),
+                expected_counts: serde_json::from_value(sealed.get("counts")).unwrap(),
+            }],
+            acknowledged_exclusions: true,
+        },
+    )
+    .await
+    .unwrap();
+    assert_exact_remainder(
+        &pool,
+        &f,
+        next.bundle_id,
+        second_plan,
+        Family::Activity,
+        true,
+        false,
+    )
+    .await;
+
+    let task_22: Uuid = sqlx::query_scalar(
+        "SELECT id FROM task WHERE organization_id=$1 AND source_external_id LIKE '%:22'",
+    )
+    .bind(f.org)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let head_before: (Uuid, i64) = sqlx::query_as(
+        "SELECT result_id,version FROM migration_family_refresh_head WHERE organization_id=$1 AND target_id=$2",
+    )
+    .bind(f.org)
+    .bind(task_22)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        head_before.1, 2,
+        "second cycle advances the first head once"
+    );
+    assert_ne!(
+        head_before.0, baseline.result_id,
+        "the changed second-cycle source replaces the first result head"
+    );
+
+    // Third complete capture deliberately omits the previously owned task 21
+    // and changes task 22. A local edit after preparation must hold task 22
+    // without changing its baseline/head; omission is a held observation, never
+    // a native delete.
+    let mut third_22 = db_activity_source::task(22);
+    third_22["name"] = json!("Third retained title");
+    f.reader.set_records(
+        Stream::TasksOpen,
+        vec![third_22, db_activity_source::task(23)],
+    );
+    let third_report = admission::report(
+        &f,
+        parent,
+        vec![json!({"id":101,"firstName":"Synthetic","stage":"Lead","assignedUserId":3})],
+    )
+    .await;
+    let third = commands::prepare(
+        &f.pool,
+        &f.key,
+        &f.policy,
+        &release,
+        &f.ctx,
+        PrepareFamilyRefresh {
+            request_id: Uuid::new_v4(),
+            parent_import_id: parent,
+            core_report_id: Some(third_report),
+            history_capture_id: None,
+            families: vec![Family::Activity],
+        },
+    )
+    .await
+    .unwrap();
+    let third_plan = third.families[0].plan_id;
+    for turn in 0..100 {
+        worker::run_once(&f.pool, &f.key, &f.policy).await.unwrap();
+        let state: String =
+            sqlx::query_scalar("SELECT state FROM migration_family_refresh_plan WHERE id=$1")
+                .bind(third_plan)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        if state == "ready" {
+            break;
+        }
+        assert!(turn < 99, "third cycle did not seal");
+    }
+    let sealed = sqlx::query("SELECT b.revision AS bundle_revision,encode(b.digest,'hex') AS bundle_digest,p.revision,encode(p.digest,'hex') AS digest,p.counts FROM migration_family_refresh_bundle b JOIN migration_family_refresh_plan p ON p.bundle_id=b.id AND p.organization_id=b.organization_id WHERE p.id=$1")
+        .bind(third_plan).fetch_one(&pool).await.unwrap();
+    sqlx::query(
+        "UPDATE task SET title='Local third-cycle title' WHERE id=$1 AND organization_id=$2",
+    )
+    .bind(task_22)
+    .bind(f.org)
+    .execute(&pool)
+    .await
+    .unwrap();
+    confirmation::confirm(
+        &f.pool,
+        &f.key,
+        &release,
+        &f.ctx,
+        third.bundle_id,
+        ConfirmFamilyRefresh {
+            request_id: Uuid::new_v4(),
+            expected_revision: sealed.get::<i64, _>("bundle_revision").to_string(),
+            bundle_digest: sealed.get("bundle_digest"),
+            families: vec![SelectedPlan {
+                family: Family::Activity,
+                plan_id: third_plan,
+                plan_revision: sealed.get::<i64, _>("revision").to_string(),
+                plan_digest: sealed.get("digest"),
+                expected_counts: serde_json::from_value(sealed.get("counts")).unwrap(),
+            }],
+            acknowledged_exclusions: true,
+        },
+    )
+    .await
+    .unwrap();
+    for turn in 0..30 {
+        let Some(claim) = execution::claim_next(&f.pool).await.unwrap() else {
+            break;
+        };
+        execution::apply_once(&f.pool, &f.key, &f.policy, &release, &claim)
+            .await
+            .unwrap();
+        worker::release(&f.pool, &claim).await.unwrap();
+        assert!(turn < 29);
+    }
+    assert_eq!(
+        sqlx::query_scalar::<_, String>(
+            "SELECT title FROM task WHERE id=$1 AND organization_id=$2",
+        )
+        .bind(task_22)
+        .bind(f.org)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        "Local third-cycle title"
+    );
+    assert_eq!(
+        sqlx::query_as::<_, (Uuid, i64)>(
+            "SELECT result_id,version FROM migration_family_refresh_head WHERE organization_id=$1 AND target_id=$2",
+        )
+        .bind(f.org)
+        .bind(task_22)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        head_before
+    );
+    assert_eq!(sqlx::query_scalar::<_,String>("SELECT r.reason FROM migration_family_refresh_result r JOIN migration_family_refresh_manifest u ON u.id=r.manifest_id AND u.organization_id=r.organization_id WHERE r.plan_id=$1 AND r.disposition='held' AND u.source_id='22'").bind(third_plan).fetch_one(&pool).await.unwrap(),"local_change");
+    assert_eq!(sqlx::query_scalar::<_,String>("SELECT r.reason FROM migration_family_refresh_result r JOIN migration_family_refresh_manifest u ON u.id=r.manifest_id AND u.organization_id=r.organization_id WHERE r.plan_id=$1 AND r.disposition='held' AND u.source_id='21'").bind(third_plan).fetch_one(&pool).await.unwrap(),"source_not_observed");
+    assert!(sqlx::query_scalar::<_,bool>("SELECT EXISTS(SELECT 1 FROM task WHERE organization_id=$1 AND source_external_id LIKE '%:21' AND deleted_at IS NULL)").bind(f.org).fetch_one(&pool).await.unwrap());
 }
 
 #[sqlx::test]

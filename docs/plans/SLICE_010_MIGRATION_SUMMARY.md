@@ -95,17 +95,22 @@ report changed/newly observed/not-seen/unresolved records without applying updat
 or inferring deletion. The [Mobile 001 / 010e1 release](../tasks/MOBILE_001_010e1_RELEASE.md)
 records its completed delivery.
 
-**Latest released slice — 010e2 (D-076):** previewed refresh of already imported
-People is implemented, published and deployed. See the [spec](../specs/SLICE_010e2.md)
-and [current release evidence](../tasks/MOBILE_002_010e2_RELEASE.md).
+**Subsequent released capabilities:** 010e3 admits qualified newly observed
+People; 010e4/010f3/010f4/010d3 extend qualified admitted-Person refresh through
+metadata, activity and metadata-first history; 010e5 repairs existing-Person
+stage/agent mappings; and 010e6 recovers qualified never-imported People. The
+latest [010g1 release](../tasks/SLICE_010g1_RELEASE.md) combines repeatable
+metadata, note/task and immutable historical corrections for original, admitted
+and recovered cohorts. These are retained-evidence, review-only paths; they do
+not establish a complete live FUB account or customer activation.
 
-**Current approved slice — 010e3 (D-078):** core-only admission of qualified
-People newly observed after the original import. The [spec](../specs/SLICE_010e3.md),
-[brief](../tasks/SLICE_010e3_IMPL.md), [review](../tasks/MOBILE_003_010e3_PLANNING_REVIEW.md)
-and [Mobile 003 parallel plan](MOBILE_003_010e3_PARALLEL_LAUNCH.md) are approved for
-implementation. Dependent-family coverage and later refresh for these People remain
-following work. Standalone tags, other uncaptured families, mapping repair,
-remaining deltas, live qualification and cutover remain explicit gaps.
+**Explicit destination and source gaps remain:** embedded Person tags are not a
+qualified standalone tag catalog; addresses and relationships are retained only
+when returned and have no complete destination import; appointments, deals,
+emails, recordings, external files, automation/settings and source-deletion
+semantics remain outside the shipped import path. History remains metadata-only.
+Live qualification, O-012/O-013 readiness and workspace activation/cutover are
+separate deferred work.
 
 ## 1. Outcome and first milestone
 
@@ -247,7 +252,8 @@ the cutover rung.
 | 5a — 010d1 | Implemented, synthetically verified, committed, merged, pushed and deployed in shared development under D-070 and its follow-up; the merged worktree/branch was removed. Original reviews/gates (including 934 DB tests), the 75,000-observation collector and desktop/390px walkthrough are preserved in [verification](../tasks/SLICE_010d1_VERIFICATION.md); final runtime identity and the separately verified release correction are in [release](../tasks/SLICE_010d1_RELEASE.md). Separate confirmed historical events/calls/texts capture provides encrypted evidence and bounded coverage review. Public restrictions, provisional text pagination and uncaptured detail/media remain explicit. No native history writes, live qualification or activation. |
 | 5b — 010d2 | Implemented, verified and deployed: metadata-only historical timeline import from the separately frozen 010d1 capture, under D-072. No message bodies/media, ordinary email, Today/contact credit or activation. [Release evidence](../tasks/SLICE_010d2_RELEASE.md). |
 | 6a — deployed 010e1 | Compare the original core snapshot with a newer completed core capture. Paged source-change report only; no CRM updates or deletion inference. [Spec](../specs/SLICE_010e1.md) and [milestone release](../tasks/MOBILE_001_010e1_RELEASE.md). |
-| 6b+ — remaining 010e | Per-entity delta application/repair, remaining capture, final reconciliation and explicit cutover/activation. Resolve source privacy, enforce communication restrictions and review Today before releasing the D-064 hold; validate changes/deletions and agree a source-write cutoff/final delta. No source cancellation, phone transfer or ongoing two-way sync is implied. |
+| 6b — released 010e3–010g1 | Qualified admitted-Person coverage, existing-Person mapping repair, never-imported recovery and combined repeatable metadata/activity/history refresh are implemented and deployed in shared development. They preserve review-only use and never infer source deletions. |
+| 6c — remaining work | Capture and model the explicit destination gaps, reconcile only qualified retained evidence, resolve source privacy/deletion semantics, then separately specify activation/cutover. No source cancellation, phone transfer or ongoing two-way sync is implied. |
 
 No calendar estimate is credible before source access, volume and fidelity
 gaps are measured. The existing 25k-People/50-member/five-concurrent-Today

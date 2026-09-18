@@ -94,7 +94,9 @@ async fn claim(
     session: &WorkerSession,
     boundary: DateTime<Utc>,
 ) -> Result<Option<Claim>, MigrationError> {
-    let Some(candidate)=sqlx::query("SELECT id,organization_id FROM migration_history_import_run WHERE state IN ('preparing','queued') OR (state='running' AND lease_expires_at<=clock_timestamp()) ORDER BY created_at,id LIMIT 1").fetch_optional(pool).await? else{return Ok(None);};
+    let Some(candidate) = sqlx::query(CANDIDATE_SQL).fetch_optional(pool).await? else {
+        return Ok(None);
+    };
     let id = candidate.get("id");
     let org = OrganizationId::new(candidate.get("organization_id"));
     let mut tx = pool.begin().await?;
@@ -576,3 +578,6 @@ async fn apply(
     }
     Ok(())
 }
+
+// Shared with the scheduler hint; this SELECT never grants a work permit.
+pub(super) const CANDIDATE_SQL: &str = "SELECT id,organization_id FROM migration_history_import_run WHERE state IN ('preparing','queued') OR (state='running' AND lease_expires_at<=clock_timestamp()) ORDER BY created_at,id LIMIT 1";

@@ -151,7 +151,7 @@ async fn claim(
     identity_after: DateTime<Utc>,
     initial_readiness: bool,
 ) -> Result<Option<Claim>, MigrationError> {
-    let candidate=sqlx::query("SELECT id,organization_id FROM migration_history_capture_run WHERE (state IN ('queued','waiting_retry') AND (next_attempt_at IS NULL OR next_attempt_at<=now())) OR (state='running' AND lease_expires_at<=now()) ORDER BY created_at,id LIMIT 1").fetch_optional(pool).await?;
+    let candidate = sqlx::query(CANDIDATE_SQL).fetch_optional(pool).await?;
     let Some(candidate) = candidate else {
         return Ok(None);
     };
@@ -646,3 +646,6 @@ async fn change_link(
     sqlx::query(&format!("UPDATE migration_history_stream SET {column}={column}+$4 WHERE run_id=$1 AND organization_id=$2 AND family=$3")).bind(c.run).bind(c.org.0).bind(family).bind(delta).execute(conn).await?;
     Ok(())
 }
+
+// Shared with the scheduler hint; this SELECT never grants a work permit.
+pub(super) const CANDIDATE_SQL: &str = "SELECT id,organization_id FROM migration_history_capture_run WHERE (state IN ('queued','waiting_retry') AND (next_attempt_at IS NULL OR next_attempt_at<=now())) OR (state='running' AND lease_expires_at<=now()) ORDER BY created_at,id LIMIT 1";

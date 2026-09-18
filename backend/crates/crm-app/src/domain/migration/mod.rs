@@ -298,3 +298,5 @@ pub(crate) mod admitted_people_refresh_queries;
 pub(crate) mod admitted_people_refresh_source;
 pub(crate) mod admitted_people_refresh_store;
 pub mod admitted_people_refresh_worker;
+
+pub mod release_work;

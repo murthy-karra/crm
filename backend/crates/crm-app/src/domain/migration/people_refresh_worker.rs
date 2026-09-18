@@ -185,7 +185,7 @@ pub async fn run_once(
     policy: &SnapshotPolicy,
     release: Option<&ReleaseReadiness>,
 ) -> Result<bool, MigrationError> {
-    let r=sqlx::query("SELECT id,organization_id,lease_token FROM migration_people_refresh WHERE state IN ('preparing','queued','running') ORDER BY created_at,id LIMIT 1").fetch_optional(pool).await?;
+    let r = sqlx::query(CANDIDATE_SQL).fetch_optional(pool).await?;
     let Some(r) = r else { return Ok(false) };
     let candidate = WorkerCandidate {
         id: r.get("id"),
@@ -1102,3 +1102,6 @@ async fn execute_noop(
     }
     Ok(retained_delta)
 }
+
+// Shared with the scheduler hint; this SELECT never grants a work permit.
+pub(super) const CANDIDATE_SQL: &str = "SELECT id,organization_id,lease_token FROM migration_people_refresh WHERE state IN ('preparing','queued','running') ORDER BY created_at,id LIMIT 1";

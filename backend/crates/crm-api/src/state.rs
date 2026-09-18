@@ -211,3 +211,42 @@ impl AppState {
         Some(release.clone())
     }
 }
+
+/// An observed job may still have unavailable release evidence. Keep that case
+/// distinct from an idle queue so existing pause/recovery handling still runs.
+pub struct MigrationWorkRelease {
+    pub readiness: Option<Arc<crate::auth::workspace::ReleaseReadiness>>,
+}
+
+impl AppState {
+    /// Check for work before inspecting the full release checklist. This hint is
+    /// not a claim: workers reselect and revalidate all authority under their
+    /// existing locks. A job arriving after an idle hint waits for the next tick.
+    pub async fn migration_release_for_work(
+        &self,
+        work: crate::domain::migration::release_work::ReleaseWork,
+    ) -> Result<Option<MigrationWorkRelease>, sqlx::Error> {
+        let Some(pool) = &self.db else {
+            return Ok(None);
+        };
+        if !work.is_pending(pool).await? {
+            return Ok(None);
+        }
+        Ok(Some(MigrationWorkRelease {
+            readiness: self.current_import_release().await,
+        }))
+    }
+
+    pub(crate) async fn scheduled_migration_release(
+        &self,
+        work: crate::domain::migration::release_work::ReleaseWork,
+    ) -> Option<MigrationWorkRelease> {
+        match self.migration_release_for_work(work).await {
+            Ok(release) => release,
+            Err(error) => {
+                tracing::warn!(?work, outcome=%error, "migration queue probe failed");
+                None
+            }
+        }
+    }
+}

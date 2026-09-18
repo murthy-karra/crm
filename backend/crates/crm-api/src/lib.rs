@@ -26,6 +26,7 @@ use tower_http::trace::{DefaultOnRequest, DefaultOnResponse, TraceLayer};
 use tracing::{Level, Span};
 
 use config::Config;
+use domain::migration::release_work::ReleaseWork;
 use state::AppState;
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
@@ -306,27 +307,32 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
             tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
                 tick.tick().await;
-                let release = state.current_import_release().await;
-                for _ in 0..32 {
-                    match domain::migration::core_change_worker::run_once(
-                        &pool,
-                        &state.raw_payload_key,
-                        &state.snapshot_policy,
-                        release.as_deref(),
-                    )
+                if let Some(release) = state
+                    .scheduled_migration_release(ReleaseWork::CoreChange)
                     .await
-                    {
-                        Ok(true) => tokio::task::yield_now().await,
-                        Ok(false) => break,
-                        Err(error) => {
-                            tracing::warn!(outcome=%error, "core change report sweep failed");
-                            break;
+                {
+                    let release = release.readiness;
+                    for _ in 0..32 {
+                        match domain::migration::core_change_worker::run_once(
+                            &pool,
+                            &state.raw_payload_key,
+                            &state.snapshot_policy,
+                            release.as_deref(),
+                        )
+                        .await
+                        {
+                            Ok(true) => tokio::task::yield_now().await,
+                            Ok(false) => break,
+                            Err(error) => {
+                                tracing::warn!(outcome=%error, "core change report sweep failed");
+                                break;
+                            }
                         }
                     }
                 }
                 // Alternate preparation and execution within the same finite
                 // budget so a large retained capture cannot starve confirmed work.
-                let release = state.current_import_release().await;
+                let mut release = None;
                 let mut idle = [false; 2];
                 for turn in 0..32 {
                     use domain::migration::family_refresh::{
@@ -342,13 +348,22 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
                         )
                         .await
                     } else {
-                        execution::run_once(
-                            &pool,
-                            &state.raw_payload_key,
-                            &state.snapshot_policy,
-                            release.as_deref(),
-                        )
-                        .await
+                        if release.is_none() {
+                            release = state
+                                .scheduled_migration_release(ReleaseWork::FamilyRefresh)
+                                .await;
+                        }
+                        if let Some(release) = &release {
+                            execution::run_once(
+                                &pool,
+                                &state.raw_payload_key,
+                                &state.snapshot_policy,
+                                release.readiness.as_deref(),
+                            )
+                            .await
+                        } else {
+                            Ok(Progress::Idle)
+                        }
                     };
                     match result {
                         Ok(Progress::Advanced | Progress::Paused) => {
@@ -376,7 +391,13 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
             tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
                 tick.tick().await;
-                let release = state.current_import_release().await;
+                let Some(release) = state
+                    .scheduled_migration_release(ReleaseWork::PeopleRefresh)
+                    .await
+                else {
+                    continue;
+                };
+                let release = release.readiness;
                 for _ in 0..32 {
                     match domain::migration::people_refresh_worker::run_once(
                         &pool,
@@ -405,7 +426,13 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
             tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
                 tick.tick().await;
-                let release = state.current_import_release().await;
+                let Some(release) = state
+                    .scheduled_migration_release(ReleaseWork::PeopleAdmission)
+                    .await
+                else {
+                    continue;
+                };
+                let release = release.readiness;
                 for _ in 0..32 {
                     match domain::migration::people_admission_worker::run_once(
                         &pool,
@@ -434,7 +461,13 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
             tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
                 tick.tick().await;
-                let release = state.current_import_release().await;
+                let Some(release) = state
+                    .scheduled_migration_release(ReleaseWork::AdmittedPeopleRefresh)
+                    .await
+                else {
+                    continue;
+                };
+                let release = release.readiness;
                 for _ in 0..32 {
                     match domain::migration::admitted_people_refresh_worker::run_once(
                         &pool,
@@ -506,7 +539,13 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
             tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
                 tick.tick().await;
-                let release = state.current_import_release().await;
+                let Some(release) = state
+                    .scheduled_migration_release(ReleaseWork::HistoryCapture)
+                    .await
+                else {
+                    continue;
+                };
+                let release = release.readiness;
                 if let Err(error) = domain::migration::history_capture_worker::run_once(
                     &pool,
                     &state.raw_payload_key,
@@ -530,7 +569,13 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
             tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
                 tick.tick().await;
-                let release = state.current_import_release().await;
+                let Some(release) = state
+                    .scheduled_migration_release(ReleaseWork::HistoryImport)
+                    .await
+                else {
+                    continue;
+                };
+                let release = release.readiness;
                 // Each unit has a separate bounded, fenced transaction. Drain
                 // available work without paying an idle delay for every 50 rows.
                 for _ in 0..32 {
@@ -563,7 +608,13 @@ pub async fn run(config: Config) -> Result<(), BoxError> {
             tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
                 tick.tick().await;
-                let release = state.current_import_release().await;
+                let Some(release) = state
+                    .scheduled_migration_release(ReleaseWork::AdmittedHistory)
+                    .await
+                else {
+                    continue;
+                };
+                let release = release.readiness;
                 // Each unit has a separate bounded, fenced transaction. Drain
                 // available work without paying an idle delay for every 50 rows.
                 for _ in 0..32 {

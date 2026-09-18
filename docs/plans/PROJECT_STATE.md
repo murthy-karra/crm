@@ -7,6 +7,12 @@ completed chronology. Decisions remain authoritative; use the
 
 ## Current state
 
+**Local migration idle optimization:** on `codex/migration-idle-readiness`, the
+scheduler checks for work before loading full release evidence. Poll cadence and
+actual execution fences are preserved. All 99 selected database tests, the
+16-step migration browser journey, production compilation, formatting and strict
+lint passed. This change is not deployed. [Implementation record](../reviews/migration-idle-readiness-2026-09-17.md).
+
 **Read optimization and migration follow-up release:** Person detail's projection,
 Today reference batching, repeated-refresh correction, coverage inventory and
 administrator reconciliation report are merged and published on `main` at
@@ -56,7 +62,8 @@ Mobile004/010e4 and preceding slices remain documented in history.
 
 ## Current branch and retained resources
 
-`main` is published through `8fac1dc`. Only the main checkout and branch remain;
+`main` includes deployed source `8fac1dc` and release record `6c08f95`. The main
+checkout now holds the local `codex/migration-idle-readiness` branch;
 the completed migration writer worktrees and old feature branches were removed
 with user authorization, including leftover local drafts. Current release evidence
 is in [the release record](../tasks/READ_OPTIMIZATION_RELEASE_2026-09-17.md).

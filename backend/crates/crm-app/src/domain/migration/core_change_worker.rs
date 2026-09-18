@@ -43,7 +43,7 @@ pub async fn run_once(
     policy: &SnapshotPolicy,
     release: Option<&ReleaseReadiness>,
 ) -> Result<bool, MigrationError> {
-    let candidate=sqlx::query("SELECT id,organization_id,initiated_by_user_id,lease_epoch FROM migration_core_change_report WHERE state='queued' OR (state='running' AND lease_expires_at<=clock_timestamp()) ORDER BY created_at,id LIMIT 1").fetch_optional(pool).await?;
+    let candidate = sqlx::query(CANDIDATE_SQL).fetch_optional(pool).await?;
     let Some(candidate) = candidate else {
         return Ok(false);
     };
@@ -579,3 +579,6 @@ pub async fn settle_for_test(
 pub async fn pause_for_test(pool: &PgPool, claim: &TestClaim) -> Result<(), MigrationError> {
     pause_error(pool, &claim.0, MigrationError::Crypto, false).await
 }
+
+// Shared with the scheduler hint; this SELECT never grants a work permit.
+pub(super) const CANDIDATE_SQL: &str = "SELECT id,organization_id,initiated_by_user_id,lease_epoch FROM migration_core_change_report WHERE state='queued' OR (state='running' AND lease_expires_at<=clock_timestamp()) ORDER BY created_at,id LIMIT 1";

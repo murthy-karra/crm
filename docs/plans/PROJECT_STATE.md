@@ -1,23 +1,26 @@
 # Project state
 
-Updated: 2026-09-17 — read optimization and migration follow-up published and deployed to shared development.
+Updated: 2026-09-18 — migration idle optimization deployed and verified.
 Current status and live residuals only. [History](PROJECT_HISTORY.md) preserves
 completed chronology. Decisions remain authoritative; use the
 [reading index](../decisions/DECISION_INDEX.md).
 
 ## Current state
 
-**Local migration idle optimization:** on `codex/migration-idle-readiness`, the
-scheduler checks for work before loading full release evidence. Poll cadence and
-actual execution fences are preserved. All 99 selected database tests, the
-16-step migration browser journey, production compilation, formatting and strict
-lint passed. This change is not deployed. [Implementation record](../reviews/migration-idle-readiness-2026-09-17.md).
+**Migration idle optimization release:** `8255ad9` is merged, published and
+running on the shared-development API. Empty queues now skip the full release
+checklist. Matched 30-second observations fell from 210.15 to 17.05 database
+transactions/second (91.89% lower); all pending queues remain empty and data is
+preserved. The 180-second stability observation and final checks passed.
+[Release record](../tasks/MIGRATION_IDLE_RELEASE_2026-09-18.md) owns runtime and
+measurement evidence; [implementation verification](../reviews/migration-idle-readiness-2026-09-17.md)
+records 99 database tests, the 16-step browser journey, compilation and lint.
 
 **Read optimization and migration follow-up release:** Person detail's projection,
 Today reference batching, repeated-refresh correction, coverage inventory and
 administrator reconciliation report are merged and published on `main` at
-`8fac1dc`. The shared-development API and Web run that source; deployment and
-the 180-second observation passed. [Release record](../tasks/READ_OPTIMIZATION_RELEASE_2026-09-17.md)
+`8fac1dc`. The Web still runs that source; the API now includes the idle optimization
+above. Its deployment and 180-second observation passed. [Release record](../tasks/READ_OPTIMIZATION_RELEASE_2026-09-17.md)
 owns runtime, backup, schema/data preservation and smoke evidence.
 
 Today remains one snapshot with batched stage/assignee/tag reference validation;
@@ -62,11 +65,11 @@ Mobile004/010e4 and preceding slices remain documented in history.
 
 ## Current branch and retained resources
 
-`main` includes deployed source `8fac1dc` and release record `6c08f95`. The main
-checkout now holds the local `codex/migration-idle-readiness` branch;
-the completed migration writer worktrees and old feature branches were removed
-with user authorization, including leftover local drafts. Current release evidence
-is in [the release record](../tasks/READ_OPTIMIZATION_RELEASE_2026-09-17.md).
+`main` is published through `8255ad9`. The main checkout is on `main`; the
+merged `codex/migration-idle-readiness` branch is retained. Prior migration writer
+worktrees and obsolete branches were removed with user authorization, including
+leftover drafts. Current runtime identity is in
+[the release record](../tasks/MIGRATION_IDLE_RELEASE_2026-09-18.md).
 Private verification services and build outputs remain retained.
 Three previously completed writer worktrees and five milestone branches
 were removed after preserving all lane histories and the exact dirty migration

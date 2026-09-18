@@ -2,7 +2,9 @@
 
 User request: run release safety checks after a job is present. Implementation
 base: `6c08f95`; branch `codex/migration-idle-readiness`. Local verification passed;
-shared development continues running `8fac1dc`.
+committed, merged and published as `8255ad9`. The shared-development API now
+runs this change; [release verification](../tasks/MIGRATION_IDLE_RELEASE_2026-09-18.md)
+records deployment and before/after activity.
 
 The scheduler previously loaded release evidence eight times per scheduling cycle
 (seven one-second lanes and the two-second history-capture lane), before learning
@@ -64,5 +66,5 @@ Commands: isolated `cargo check --workspace --locked`,
 `cargo fmt --all --check`, `git diff --check`;
 `cargo nextest run -p crm-api --test all --locked --run-ignored only` with the
 recorded migration-family selector; and
-`./scripts/e2e --family migration --concurrency 1 --timeout 900`. No measured
-post-deployment transaction-rate claim is made; shared development is unchanged.
+`./scripts/e2e --family migration --concurrency 1 --timeout 900`. The separate release record owns the measured runtime comparison; local
+verification did not measure the shared-development transaction rate.

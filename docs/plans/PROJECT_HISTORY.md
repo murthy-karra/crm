@@ -9,6 +9,15 @@ Use [PROJECT_STATE.md](PROJECT_STATE.md) for current work, live residuals and ne
 actions, and the [decision log](../decisions/DECISION_LOG.md) for authority.
 Per-slice verification/release records remain the detailed evidence.
 
+## Migration idle readiness — 2026-09-18
+
+User-authorized commit/deployment published `8255ad9`: workers check for jobs
+before loading release evidence, with unchanged scheduling and execution fences.
+99 selected DB tests, 16 migration browser steps, compilation and lint passed.
+Shared-development activity fell from 210.15 to 17.05 transactions/second in
+matched short observations. [Release record](../tasks/MIGRATION_IDLE_RELEASE_2026-09-18.md)
+owns runtime, preservation, backup and observation evidence.
+
 ## Read optimization and migration follow-up — 2026-09-17
 
 The migration coverage, repeated-refresh fix and administrator reconciliation

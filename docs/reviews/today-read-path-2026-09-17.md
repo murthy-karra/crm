@@ -1,6 +1,8 @@
 # Today read-path audit and reference batching
 
-Base: `11f5d85` on `codex/migration-completion`. Local optimization; no release.
+Implementation base: `11f5d85` on former `codex/migration-completion`.
+Merged and published at `8fac1dc`; shared-development deployment is tracked in
+[the release record](../tasks/READ_OPTIMIZATION_RELEASE_2026-09-17.md).
 Person detail is already one current-state projection lookup plus one history
 union. This work concerns Today, not another Person-detail rewrite.
 

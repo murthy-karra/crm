@@ -1,38 +1,32 @@
 # Project state
 
-Updated: 2026-09-17 — 010g1 and 010e6 published and deployed to shared development.
+Updated: 2026-09-17 — read optimization and migration follow-up published and deployed to shared development.
 Current status and live residuals only. [History](PROJECT_HISTORY.md) preserves
 completed chronology. Decisions remain authoritative; use the
 [reading index](../decisions/DECISION_INDEX.md).
 
 ## Current state
 
-**Local read optimization:** Person detail already uses one current-state
-projection lookup plus one history union. Today now batches stage/assignee/tag
-reference validation by clause; no new projection table or shared contract was
-added. The reference-heavy 25k-People/50-member paired fixture returned identical
-responses with p95 68.7 ms → 29.1 ms; 278 relevant DB tests, all 10 E2E families
-(103 steps, cleanup verified), formatting, normal lint and production compilation passed.
-[Read-path audit and verification](../reviews/today-read-path-2026-09-17.md)
-records exact scope, failures/corrections and limits. This Today change is retained
-locally and undeployed on `codex/migration-completion`. A compact Today summary
-projection remains a candidate requiring separate evidence and contract design.
+**Read optimization and migration follow-up release:** Person detail's projection,
+Today reference batching, repeated-refresh correction, coverage inventory and
+administrator reconciliation report are merged and published on `main` at
+`8fac1dc`. The shared-development API and Web run that source; deployment and
+the 180-second observation passed. [Release record](../tasks/READ_OPTIMIZATION_RELEASE_2026-09-17.md)
+owns runtime, backup, schema/data preservation and smoke evidence.
 
-**Local migration follow-up:** `codex/migration-completion` integrates the
-coverage inventory, repeated-refresh head fix and regressions, and the
-administrator reconciliation report. Functional/database tests, the sixteen-step
-browser journey, and seven exact query plans at 25,000 People / 50 members passed.
-Final integration checks passed; evidence is tracked in the
-[verification record](../reviews/migration-completion-2026-09-17.md).
-This branch is not merged or deployed. Live FUB qualification and unsupported
-destination families remain deferred; the report exposes those gaps.
+Today remains one snapshot with batched stage/assignee/tag reference validation;
+Person detail remains one current-state lookup plus one history union.
+[Today verification](../reviews/today-read-path-2026-09-17.md) and
+[migration verification](../reviews/migration-completion-2026-09-17.md) retain
+implementation gates and limitations. Live FUB qualification and unsupported
+destination families remain deferred. Further Today projection work is unimplemented.
 
 **010e6 recovery is accepted under D-090 and implemented on
 `main` as `2a4c207`; final verification passed and the local fast-forward merge is complete.** It creates positively
 proven mapping-held People once and supplies separate family handoffs. Independent
 implementation review is READY, round 2. [Status](../tasks/SLICE_010e6_IMPLEMENTATION_STATUS.md)
 and [verification](../tasks/SLICE_010e6_VERIFICATION.md) own current evidence.
-Shared development now runs the verified [010g1 / 010e6 release](../tasks/SLICE_010g1_RELEASE.md) at source `74e63a8`.
+Its shared-development release at `74e63a8` is retained in the [010g1 / 010e6 release record](../tasks/SLICE_010g1_RELEASE.md); the newer runtime is recorded above.
 
 
 **Mobile006 / 010f4 are implemented, verified, merged to main, pushed and deployed
@@ -62,9 +56,10 @@ Mobile004/010e4 and preceding slices remain documented in history.
 
 ## Current branch and retained resources
 
-`main` is published through `74e63a8`, including 010g1 and 010e6. All merged
-feature branches and the old history worktree were removed. Current runtime
-identity and smoke checks are in [the release record](../tasks/SLICE_010g1_RELEASE.md).
+`main` is published through `8fac1dc`. Only the main checkout and branch remain;
+the completed migration writer worktrees and old feature branches were removed
+with user authorization, including leftover local drafts. Current release evidence
+is in [the release record](../tasks/READ_OPTIMIZATION_RELEASE_2026-09-17.md).
 Private verification services and build outputs remain retained.
 Three previously completed writer worktrees and five milestone branches
 were removed after preserving all lane histories and the exact dirty migration

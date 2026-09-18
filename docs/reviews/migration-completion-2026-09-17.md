@@ -1,7 +1,8 @@
 # Migration coverage, repeated refresh, and reconciliation verification
 
 Status: scoped implementation verified on `codex/migration-completion`.
-Ready for merge review; not merged, pushed or deployed.
+Merged and published on `main` at `8fac1dc`; shared-development deployment is
+tracked in [the release record](../tasks/READ_OPTIMIZATION_RELEASE_2026-09-17.md).
 
 ## Scope
 

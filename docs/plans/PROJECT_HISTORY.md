@@ -9,6 +9,18 @@ Use [PROJECT_STATE.md](PROJECT_STATE.md) for current work, live residuals and ne
 actions, and the [decision log](../decisions/DECISION_LOG.md) for authority.
 Per-slice verification/release records remain the detailed evidence.
 
+## Read optimization and migration follow-up — 2026-09-17
+
+The migration coverage, repeated-refresh fix and administrator reconciliation
+report were integrated on `codex/migration-completion`, followed by Today filter
+reference batching. The final tree passed all ten E2E families / 103 steps.
+User-authorized fast-forward merge brought local `main` to `8fac1dc`; publication
+included the prior Person-detail projection commit. Completed branches and all
+three writer worktrees were removed, with explicit authorization to discard the
+remaining local drafts. [Release evidence](../tasks/READ_OPTIMIZATION_RELEASE_2026-09-17.md)
+owns deployment status and runtime checks. Migration fidelity gaps remain in
+[the deferred backlog](MIGRATION_BACKLOG.md).
+
 ## 010g1 / 010e6 published and deployed — 2026-09-17
 
 User-authorized PRs #1/#2 merged to `74e63a8`; merged branches and the old
